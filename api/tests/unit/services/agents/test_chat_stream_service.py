@@ -484,7 +484,7 @@ class TestLoadAgentResources:
         mock_db.execute = AsyncMock(return_value=mock_result)
 
         with patch(
-            "src.services.agents.chat_stream_service.get_async_session_factory",
+            "src.core.database.get_async_session_factory",
             return_value=self._make_session_factory(mock_db),
         ):
             agent_kbs, agent_tools, mcp_tool_names = await service._load_agent_resources(sample_db_agent, mock_db)
@@ -509,7 +509,7 @@ class TestLoadAgentResources:
         mock_db.execute = AsyncMock(side_effect=Exception("Database error"))
 
         with patch(
-            "src.services.agents.chat_stream_service.get_async_session_factory",
+            "src.core.database.get_async_session_factory",
             return_value=self._make_session_factory(mock_db),
         ):
             agent_kbs, agent_tools, mcp_tool_names = await service._load_agent_resources(sample_db_agent, mock_db)
