@@ -290,7 +290,7 @@ This is an automated scheduled task. Complete it thoroughly and provide your fin
 
                         from src.services.agents.internal_tools.web_tools import _is_url_safe
 
-                        is_safe, ssrf_error = _is_url_safe(callback_url)
+                        is_safe, ssrf_error = asyncio.run(_is_url_safe(callback_url))
                         if not is_safe:
                             logger.warning(f"Callback URL blocked for task {task_id}: {ssrf_error}")
                             result["callback_error"] = f"Callback URL blocked: {ssrf_error}"
