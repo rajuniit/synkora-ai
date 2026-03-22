@@ -1,0 +1,27 @@
+apiVersion: v2
+name: synkora
+description: A Helm chart for Synkora on Kubernetes
+type: application
+version: 1.0.0
+appVersion: "1.0.0"
+keywords:
+  - synkora
+  - ai
+  - llm
+  - chatbot
+home: https://github.com/rajuniit/synkora-ai
+sources:
+  - https://github.com/rajuniit/synkora-ai
+maintainers:
+  - name: Raju Mazumder
+    email: rajuniit@gmail.com
+
+dependencies:
+  - name: postgresql
+    version: "12.x.x"
+    repository: https://charts.bitnami.com/bitnami
+    condition: postgresql.enabled
+  - name: redis
+    version: "18.x.x"
+    repository: https://charts.bitnami.com/bitnami
+    condition: redis.enabled

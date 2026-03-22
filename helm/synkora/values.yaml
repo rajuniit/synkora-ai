@@ -1,0 +1,286 @@
+# Default values for synkora
+# This is a YAML-formatted file following Synkora community Helm chart patterns
+
+global:
+  storageClass: gp3 # AWS EBS gp3 for better performance
+
+# PostgreSQL configuration (using Bitnami chart)
+# Reference: https://github.com/bitnami/charts/tree/main/bitnami/postgresql
+postgresql:
+  enabled: true
+  auth:
+    username: synkora
+    password: changeme # CHANGE THIS IN PRODUCTION
+    database: synkora
+  primary:
+    persistence:
+      enabled: true
+      size: 20Gi
+      storageClass: gp3
+    resources:
+      requests:
+        memory: 1Gi
+        cpu: 500m
+      limits:
+        memory: 2Gi
+        cpu: 1000m
+  image:
+    registry: docker.io
+    repository: pgvector/pgvector
+    tag: pg16
+  postgresqlExtendedConf:
+    shared_preload_libraries: "vector"
+
+# Redis configuration (using Bitnami chart)
+# Reference: https://github.com/bitnami/charts/tree/main/bitnami/redis
+redis:
+  enabled: true
+  architecture: standalone
+  auth:
+    enabled: true
+    password: changeme # CHANGE THIS IN PRODUCTION
+  master:
+    persistence:
+      enabled: true
+      size: 8Gi
+      storageClass: gp3
+    resources:
+      requests:
+        memory: 256Mi
+        cpu: 250m
+      limits:
+        memory: 512Mi
+        cpu: 500m
+
+# API configuration
+api:
+  enabled: true
+  replicaCount: 3
+
+  image:
+    repository: <YOUR_ECR_REPO>/synkora-api
+    tag: latest
+    pullPolicy: Always
+
+  imagePullSecrets: []
+  # - name: ecr-secret
+
+  service:
+    type: ClusterIP
+    port: 5000
+    annotations: {}
+
+  resources:
+    requests:
+      memory: 512Mi
+      cpu: 500m
+    limits:
+      memory: 2Gi
+      cpu: 2000m
+
+  autoscaling:
+    enabled: true
+    minReplicas: 3
+    maxReplicas: 10
+    targetCPUUtilizationPercentage: 70
+    targetMemoryUtilizationPercentage: 80
+
+  env:
+    LOG_LEVEL: INFO
+    MODE: api
+    DEBUG: "false"
+
+  # Persistent storage for uploads
+  persistence:
+    enabled: true
+    size: 10Gi
+    storageClass: gp3
+    accessMode: ReadWriteMany # Use EFS for multi-pod access
+
+  # Health checks
+  livenessProbe:
+    httpGet:
+      path: /health
+      port: 5000
+    initialDelaySeconds: 30
+    periodSeconds: 10
+    timeoutSeconds: 5
+    failureThreshold: 3
+
+  readinessProbe:
+    httpGet:
+      path: /health
+      port: 5000
+    initialDelaySeconds: 10
+    periodSeconds: 5
+    timeoutSeconds: 3
+    failureThreshold: 3
+
+# Web frontend configuration
+web:
+  enabled: true
+  replicaCount: 2
+
+  image:
+    repository: <YOUR_ECR_REPO>/synkora-web
+    tag: latest
+    pullPolicy: Always
+
+  imagePullSecrets: []
+  # - name: ecr-secret
+
+  service:
+    type: ClusterIP
+    port: 3000
+    annotations: {}
+
+  resources:
+    requests:
+      memory: 256Mi
+      cpu: 250m
+    limits:
+      memory: 512Mi
+      cpu: 500m
+
+  autoscaling:
+    enabled: true
+    minReplicas: 2
+    maxReplicas: 6
+    targetCPUUtilizationPercentage: 70
+
+  env:
+    NODE_ENV: production
+
+  # Health checks
+  livenessProbe:
+    httpGet:
+      path: /
+      port: 3000
+    initialDelaySeconds: 30
+    periodSeconds: 10
+
+  readinessProbe:
+    httpGet:
+      path: /
+      port: 3000
+    initialDelaySeconds: 10
+    periodSeconds: 5
+
+# Worker configuration (Celery workers)
+worker:
+  enabled: true
+  replicaCount: 2
+
+  image:
+    repository: <YOUR_ECR_REPO>/synkora-api
+    tag: latest
+    pullPolicy: Always
+
+  imagePullSecrets: []
+  # - name: ecr-secret
+
+  resources:
+    requests:
+      memory: 512Mi
+      cpu: 500m
+    limits:
+      memory: 2Gi
+      cpu: 2000m
+
+  autoscaling:
+    enabled: true
+    minReplicas: 2
+    maxReplicas: 8
+    targetCPUUtilizationPercentage: 70
+
+  env:
+    LOG_LEVEL: INFO
+    MODE: worker
+
+  # Share the same persistent storage as API
+  persistence:
+    enabled: true
+    existingClaim: synkora-api-storage
+
+# Ingress configuration for AWS ALB
+ingress:
+  enabled: true
+  className: alb
+  annotations:
+    alb.ingress.kubernetes.io/scheme: internet-facing
+    alb.ingress.kubernetes.io/target-type: ip
+    alb.ingress.kubernetes.io/certificate-arn: <YOUR_ACM_CERTIFICATE_ARN>
+    alb.ingress.kubernetes.io/listen-ports: '[{"HTTP": 80}, {"HTTPS": 443}]'
+    alb.ingress.kubernetes.io/ssl-redirect: "443"
+    alb.ingress.kubernetes.io/healthcheck-path: /health
+    alb.ingress.kubernetes.io/healthcheck-interval-seconds: "15"
+    alb.ingress.kubernetes.io/healthcheck-timeout-seconds: "5"
+    alb.ingress.kubernetes.io/healthy-threshold-count: "2"
+    alb.ingress.kubernetes.io/unhealthy-threshold-count: "2"
+  hosts:
+    - host: synkora.yourdomain.com
+      paths:
+        - path: /api
+          pathType: Prefix
+          backend:
+            service:
+              name: synkora-api
+              port:
+                number: 5000
+        - path: /
+          pathType: Prefix
+          backend:
+            service:
+              name: synkora-web
+              port:
+                number: 3000
+  tls: []
+
+# Service Account
+serviceAccount:
+  create: true
+  annotations: {}
+  name: ""
+
+# Pod Security Context
+podSecurityContext:
+  fsGroup: 1000
+  runAsNonRoot: true
+  runAsUser: 1000
+
+# Security Context
+securityContext:
+  allowPrivilegeEscalation: false
+  capabilities:
+    drop:
+      - ALL
+  readOnlyRootFilesystem: false
+
+# Node selector
+nodeSelector: {}
+
+# Tolerations
+tolerations: []
+
+# Affinity
+affinity: {}
+
+# Network Policy
+networkPolicy:
+  enabled: false
+  policyTypes:
+    - Ingress
+    - Egress
+
+# Pod Disruption Budget
+podDisruptionBudget:
+  enabled: true
+  minAvailable: 1
+
+# Monitoring
+monitoring:
+  enabled: false
+  serviceMonitor:
+    enabled: false
+    interval: 30s
+    scrapeTimeout: 10s

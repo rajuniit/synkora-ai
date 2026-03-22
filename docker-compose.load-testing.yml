@@ -1,0 +1,171 @@
+# ============================================================================
+# Load Testing Services - Docker Compose
+# ============================================================================
+#
+# This file adds load testing services to the main docker-compose setup.
+# Use it alongside the main docker-compose.yml:
+#
+#   docker-compose -f docker-compose.yml -f docker-compose.load-testing.yml up
+#
+# Or just the load testing services:
+#
+#   docker-compose -f docker-compose.yml -f docker-compose.load-testing.yml up \
+#     llm-proxy redis-loadtest k6-runner celery-worker-loadtest
+#
+# ============================================================================
+
+version: '3.8'
+
+services:
+  # ============================================================================
+  # LLM Proxy Gateway - Mock LLM endpoints for load testing
+  # ============================================================================
+  # This service provides mock LLM responses so you can load test your AI agents
+  # without incurring real API costs. Configure your agent to use:
+  #   - OpenAI: http://localhost:8090/proxy/v1/chat/completions
+  #   - Anthropic: http://localhost:8090/proxy/v1/messages
+  #   - Google: http://localhost:8090/proxy/v1/models/gemini-pro:generateContent
+  # ============================================================================
+  llm-proxy:
+    build:
+      context: ./api
+      dockerfile: Dockerfile.llm-proxy
+    container_name: synkora-llm-proxy
+    environment:
+      - DATABASE_URL=postgresql://${POSTGRES_USER:-synkora}:${POSTGRES_PASSWORD:-synkora_dev_password}@postgres:5432/${POSTGRES_DB:-synkora}
+      - REDIS_URL=redis://redis-loadtest:6379
+      - LOG_LEVEL=info
+      - WORKERS=4
+      - PORT=8080
+      - MAX_CONNECTIONS=10000
+      - PYTHONUNBUFFERED=1
+    ports:
+      - "8090:8080"
+    depends_on:
+      redis-loadtest:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8080/health"]
+      interval: 10s
+      timeout: 5s
+      retries: 3
+      start_period: 10s
+    deploy:
+      resources:
+        limits:
+          memory: 2G
+          cpus: '2'
+        reservations:
+          memory: 512M
+          cpus: '0.5'
+    networks:
+      - synkora_synkora-network
+
+  # ============================================================================
+  # Redis for Load Testing - Dedicated instance for rate limiting & pub/sub
+  # ============================================================================
+  redis-loadtest:
+    image: redis:7-alpine
+    container_name: synkora-redis-loadtest
+    command: >
+      redis-server
+      --maxmemory 512mb
+      --maxmemory-policy allkeys-lru
+      --save ""
+      --appendonly no
+    ports:
+      - "6381:6379"
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 5s
+      timeout: 3s
+      retries: 5
+    deploy:
+      resources:
+        limits:
+          memory: 512M
+          cpus: '0.5'
+        reservations:
+          memory: 128M
+          cpus: '0.1'
+    networks:
+      - synkora_synkora-network
+
+  # ============================================================================
+  # K6 Runner - Executes load tests
+  # ============================================================================
+  # This container runs K6 load tests. It stays running and executes tests
+  # when triggered via the API or directly.
+  # ============================================================================
+  k6-runner:
+    build:
+      context: ./api
+      dockerfile: Dockerfile.k6-runner
+    container_name: synkora-k6-runner
+    environment:
+      - SYNKORA_API_URL=http://api:5001
+      - REDIS_URL=redis://redis-loadtest:6379
+      - CALLBACK_URL=http://api:5001/api/v1/test-runs/callback
+      - LOG_LEVEL=info
+    volumes:
+      - k6_scripts:/scripts
+      - k6_results:/results
+    depends_on:
+      - redis-loadtest
+    deploy:
+      resources:
+        limits:
+          memory: 4G
+          cpus: '4'
+        reservations:
+          memory: 1G
+          cpus: '1'
+    networks:
+      - synkora_synkora-network
+
+  # ============================================================================
+  # Celery Worker - Load Testing Queue
+  # ============================================================================
+  # Dedicated worker for load testing tasks (test execution, result processing)
+  # ============================================================================
+  celery-worker-loadtest:
+    build:
+      context: ./api
+      dockerfile: Dockerfile.dev
+    container_name: synkora-celery-worker-loadtest
+    command: celery -A src.celery_app worker --loglevel=info --concurrency=2 -Q load_testing
+    env_file:
+      - ./api/.env
+    environment:
+      - DB_HOST=postgres
+      - PYTHONUNBUFFERED=1
+      - REDIS_LOADTEST_URL=redis://redis-loadtest:6379
+      - K6_RUNNER_URL=http://k6-runner:6565
+    volumes:
+      - ./api:/app/api
+      - /app/api/.venv
+      - k6_scripts:/k6_scripts
+    depends_on:
+      redis-loadtest:
+        condition: service_healthy
+    deploy:
+      resources:
+        limits:
+          memory: 2G
+          cpus: '2'
+        reservations:
+          memory: 512M
+          cpus: '0.5'
+    networks:
+      - synkora_synkora-network
+
+volumes:
+  k6_scripts:
+    driver: local
+  k6_results:
+    driver: local
+
+networks:
+  synkora_synkora-network:
+    name: synkora_synkora-network
+    external: true

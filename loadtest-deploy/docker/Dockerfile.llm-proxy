@@ -1,0 +1,60 @@
+# LLM Proxy Gateway - Standalone Dockerfile
+# This builds a lightweight image containing only the proxy functionality
+
+FROM python:3.11-slim as builder
+
+WORKDIR /app
+
+# Install build dependencies
+RUN apt-get update && apt-get install -y --no-install-recommends \
+    build-essential \
+    && rm -rf /var/lib/apt/lists/*
+
+# Copy only requirements first for caching
+COPY api/pyproject.toml api/uv.lock ./
+
+# Install dependencies
+RUN pip install --no-cache-dir uv && \
+    uv pip install --system --no-cache -r pyproject.toml
+
+# Production image
+FROM python:3.11-slim
+
+WORKDIR /app
+
+# Create non-root user
+RUN groupadd -r proxy && useradd -r -g proxy proxy
+
+# Copy installed packages from builder
+COPY --from=builder /usr/local/lib/python3.11/site-packages /usr/local/lib/python3.11/site-packages
+
+# Copy only the proxy-related code
+COPY api/src/services/load_testing/ ./src/services/load_testing/
+COPY api/src/controllers/llm_proxy.py ./src/controllers/
+COPY api/src/models/proxy_config.py ./src/models/
+COPY api/src/schemas/load_testing.py ./src/schemas/
+COPY api/src/core/ ./src/core/
+COPY api/src/config/ ./src/config/
+
+# Copy proxy-specific entrypoint
+COPY deploy/docker/proxy_entrypoint.py ./
+
+# Set ownership
+RUN chown -R proxy:proxy /app
+
+USER proxy
+
+# Environment variables
+ENV PYTHONUNBUFFERED=1 \
+    PYTHONDONTWRITEBYTECODE=1 \
+    PROXY_MODE=standalone \
+    WORKERS=4 \
+    PORT=8080
+
+EXPOSE 8080
+
+# Health check
+HEALTHCHECK --interval=30s --timeout=10s --start-period=5s --retries=3 \
+    CMD python -c "import urllib.request; urllib.request.urlopen('http://localhost:8080/health')"
+
+CMD ["python", "proxy_entrypoint.py"]

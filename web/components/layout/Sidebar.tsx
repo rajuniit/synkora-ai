@@ -1,0 +1,366 @@
+'use client'
+
+import { useState } from 'react'
+import Link from 'next/link'
+import { usePathname } from 'next/navigation'
+import { useAuth } from '@/lib/hooks/useAuth'
+import { usePermissions } from '@/hooks/usePermissions'
+import { cn } from '@/lib/utils/cn'
+
+const navigation = [
+  { 
+    name: 'Dashboard', 
+    href: '/dashboard', 
+    icon: (
+      <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M3 12l2-2m0 0l7-7 7 7M5 10v10a1 1 0 001 1h3m10-11l2 2m-2-2v10a1 1 0 01-1 1h-3m-6 0a1 1 0 001-1v-4a1 1 0 011-1h2a1 1 0 011 1v4a1 1 0 001 1m-6 0h6" />
+      </svg>
+    )
+  },
+  { 
+    name: 'Agents', 
+    href: '/agents', 
+    icon: (
+      <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9.75 17L9 20l-1 1h8l-1-1-.75-3M3 13h18M5 17h14a2 2 0 002-2V5a2 2 0 00-2-2H5a2 2 0 00-2 2v10a2 2 0 002 2z" />
+      </svg>
+    )
+  },
+  { 
+    name: 'Browse Agents', 
+    href: '/browse', 
+    icon: (
+      <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" />
+      </svg>
+    )
+  },
+  { 
+    name: 'MCP Servers', 
+    href: '/mcp-servers', 
+    icon: (
+      <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 12h14M5 12a2 2 0 01-2-2V6a2 2 0 012-2h14a2 2 0 012 2v4a2 2 0 01-2 2M5 12a2 2 0 00-2 2v4a2 2 0 002 2h14a2 2 0 002-2v-4a2 2 0 00-2-2m-2-4h.01M17 16h.01" />
+      </svg>
+    )
+  },
+  { 
+    name: 'Custom Tools', 
+    href: '/custom-tools', 
+    icon: (
+      <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 6V4m0 2a2 2 0 100 4m0-4a2 2 0 110 4m-6 8a2 2 0 100-4m0 4a2 2 0 110-4m0 4v2m0-6V4m6 6v10m6-2a2 2 0 100-4m0 4a2 2 0 110-4m0 4v2m0-6V4" />
+      </svg>
+    )
+  },
+  { 
+    name: 'Knowledge Bases', 
+    href: '/knowledge-bases', 
+    icon: (
+      <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 6.253v13m0-13C10.832 5.477 9.246 5 7.5 5S4.168 5.477 3 6.253v13C4.168 18.477 5.754 18 7.5 18s3.332.477 4.5 1.253m0-13C13.168 5.477 14.754 5 16.5 5c1.747 0 3.332.477 4.5 1.253v13C19.832 18.477 18.247 18 16.5 18c-1.746 0-3.332.477-4.5 1.253" />
+      </svg>
+    )
+  },
+  { 
+    name: 'Data Sources', 
+    href: '/data-sources', 
+    icon: (
+      <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 7v10c0 2.21 3.582 4 8 4s8-1.79 8-4V7M4 7c0 2.21 3.582 4 8 4s8-1.79 8-4M4 7c0-2.21 3.582-4 8-4s8 1.79 8 4m0 5c0 2.21-3.582 4-8 4s-8-1.79-8-4" />
+      </svg>
+    )
+  },
+  { 
+    name: 'Database Connections', 
+    href: '/database-connections', 
+    icon: (
+      <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 7v10c0 2.21 3.582 4 8 4s8-1.79 8-4V7M4 7c0 2.21 3.582 4 8 4s8-1.79 8-4M4 7c0-2.21 3.582-4 8-4s8 1.79 8 4m0 5c0 2.21-3.582 4-8 4s-8-1.79-8-4" />
+      </svg>
+    )
+  },
+  {
+    name: 'Scheduled Tasks',
+    href: '/scheduled-tasks',
+    icon: (
+      <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z" />
+      </svg>
+    )
+  },
+  {
+    name: 'Projects',
+    href: '/projects',
+    icon: (
+      <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M3 7v10a2 2 0 002 2h14a2 2 0 002-2V9a2 2 0 00-2-2h-6l-2-2H5a2 2 0 00-2 2z" />
+      </svg>
+    )
+  },
+  {
+    name: 'Escalations',
+    href: '/escalations',
+    icon: (
+      <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z" />
+      </svg>
+    )
+  },
+  {
+    name: 'Integrations',
+    href: '/oauth-apps',
+    icon: (
+      <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13.828 10.172a4 4 0 00-5.656 0l-4 4a4 4 0 105.656 5.656l1.102-1.101m-.758-4.899a4 4 0 005.656 0l4-4a4 4 0 00-5.656-5.656l-1.1 1.1" />
+      </svg>
+    )
+  },
+  {
+    name: 'Load Testing',
+    href: '/load-testing',
+    icon: (
+      <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 19v-6a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2a2 2 0 002-2zm0 0V9a2 2 0 012-2h2a2 2 0 012 2v10m-6 0a2 2 0 002 2h2a2 2 0 002-2m0 0V5a2 2 0 012-2h2a2 2 0 012 2v14a2 2 0 01-2 2h-2a2 2 0 01-2-2z" />
+      </svg>
+    )
+  },
+  {
+    name: 'Billing', 
+    href: '/billing', 
+    icon: (
+      <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M3 10h18M7 15h1m4 0h1m-7 4h12a3 3 0 003-3V8a3 3 0 00-3-3H6a3 3 0 00-3 3v8a3 3 0 003 3z" />
+      </svg>
+    )
+  },
+]
+
+const settingsNavigation = [
+  {
+    name: 'Profile',
+    href: '/settings/profile',
+    icon: (
+      <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M16 7a4 4 0 11-8 0 4 4 0 018 0zM12 14a7 7 0 00-7 7h14a7 7 0 00-7-7z" />
+      </svg>
+    )
+  },
+  {
+    name: 'Human Contacts',
+    href: '/settings/human-contacts',
+    icon: (
+      <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 4.354a4 4 0 110 5.292M15 21H3v-1a6 6 0 0112 0v1zm0 0h6v-1a6 6 0 00-9-5.197M13 7a4 4 0 11-8 0 4 4 0 018 0z" />
+      </svg>
+    )
+  },
+  {
+    name: 'Team',
+    href: '/settings/team',
+    icon: (
+      <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M17 20h5v-2a3 3 0 00-5.356-1.857M17 20H7m10 0v-2c0-.656-.126-1.283-.356-1.857M7 20H2v-2a3 3 0 015.356-1.857M7 20v-2c0-.656.126-1.283.356-1.857m0 0a5.002 5.002 0 019.288 0M15 7a3 3 0 11-6 0 3 3 0 016 0zm6 3a2 2 0 11-4 0 2 2 0 014 0zM7 10a2 2 0 11-4 0 2 2 0 014 0z" />
+      </svg>
+    )
+  },
+  {
+    name: 'Social Auth',
+    href: '/settings/social-auth-config',
+    platformOnly: true,
+    icon: (
+      <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 7a2 2 0 012 2m4 0a6 6 0 01-7.743 5.743L11 17H9v2H7v2H4a1 1 0 01-1-1v-2.586a1 1 0 01.293-.707l5.964-5.964A6 6 0 1121 9z" />
+      </svg>
+    )
+  },
+  {
+    name: 'Activity',
+    href: '/settings/activity',
+    icon: (
+      <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2m-3 7h3m-3 4h3m-6-4h.01M9 16h.01" />
+      </svg>
+    )
+  },
+  {
+    name: 'Integrations',
+    href: '/settings/integrations',
+    permission: { resource: 'integration_configs', action: 'read' },
+    icon: (
+      <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M11 4a2 2 0 114 0v1a1 1 0 001 1h3a1 1 0 011 1v3a1 1 0 01-1 1h-1a2 2 0 100 4h1a1 1 0 011 1v3a1 1 0 01-1 1h-3a1 1 0 01-1-1v-1a2 2 0 10-4 0v1a1 1 0 01-1 1H7a1 1 0 01-1-1v-3a1 1 0 00-1-1H4a2 2 0 110-4h1a1 1 0 001-1V7a1 1 0 011-1h3a1 1 0 001-1V4z" />
+      </svg>
+    )
+  },
+  {
+    name: 'Subscription Plans',
+    href: '/settings/subscription-plans',
+    platformOnly: true,
+    icon: (
+      <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
+      </svg>
+    )
+  },
+]
+
+export function Sidebar() {
+  const [isExpanded, setIsExpanded] = useState(false)
+  const [isPinned, setIsPinned] = useState(false)
+  const pathname = usePathname()
+  const { user } = useAuth()
+  const { hasPermission } = usePermissions()
+
+  const handleMouseEnter = () => {
+    if (!isPinned) {
+      setIsExpanded(true)
+    }
+  }
+
+  const handleMouseLeave = () => {
+    if (!isPinned) {
+      setIsExpanded(false)
+    }
+  }
+
+  const togglePin = () => {
+    setIsPinned(!isPinned)
+    setIsExpanded(!isPinned)
+  }
+
+  return (
+    <div 
+      className={cn(
+        'bg-gray-900 h-screen flex flex-col py-6 transition-all duration-300 relative',
+        isExpanded || isPinned ? 'w-64' : 'w-20'
+      )}
+      onMouseEnter={handleMouseEnter}
+      onMouseLeave={handleMouseLeave}
+    >
+      {/* Logo and Pin Button */}
+      <div className="mb-8 px-5">
+        <div className={cn('flex items-center', isExpanded || isPinned ? 'justify-between' : 'justify-center')}>
+          <div className="flex items-center gap-3">
+            {/* Modern Logo with Gradient */}
+            <div className="relative w-10 h-10 flex-shrink-0">
+              <div className="absolute inset-0 bg-gradient-to-br from-primary-400 to-primary-600 rounded-lg rotate-45"></div>
+              <div className="absolute inset-0 flex items-center justify-center">
+                <svg className="w-6 h-6 text-white relative z-10" fill="currentColor" viewBox="0 0 24 24">
+                  <path d="M13 10V3L4 14h7v7l9-11h-7z" />
+                </svg>
+              </div>
+            </div>
+            {(isExpanded || isPinned) && (
+              <div className="flex flex-col">
+                <span className="text-lg font-bold text-white whitespace-nowrap">
+                  synkora <span className="text-primary-400">ai</span>
+                </span>
+                <span className="text-[10px] text-gray-400 -mt-1">Enterprise Platform</span>
+              </div>
+            )}
+          </div>
+          {(isExpanded || isPinned) && (
+            <button
+              onClick={togglePin}
+              className="flex items-center gap-2 p-1 rounded-lg hover:bg-gray-800 transition-colors"
+              title={isPinned ? 'Unlock sidebar' : 'Lock sidebar'}
+            >
+              <div className={cn(
+                'relative w-10 h-5 rounded-full transition-colors',
+                isPinned ? 'bg-gradient-to-r from-primary-500 to-primary-600' : 'bg-gray-600'
+              )}>
+                <div className={cn(
+                  'absolute top-0.5 left-0.5 w-4 h-4 bg-white rounded-full transition-transform',
+                  isPinned ? 'translate-x-5' : 'translate-x-0'
+                )} />
+              </div>
+            </button>
+          )}
+        </div>
+      </div>
+
+      {/* Navigation */}
+      <nav className="flex-1 flex flex-col space-y-2 px-3 overflow-y-auto">
+        {navigation.map((item) => {
+          const isActive = pathname?.startsWith(item.href)
+          return (
+            <Link
+              key={item.name}
+              href={item.href}
+              className={cn(
+                'flex items-center gap-3 px-3 py-3 rounded-lg transition-all',
+                isActive
+                  ? 'bg-gradient-to-r from-primary-500/10 to-primary-600/10 text-primary-400 border-l-2 border-primary-500'
+                  : 'text-gray-400 hover:bg-gray-800 hover:text-gray-200'
+              )}
+            >
+              <div className="flex-shrink-0">
+                {item.icon}
+              </div>
+              {(isExpanded || isPinned) && (
+                <span className="text-sm font-medium whitespace-nowrap">{item.name}</span>
+              )}
+            </Link>
+          )
+        })}
+
+        {/* Settings Section */}
+        <div className="pt-4 mt-4 border-t border-gray-700">
+          {(isExpanded || isPinned) && (
+            <div className="px-3 mb-2">
+              <span className="text-xs font-semibold text-gray-500 uppercase tracking-wider">
+                Settings
+              </span>
+            </div>
+          )}
+          {settingsNavigation.map((item) => {
+            // Check permission if item has permission requirement
+            if (item.permission && !hasPermission(item.permission.resource, item.permission.action)) {
+              return null
+            }
+            
+            // Check if item is platform-only and user is not platform owner
+            if (item.platformOnly && !hasPermission('platform', 'read')) {
+              return null
+            }
+            
+            const isActive = pathname?.startsWith(item.href)
+            return (
+              <Link
+                key={item.name}
+                href={item.href}
+                className={cn(
+                  'flex items-center gap-3 px-3 py-3 rounded-lg transition-all',
+                  isActive
+                    ? 'bg-gradient-to-r from-primary-500/10 to-primary-600/10 text-primary-400 border-l-2 border-primary-500'
+                    : 'text-gray-400 hover:bg-gray-800 hover:text-gray-200'
+                )}
+              >
+                <div className="flex-shrink-0">
+                  {item.icon}
+                </div>
+                {(isExpanded || isPinned) && (
+                  <span className="text-sm font-medium whitespace-nowrap">{item.name}</span>
+                )}
+              </Link>
+            )
+          })}
+        </div>
+      </nav>
+
+      {/* User Section */}
+      <div className={cn('mt-auto px-3', isExpanded ? 'flex items-center gap-3 p-3 rounded-lg hover:bg-gray-800 transition-colors' : 'flex justify-center')}>
+        <div className="w-10 h-10 bg-gradient-to-br from-primary-500 to-primary-600 rounded-full flex items-center justify-center text-white font-semibold text-sm flex-shrink-0">
+          {user?.name?.charAt(0).toUpperCase() || 'U'}
+        </div>
+        {isExpanded && (
+          <div className="flex-1 min-w-0">
+            <p className="text-sm font-medium text-white truncate">{user?.name || 'User'}</p>
+            <p className="text-xs text-gray-400 truncate">{user?.email || ''}</p>
+          </div>
+        )}
+      </div>
+    </div>
+  )
+}

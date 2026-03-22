@@ -1,0 +1,173 @@
+/**
+ * Type definitions for the advanced chat interface
+ */
+
+export interface Message {
+  id: string
+  role: 'user' | 'assistant'
+  content: string
+  timestamp: Date
+  attachments?: Attachment[]
+  metadata?: MessageMetadata
+  sources?: RAGSource[]
+  isError?: boolean
+}
+
+export interface Attachment {
+  type: 'image' | 'video' | 'pdf' | 'link' | 'chart' | 'table' | 'document'
+  url: string
+  name?: string
+  thumbnail?: string
+  size?: number
+  // File upload fields
+  file_id?: string
+  file_name?: string
+  file_type?: string
+  file_size?: number
+  file_url?: string
+  thumbnail_url?: string
+}
+
+export interface MessageMetadata {
+  sources?: Source[]
+  charts?: ChartData[]
+  tables?: TableData[]
+  keyPeople?: Person[]
+  news?: NewsItem[]
+  images?: ImageData[]
+  usage?: TokenUsage
+  timing?: TimingInfo
+  workflow?: WorkflowMetadata
+}
+
+export interface WorkflowMetadata {
+  workflow_type?: string
+  stages?: any[]
+  total_duration?: number
+  agent_outputs?: Record<string, any>
+}
+
+export interface TokenUsage {
+  input_tokens: number
+  output_tokens: number
+  total_tokens: number
+}
+
+export interface TimingInfo {
+  start_time?: number
+  end_time?: number
+  duration?: number
+  time_to_first_token?: number
+}
+
+export interface Source {
+  title: string
+  url: string
+  favicon?: string
+  description?: string
+  snippet?: string
+  relevance?: number
+}
+
+export interface RAGSource {
+  index: number
+  score: number
+  text_preview: string
+  knowledge_base: string
+  segment_id?: string
+  document_id?: string
+  title?: string
+  source_type?: string
+  external_url?: string
+  presigned_url?: string
+  mime_type?: string
+  created_at?: string
+  metadata?: Record<string, any>
+  display: {
+    type: string
+    channel?: string
+    user?: string
+    from?: string
+    subject?: string
+    timestamp?: string
+    link?: string
+    title?: string
+    [key: string]: any
+  }
+}
+
+export interface ChartData {
+  type?: 'bar' | 'line' | 'pie' | 'area' | 'scatter' | 'doughnut'
+  chart_type?: 'bar' | 'line' | 'pie' | 'area' | 'scatter' | 'doughnut'
+  title: string
+  description?: string
+  library?: string
+  data: any
+  config?: any
+}
+
+export interface TableData {
+  title: string
+  headers: string[]
+  rows: string[][]
+}
+
+export interface Person {
+  name: string
+  title: string
+  avatar?: string
+  linkedin?: string
+  company?: string
+}
+
+export interface NewsItem {
+  title: string
+  source: string
+  url: string
+  date: string
+  thumbnail?: string
+}
+
+export interface ImageData {
+  url: string
+  caption?: string
+  width?: number
+  height?: number
+}
+
+export interface SuggestionPrompt {
+  title: string
+  description?: string
+  icon?: string
+  prompt: string
+}
+
+export interface Agent {
+  agent_name: string
+  agent_type: string
+  description?: string
+  status: string
+  model?: string
+  provider?: string
+  avatar?: string
+  suggestion_prompts?: SuggestionPrompt[]
+  // Stats and metadata
+  likes_count?: number
+  dislikes_count?: number
+  usage_count?: number
+  execution_count?: number
+  success_rate?: number
+  successful_executions?: number
+  failed_executions?: number
+  creator_name?: string
+  created_at?: string
+}
+
+export interface ChatSession {
+  id: string
+  agentName: string
+  title: string
+  lastMessage?: string
+  timestamp: Date
+  messageCount: number
+}

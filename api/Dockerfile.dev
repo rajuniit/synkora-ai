@@ -1,0 +1,88 @@
+# Development Dockerfile for synkora API
+FROM python:3.11-slim-bookworm
+
+WORKDIR /app/api
+
+# Force rebuild lxml and xmlsec from source so they match system libs
+ENV LXML_FORCE_EXTERNAL_LIBS=1
+ENV XMLSEC_FORCE_EXTERNAL_LIBS=1
+
+# Install system dependencies including Node.js for MCP stdio servers, GitHub CLI, SAML/xmlsec, and Playwright dependencies
+RUN apt-get update && apt-get install -y \
+    postgresql-client \
+    gcc \
+    g++ \
+    make \
+    python3-dev \
+    libpq-dev \
+    curl \
+    libmagic1 \
+    ca-certificates \
+    gnupg \
+    git \
+    openssh-client \
+    libxml2-dev \
+    libxmlsec1-dev \
+    libxmlsec1-openssl \
+    libxml2 \
+    libxmlsec1 \
+    pkg-config \
+    libnss3 \
+    libnspr4 \
+    libatk1.0-0 \
+    libatk-bridge2.0-0 \
+    libcups2 \
+    libdrm2 \
+    libdbus-1-3 \
+    libxkbcommon0 \
+    libxcomposite1 \
+    libxdamage1 \
+    libxfixes3 \
+    libxrandr2 \
+    libgbm1 \
+    libpango-1.0-0 \
+    libcairo2 \
+    libasound2 \
+    libatspi2.0-0 \
+    && mkdir -p /etc/apt/keyrings \
+    && curl -fsSL https://deb.nodesource.com/gpgkey/nodesource-repo.gpg.key | gpg --dearmor -o /etc/apt/keyrings/nodesource.gpg \
+    && echo "deb [signed-by=/etc/apt/keyrings/nodesource.gpg] https://deb.nodesource.com/node_20.x nodistro main" | tee /etc/apt/sources.list.d/nodesource.list \
+    && curl -fsSL https://cli.github.com/packages/githubcli-archive-keyring.gpg | gpg --dearmor -o /usr/share/keyrings/githubcli-archive-keyring.gpg \
+    && echo "deb [arch=$(dpkg --print-architecture) signed-by=/usr/share/keyrings/githubcli-archive-keyring.gpg] https://cli.github.com/packages stable main" | tee /etc/apt/sources.list.d/github-cli.list \
+    && apt-get update \
+    && apt-get install -y nodejs gh \
+    && rm -rf /var/lib/apt/lists/*
+
+# Install uv for faster dependency management
+ENV UV_VERSION=0.5.11
+RUN pip install --no-cache-dir uv==${UV_VERSION}
+
+# Copy dependency files
+COPY pyproject.toml uv.lock ./
+
+# Install dependencies with dev packages
+RUN uv pip install --system -e ".[dev]"
+
+# Force xmlsec & lxml to link to correct system-level libxml2/libxmlsec
+RUN pip uninstall -y lxml xmlsec && \
+    LXML_FORCE_EXTERNAL_LIBS=1 \
+    XMLSEC_FORCE_EXTERNAL_LIBS=1 \
+    pip install --no-binary=:all: lxml xmlsec
+
+
+# Install Playwright browsers for crawl4ai
+RUN playwright install chromium --with-deps
+
+# Copy application code
+COPY . .
+
+# Set environment variables
+ENV PYTHONPATH=/app/api
+ENV PYTHONUNBUFFERED=1
+ENV DEBUG=true
+
+# Expose port
+EXPOSE 5001
+
+# Default command for development (with hot reload)
+CMD ["uvicorn", "app:app", "--host", "0.0.0.0", "--port", "5001", "--reload"]

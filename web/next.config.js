@@ -1,0 +1,175 @@
+const { withSentryConfig } = require('@sentry/nextjs')
+
+/** @type {import('next').NextConfig} */
+const nextConfig = {
+  reactStrictMode: true,
+  output: 'standalone',
+
+  // Turbopack config (Next.js 16+ uses Turbopack by default)
+  turbopack: {},
+
+  // Transpile ESM-only packages
+  transpilePackages: ['remark-gfm', 'chart.js', 'react-chartjs-2', 'mermaid'],
+  
+  // Environment variables
+  env: {
+    NEXT_PUBLIC_API_URL: process.env.NEXT_PUBLIC_API_URL || 'http://localhost:5001',
+  },
+
+  // Image optimization
+  images: {
+    remotePatterns: [
+      {
+        protocol: 'http',
+        hostname: 'localhost',
+        port: '9000',
+        pathname: '/**',
+      },
+      {
+        protocol: 'https',
+        hostname: 'localhost',
+        port: '9000',
+        pathname: '/**',
+      },
+    ],
+    unoptimized: process.env.NODE_ENV === 'development',
+  },
+
+  // Webpack configuration
+  webpack: (config) => {
+    config.resolve.fallback = {
+      ...config.resolve.fallback,
+      fs: false,
+      net: false,
+      tls: false,
+    }
+    return config
+  },
+
+  // Headers for security
+  async headers() {
+    const isDev = process.env.NODE_ENV === 'development'
+    const apiUrl = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:5001'
+
+    // Build CSP — restrict where scripts can connect to prevent XSS token exfiltration
+    const cspDirectives = [
+      "default-src 'self'",
+      // Next.js requires unsafe-inline for hydration scripts; unsafe-eval for some libs
+      "script-src 'self' 'unsafe-inline' 'unsafe-eval'",
+      // Tailwind and styled components require unsafe-inline for styles
+      "style-src 'self' 'unsafe-inline'",
+      // Images from self, data URIs, blobs, and any HTTPS source (for user avatars etc.)
+      // In development, also allow HTTP for local MinIO presigned URLs
+      isDev ? "img-src 'self' data: blob: https: http:" : "img-src 'self' data: blob: https:",
+      "font-src 'self' data:",
+      // Critical: restrict where JS can make network requests — blocks token exfiltration
+      [
+        "connect-src 'self'",
+        apiUrl,
+        // WebSocket for real-time features
+        apiUrl.replace('http', 'ws'),
+        // Sentry error reporting (self-hosted + cloud)
+        'https://*.sentry.io',
+        'https://ingest.sentry.io',
+        process.env.NEXT_PUBLIC_LOGS_URL || '',
+        process.env.NEXT_PUBLIC_SENTRY_HOST || '',
+      ].filter(Boolean).join(' '),
+      "worker-src 'self' blob:",
+      // Allow iframes for document embedding (PDFs via API proxy, PowerPoint via Office Online)
+      [
+        "frame-src 'self'",
+        apiUrl,
+        'https://view.officeapps.live.com',
+        isDev ? 'http://localhost:9000' : '',
+        process.env.NEXT_PUBLIC_MINIO_PUBLIC_URL || '',
+      ].filter(Boolean).join(' '),
+      // Prevent clickjacking (replaces X-Frame-Options)
+      "frame-ancestors 'none'",
+      // Prevent base tag injection
+      "base-uri 'self'",
+      // Prevent form hijacking
+      "form-action 'self'",
+      // Upgrade HTTP requests to HTTPS in production
+      isDev ? '' : 'upgrade-insecure-requests',
+    ].filter(Boolean)
+
+    return [
+      {
+        source: '/:path*',
+        headers: [
+          {
+            key: 'Content-Security-Policy',
+            value: cspDirectives.join('; '),
+          },
+          {
+            key: 'X-Content-Type-Options',
+            value: 'nosniff',
+          },
+          // X-XSS-Protection intentionally omitted — deprecated and can introduce
+          // reflected XSS in some browsers. CSP provides XSS protection instead.
+          {
+            key: 'X-Frame-Options',
+            value: 'DENY',
+          },
+          {
+            key: 'Referrer-Policy',
+            value: 'strict-origin-when-cross-origin',
+          },
+          {
+            key: 'Permissions-Policy',
+            value: 'camera=(), microphone=(), geolocation=()',
+          },
+          // HSTS belongs on the frontend (HTML) server, not the API backend.
+          // Only set in production to avoid locking development browsers into HTTPS.
+          ...(!isDev ? [{
+            key: 'Strict-Transport-Security',
+            value: 'max-age=31536000; includeSubDomains; preload',
+          }] : []),
+        ],
+      },
+      // CORS headers for widget.js to allow embedding on external sites
+      {
+        source: '/widget.js',
+        headers: [
+          {
+            key: 'Access-Control-Allow-Origin',
+            value: '*',
+          },
+          {
+            key: 'Access-Control-Allow-Methods',
+            value: 'GET, OPTIONS',
+          },
+          {
+            key: 'Access-Control-Allow-Headers',
+            value: 'Content-Type',
+          },
+          {
+            key: 'Cache-Control',
+            value: 'public, max-age=3600, s-maxage=3600',
+          },
+        ],
+      },
+    ]
+  },
+
+  // Rewrites for API proxy in development
+  async rewrites() {
+    return [
+      {
+        source: '/api/:path*',
+        destination: `${process.env.NEXT_PUBLIC_API_URL || 'http://localhost:5001'}/api/:path*`,
+      },
+    ]
+  },
+}
+
+module.exports = process.env.NEXT_PUBLIC_SENTRY_DSN
+  ? withSentryConfig(nextConfig, {
+      org: process.env.SENTRY_ORG || '',
+      project: process.env.SENTRY_PROJECT || '',
+      silent: true,
+      widenClientFileUpload: true,
+      hideSourceMaps: true,
+      disableLogger: true,
+    })
+  : nextConfig

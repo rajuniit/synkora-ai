@@ -1,0 +1,345 @@
+"""Feature configuration."""
+
+from pydantic import Field, computed_field
+from pydantic_settings import BaseSettings
+
+
+class HttpConfig(BaseSettings):
+    """HTTP configuration settings."""
+
+    inner_cors_origins: str = Field(
+        default="",
+        description=(
+            "Comma-separated list of allowed CORS origins. "
+            "Example: 'https://app.example.com,https://admin.example.com'. "
+            "Leave empty to deny all cross-origin requests (recommended for production). "
+            "Set to 'http://localhost:3005' for local development."
+        ),
+    )
+
+    @computed_field  # type: ignore[misc]
+    @property
+    def cors_origins(self) -> list[str]:
+        """Get CORS origins as a list."""
+        return [origin.strip() for origin in self.inner_cors_origins.split(",") if origin.strip()]
+
+
+class FileUploadConfig(BaseSettings):
+    """File upload configuration."""
+
+    max_upload_size: int = Field(
+        default=15728640,
+        description="Max upload size in bytes (15MB)",
+    )
+
+    inner_allowed_extensions: str = Field(
+        default="txt,pdf,docx,md,html",
+        description="Comma-separated list of allowed file extensions",
+    )
+
+    @computed_field  # type: ignore[misc]
+    @property
+    def allowed_extensions(self) -> list[str]:
+        """Get allowed extensions as a list."""
+        return [ext.strip() for ext in self.inner_allowed_extensions.split(",") if ext.strip()]
+
+
+class LLMConfig(BaseSettings):
+    """LLM provider configuration."""
+
+    openai_api_key: str | None = Field(
+        default=None,
+        description="OpenAI API key",
+    )
+
+    anthropic_api_key: str | None = Field(
+        default=None,
+        description="Anthropic API key",
+    )
+
+
+class VectorDBConfig(BaseSettings):
+    """
+    Vector database configuration.
+
+    Following Synkora's architecture, supports multiple vector database providers.
+    ChromaDB is the default and recommended option for simplicity.
+    """
+
+    # Vector store type selection
+    vector_store: str = Field(
+        default="CHROMA",
+        description="Vector store type (CHROMA, QDRANT, WEAVIATE, MILVUS, etc.)",
+    )
+
+    # ChromaDB configuration (default)
+    chroma_host: str = Field(
+        default="localhost",
+        description="ChromaDB host",
+    )
+
+    chroma_port: int = Field(
+        default=8000,
+        description="ChromaDB port",
+    )
+
+    chroma_tenant: str = Field(
+        default="default_tenant",
+        description="ChromaDB tenant",
+    )
+
+    chroma_database: str = Field(
+        default="default_database",
+        description="ChromaDB database",
+    )
+
+    chroma_auth_provider: str | None = Field(
+        default=None,
+        description="ChromaDB auth provider",
+    )
+
+    chroma_auth_credentials: str | None = Field(
+        default=None,
+        description="ChromaDB auth credentials",
+    )
+
+    # Qdrant configuration
+    qdrant_url: str | None = Field(
+        default=None,
+        description="Qdrant URL",
+    )
+
+    qdrant_api_key: str | None = Field(
+        default=None,
+        description="Qdrant API key",
+    )
+
+    # Weaviate configuration
+    weaviate_url: str | None = Field(
+        default=None,
+        description="Weaviate URL",
+    )
+
+    weaviate_api_key: str | None = Field(
+        default=None,
+        description="Weaviate API key",
+    )
+
+    # Milvus configuration
+    milvus_host: str | None = Field(
+        default=None,
+        description="Milvus host",
+    )
+
+    milvus_port: int | None = Field(
+        default=None,
+        description="Milvus port",
+    )
+
+    milvus_user: str | None = Field(
+        default=None,
+        description="Milvus user",
+    )
+
+    milvus_password: str | None = Field(
+        default=None,
+        description="Milvus password",
+    )
+
+
+class MonitoringConfig(BaseSettings):
+    """Monitoring configuration."""
+
+    sentry_dsn: str | None = Field(
+        default=None,
+        description="Sentry DSN",
+    )
+
+    sentry_environment: str | None = Field(
+        default=None,
+        description="Sentry environment",
+    )
+
+    metrics_auth_token: str | None = Field(
+        default=None,
+        description=(
+            "Bearer token required to access /metrics and /api/v1/stats/performance. "
+            "If unset the endpoints are open (acceptable inside a private network). "
+            "Set this in production to prevent topology leakage."
+        ),
+    )
+
+
+class LangfuseConfig(BaseSettings):
+    """Langfuse observability configuration."""
+
+    langfuse_enabled: bool = Field(
+        default=False,
+        description="Enable Langfuse tracing",
+    )
+
+    langfuse_public_key: str | None = Field(
+        default=None,
+        description="Langfuse public key",
+    )
+
+    langfuse_secret_key: str | None = Field(
+        default=None,
+        description="Langfuse secret key",
+    )
+
+    langfuse_host: str = Field(
+        default="https://cloud.langfuse.com",
+        description="Langfuse host URL",
+    )
+
+    langfuse_sample_rate: float = Field(
+        default=1.0,
+        description="Sampling rate for traces (0.0 to 1.0)",
+        ge=0.0,
+        le=1.0,
+    )
+
+    @property
+    def is_configured(self) -> bool:
+        """Check if Langfuse is properly configured."""
+        return bool(self.langfuse_enabled and self.langfuse_public_key and self.langfuse_secret_key)
+
+
+class StripeConfig(BaseSettings):
+    """Stripe payment configuration."""
+
+    stripe_secret_key: str | None = Field(
+        default=None,
+        description="Stripe secret API key",
+    )
+
+    stripe_publishable_key: str | None = Field(
+        default=None,
+        description="Stripe publishable API key",
+    )
+
+    stripe_webhook_secret: str | None = Field(
+        default=None,
+        description="Stripe webhook signing secret",
+    )
+
+    stripe_enabled: bool = Field(
+        default=False,
+        description="Enable Stripe payment processing",
+    )
+
+    @property
+    def is_configured(self) -> bool:
+        """Check if Stripe is properly configured."""
+        return bool(self.stripe_enabled and self.stripe_secret_key and self.stripe_publishable_key)
+
+
+class DomainConfig(BaseSettings):
+    """Domain configuration."""
+
+    platform_domain: str = Field(
+        default="localhost",
+        description=(
+            "Platform domain used for subdomain routing. "
+            "Set to your public domain in production, e.g. 'app.example.com'."
+        ),
+    )
+
+    webhook_base_url: str | None = Field(
+        default=None,
+        description=(
+            "Publicly reachable base URL for webhook endpoints. "
+            "Required for Telegram webhook mode, e.g. 'https://api.example.com'."
+        ),
+    )
+
+    widget_js_url: str = Field(
+        default="http://localhost:3005/widget.js",
+        description=(
+            "Public URL where widget.js is served. "
+            "Set to your frontend URL in production, e.g. 'https://app.example.com/widget.js'."
+        ),
+    )
+
+    public_api_url: str = Field(
+        default="http://localhost:5001/api/v1",
+        description=(
+            "Public base URL for the API, used in widget embed code. "
+            "Set to your API URL in production, e.g. 'https://api.example.com/api/v1'."
+        ),
+    )
+
+
+class BotWorkerConfig(BaseSettings):
+    """Bot Worker configuration for scalable bot management."""
+
+    # Worker capacity
+    bot_worker_capacity: int = Field(
+        default=1000,
+        description="Maximum number of bots per worker",
+    )
+
+    # Heartbeat settings
+    bot_worker_heartbeat_interval: int = Field(
+        default=10,
+        description="Heartbeat interval in seconds",
+    )
+
+    bot_worker_heartbeat_timeout: int = Field(
+        default=30,
+        description="Consider worker dead after this many seconds without heartbeat",
+    )
+
+    # Health server
+    bot_worker_health_port: int = Field(
+        default=8080,
+        description="Port for worker health check server",
+    )
+
+    # Scaling
+    bot_worker_bots_per_worker_target: int = Field(
+        default=800,
+        description="Target bots per worker for auto-scaling decisions",
+    )
+
+
+class WorkspaceConfig(BaseSettings):
+    """
+    Workspace configuration for agent sandbox environments.
+
+    Provides isolated workspace directories per agent session for
+    git clones, file operations, and command execution.
+    """
+
+    workspace_base_path: str = Field(
+        default="/tmp/synkora/workspaces",
+        description="Base directory for agent workspaces",
+    )
+
+    workspace_ttl_hours: int = Field(
+        default=24,
+        description="Time-to-live for workspaces in hours",
+    )
+
+    workspace_max_size_mb: int = Field(
+        default=2000,
+        description="Maximum size per workspace in MB (2GB default)",
+    )
+
+    workspace_max_per_tenant: int = Field(
+        default=100,
+        description="Maximum concurrent workspaces per tenant",
+    )
+
+
+class FeatureConfig(BaseSettings):
+    """Feature configuration combining all feature settings."""
+
+    http: HttpConfig = HttpConfig()
+    file_upload: FileUploadConfig = FileUploadConfig()
+    llm: LLMConfig = LLMConfig()
+    vector_db: VectorDBConfig = VectorDBConfig()
+    monitoring: MonitoringConfig = MonitoringConfig()
+    langfuse: LangfuseConfig = LangfuseConfig()
+    stripe: StripeConfig = StripeConfig()

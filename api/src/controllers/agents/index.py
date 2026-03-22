@@ -1,0 +1,1305 @@
+"""
+Agent CRUD operations.
+
+Handles basic agent creation, listing, retrieval, update, delete, and reset operations.
+"""
+
+import logging
+import uuid
+
+from fastapi import APIRouter, Depends, HTTPException, status
+from sqlalchemy import func, select
+from sqlalchemy.ext.asyncio import AsyncSession
+from sqlalchemy.orm import selectinload
+
+from src.controllers.agents.models import (
+    AgentResponse,
+    CloneAgentRequest,
+    CreateAgentRequest,
+    ExecuteAgentRequest,
+    ExecuteWorkflowRequest,
+    UpdateAgentRequest,
+)
+from src.core.database import get_async_db
+from src.middleware.auth_middleware import get_current_tenant_id
+from src.models.agent import Agent
+from src.services.agents.agent_manager import AgentManager
+from src.services.agents.config import AgentConfig
+from src.services.agents.implementations import ClaudeCodeAgent, CodeAgent, LLMAgent, ResearchAgent
+from src.services.cache import get_agent_cache
+from src.services.storage.s3_storage import S3StorageService
+
+logger = logging.getLogger(__name__)
+
+# Create router
+agents_index_router = APIRouter()
+
+# Global agent manager instance
+agent_manager = AgentManager()
+
+
+def convert_s3_uri_to_presigned_url(s3_uri: str) -> str:
+    """
+    Convert S3 URI to presigned URL for frontend display.
+
+    Args:
+        s3_uri: S3 URI (s3://bucket/key) or HTTP URL
+
+    Returns:
+        Presigned HTTP URL or original URL if not S3 URI
+    """
+    if not s3_uri:
+        return s3_uri
+
+    # If it's already an HTTP URL, return as-is
+    if s3_uri.startswith(("http://", "https://")):
+        return s3_uri
+
+    # If it's an S3 URI or key path, generate presigned URL
+    if s3_uri.startswith("s3://") or "/" in s3_uri:
+        try:
+            storage_service = S3StorageService()
+            # Generate presigned URL valid for 7 days
+            return storage_service.generate_presigned_url(s3_uri, expiration=86400 * 7)
+        except Exception as e:
+            logger.warning(f"Failed to generate presigned URL for {s3_uri}: {e}")
+            return s3_uri
+
+    return s3_uri
+
+
+# Endpoints
+@agents_index_router.post("/", response_model=AgentResponse, status_code=status.HTTP_201_CREATED)
+async def create_agent(
+    request: CreateAgentRequest,
+    tenant_id: uuid.UUID = Depends(get_current_tenant_id),
+    db: AsyncSession = Depends(get_async_db),
+):
+    """
+    Create and register a new agent.
+
+    Args:
+        request: Agent creation request
+        db: Database session
+
+    Returns:
+        Agent creation response
+    """
+    try:
+        # Check agent creation limit
+        from src.services.billing import PlanRestrictionError, PlanRestrictionService
+
+        restriction_service = PlanRestrictionService(db)
+        try:
+            await restriction_service.enforce_agent_limit(tenant_id)
+        except PlanRestrictionError as e:
+            raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail=str(e))
+
+        # Determine agent class
+        agent_class_map = {
+            "llm": LLMAgent,
+            "research": ResearchAgent,
+            "code": CodeAgent,
+            "claude_code": ClaudeCodeAgent,
+        }
+
+        agent_class = agent_class_map.get(request.agent_type.lower())
+        if not agent_class:
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail=f"Unknown agent type: {request.agent_type}. Valid types: llm, research, code, claude_code",
+            )
+
+        # SECURITY: Scan system prompt for potential injection patterns
+        if request.config.system_prompt:
+            from src.services.security.advanced_prompt_scanner import advanced_prompt_scanner
+
+            scan_result = advanced_prompt_scanner.scan_comprehensive(
+                text=request.config.system_prompt,
+                user_id=f"tenant_{tenant_id}",
+                context={"source": "agent_creation", "agent_name": request.config.name},
+            )
+
+            if not scan_result["is_safe"]:
+                logger.warning(
+                    f"System prompt injection detected during agent creation '{request.config.name}' by tenant {tenant_id}: {scan_result['threats']}"
+                )
+                raise HTTPException(
+                    status_code=status.HTTP_400_BAD_REQUEST,
+                    detail=f"System prompt contains potentially dangerous patterns: {', '.join(scan_result['threats'])}",
+                )
+
+        # SECURITY: Sanitize suggestion_prompts to prevent stored XSS
+        from src.services.security.input_sanitizer import sanitize_suggestion_prompts
+
+        sanitized_suggestion_prompts = sanitize_suggestion_prompts(getattr(request.config, "suggestion_prompts", []))
+
+        # Create agent in memory
+        if request.api_key:
+            await agent_manager.create_agent(config=request.config, agent_class=agent_class, api_key=request.api_key)
+
+        # Prepare llm_config with encrypted API key
+        from src.services.agents.security import encrypt_value
+
+        llm_config_data = request.config.llm_config.model_dump()
+        if llm_config_data.get("api_key"):
+            llm_config_data["api_key"] = encrypt_value(llm_config_data["api_key"])
+
+        # Save to database
+        db_agent = Agent(
+            tenant_id=tenant_id,
+            agent_name=request.config.name,
+            agent_type=request.agent_type.lower(),
+            description=request.config.description,
+            avatar=request.config.avatar,
+            system_prompt=request.config.system_prompt,
+            llm_config=llm_config_data,
+            tools_config={"tools": [tool.model_dump() for tool in request.config.tools]}
+            if request.config.tools
+            else None,
+            agent_metadata={},
+            status="ACTIVE",
+            suggestion_prompts=sanitized_suggestion_prompts,  # SECURITY: Use sanitized prompts
+            is_public=getattr(request, "is_public", False),
+            category=getattr(request, "category", None),
+            tags=getattr(request, "tags", []) or [],
+            role_id=uuid.UUID(request.role_id) if request.role_id else None,
+            human_contact_id=uuid.UUID(request.human_contact_id) if request.human_contact_id else None,
+        )
+
+        db.add(db_agent)
+        await db.commit()
+        await db.refresh(db_agent)
+
+        # Also create an entry in the agent_llm_configs table for the LLM config
+        # This is required because the edit page and chat use that table
+        try:
+            from src.models.agent_llm_config import AgentLLMConfig
+            from src.services.agents.security import encrypt_value
+
+            llm_data = request.config.llm_config
+            # Encrypt the API key before storing
+            encrypted_api_key = encrypt_value(llm_data.api_key) if llm_data.api_key else ""
+            llm_config_entry = AgentLLMConfig(
+                tenant_id=tenant_id,
+                agent_id=db_agent.id,
+                name=f"Primary {llm_data.model_name}",
+                provider=llm_data.provider,
+                model_name=llm_data.model_name,
+                api_key=encrypted_api_key,
+                api_base=llm_data.api_base,
+                temperature=llm_data.temperature,
+                max_tokens=llm_data.max_tokens,
+                top_p=llm_data.top_p,
+                additional_params=llm_data.additional_params or {},
+                is_default=True,
+                display_order=0,
+                enabled=True,
+            )
+            db.add(llm_config_entry)
+            await db.commit()
+            logger.info(f"Created LLM config entry for agent '{request.config.name}'")
+        except Exception as llm_err:
+            logger.warning(f"Failed to create LLM config entry: {llm_err}")
+            # Don't fail agent creation if LLM config entry fails
+
+        # PERFORMANCE: Invalidate agents list cache for this tenant
+        cache = get_agent_cache()
+        await cache.invalidate_agents_list(str(tenant_id))
+
+        return AgentResponse(
+            success=True,
+            message=f"Agent '{request.config.name}' created successfully",
+            data={"agent_id": str(db_agent.id), "agent_name": request.config.name},
+        )
+
+    except ValueError as e:
+        await db.rollback()
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(e))
+    except HTTPException:
+        await db.rollback()
+        raise
+    except Exception as e:
+        from sqlalchemy.exc import IntegrityError
+
+        await db.rollback()
+
+        # Handle duplicate agent name error
+        if isinstance(e, IntegrityError) and "agents_agent_name_idx" in str(e):
+            logger.warning(f"Duplicate agent name attempted: {request.config.name}")
+            raise HTTPException(
+                status_code=status.HTTP_409_CONFLICT,
+                detail=f"Agent with name '{request.config.name}' already exists. Please choose a different name.",
+            )
+
+        # Handle other integrity errors
+        elif isinstance(e, IntegrityError):
+            logger.error(f"Database integrity error: {e}", exc_info=True)
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail="Invalid data provided. Please check your input and try again.",
+            )
+
+        # Handle other exceptions
+        logger.error(f"Failed to create agent: {e}", exc_info=True)
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail="Failed to create agent. Please try again later.",
+        )
+
+
+@agents_index_router.post("/execute", response_model=AgentResponse)
+async def execute_agent(
+    request: ExecuteAgentRequest,
+    tenant_id: uuid.UUID = Depends(get_current_tenant_id),
+    db: AsyncSession = Depends(get_async_db),
+):
+    """
+    Execute a registered agent.
+
+    Args:
+        request: Agent execution request
+        tenant_id: Tenant ID from JWT token
+        db: Database session
+
+    Returns:
+        Execution result
+    """
+    try:
+        from sqlalchemy import or_
+
+        # SECURITY: Verify agent belongs to tenant OR is public before execution
+        result = await db.execute(
+            select(Agent).filter(
+                Agent.agent_name == request.agent_name, or_(Agent.tenant_id == tenant_id, Agent.is_public.is_(True))
+            )
+        )
+        db_agent = result.scalar_one_or_none()
+
+        if not db_agent:
+            raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=f"Agent '{request.agent_name}' not found")
+
+        result = await agent_manager.execute_agent(request.agent_name, request.input_data)
+
+        return AgentResponse(
+            success=result.get("status") == "success",
+            message=f"Agent '{request.agent_name}' executed",
+            data=result,
+        )
+
+    except HTTPException:
+        raise
+    except KeyError:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Agent not found")
+    except Exception as e:
+        logger.error(f"Failed to execute agent: {e}", exc_info=True)
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail="Failed to execute agent",
+        )
+
+
+@agents_index_router.post("/workflows/execute", response_model=AgentResponse)
+async def execute_workflow(
+    request: ExecuteWorkflowRequest,
+    tenant_id: uuid.UUID = Depends(get_current_tenant_id),
+    db: AsyncSession = Depends(get_async_db),
+):
+    """
+    Execute a multi-agent workflow.
+
+    Args:
+        request: Workflow execution request
+        tenant_id: Tenant ID from JWT token
+        db: Database session
+
+    Returns:
+        Workflow execution result
+    """
+    try:
+        from sqlalchemy import or_
+
+        # SECURITY: Verify all agents in workflow belong to tenant OR are public
+        agent_names = [step.agent_name for step in request.workflow_config.steps]
+        for agent_name in agent_names:
+            result = await db.execute(
+                select(Agent).filter(
+                    Agent.agent_name == agent_name, or_(Agent.tenant_id == tenant_id, Agent.is_public.is_(True))
+                )
+            )
+            db_agent = result.scalar_one_or_none()
+
+            if not db_agent:
+                raise HTTPException(
+                    status_code=status.HTTP_404_NOT_FOUND, detail=f"Agent '{agent_name}' not found in workflow"
+                )
+
+        result = await agent_manager.execute_workflow(request.workflow_config, request.input_data)
+
+        return AgentResponse(
+            success=result.get("status") in ["success", "partial_success"],
+            message=f"Workflow '{request.workflow_config.name}' executed",
+            data=result,
+        )
+
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"Failed to execute workflow: {e}", exc_info=True)
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail="Failed to execute workflow",
+        )
+
+
+@agents_index_router.get("/", response_model=AgentResponse)
+async def list_agents(
+    page: int = 1,
+    page_size: int = 10,
+    tenant_id: uuid.UUID = Depends(get_current_tenant_id),
+    db: AsyncSession = Depends(get_async_db),
+):
+    """
+    List all registered agents from database with pagination.
+
+    Args:
+        page: Page number (starts from 1)
+        page_size: Number of items per page
+        tenant_id: Current tenant ID
+        db: Database session
+
+    Returns:
+        Paginated list of agent names with metadata including workflow info and sub-agents
+    """
+    from src.models.agent_sub_agent import AgentSubAgent
+
+    try:
+        # Validate pagination parameters
+        if page < 1:
+            page = 1
+        if page_size < 1:
+            page_size = 10
+        if page_size > 100:
+            page_size = 100
+
+        # PERFORMANCE: Try to get from cache first
+        cache = get_agent_cache()
+        tenant_id_str = str(tenant_id)
+        cached_data = await cache.get_agents_list(tenant_id_str, page, page_size)
+        if cached_data:
+            return AgentResponse(
+                success=True,
+                message=cached_data.get("message", "Found agents (cached)"),
+                data=cached_data.get("data", {}),
+            )
+
+        # Calculate offset
+        offset = (page - 1) * page_size
+
+        # Get total count
+        count_result = await db.execute(select(func.count()).select_from(Agent).filter(Agent.tenant_id == tenant_id))
+        total_count = count_result.scalar()
+
+        # PERFORMANCE: Get paginated agents from database without restoring to memory
+        # Agents are loaded on-demand when needed, not on list
+        agents_result = await db.execute(
+            select(Agent)
+            .filter(Agent.tenant_id == tenant_id)
+            .order_by(Agent.created_at.desc())
+            .offset(offset)
+            .limit(page_size)
+        )
+        db_agents = agents_result.scalars().all()
+
+        # Get sub-agent counts for all agents in one query
+        agent_ids = [db_agent.id for db_agent in db_agents]
+        sub_agent_counts_result = await db.execute(
+            select(AgentSubAgent.parent_agent_id, func.count(AgentSubAgent.id).label("count"))
+            .filter(AgentSubAgent.parent_agent_id.in_(agent_ids))
+            .group_by(AgentSubAgent.parent_agent_id)
+        )
+        sub_agent_counts = sub_agent_counts_result.all()
+        sub_agent_count_map = {str(parent_id): count for parent_id, count in sub_agent_counts}
+
+        # Get sub-agents data for agents that have sub-agents
+        sub_agents_result = await db.execute(
+            select(AgentSubAgent)
+            .options(selectinload(AgentSubAgent.sub_agent))
+            .filter(AgentSubAgent.parent_agent_id.in_(agent_ids))
+            .order_by(AgentSubAgent.execution_order)
+        )
+        sub_agents_data = sub_agents_result.scalars().all()
+
+        # Get set of agent IDs that are used as sub-agents (to filter them out from main list)
+        # PERFORMANCE: Scope to current tenant to avoid unbounded cross-tenant query
+        sub_agent_ids_query = await db.execute(
+            select(AgentSubAgent.sub_agent_id)
+            .join(Agent, Agent.id == AgentSubAgent.parent_agent_id)
+            .filter(Agent.tenant_id == tenant_id)
+            .distinct()
+        )
+        sub_agent_ids_result = sub_agent_ids_query.all()
+        sub_agent_ids_set = {str(row[0]) for row in sub_agent_ids_result}
+
+        # Build sub-agents map by parent_agent_id
+        sub_agents_map: dict = {}
+        for sub_agent_rel in sub_agents_data:
+            parent_id = str(sub_agent_rel.parent_agent_id)
+            if parent_id not in sub_agents_map:
+                sub_agents_map[parent_id] = []
+            sub_agents_map[parent_id].append(
+                {
+                    "id": str(sub_agent_rel.id),
+                    "sub_agent_id": str(sub_agent_rel.sub_agent_id),
+                    "sub_agent_name": sub_agent_rel.sub_agent.agent_name if sub_agent_rel.sub_agent else None,
+                    "sub_agent_type": sub_agent_rel.sub_agent.agent_type if sub_agent_rel.sub_agent else None,
+                    "execution_order": sub_agent_rel.execution_order,
+                    "is_active": sub_agent_rel.is_active,
+                }
+            )
+
+        # NOTE: Removed agent restoration loop to prevent N+1 queries and memory bloat
+        # Agents are now loaded lazily when actually needed (e.g., during chat)
+
+        # Calculate pagination metadata
+        total_pages = (total_count + page_size - 1) // page_size
+        has_next = page < total_pages
+        has_prev = page > 1
+
+        # Convert S3 URIs to presigned URLs for avatars
+        agents_list = []
+        for db_agent in db_agents:
+            agent_id_str = str(db_agent.id)
+            avatar_url = convert_s3_uri_to_presigned_url(db_agent.avatar) if db_agent.avatar else None
+
+            # Check if this agent is a sub-agent of another agent
+            # Either via parent_agent_id or via AgentSubAgent junction table
+            is_sub_agent = db_agent.parent_agent_id is not None or agent_id_str in sub_agent_ids_set
+
+            agents_list.append(
+                {
+                    "id": agent_id_str,
+                    "agent_name": db_agent.agent_name,
+                    "description": db_agent.description,
+                    "agent_type": db_agent.agent_type,
+                    "avatar": avatar_url,
+                    "status": db_agent.status,
+                    "workflow_type": db_agent.workflow_type,
+                    "execution_count": db_agent.execution_count,
+                    "success_rate": db_agent.success_rate,
+                    "created_at": db_agent.created_at.isoformat() if db_agent.created_at else None,
+                    "sub_agents_count": sub_agent_count_map.get(agent_id_str, 0),
+                    "sub_agents": sub_agents_map.get(agent_id_str, []),
+                    "is_public": db_agent.is_public,
+                    "category": db_agent.category,
+                    "tags": db_agent.tags or [],
+                    "is_sub_agent": is_sub_agent,
+                }
+            )
+
+        # Build response data
+        response_message = f"Found {total_count} agents"
+        response_data = {
+            "agents": [db_agent.agent_name for db_agent in db_agents],
+            "agents_list": agents_list,
+            "pagination": {
+                "page": page,
+                "page_size": page_size,
+                "total": total_count,
+                "total_pages": total_pages,
+                "has_next": has_next,
+                "has_prev": has_prev,
+            },
+        }
+
+        # PERFORMANCE: Cache the response for 60 seconds
+        await cache.set_agents_list(
+            tenant_id_str,
+            {"message": response_message, "data": response_data},
+            page,
+            page_size,
+        )
+
+        return AgentResponse(
+            success=True,
+            message=response_message,
+            data=response_data,
+        )
+
+    except Exception as e:
+        logger.error(f"Failed to list agents: {e}", exc_info=True)
+        raise HTTPException(status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail="Failed to list agents")
+
+
+# NOTE: Static routes like /categories and /stats MUST be defined BEFORE dynamic routes like /{agent_name}
+# Otherwise FastAPI will match "categories" as an agent_name parameter
+@agents_index_router.get("/categories", response_model=AgentResponse)
+async def list_agent_categories(db: AsyncSession = Depends(get_async_db)):
+    """
+    List all available agent categories.
+
+    Args:
+        db: Database session
+
+    Returns:
+        List of categories with agent counts
+    """
+    try:
+        # Get categories with counts
+        categories_result = await db.execute(
+            select(Agent.category, func.count(Agent.id).label("count"))
+            .filter(Agent.is_public, Agent.category.isnot(None))
+            .group_by(Agent.category)
+        )
+        categories = categories_result.all()
+
+        categories_list = [{"name": cat, "count": count} for cat, count in categories]
+
+        return AgentResponse(
+            success=True, message=f"Found {len(categories_list)} categories", data={"categories": categories_list}
+        )
+
+    except Exception as e:
+        logger.error(f"Failed to list categories: {e}", exc_info=True)
+        raise HTTPException(status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail="Failed to list categories")
+
+
+@agents_index_router.get("/stats", response_model=AgentResponse)
+async def get_all_stats(
+    tenant_id: uuid.UUID = Depends(get_current_tenant_id),
+    db: AsyncSession = Depends(get_async_db),
+):
+    """
+    Get statistics for all agents belonging to the current tenant.
+
+    Args:
+        tenant_id: Tenant ID from JWT token
+        db: Database session
+
+    Returns:
+        Statistics for tenant's agents only
+    """
+    try:
+        # SECURITY: Only return stats for agents belonging to current tenant
+        result = await db.execute(select(Agent.agent_name).filter(Agent.tenant_id == tenant_id))
+        tenant_agents = result.all()
+        tenant_agent_names = {a[0] for a in tenant_agents}
+
+        all_stats = agent_manager.get_all_stats()
+        # Filter stats to only include tenant's agents
+        filtered_stats = {name: stats for name, stats in all_stats.items() if name in tenant_agent_names}
+
+        return AgentResponse(success=True, message="Retrieved stats for tenant agents", data={"agents": filtered_stats})
+
+    except Exception as e:
+        logger.error(f"Failed to get all stats: {e}", exc_info=True)
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail="Failed to get agent stats",
+        )
+
+
+@agents_index_router.get("/{agent_name}", response_model=AgentResponse)
+async def get_agent(
+    agent_name: str,
+    tenant_id: uuid.UUID = Depends(get_current_tenant_id),
+    db: AsyncSession = Depends(get_async_db),
+):
+    """
+    Get details of a specific agent.
+
+    Args:
+        agent_name: Name of the agent
+        db: Database session
+
+    Returns:
+        Agent details
+    """
+    try:
+        from sqlalchemy import or_
+
+        # SECURITY: Single query with OR to prevent timing attacks
+        # Checks: (agent belongs to tenant) OR (agent is public)
+        result = await db.execute(
+            select(Agent)
+            .options(selectinload(Agent.role), selectinload(Agent.human_contact))
+            .filter(Agent.agent_name == agent_name, or_(Agent.tenant_id == tenant_id, Agent.is_public.is_(True)))
+        )
+        db_agent = result.scalar_one_or_none()
+
+        if not db_agent:
+            raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=f"Agent '{agent_name}' not found")
+
+        # Get runtime stats if agent is in memory
+        stats = {}
+        if agent_name in agent_manager.registry:
+            stats = agent_manager.get_agent_stats(agent_name)
+
+        # Convert S3 URI to presigned URL for avatar display
+        avatar_url = convert_s3_uri_to_presigned_url(db_agent.avatar) if db_agent.avatar else None
+
+        # Build role and human contact data
+        role_data = None
+        if db_agent.role:
+            role_data = {
+                "id": str(db_agent.role.id),
+                "role_type": db_agent.role.role_type,
+                "role_name": db_agent.role.role_name,
+            }
+
+        human_contact_data = None
+        if db_agent.human_contact:
+            human_contact_data = {
+                "id": str(db_agent.human_contact.id),
+                "name": db_agent.human_contact.name,
+                "preferred_channel": db_agent.human_contact.preferred_channel,
+            }
+
+        return AgentResponse(
+            success=True,
+            message=f"Agent '{agent_name}' details",
+            data={
+                "id": str(db_agent.id),
+                "agent_name": db_agent.agent_name,
+                "agent_type": db_agent.agent_type,
+                "description": db_agent.description,
+                "avatar": avatar_url,
+                "system_prompt": db_agent.system_prompt,
+                "llm_config": db_agent.llm_config,
+                "tools_config": db_agent.tools_config,
+                "observability_config": db_agent.observability_config or {},
+                "agent_metadata": db_agent.agent_metadata or {},
+                "suggestion_prompts": db_agent.suggestion_prompts or [],
+                "status": db_agent.status,
+                "is_public": db_agent.is_public or False,
+                "category": db_agent.category,
+                "tags": db_agent.tags or [],
+                "voice_enabled": db_agent.voice_enabled or False,
+                "voice_config": db_agent.voice_config or {},
+                "is_adk_workflow_enabled": db_agent.workflow_type is not None,
+                "workflow_type": db_agent.workflow_type,
+                "workflow_config": db_agent.workflow_config,
+                "created_at": db_agent.created_at.isoformat(),
+                "updated_at": db_agent.updated_at.isoformat(),
+                "stats": stats,
+                "role_id": str(db_agent.role_id) if db_agent.role_id else None,
+                "human_contact_id": str(db_agent.human_contact_id) if db_agent.human_contact_id else None,
+                "role": role_data,
+                "human_contact": human_contact_data,
+            },
+        )
+
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"Failed to get agent: {e}", exc_info=True)
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail="Failed to get agent details",
+        )
+
+
+@agents_index_router.get("/{agent_name}/stats", response_model=AgentResponse)
+async def get_agent_stats(
+    agent_name: str,
+    tenant_id: uuid.UUID = Depends(get_current_tenant_id),
+    db: AsyncSession = Depends(get_async_db),
+):
+    """
+    Get statistics for a specific agent.
+    Allows access to public agents even if they don't belong to the current tenant.
+
+    Args:
+        agent_name: Name of the agent
+        db: Database session
+
+    Returns:
+        Agent statistics including database info
+    """
+    try:
+        from sqlalchemy import or_
+
+        from src.models.tenant import Tenant
+
+        # SECURITY: Single query with OR to prevent timing attacks
+        # Checks: (agent belongs to tenant) OR (agent is public)
+        result = await db.execute(
+            select(Agent).filter(
+                Agent.agent_name == agent_name, or_(Agent.tenant_id == tenant_id, Agent.is_public.is_(True))
+            )
+        )
+        db_agent = result.scalar_one_or_none()
+
+        if not db_agent:
+            raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=f"Agent '{agent_name}' not found")
+
+        # Convert S3 URI to presigned URL for avatar display
+        avatar_url = convert_s3_uri_to_presigned_url(db_agent.avatar) if db_agent.avatar else None
+
+        # Use database values for execution stats
+        # Calculate failed executions from total and success count
+        failed_count = db_agent.execution_count - db_agent.success_count
+
+        # Get creator information from tenant (separate query - Agent doesn't have tenant relationship)
+        creator_name = None
+        if db_agent.tenant_id:
+            tenant_result = await db.execute(select(Tenant).filter(Tenant.id == db_agent.tenant_id))
+            tenant = tenant_result.scalar_one_or_none()
+            if tenant:
+                creator_name = tenant.name
+
+        # Combine database info with computed stats
+        stats = {
+            "agent_id": str(db_agent.id),
+            "agent_name": db_agent.agent_name,
+            "agent_type": db_agent.agent_type,
+            "description": db_agent.description,
+            "avatar": avatar_url,
+            "status": db_agent.status,
+            "llm_config": db_agent.llm_config,
+            "observability_config": db_agent.observability_config or {},
+            "suggestion_prompts": db_agent.suggestion_prompts or [],
+            "created_at": db_agent.created_at.isoformat(),
+            "updated_at": db_agent.updated_at.isoformat(),
+            "execution_count": db_agent.execution_count,
+            "success_rate": db_agent.success_rate,  # Uses property from model
+            "total_executions": db_agent.execution_count,
+            "successful_executions": db_agent.success_count,
+            "failed_executions": failed_count,
+            "average_execution_time": 0.0,  # This would need separate tracking
+            "likes_count": db_agent.likes_count,
+            "dislikes_count": db_agent.dislikes_count,
+            "usage_count": db_agent.usage_count,
+            "creator_name": creator_name,
+            "tenant_id": str(db_agent.tenant_id),
+        }
+
+        return AgentResponse(success=True, message=f"Stats for agent '{agent_name}'", data=stats)
+
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"Failed to get agent stats: {e}", exc_info=True)
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail="Failed to get agent stats",
+        )
+
+
+@agents_index_router.put("/{agent_name}", response_model=AgentResponse)
+async def update_agent(
+    agent_name: str,
+    request: UpdateAgentRequest,
+    tenant_id: uuid.UUID = Depends(get_current_tenant_id),
+    db: AsyncSession = Depends(get_async_db),
+):
+    """
+    Update an agent's configuration.
+
+    Args:
+        agent_name: Name of the agent to update
+        request: Update request with fields to change
+        db: Database session
+
+    Returns:
+        Update confirmation
+    """
+    try:
+        # Get agent from database
+        result = await db.execute(select(Agent).filter(Agent.agent_name == agent_name, Agent.tenant_id == tenant_id))
+        db_agent = result.scalar_one_or_none()
+
+        if not db_agent:
+            raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=f"Agent '{agent_name}' not found")
+
+        # Update fields if provided
+        if request.description is not None:
+            db_agent.description = request.description
+        if request.avatar is not None:
+            db_agent.avatar = request.avatar
+        if request.system_prompt is not None:
+            # SECURITY: Scan system prompt for potential injection patterns
+            from src.services.security.advanced_prompt_scanner import advanced_prompt_scanner
+
+            scan_result = advanced_prompt_scanner.scan_comprehensive(
+                text=request.system_prompt,
+                user_id=f"tenant_{tenant_id}",
+                context={"source": "system_prompt_update", "agent_name": agent_name},
+            )
+
+            if not scan_result["is_safe"]:
+                logger.warning(
+                    f"System prompt injection detected for agent '{agent_name}' by tenant {tenant_id}: {scan_result['threats']}"
+                )
+                raise HTTPException(
+                    status_code=status.HTTP_400_BAD_REQUEST,
+                    detail=f"System prompt contains potentially dangerous patterns: {', '.join(scan_result['threats'])}",
+                )
+
+            db_agent.system_prompt = request.system_prompt
+        if request.llm_config is not None:
+            # Encrypt API key if present in the update
+            updated_llm_config = (
+                request.llm_config.copy() if isinstance(request.llm_config, dict) else request.llm_config
+            )
+            if isinstance(updated_llm_config, dict) and updated_llm_config.get("api_key"):
+                from src.services.agents.security import encrypt_value
+
+                updated_llm_config["api_key"] = encrypt_value(updated_llm_config["api_key"])
+            db_agent.llm_config = updated_llm_config
+        if request.tools_config is not None:
+            db_agent.tools_config = request.tools_config
+        if request.observability_config is not None:
+            db_agent.observability_config = request.observability_config
+        if request.suggestion_prompts is not None:
+            # SECURITY: Sanitize suggestion_prompts to prevent stored XSS
+            from src.services.security.input_sanitizer import sanitize_suggestion_prompts
+
+            db_agent.suggestion_prompts = sanitize_suggestion_prompts(request.suggestion_prompts)
+        if request.status is not None:
+            db_agent.status = request.status
+        if request.is_public is not None:
+            db_agent.is_public = request.is_public
+        if request.category is not None:
+            db_agent.category = request.category
+        if request.tags is not None:
+            db_agent.tags = request.tags
+        if request.voice_enabled is not None:
+            db_agent.voice_enabled = request.voice_enabled
+        if request.voice_config is not None:
+            db_agent.voice_config = request.voice_config
+        if request.agent_metadata is not None:
+            db_agent.agent_metadata = request.agent_metadata
+        # Note: is_adk_workflow_enabled is derived from workflow_type presence, not stored separately
+        if request.workflow_type is not None:
+            db_agent.workflow_type = request.workflow_type
+        if request.workflow_config is not None:
+            db_agent.workflow_config = request.workflow_config
+        # Role-based agent fields
+        if request.role_id is not None:
+            db_agent.role_id = uuid.UUID(request.role_id) if request.role_id else None
+        if request.human_contact_id is not None:
+            db_agent.human_contact_id = uuid.UUID(request.human_contact_id) if request.human_contact_id else None
+
+        await db.commit()
+        await db.refresh(db_agent)
+
+        # Phase 4: Invalidate cache after update
+        cache = get_agent_cache()
+        await cache.invalidate_agent(agent_name=agent_name, agent_id=str(db_agent.id))
+        await cache.invalidate_agents_list(str(tenant_id))  # PERFORMANCE: Also invalidate list cache
+        logger.info(f"🗑️  Invalidated cache for agent '{agent_name}'")
+
+        # Recreate agent in memory with updated config
+        if agent_name in agent_manager.registry:
+            try:
+                # Delete old agent from memory
+                await agent_manager.delete_agent(agent_name)
+
+                # Reconstruct and recreate agent
+                from src.services.agents.config import ModelConfig, ToolConfig
+
+                llm_config = ModelConfig(**db_agent.llm_config)
+                tools = []
+                if db_agent.tools_config and "tools" in db_agent.tools_config:
+                    tools = [ToolConfig(**tool) for tool in db_agent.tools_config["tools"]]
+
+                config = AgentConfig(
+                    name=db_agent.agent_name,
+                    description=db_agent.description or "",
+                    system_prompt=db_agent.system_prompt or "",
+                    llm_config=llm_config,
+                    tools=tools,
+                )
+
+                # Determine agent class
+                agent_class_map = {
+                    "llm": LLMAgent,
+                    "research": ResearchAgent,
+                    "code": CodeAgent,
+                    "claude_code": ClaudeCodeAgent,
+                }
+                agent_class = agent_class_map.get(
+                    db_agent.agent_type.lower() if db_agent.agent_type else "llm", LLMAgent
+                )
+
+                # Get API key from llm_config
+                api_key = db_agent.llm_config.get("api_key", "")
+
+                # Recreate agent in memory
+                await agent_manager.create_agent(config=config, agent_class=agent_class, api_key=api_key)
+                logger.info(f"Recreated agent '{agent_name}' in memory with updated config")
+            except Exception as e:
+                logger.error(f"Failed to recreate agent in memory: {e}")
+
+        return AgentResponse(
+            success=True,
+            message=f"Agent '{agent_name}' updated successfully",
+            data={"agent_name": db_agent.agent_name, "updated_at": db_agent.updated_at.isoformat()},
+        )
+
+    except HTTPException:
+        raise
+    except Exception as e:
+        await db.rollback()
+        logger.error(f"Failed to update agent: {e}", exc_info=True)
+        raise HTTPException(status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail="Failed to update agent")
+
+
+@agents_index_router.delete("/{agent_name}", response_model=AgentResponse)
+async def delete_agent(
+    agent_name: str,
+    tenant_id: uuid.UUID = Depends(get_current_tenant_id),
+    db: AsyncSession = Depends(get_async_db),
+):
+    """
+    Delete an agent.
+
+    Args:
+        agent_name: Name of the agent to delete
+        db: Database session
+
+    Returns:
+        Deletion confirmation
+    """
+    try:
+        deleted_from_memory = False
+        deleted_from_db = False
+
+        # Try to delete from memory (may not be loaded)
+        try:
+            await agent_manager.delete_agent(agent_name)
+            deleted_from_memory = True
+        except KeyError:
+            # Agent not in memory, continue to try deleting from database
+            pass
+
+        # Delete from database
+        result = await db.execute(select(Agent).filter(Agent.agent_name == agent_name, Agent.tenant_id == tenant_id))
+        db_agent = result.scalar_one_or_none()
+
+        if db_agent:
+            await db.delete(db_agent)
+            await db.commit()
+            deleted_from_db = True
+
+        # If agent wasn't found anywhere, return 404
+        if not deleted_from_memory and not deleted_from_db:
+            raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=f"Agent '{agent_name}' not found")
+
+        # PERFORMANCE: Invalidate agents list cache for this tenant
+        cache = get_agent_cache()
+        await cache.invalidate_agents_list(str(tenant_id))
+
+        return AgentResponse(success=True, message=f"Agent '{agent_name}' deleted successfully")
+
+    except HTTPException:
+        raise
+    except Exception as e:
+        await db.rollback()
+        logger.error(f"Failed to delete agent: {e}", exc_info=True)
+        raise HTTPException(status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail="Failed to delete agent")
+
+
+@agents_index_router.post("/{agent_name}/reset", response_model=AgentResponse)
+async def reset_agent(
+    agent_name: str,
+    tenant_id: uuid.UUID = Depends(get_current_tenant_id),
+    db: AsyncSession = Depends(get_async_db),
+):
+    """
+    Reset an agent's state.
+
+    Args:
+        agent_name: Name of the agent to reset
+        tenant_id: Tenant ID from JWT token
+        db: Database session
+
+    Returns:
+        Reset confirmation
+    """
+    try:
+        # SECURITY: Verify agent belongs to tenant before resetting (no public agent reset)
+        result = await db.execute(select(Agent).filter(Agent.agent_name == agent_name, Agent.tenant_id == tenant_id))
+        db_agent = result.scalar_one_or_none()
+
+        if not db_agent:
+            raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=f"Agent '{agent_name}' not found")
+
+        # Try to reset in memory (agent may not be loaded)
+        try:
+            await agent_manager.reset_agent(agent_name)
+        except KeyError:
+            # Agent not in memory, but exists in DB - nothing to reset in memory
+            pass
+
+        return AgentResponse(success=True, message=f"Agent '{agent_name}' reset successfully")
+
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"Failed to reset agent: {e}", exc_info=True)
+        raise HTTPException(status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail="Failed to reset agent")
+
+
+@agents_index_router.post("/reset-all", response_model=AgentResponse)
+async def reset_all_agents(
+    tenant_id: uuid.UUID = Depends(get_current_tenant_id),
+    db: AsyncSession = Depends(get_async_db),
+):
+    """
+    Reset all agents belonging to the current tenant.
+
+    Args:
+        tenant_id: Tenant ID from JWT token
+        db: Database session
+
+    Returns:
+        Reset confirmation
+    """
+    try:
+        # SECURITY: Only reset agents belonging to current tenant
+        result = await db.execute(select(Agent.agent_name).filter(Agent.tenant_id == tenant_id))
+        tenant_agents = result.all()
+        tenant_agent_names = [a[0] for a in tenant_agents]
+
+        reset_count = 0
+        for agent_name in tenant_agent_names:
+            try:
+                await agent_manager.reset_agent(agent_name)
+                reset_count += 1
+            except KeyError:
+                # Agent not in memory, skip
+                pass
+
+        return AgentResponse(success=True, message=f"Reset {reset_count} agents successfully")
+
+    except Exception as e:
+        logger.error(f"Failed to reset all agents: {e}", exc_info=True)
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail="Failed to reset agents",
+        )
+
+
+@agents_index_router.post("/{agent_name}/clone", response_model=AgentResponse, status_code=status.HTTP_201_CREATED)
+async def clone_agent(
+    agent_name: str,
+    request: CloneAgentRequest,
+    tenant_id: uuid.UUID = Depends(get_current_tenant_id),
+    db: AsyncSession = Depends(get_async_db),
+):
+    """
+    Clone an existing agent with configurable options.
+
+    Args:
+        agent_name: Name of the agent to clone
+        request: Clone configuration request
+        tenant_id: Current tenant ID
+        db: Database session
+
+    Returns:
+        Clone success response with warnings about OAuth integrations
+    """
+    try:
+        # Check agent creation limit
+        from src.models.agent_knowledge_base import AgentKnowledgeBase
+        from src.models.agent_llm_config import AgentLLMConfig
+        from src.models.agent_sub_agent import AgentSubAgent
+        from src.services.billing import PlanRestrictionError, PlanRestrictionService
+
+        restriction_service = PlanRestrictionService(db)
+        try:
+            await restriction_service.enforce_agent_limit(tenant_id)
+        except PlanRestrictionError as e:
+            raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail=str(e))
+
+        # Get source agent
+        result = await db.execute(select(Agent).filter(Agent.agent_name == agent_name, Agent.tenant_id == tenant_id))
+        source_agent = result.scalar_one_or_none()
+
+        if not source_agent:
+            raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=f"Agent '{agent_name}' not found")
+
+        # Check if new name already exists
+        existing_result = await db.execute(
+            select(Agent).filter(Agent.agent_name == request.new_name, Agent.tenant_id == tenant_id)
+        )
+        existing = existing_result.scalar_one_or_none()
+
+        if existing:
+            raise HTTPException(
+                status_code=status.HTTP_409_CONFLICT, detail=f"Agent '{request.new_name}' already exists"
+            )
+
+        # Clone the agent with same settings
+        cloned_agent = Agent(
+            tenant_id=tenant_id,
+            agent_name=request.new_name,
+            agent_type=source_agent.agent_type,
+            description=source_agent.description,
+            avatar=source_agent.avatar,
+            system_prompt=source_agent.system_prompt,
+            llm_config=source_agent.llm_config.copy() if source_agent.llm_config else {},
+            tools_config=source_agent.tools_config.copy()
+            if (source_agent.tools_config and request.clone_tools)
+            else None,
+            agent_metadata=source_agent.agent_metadata.copy() if source_agent.agent_metadata else {},
+            observability_config=source_agent.observability_config.copy()
+            if source_agent.observability_config
+            else None,
+            suggestion_prompts=source_agent.suggestion_prompts.copy() if source_agent.suggestion_prompts else [],
+            voice_enabled=source_agent.voice_enabled,
+            voice_config=source_agent.voice_config.copy() if source_agent.voice_config else None,
+            is_public=False,
+            category=source_agent.category,
+            tags=source_agent.tags.copy() if source_agent.tags else [],
+            workflow_type=source_agent.workflow_type if request.clone_workflows else None,
+            workflow_config=source_agent.workflow_config.copy()
+            if (source_agent.workflow_config and request.clone_workflows)
+            else None,
+            status="ACTIVE",
+            execution_count=0,
+            success_count=0,
+            likes_count=0,
+            dislikes_count=0,
+            usage_count=0,
+        )
+
+        # Update API key in legacy llm_config if provided (encrypt it first)
+        if request.new_api_key:
+            from src.services.agents.security import encrypt_value
+
+            if cloned_agent.llm_config:
+                cloned_agent.llm_config["api_key"] = encrypt_value(request.new_api_key)
+
+        db.add(cloned_agent)
+        await db.flush()  # Get ID for relationships
+
+        warnings = []
+
+        # Clone knowledge base relationships if requested
+        if request.clone_knowledge_bases:
+            kb_result = await db.execute(
+                select(AgentKnowledgeBase).filter(AgentKnowledgeBase.agent_id == source_agent.id)
+            )
+            source_kb_relations = kb_result.scalars().all()
+
+            for kb_rel in source_kb_relations:
+                new_kb_rel = AgentKnowledgeBase(
+                    agent_id=cloned_agent.id,
+                    knowledge_base_id=kb_rel.knowledge_base_id,
+                    retrieval_config=kb_rel.retrieval_config.copy() if kb_rel.retrieval_config else None,
+                )
+                db.add(new_kb_rel)
+
+            if source_kb_relations:
+                warnings.append(
+                    f"Cloned {len(source_kb_relations)} knowledge base link(s). Note: OAuth-based data sources will require re-authorization."
+                )
+
+        # Clone sub-agent relationships if requested
+        if request.clone_sub_agents:
+            sub_agents_result = await db.execute(
+                select(AgentSubAgent).filter(AgentSubAgent.parent_agent_id == source_agent.id)
+            )
+            source_sub_agents = sub_agents_result.scalars().all()
+
+            for sub_rel in source_sub_agents:
+                new_sub_rel = AgentSubAgent(
+                    parent_agent_id=cloned_agent.id,
+                    sub_agent_id=sub_rel.sub_agent_id,
+                    config=sub_rel.config.copy() if sub_rel.config else None,
+                )
+                db.add(new_sub_rel)
+
+            if source_sub_agents:
+                warnings.append(f"Cloned {len(source_sub_agents)} sub-agent relationship(s).")
+
+        # Clone LLM configs from separate table
+        llm_configs_result = await db.execute(select(AgentLLMConfig).filter(AgentLLMConfig.agent_id == source_agent.id))
+        source_llm_configs = llm_configs_result.scalars().all()
+
+        if source_llm_configs:
+            for llm_config in source_llm_configs:
+                # If new_api_key is provided and this is the default config, use it and enable the config
+                if request.new_api_key and llm_config.is_default:
+                    cloned_api_key = encrypt_value(request.new_api_key)
+                    cloned_enabled = True
+                else:
+                    cloned_api_key = ""
+                    cloned_enabled = False
+
+                cloned_llm_config = AgentLLMConfig(
+                    tenant_id=tenant_id,
+                    agent_id=cloned_agent.id,
+                    name=llm_config.name,
+                    provider=llm_config.provider,
+                    model_name=llm_config.model_name,
+                    api_key=cloned_api_key,
+                    api_base=llm_config.api_base,
+                    temperature=llm_config.temperature,
+                    max_tokens=llm_config.max_tokens,
+                    top_p=llm_config.top_p,
+                    additional_params=llm_config.additional_params.copy() if llm_config.additional_params else None,
+                    is_default=llm_config.is_default,
+                    display_order=llm_config.display_order,
+                    enabled=cloned_enabled,
+                )
+                db.add(cloned_llm_config)
+
+            # Only warn about API keys if new_api_key wasn't provided
+            if not request.new_api_key:
+                warnings.append(
+                    f"Cloned {len(source_llm_configs)} LLM configuration(s) without API keys. Please configure API keys for each LLM config."
+                )
+            elif len(source_llm_configs) > 1:
+                warnings.append(
+                    f"Cloned {len(source_llm_configs)} LLM configuration(s). The default config was enabled with the provided API key. Other configs need API keys configured."
+                )
+
+        await db.commit()
+        await db.refresh(cloned_agent)
+
+        logger.info(
+            f"Cloned agent '{agent_name}' to '{request.new_name}' (tools={request.clone_tools}, kb={request.clone_knowledge_bases}, sub_agents={request.clone_sub_agents}, workflows={request.clone_workflows})"
+        )
+
+        # PERFORMANCE: Invalidate agents list cache for this tenant
+        cache = get_agent_cache()
+        await cache.invalidate_agents_list(str(tenant_id))
+
+        # Include LLM config details in response so user knows what API key is needed
+        llm_config_info = []
+        for llm_config in source_llm_configs:
+            llm_config_info.append(
+                {
+                    "name": llm_config.name,
+                    "provider": llm_config.provider,
+                    "model_name": llm_config.model_name,
+                    "is_default": llm_config.is_default,
+                    "enabled": llm_config.is_default and bool(request.new_api_key),
+                }
+            )
+
+        return AgentResponse(
+            success=True,
+            message=f"Agent cloned successfully as '{request.new_name}'",
+            data={
+                "agent_id": str(cloned_agent.id),
+                "agent_name": cloned_agent.agent_name,
+                "source_agent": agent_name,
+                "llm_configs": llm_config_info if llm_config_info else None,
+                "warnings": warnings if warnings else None,
+                "requires_configuration": not request.new_api_key,
+            },
+        )
+
+    except HTTPException:
+        raise
+    except Exception as e:
+        await db.rollback()
+        logger.error(f"Failed to clone agent: {e}", exc_info=True)
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail=f"Failed to clone agent: {str(e)}"
+        )

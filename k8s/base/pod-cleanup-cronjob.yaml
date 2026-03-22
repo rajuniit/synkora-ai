@@ -1,0 +1,58 @@
+apiVersion: batch/v1
+kind: CronJob
+metadata:
+  name: pod-cleanup
+  namespace: synkora-production
+spec:
+  schedule: "0 * * * *"  # Every hour
+  jobTemplate:
+    spec:
+      template:
+        spec:
+          serviceAccountName: pod-cleanup-sa
+          restartPolicy: OnFailure
+          containers:
+            - name: cleanup
+              image: bitnami/kubectl:latest
+              command:
+                - /bin/sh
+                - -c
+                - |
+                  echo "Deleting failed/completed/unknown pods..."
+                  kubectl delete pods -n synkora-production \
+                    --field-selector=status.phase==Failed \
+                    --ignore-not-found=true
+                  kubectl delete pods -n synkora-production \
+                    --field-selector=status.phase==Succeeded \
+                    --ignore-not-found=true
+                  echo "Done."
+---
+apiVersion: v1
+kind: ServiceAccount
+metadata:
+  name: pod-cleanup-sa
+  namespace: synkora-production
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: Role
+metadata:
+  name: pod-cleanup-role
+  namespace: synkora-production
+rules:
+  - apiGroups: [""]
+    resources: ["pods"]
+    verbs: ["list", "delete"]
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: RoleBinding
+metadata:
+  name: pod-cleanup-rolebinding
+  namespace: synkora-production
+roleRef:
+  apiGroup: rbac.authorization.k8s.io
+  kind: Role
+  name: pod-cleanup-role
+subjects:
+  - kind: ServiceAccount
+    name: pod-cleanup-sa
+    namespace: synkora-production

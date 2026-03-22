@@ -1,0 +1,134 @@
+---
+# API Deployment
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: synkora-api
+  namespace: synkora-production
+  labels:
+    app: synkora
+    component: api
+    version: v1
+spec:
+  replicas: 2
+  progressDeadlineSeconds: 700
+  strategy:
+    type: RollingUpdate
+    rollingUpdate:
+      maxSurge: 0
+      maxUnavailable: 1
+  selector:
+    matchLabels:
+      app: synkora
+      component: api
+  template:
+    metadata:
+      labels:
+        app: synkora
+        component: api
+        version: v1
+      annotations:
+        prometheus.io/scrape: "true"
+        prometheus.io/port: "5001"
+        prometheus.io/path: "/metrics"
+    spec:
+      imagePullSecrets:
+      - name: ecr-registry-secret
+      serviceAccountName: synkora-api
+      securityContext:
+        runAsNonRoot: true
+        runAsUser: 1000
+        fsGroup: 1000
+      containers:
+      - name: api
+        image: IMAGE_PLACEHOLDER
+        imagePullPolicy: Always
+        securityContext:
+          allowPrivilegeEscalation: false
+          readOnlyRootFilesystem: true
+          capabilities:
+            drop:
+              - ALL
+        ports:
+        - containerPort: 5001
+          name: http
+          protocol: TCP
+        envFrom:
+        - configMapRef:
+            name: synkora-config
+        - secretRef:
+            name: synkora-secrets
+        resources:
+          requests:
+            memory: "1500Mi"
+            cpu: "500m"
+            ephemeral-storage: "1Gi"
+          limits:
+            memory: "2Gi"
+            cpu: "2000m"
+            ephemeral-storage: "5Gi"
+        livenessProbe:
+          httpGet:
+            path: /api/health
+            port: 5001
+            scheme: HTTP
+          initialDelaySeconds: 30
+          periodSeconds: 10
+          timeoutSeconds: 5
+          failureThreshold: 3
+          successThreshold: 1
+        readinessProbe:
+          httpGet:
+            path: /api/health
+            port: 5001
+            scheme: HTTP
+          initialDelaySeconds: 10
+          periodSeconds: 5
+          timeoutSeconds: 3
+          failureThreshold: 3
+          successThreshold: 1
+        startupProbe:
+          httpGet:
+            path: /api/health
+            port: 5001
+            scheme: HTTP
+          initialDelaySeconds: 0
+          periodSeconds: 10
+          timeoutSeconds: 5
+          failureThreshold: 60
+        volumeMounts:
+        - name: tmp
+          mountPath: /tmp
+        - name: cache
+          mountPath: /app/cache
+        - name: storage
+          mountPath: /app/storage
+        - name: crawl4ai
+          mountPath: /home/appuser/.crawl4ai
+      volumes:
+      - name: tmp
+        emptyDir:
+          sizeLimit: 20Gi
+      - name: cache
+        emptyDir: {}
+      - name: storage
+        emptyDir: {}
+      - name: crawl4ai
+        emptyDir: {}
+      affinity:
+        podAntiAffinity:
+          preferredDuringSchedulingIgnoredDuringExecution:
+          - weight: 100
+            podAffinityTerm:
+              labelSelector:
+                matchExpressions:
+                - key: app
+                  operator: In
+                  values:
+                  - synkora
+                - key: component
+                  operator: In
+                  values:
+                  - api
+              topologyKey: kubernetes.io/hostname
+      terminationGracePeriodSeconds: 30

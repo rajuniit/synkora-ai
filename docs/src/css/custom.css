@@ -1,0 +1,428 @@
+/**
+ * Synkora Documentation Theme
+ * Bold, modern design with red branding
+ */
+
+/* Primary colors - Synkora red brand */
+:root {
+  --ifm-color-primary: #dc2626;
+  --ifm-color-primary-dark: #b91c1c;
+  --ifm-color-primary-darker: #991b1b;
+  --ifm-color-primary-darkest: #7f1d1d;
+  --ifm-color-primary-light: #ef4444;
+  --ifm-color-primary-lighter: #f87171;
+  --ifm-color-primary-lightest: #fca5a5;
+  --ifm-code-font-size: 95%;
+  --docusaurus-highlighted-code-line-bg: rgba(220, 38, 38, 0.1);
+
+  /* Custom properties */
+  --synkora-red: #dc2626;
+  --synkora-red-dark: #b91c1c;
+  --synkora-black: #0a0a0a;
+  --synkora-white: #ffffff;
+  --synkora-gray-50: #fafafa;
+  --synkora-gray-100: #f5f5f5;
+  --synkora-gray-200: #e5e5e5;
+  --synkora-gray-800: #262626;
+  --synkora-gray-900: #171717;
+
+  --ifm-font-family-base: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+  --ifm-heading-font-family: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+  --ifm-font-weight-bold: 700;
+  --ifm-font-weight-semibold: 600;
+  --ifm-navbar-height: 72px;
+  --ifm-navbar-background-color: var(--synkora-white);
+  --ifm-background-color: var(--synkora-white);
+  --ifm-footer-background-color: var(--synkora-black);
+}
+
+/* Dark mode palette */
+[data-theme='dark'] {
+  --ifm-color-primary: #ef4444;
+  --ifm-color-primary-dark: #dc2626;
+  --ifm-color-primary-darker: #b91c1c;
+  --ifm-color-primary-darkest: #991b1b;
+  --ifm-color-primary-light: #f87171;
+  --ifm-color-primary-lighter: #fca5a5;
+  --ifm-color-primary-lightest: #fecaca;
+  --docusaurus-highlighted-code-line-bg: rgba(239, 68, 68, 0.2);
+  --ifm-background-color: #0a0a0a;
+  --ifm-background-surface-color: #171717;
+  --ifm-navbar-background-color: #0a0a0a;
+  --ifm-footer-background-color: #0a0a0a;
+}
+
+/* Global styles */
+html {
+  scroll-behavior: smooth;
+}
+
+body {
+  font-feature-settings: 'cv02', 'cv03', 'cv04', 'cv11';
+}
+
+/* Navbar styling */
+.navbar {
+  box-shadow: none;
+  border-bottom: 1px solid var(--ifm-color-emphasis-200);
+  padding: 0.5rem 0;
+}
+
+.navbar__title {
+  font-weight: 800;
+  font-size: 1.5rem;
+  letter-spacing: -0.025em;
+}
+
+.navbar__link {
+  font-weight: 500;
+  font-size: 0.95rem;
+}
+
+.navbar__link:hover {
+  color: var(--synkora-red);
+}
+
+.navbar__link--active {
+  color: var(--synkora-red);
+  font-weight: 600;
+}
+
+/* Hero section - bold and modern */
+.hero {
+  background: var(--synkora-black);
+  padding: 6rem 0;
+  position: relative;
+  overflow: hidden;
+}
+
+.hero::before {
+  content: '';
+  position: absolute;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  background:
+    radial-gradient(ellipse at 20% 50%, rgba(220, 38, 38, 0.15) 0%, transparent 50%),
+    radial-gradient(ellipse at 80% 50%, rgba(220, 38, 38, 0.1) 0%, transparent 50%);
+  pointer-events: none;
+}
+
+.hero__title {
+  font-size: 4rem;
+  font-weight: 800;
+  letter-spacing: -0.04em;
+  line-height: 1.1;
+  color: var(--synkora-white);
+  margin-bottom: 1.5rem;
+}
+
+.hero__subtitle {
+  font-size: 1.5rem;
+  font-weight: 400;
+  color: rgba(255, 255, 255, 0.7);
+  max-width: 600px;
+  margin: 0 auto 2rem;
+  line-height: 1.6;
+}
+
+/* Hero buttons */
+.hero .button {
+  font-weight: 600;
+  font-size: 1.1rem;
+  padding: 1rem 2.5rem;
+  border-radius: 8px;
+  transition: all 0.2s ease;
+}
+
+.hero .button--secondary {
+  background: var(--synkora-red);
+  border: none;
+  color: white;
+}
+
+.hero .button--secondary:hover {
+  background: var(--synkora-red-dark);
+  transform: translateY(-2px);
+  box-shadow: 0 10px 40px rgba(220, 38, 38, 0.3);
+}
+
+/* Code blocks */
+.prism-code {
+  border-radius: 12px;
+}
+
+pre {
+  border-radius: 12px;
+  border: 1px solid var(--ifm-color-emphasis-200);
+}
+
+code {
+  border-radius: 6px;
+  padding: 0.2em 0.4em;
+  background: var(--ifm-color-emphasis-100);
+}
+
+/* API Reference styling */
+.api-method {
+  display: inline-block;
+  padding: 0.25rem 0.75rem;
+  border-radius: 6px;
+  font-weight: 700;
+  font-size: 0.75rem;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+}
+
+.api-method-get {
+  background: #059669;
+  color: white;
+}
+
+.api-method-post {
+  background: #2563eb;
+  color: white;
+}
+
+.api-method-put {
+  background: #d97706;
+  color: white;
+}
+
+.api-method-delete {
+  background: var(--synkora-red);
+  color: white;
+}
+
+/* Cards */
+.card {
+  border-radius: 16px;
+  border: 1px solid var(--ifm-color-emphasis-200);
+  transition: all 0.3s ease;
+  background: var(--ifm-background-color);
+}
+
+.card:hover {
+  box-shadow: 0 20px 40px rgba(0, 0, 0, 0.1);
+  transform: translateY(-4px);
+  border-color: var(--synkora-red);
+}
+
+/* Table styling */
+table {
+  display: table;
+  width: 100%;
+  border-radius: 12px;
+  overflow: hidden;
+}
+
+th {
+  background: var(--synkora-black);
+  color: white;
+  font-weight: 600;
+  text-transform: uppercase;
+  font-size: 0.75rem;
+  letter-spacing: 0.05em;
+}
+
+[data-theme='dark'] th {
+  background: var(--synkora-gray-800);
+}
+
+/* Blockquotes */
+blockquote {
+  border-left: 4px solid var(--synkora-red);
+  background: var(--ifm-color-emphasis-100);
+  padding: 1.25rem 1.5rem;
+  border-radius: 0 12px 12px 0;
+  font-style: normal;
+}
+
+/* Sidebar styling */
+.menu__link {
+  border-radius: 8px;
+  font-weight: 500;
+  transition: all 0.2s ease;
+}
+
+.menu__link:hover {
+  background: var(--ifm-color-emphasis-100);
+  color: var(--synkora-red);
+}
+
+.menu__link--active {
+  background: rgba(220, 38, 38, 0.1);
+  color: var(--synkora-red);
+  font-weight: 600;
+}
+
+[data-theme='dark'] .menu__link--active {
+  background: rgba(239, 68, 68, 0.15);
+}
+
+/* Footer */
+.footer {
+  background: var(--synkora-black);
+  padding: 4rem 0 2rem;
+}
+
+.footer__title {
+  color: white;
+  font-weight: 700;
+  font-size: 1rem;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  margin-bottom: 1rem;
+}
+
+.footer__link-item {
+  color: rgba(255, 255, 255, 0.6);
+  transition: color 0.2s ease;
+}
+
+.footer__link-item:hover {
+  color: var(--synkora-red);
+}
+
+.footer__copyright {
+  color: rgba(255, 255, 255, 0.4);
+  border-top: 1px solid rgba(255, 255, 255, 0.1);
+  padding-top: 2rem;
+  margin-top: 3rem;
+}
+
+/* Admonitions */
+.admonition {
+  border-radius: 12px;
+  border: none;
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.05);
+}
+
+.admonition-heading {
+  font-weight: 700;
+}
+
+/* Search */
+.DocSearch-Button {
+  border-radius: 8px !important;
+  background: var(--ifm-color-emphasis-100) !important;
+}
+
+/* Blog styling */
+.blog-post-page article {
+  max-width: 800px;
+}
+
+.blog-post-page h1 {
+  font-size: 3rem;
+  font-weight: 800;
+  letter-spacing: -0.03em;
+  line-height: 1.2;
+}
+
+article header h2 a {
+  color: inherit;
+  font-weight: 700;
+}
+
+article header h2 a:hover {
+  color: var(--synkora-red);
+}
+
+.avatar__name {
+  font-weight: 600;
+}
+
+/* Tags */
+.tag {
+  border-radius: 6px;
+  font-weight: 500;
+}
+
+/* Pagination */
+.pagination-nav__link {
+  border-radius: 12px;
+  border: 1px solid var(--ifm-color-emphasis-200);
+  transition: all 0.2s ease;
+}
+
+.pagination-nav__link:hover {
+  border-color: var(--synkora-red);
+}
+
+/* TOC */
+.table-of-contents__link--active {
+  color: var(--synkora-red);
+  font-weight: 600;
+}
+
+/* Responsive improvements */
+@media (max-width: 996px) {
+  .hero__title {
+    font-size: 2.5rem;
+  }
+
+  .hero__subtitle {
+    font-size: 1.125rem;
+  }
+
+  .hero {
+    padding: 4rem 0;
+  }
+}
+
+/* Animations */
+@keyframes fadeInUp {
+  from {
+    opacity: 0;
+    transform: translateY(20px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+.main-wrapper {
+  animation: fadeInUp 0.4s ease;
+}
+
+/* Headings */
+h1, h2, h3, h4, h5, h6 {
+  font-weight: 700;
+  letter-spacing: -0.02em;
+}
+
+h1 {
+  font-size: 2.5rem;
+}
+
+h2 {
+  font-size: 1.75rem;
+}
+
+/* Links */
+a {
+  transition: color 0.2s ease;
+}
+
+.markdown a {
+  color: var(--synkora-red);
+  text-decoration: none;
+  font-weight: 500;
+}
+
+.markdown a:hover {
+  text-decoration: underline;
+}
+
+/* Features section */
+.features-section {
+  background: var(--synkora-gray-50);
+  padding: 6rem 0;
+}
+
+[data-theme='dark'] .features-section {
+  background: var(--synkora-gray-900);
+}

@@ -1,0 +1,148 @@
+"""
+Spawn Agent Tools Registry
+
+Registers spawn_agent and check_task tools with the ADK tool registry.
+These tools enable agents to spawn sub-agents for complex tasks using Celery.
+"""
+
+import logging
+from typing import Any
+
+from sqlalchemy import select
+
+logger = logging.getLogger(__name__)
+
+
+def register_spawn_agent_tools(registry):
+    """
+    Register all spawn agent tools with the ADK tool registry.
+
+    Args:
+        registry: ADKToolRegistry instance
+    """
+    from src.services.agents.internal_tools.spawn_agent_tool import (
+        internal_check_task,
+        internal_list_background_tasks,
+        internal_spawn_agent,
+    )
+
+    async def spawn_agent_wrapper(config: dict[str, Any] | None = None, **kwargs):
+        runtime_context = config.get("_runtime_context") if config else None
+
+        db = runtime_context.db_session if runtime_context else None
+        tenant_id = str(runtime_context.tenant_id) if runtime_context else None
+        parent_agent_id = str(runtime_context.agent_id) if runtime_context else None
+        parent_agent_name = None
+
+        if db and runtime_context and runtime_context.agent_id:
+            try:
+                from src.models.agent import Agent
+
+                result = await db.execute(select(Agent).filter(Agent.id == runtime_context.agent_id))
+                agent = result.scalar_one_or_none()
+                if agent:
+                    parent_agent_name = agent.agent_name
+            except Exception as e:
+                logger.warning(f"Could not load parent agent: {e}")
+
+        return await internal_spawn_agent(
+            task_description=kwargs.get("task_description", ""),
+            run_in_background=kwargs.get("run_in_background", False),
+            db=db,
+            tenant_id=tenant_id,
+            parent_agent_id=parent_agent_id,
+            parent_agent_name=parent_agent_name,
+        )
+
+    async def check_task_wrapper(config: dict[str, Any] | None = None, **kwargs):
+        runtime_context = config.get("_runtime_context") if config else None
+        tenant_id = str(runtime_context.tenant_id) if runtime_context else None
+
+        return await internal_check_task(
+            task_id=kwargs.get("task_id", ""),
+            tenant_id=tenant_id,
+        )
+
+    async def list_background_tasks_wrapper(config: dict[str, Any] | None = None, **kwargs):
+        runtime_context = config.get("_runtime_context") if config else None
+        tenant_id = str(runtime_context.tenant_id) if runtime_context else None
+
+        return await internal_list_background_tasks(
+            tenant_id=tenant_id,
+            limit=kwargs.get("limit", 20),
+        )
+
+    registry.register_tool(
+        name="spawn_agent",
+        description="""Spawn a sub-agent to handle complex, multi-step, or long-running tasks.
+
+The sub-agent inherits your configuration (LLM, tools, system prompt) and runs the given task.
+
+Use this tool when:
+- The task requires deep research or analysis
+- The task involves multiple steps that benefit from focused attention
+- You need to run a task in the background while continuing other work
+- The task would take a long time and shouldn't block the conversation
+
+For background tasks, use run_in_background=true and retrieve results with check_task.""",
+        parameters={
+            "type": "object",
+            "properties": {
+                "task_description": {
+                    "type": "string",
+                    "description": "Clear, detailed description of what the sub-agent should accomplish. Be specific about expected outputs.",
+                },
+                "run_in_background": {
+                    "type": "boolean",
+                    "description": "If true, task runs asynchronously via Celery and returns a task_id. Use check_task to get results later.",
+                    "default": False,
+                },
+            },
+            "required": ["task_description"],
+        },
+        function=spawn_agent_wrapper,
+    )
+
+    registry.register_tool(
+        name="check_task",
+        description="""Check the status and result of a background task.
+
+Use this to retrieve results from tasks spawned with run_in_background=true.
+
+Returns:
+- status: 'pending', 'running', 'completed', 'failed', 'retrying', 'cancelled'
+- result: The agent's response (if completed)
+- error: Error message (if failed)""",
+        parameters={
+            "type": "object",
+            "properties": {
+                "task_id": {
+                    "type": "string",
+                    "description": "The task_id returned from spawn_agent when run_in_background=true",
+                },
+            },
+            "required": ["task_id"],
+        },
+        function=check_task_wrapper,
+    )
+
+    registry.register_tool(
+        name="list_background_tasks",
+        description="""Get information about checking background task status.
+
+Note: Track task_ids from spawn_agent responses and use check_task to check their status.""",
+        parameters={
+            "type": "object",
+            "properties": {
+                "limit": {
+                    "type": "integer",
+                    "description": "Not used - included for compatibility",
+                    "default": 20,
+                },
+            },
+            "required": [],
+        },
+        function=list_background_tasks_wrapper,
+    )
+
+    logger.info("Registered 3 spawn agent tools (spawn_agent, check_task, list_background_tasks)")

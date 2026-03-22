@@ -1,0 +1,284 @@
+'use client'
+
+import { useState, useCallback } from 'react'
+import { useDropzone } from 'react-dropzone'
+import { Upload, X, FileText, CheckCircle, AlertCircle, Loader2 } from 'lucide-react'
+import toast from 'react-hot-toast'
+
+interface FileWithProgress {
+  file: File
+  progress: number
+  status: 'pending' | 'uploading' | 'success' | 'error'
+  error?: string
+}
+
+interface FileUploadProps {
+  onUploadComplete: () => void
+  onUpload: (files: File[], onProgress: (progress: number) => void) => Promise<any>
+}
+
+const ACCEPTED_FILE_TYPES = {
+  'application/pdf': ['.pdf'],
+  'application/vnd.openxmlformats-officedocument.wordprocessingml.document': ['.docx'],
+  'text/plain': ['.txt'],
+  'text/markdown': ['.md'],
+  'text/html': ['.html'],
+  'text/csv': ['.csv'],
+}
+
+const MAX_FILE_SIZE = 50 * 1024 * 1024 // 50MB
+const MAX_FILES = 10
+
+export default function FileUpload({ onUploadComplete, onUpload }: FileUploadProps) {
+  const [files, setFiles] = useState<FileWithProgress[]>([])
+  const [uploading, setUploading] = useState(false)
+
+  const onDrop = useCallback((acceptedFiles: File[], rejectedFiles: any[]) => {
+    // Handle rejected files
+    if (rejectedFiles.length > 0) {
+      rejectedFiles.forEach(({ file, errors }) => {
+        errors.forEach((error: any) => {
+          if (error.code === 'file-too-large') {
+            toast.error(`${file.name} is too large. Maximum size is 50MB.`)
+          } else if (error.code === 'file-invalid-type') {
+            toast.error(`${file.name} has an invalid file type.`)
+          } else {
+            toast.error(`${file.name}: ${error.message}`)
+          }
+        })
+      })
+    }
+
+    // Check total file count
+    if (files.length + acceptedFiles.length > MAX_FILES) {
+      toast.error(`You can only upload up to ${MAX_FILES} files at once.`)
+      return
+    }
+
+    // Add accepted files
+    const newFiles: FileWithProgress[] = acceptedFiles.map(file => ({
+      file,
+      progress: 0,
+      status: 'pending' as const,
+    }))
+
+    setFiles(prev => [...prev, ...newFiles])
+  }, [files.length])
+
+  const { getRootProps, getInputProps, isDragActive } = useDropzone({
+    onDrop,
+    accept: ACCEPTED_FILE_TYPES,
+    maxSize: MAX_FILE_SIZE,
+    maxFiles: MAX_FILES,
+    disabled: uploading,
+  })
+
+  const removeFile = (index: number) => {
+    setFiles(prev => prev.filter((_, i) => i !== index))
+  }
+
+  const handleUpload = async () => {
+    if (files.length === 0) return
+
+    setUploading(true)
+
+    try {
+      // Update all files to uploading status
+      setFiles(prev => prev.map(f => ({ ...f, status: 'uploading' as const })))
+
+      // Upload files
+      const filesToUpload = files.map(f => f.file)
+      
+      await onUpload(filesToUpload, (progress) => {
+        // Update progress for all files
+        setFiles(prev => prev.map(f => ({ ...f, progress })))
+      })
+
+      // Mark all as success
+      setFiles(prev => prev.map(f => ({ ...f, status: 'success' as const, progress: 100 })))
+      
+      toast.success(`Successfully uploaded ${files.length} file(s)`)
+      
+      // Clear files after a delay
+      setTimeout(() => {
+        setFiles([])
+        onUploadComplete()
+      }, 2000)
+    } catch (error) {
+      // Mark all as error
+      setFiles(prev => prev.map(f => ({ 
+        ...f, 
+        status: 'error' as const,
+        error: error instanceof Error ? error.message : 'Upload failed'
+      })))
+      
+      toast.error('Failed to upload files')
+    } finally {
+      setUploading(false)
+    }
+  }
+
+  const formatFileSize = (bytes: number): string => {
+    if (bytes === 0) return '0 Bytes'
+    const k = 1024
+    const sizes = ['Bytes', 'KB', 'MB', 'GB']
+    const i = Math.floor(Math.log(bytes) / Math.log(k))
+    return Math.round(bytes / Math.pow(k, i) * 100) / 100 + ' ' + sizes[i]
+  }
+
+  const getFileIcon = () => {
+    return <FileText className="w-5 h-5 text-blue-600" />
+  }
+
+  const getStatusIcon = (status: FileWithProgress['status']) => {
+    switch (status) {
+      case 'uploading':
+        return <Loader2 className="w-5 h-5 text-blue-600 animate-spin" />
+      case 'success':
+        return <CheckCircle className="w-5 h-5 text-green-600" />
+      case 'error':
+        return <AlertCircle className="w-5 h-5 text-red-600" />
+      default:
+        return null
+    }
+  }
+
+  return (
+    <div className="space-y-4">
+      {/* Dropzone */}
+      <div
+        {...getRootProps()}
+        className={`border-2 border-dashed rounded-lg p-8 text-center cursor-pointer transition-colors ${
+          isDragActive
+            ? 'border-blue-500 bg-blue-50'
+            : 'border-gray-300 hover:border-gray-400 bg-gray-50'
+        } ${uploading ? 'opacity-50 cursor-not-allowed' : ''}`}
+      >
+        <input {...getInputProps()} />
+        <Upload className="w-12 h-12 text-gray-400 mx-auto mb-4" />
+        {isDragActive ? (
+          <p className="text-lg font-medium text-blue-600">Drop files here...</p>
+        ) : (
+          <>
+            <p className="text-lg font-medium text-gray-900 mb-2">
+              Drag & drop files here, or click to select
+            </p>
+            <p className="text-sm text-gray-500 mb-4">
+              Supported formats: PDF, DOCX, TXT, MD, HTML, CSV
+            </p>
+            <p className="text-xs text-gray-400">
+              Maximum {MAX_FILES} files, 50MB per file
+            </p>
+          </>
+        )}
+      </div>
+
+      {/* File List */}
+      {files.length > 0 && (
+        <div className="space-y-2">
+          <div className="flex items-center justify-between">
+            <h3 className="text-sm font-medium text-gray-900">
+              Selected Files ({files.length})
+            </h3>
+            {!uploading && (
+              <button
+                onClick={() => setFiles([])}
+                className="text-sm text-gray-500 hover:text-gray-700"
+              >
+                Clear all
+              </button>
+            )}
+          </div>
+
+          <div className="space-y-2 max-h-96 overflow-y-auto">
+            {files.map((fileWithProgress, index) => (
+              <div
+                key={index}
+                className="bg-white border border-gray-200 rounded-lg p-4"
+              >
+                <div className="flex items-start gap-3">
+                  <div className="flex-shrink-0 mt-0.5">
+                    {getFileIcon()}
+                  </div>
+                  
+                  <div className="flex-1 min-w-0">
+                    <div className="flex items-start justify-between gap-2">
+                      <div className="flex-1 min-w-0">
+                        <p className="text-sm font-medium text-gray-900 truncate">
+                          {fileWithProgress.file.name}
+                        </p>
+                        <p className="text-xs text-gray-500">
+                          {formatFileSize(fileWithProgress.file.size)}
+                        </p>
+                      </div>
+                      
+                      <div className="flex items-center gap-2">
+                        {getStatusIcon(fileWithProgress.status)}
+                        {!uploading && fileWithProgress.status === 'pending' && (
+                          <button
+                            onClick={() => removeFile(index)}
+                            className="text-gray-400 hover:text-gray-600"
+                          >
+                            <X className="w-4 h-4" />
+                          </button>
+                        )}
+                      </div>
+                    </div>
+
+                    {/* Progress Bar */}
+                    {fileWithProgress.status === 'uploading' && (
+                      <div className="mt-2">
+                        <div className="w-full bg-gray-200 rounded-full h-1.5">
+                          <div
+                            className="bg-blue-600 h-1.5 rounded-full transition-all duration-300"
+                            style={{ width: `${fileWithProgress.progress}%` }}
+                          />
+                        </div>
+                        <p className="text-xs text-gray-500 mt-1">
+                          {fileWithProgress.progress}%
+                        </p>
+                      </div>
+                    )}
+
+                    {/* Error Message */}
+                    {fileWithProgress.status === 'error' && fileWithProgress.error && (
+                      <p className="text-xs text-red-600 mt-1">
+                        {fileWithProgress.error}
+                      </p>
+                    )}
+
+                    {/* Success Message */}
+                    {fileWithProgress.status === 'success' && (
+                      <p className="text-xs text-green-600 mt-1">
+                        Uploaded successfully
+                      </p>
+                    )}
+                  </div>
+                </div>
+              </div>
+            ))}
+          </div>
+
+          {/* Upload Button */}
+          <button
+            onClick={handleUpload}
+            disabled={uploading || files.length === 0 || files.some(f => f.status === 'success')}
+            className="w-full px-4 py-3 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center gap-2 font-medium"
+          >
+            {uploading ? (
+              <>
+                <Loader2 className="w-5 h-5 animate-spin" />
+                Uploading...
+              </>
+            ) : (
+              <>
+                <Upload className="w-5 h-5" />
+                Upload {files.length} File{files.length !== 1 ? 's' : ''}
+              </>
+            )}
+          </button>
+        </div>
+      )}
+    </div>
+  )
+}

@@ -1,0 +1,155 @@
+# kube-prometheus-stack values for Synkora on DigitalOcean
+# Install: helm install kube-prometheus-stack prometheus-community/kube-prometheus-stack \
+#   -n monitoring --create-namespace -f k8s/monitoring/values.yaml
+
+# ─────────────────────────────────────────────
+# Grafana
+# ─────────────────────────────────────────────
+grafana:
+  adminPassword: "8HY-v9GEGb-SwhXKyYg1xw"
+
+  ingress:
+    enabled: true
+    ingressClassName: nginx
+    annotations:
+      cert-manager.io/cluster-issuer: "letsencrypt-prod"
+      nginx.ingress.kubernetes.io/auth-type: basic
+      nginx.ingress.kubernetes.io/auth-secret: grafana-basic-auth
+      nginx.ingress.kubernetes.io/auth-realm: "Grafana - Restricted"
+    hosts:
+      - grafana.synkora.ai
+    tls:
+      - secretName: grafana-tls
+        hosts:
+          - grafana.synkora.ai
+
+  persistence:
+    enabled: true
+    storageClassName: do-block-storage-retain
+    size: 5Gi
+
+  resources:
+    requests:
+      cpu: 100m
+      memory: 128Mi
+    limits:
+      cpu: 500m
+      memory: 256Mi
+
+  # Pre-load useful dashboards
+  dashboardProviders:
+    dashboardproviders.yaml:
+      apiVersion: 1
+      providers:
+        - name: default
+          orgId: 1
+          folder: ""
+          type: file
+          disableDeletion: false
+          editable: true
+          options:
+            path: /var/lib/grafana/dashboards/default
+
+  dashboards:
+    default:
+      # Kubernetes cluster overview
+      kubernetes-cluster:
+        gnetId: 7249
+        revision: 1
+        datasource: Prometheus
+      # Pod resource usage
+      kubernetes-pods:
+        gnetId: 6417
+        revision: 1
+        datasource: Prometheus
+      # Node exporter full
+      node-exporter:
+        gnetId: 1860
+        revision: 37
+        datasource: Prometheus
+      # Nginx ingress
+      nginx-ingress:
+        gnetId: 9614
+        revision: 1
+        datasource: Prometheus
+      # Redis
+      redis:
+        gnetId: 11835
+        revision: 1
+        datasource: Prometheus
+
+# ─────────────────────────────────────────────
+# Prometheus
+# ─────────────────────────────────────────────
+prometheus:
+  prometheusSpec:
+    retention: 15d
+    retentionSize: "8GB"
+
+    storageSpec:
+      volumeClaimTemplate:
+        spec:
+          storageClassName: do-block-storage-retain
+          accessModes: ["ReadWriteOnce"]
+          resources:
+            requests:
+              storage: 10Gi
+
+    resources:
+      requests:
+        cpu: 200m
+        memory: 512Mi
+      limits:
+        cpu: 1000m
+        memory: 2Gi
+
+    # Scrape all namespaces
+    podMonitorNamespaceSelector: {}
+    serviceMonitorNamespaceSelector: {}
+    ruleNamespaceSelector: {}
+
+# ─────────────────────────────────────────────
+# Alertmanager
+# ─────────────────────────────────────────────
+alertmanager:
+  alertmanagerSpec:
+    storage:
+      volumeClaimTemplate:
+        spec:
+          storageClassName: do-block-storage-retain
+          accessModes: ["ReadWriteOnce"]
+          resources:
+            requests:
+              storage: 2Gi
+
+    resources:
+      requests:
+        cpu: 50m
+        memory: 64Mi
+      limits:
+        cpu: 200m
+        memory: 128Mi
+
+# ─────────────────────────────────────────────
+# Node Exporter (per-node metrics)
+# ─────────────────────────────────────────────
+nodeExporter:
+  enabled: true
+
+# ─────────────────────────────────────────────
+# kube-state-metrics (deployment/pod state)
+# ─────────────────────────────────────────────
+kubeStateMetrics:
+  enabled: true
+
+# ─────────────────────────────────────────────
+# Prometheus Operator
+# ─────────────────────────────────────────────
+prometheusOperator:
+  resources:
+    requests:
+      cpu: 100m
+      memory: 128Mi
+    limits:
+      cpu: 200m
+      memory: 256Mi

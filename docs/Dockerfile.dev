@@ -1,0 +1,17 @@
+# Development Dockerfile with hot reloading
+FROM node:20-alpine
+
+WORKDIR /app
+
+# Install dependencies first (for better caching)
+COPY package*.json ./
+RUN npm ci
+
+# Copy source files
+COPY . .
+
+# Expose Docusaurus dev server port
+EXPOSE 3000
+
+# Start development server with hot reloading
+CMD ["npm", "start", "--", "--host", "0.0.0.0", "--poll", "1000"]

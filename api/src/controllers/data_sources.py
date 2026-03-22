@@ -1,0 +1,793 @@
+"""Data Source API endpoints."""
+
+import logging
+from datetime import UTC, datetime
+from uuid import UUID
+
+from fastapi import APIRouter, BackgroundTasks, Depends, HTTPException, Query
+from pydantic import BaseModel, ConfigDict, Field
+from sqlalchemy import select
+from sqlalchemy.ext.asyncio import AsyncSession
+from sqlalchemy.orm import selectinload
+
+from src.core.database import get_async_db
+from src.middleware.auth_middleware import get_current_account, get_current_tenant_id
+from src.models.data_source import DataSource, DataSourceStatus, DataSourceType, SyncStatus
+from src.models.knowledge_base import KnowledgeBase
+from src.models.tenant import Account, Tenant, TenantPlan, TenantStatus
+from src.services.data_sources.databricks_connector import DatabricksConnector
+from src.services.data_sources.datadog_connector import DatadogConnector
+from src.services.data_sources.docker_logs_connector import DockerLogsConnector
+from src.services.data_sources.github_connector import GitHubConnector
+from src.services.data_sources.gitlab_connector import GitLabConnector
+from src.services.data_sources.gmail_connector import GmailConnector
+from src.services.data_sources.slack_connector import SlackConnector
+from src.services.data_sources.telegram_connector import TelegramConnector
+
+logger = logging.getLogger(__name__)
+
+router = APIRouter(prefix="/data-sources", tags=["data-sources"])
+
+
+# Request/Response Models
+class CreateDataSourceRequest(BaseModel):
+    """Request model for creating a data source."""
+
+    name: str = Field(..., min_length=1, max_length=255)
+    type: DataSourceType
+    knowledge_base_id: int
+    config: dict = Field(default_factory=dict)
+    oauth_app_id: int | None = None
+
+
+class UpdateDataSourceRequest(BaseModel):
+    """Request model for updating a data source."""
+
+    name: str | None = Field(None, min_length=1, max_length=255)
+    config: dict | None = None
+    sync_enabled: bool | None = None
+
+
+class OAuthAppInfo(BaseModel):
+    """OAuth app information for data source response."""
+
+    id: int
+    app_name: str
+    provider: str
+
+
+class DataSourceResponse(BaseModel):
+    """Response model for data source."""
+
+    id: int
+    name: str
+    type: str
+    knowledge_base_id: int | None
+    tenant_id: str
+    config: dict
+    status: str
+    sync_enabled: bool
+    last_sync_at: str | None
+    last_error: str | None
+    total_documents: int
+    created_at: str
+    updated_at: str
+    oauth_app: OAuthAppInfo | None = None  # OAuth app if linked
+
+    model_config = ConfigDict(from_attributes=True)
+
+
+class ConnectionTestResponse(BaseModel):
+    """Response model for connection test."""
+
+    success: bool
+    message: str
+    details: dict
+
+
+class SyncJobResponse(BaseModel):
+    """Response model for sync job."""
+
+    job_id: str
+    status: str
+    message: str
+
+
+class SyncStatusResponse(BaseModel):
+    """Response model for sync status."""
+
+    status: str
+    total_documents: int
+    last_sync_at: str | None
+    last_error: str | None
+    sync_enabled: bool
+
+
+# Helper functions
+def build_data_source_response(ds: DataSource) -> DataSourceResponse:
+    """Build DataSourceResponse from DataSource model."""
+    oauth_app_info = None
+    if ds.oauth_app:
+        oauth_app_info = OAuthAppInfo(
+            id=ds.oauth_app.id,
+            app_name=ds.oauth_app.app_name,
+            provider=ds.oauth_app.provider,
+        )
+
+    return DataSourceResponse(
+        id=ds.id,
+        name=ds.name,
+        type=ds.type.value,
+        knowledge_base_id=ds.knowledge_base_id,
+        tenant_id=str(ds.tenant_id),
+        config=ds.config,
+        status=ds.status.value,
+        sync_enabled=ds.sync_enabled,
+        last_sync_at=ds.last_sync_at.isoformat() if ds.last_sync_at else None,
+        last_error=ds.last_error,
+        total_documents=ds.total_documents,
+        created_at=ds.created_at.isoformat(),
+        updated_at=ds.updated_at.isoformat(),
+        oauth_app=oauth_app_info,
+    )
+
+
+async def get_default_tenant(db: AsyncSession) -> UUID:
+    """Get or create default tenant."""
+    result = await db.execute(select(Tenant))
+    tenant = result.scalar_one_or_none()
+    if not tenant:
+        # Create default tenant
+        tenant = Tenant(name="Default Tenant", plan=TenantPlan.FREE, status=TenantStatus.ACTIVE)
+        db.add(tenant)
+        await db.commit()
+        await db.refresh(tenant)
+    return tenant.id
+
+
+def get_connector(data_source: DataSource, db: AsyncSession):
+    """Get the appropriate connector for a data source."""
+    if data_source.type == DataSourceType.SLACK:
+        return SlackConnector(data_source, db)
+    elif data_source.type == DataSourceType.GMAIL:
+        return GmailConnector(data_source, db)
+    elif data_source.type == DataSourceType.GITHUB:
+        return GitHubConnector(data_source, db)
+    elif data_source.type == DataSourceType.GITLAB:
+        return GitLabConnector(data_source, db)
+    elif data_source.type == DataSourceType.TELEGRAM:
+        return TelegramConnector(data_source, db)
+    elif data_source.type == DataSourceType.DATADOG:
+        return DatadogConnector(data_source, db)
+    elif data_source.type == DataSourceType.DATABRICKS:
+        return DatabricksConnector(data_source, db)
+    elif data_source.type == DataSourceType.DOCKER_LOGS:
+        return DockerLogsConnector(data_source, db)
+    else:
+        raise ValueError(f"Unsupported data source type: {data_source.type}")
+
+
+async def run_sync_job(data_source_id: int, incremental: bool, sync_job_id: int, db: AsyncSession):
+    """Background task to run sync job."""
+    from src.models.data_source import DataSourceSyncJob
+
+    sync_job = None
+    try:
+        result_ds = await db.execute(select(DataSource).filter(DataSource.id == data_source_id))
+        data_source = result_ds.scalar_one_or_none()
+        if not data_source:
+            logger.error(f"Data source {data_source_id} not found")
+            return
+
+        # Get the sync job
+        result_sj = await db.execute(select(DataSourceSyncJob).filter(DataSourceSyncJob.id == sync_job_id))
+        sync_job = result_sj.scalar_one_or_none()
+        if not sync_job:
+            logger.error(f"Sync job {sync_job_id} not found")
+            return
+
+        connector = get_connector(data_source, db)
+        result = await connector.sync(incremental=incremental)
+
+        # Update sync job on success
+        sync_job.status = SyncStatus.COMPLETED
+        sync_job.completed_at = datetime.now(UTC)
+        sync_job.documents_processed = result.get("documents_processed", 0)
+        sync_job.documents_added = result.get("documents_added", 0)
+        sync_job.documents_updated = result.get("documents_updated", 0)
+        sync_job.documents_failed = result.get("documents_failed", 0)
+        await db.commit()
+
+        logger.info(f"Sync completed for data source {data_source.name}: {result}")
+
+    except Exception as e:
+        logger.error(f"Sync job failed for data source {data_source_id}: {e}")
+
+        # Update sync job on failure
+        if sync_job:
+            sync_job.status = SyncStatus.FAILED
+            sync_job.completed_at = datetime.now(UTC)
+            sync_job.error_message = str(e)
+            await db.commit()
+
+        # Update data source
+        result_ds = await db.execute(select(DataSource).filter(DataSource.id == data_source_id))
+        data_source = result_ds.scalar_one_or_none()
+        if data_source:
+            data_source.last_error = str(e)
+            await db.commit()
+
+
+# Endpoints
+@router.post("", response_model=DataSourceResponse, status_code=201)
+async def create_data_source(
+    request: CreateDataSourceRequest,
+    tenant_id: UUID = Depends(get_current_tenant_id),
+    current_account: Account = Depends(get_current_account),
+    db: AsyncSession = Depends(get_async_db),
+):
+    """Create a new data source."""
+    try:
+        # Verify knowledge base exists
+        result = await db.execute(select(KnowledgeBase).filter(KnowledgeBase.id == request.knowledge_base_id))
+        kb = result.scalar_one_or_none()
+
+        if not kb:
+            raise HTTPException(status_code=404, detail="Knowledge base not found")
+
+        # Start with provided config
+        config = dict(request.config) if request.config else {}
+
+        # Verify OAuth app if provided
+        if request.oauth_app_id:
+            from src.models.oauth_app import OAuthApp
+            from src.models.user_oauth_token import UserOAuthToken
+
+            result = await db.execute(
+                select(OAuthApp).filter(OAuthApp.id == request.oauth_app_id, OAuthApp.tenant_id == tenant_id)
+            )
+            oauth_app = result.scalar_one_or_none()
+
+            if not oauth_app:
+                raise HTTPException(status_code=404, detail="OAuth app not found")
+
+            # Verify OAuth app provider matches data source type
+            if oauth_app.provider.upper() != request.type.value:
+                raise HTTPException(
+                    status_code=400,
+                    detail=f"OAuth app provider ({oauth_app.provider}) does not match data source type ({request.type.value})",
+                )
+
+            # Verify user has connected their account to this OAuth app
+            result = await db.execute(
+                select(UserOAuthToken).filter(
+                    UserOAuthToken.account_id == current_account.id,
+                    UserOAuthToken.oauth_app_id == request.oauth_app_id,
+                )
+            )
+            user_token = result.scalar_one_or_none()
+
+            if not user_token:
+                raise HTTPException(
+                    status_code=400,
+                    detail="You haven't connected your account to this OAuth app. Please connect first.",
+                )
+
+            # Store the account ID in config for token resolution
+            config["connected_by_account_id"] = str(current_account.id)
+
+        # Determine initial status
+        initial_status = DataSourceStatus.ACTIVE if request.oauth_app_id else DataSourceStatus.INACTIVE
+
+        data_source = DataSource(
+            name=request.name,
+            type=request.type,
+            knowledge_base_id=request.knowledge_base_id,
+            tenant_id=tenant_id,
+            config=config,
+            oauth_app_id=request.oauth_app_id,
+            status=initial_status,
+        )
+
+        db.add(data_source)
+        await db.commit()
+
+        # Re-fetch with oauth_app eagerly loaded
+        result = await db.execute(
+            select(DataSource).options(selectinload(DataSource.oauth_app)).filter(DataSource.id == data_source.id)
+        )
+        data_source = result.scalar_one()
+
+        logger.info(
+            f"Created data source: {data_source.name} (ID: {data_source.id}) with status {initial_status.value}"
+        )
+
+        return build_data_source_response(data_source)
+
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"Error creating data source: {e}")
+        await db.rollback()
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@router.get("", response_model=list[DataSourceResponse])
+async def list_data_sources(
+    knowledge_base_id: int | None = Query(None),
+    skip: int = Query(0, ge=0),
+    limit: int = Query(100, ge=1, le=100),
+    tenant_id: UUID = Depends(get_current_tenant_id),
+    db: AsyncSession = Depends(get_async_db),
+):
+    """List all data sources."""
+    try:
+        query = select(DataSource).options(selectinload(DataSource.oauth_app)).filter(DataSource.tenant_id == tenant_id)
+
+        if knowledge_base_id:
+            query = query.filter(DataSource.knowledge_base_id == knowledge_base_id)
+
+        result = await db.execute(query.offset(skip).limit(limit))
+        data_sources = result.scalars().all()
+
+        return [build_data_source_response(ds) for ds in data_sources]
+
+    except Exception as e:
+        logger.error(f"Error listing data sources: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@router.get("/{ds_id}", response_model=DataSourceResponse)
+async def get_data_source(
+    ds_id: int,
+    tenant_id: UUID = Depends(get_current_tenant_id),
+    db: AsyncSession = Depends(get_async_db),
+):
+    """Get a specific data source.
+
+    SECURITY: Requires authentication and verifies data source belongs to tenant.
+    """
+    try:
+        # SECURITY: Filter by tenant_id to prevent IDOR attacks
+        result = await db.execute(
+            select(DataSource)
+            .options(selectinload(DataSource.oauth_app))
+            .filter(DataSource.id == ds_id, DataSource.tenant_id == tenant_id)
+        )
+        ds = result.scalar_one_or_none()
+
+        if not ds:
+            raise HTTPException(status_code=404, detail="Data source not found")
+
+        return build_data_source_response(ds)
+
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"Error getting data source: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@router.put("/{ds_id}", response_model=DataSourceResponse)
+async def update_data_source(
+    ds_id: int,
+    request: UpdateDataSourceRequest,
+    tenant_id: UUID = Depends(get_current_tenant_id),
+    db: AsyncSession = Depends(get_async_db),
+):
+    """Update a data source.
+
+    SECURITY: Requires authentication and verifies data source belongs to tenant.
+    """
+    try:
+        # SECURITY: Filter by tenant_id to prevent IDOR attacks
+        result = await db.execute(select(DataSource).filter(DataSource.id == ds_id, DataSource.tenant_id == tenant_id))
+        ds = result.scalar_one_or_none()
+
+        if not ds:
+            raise HTTPException(status_code=404, detail="Data source not found")
+
+        # Update fields
+        if request.name is not None:
+            ds.name = request.name
+        if request.config is not None:
+            ds.config = request.config
+
+        await db.commit()
+
+        # Re-fetch with oauth_app eagerly loaded
+        result = await db.execute(
+            select(DataSource).options(selectinload(DataSource.oauth_app)).filter(DataSource.id == ds_id)
+        )
+        ds = result.scalar_one()
+
+        logger.info(f"Updated data source: {ds.name} (ID: {ds.id})")
+
+        return build_data_source_response(ds)
+
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"Error updating data source: {e}")
+        await db.rollback()
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@router.delete("/{ds_id}", status_code=204)
+async def delete_data_source(
+    ds_id: int,
+    tenant_id: UUID = Depends(get_current_tenant_id),
+    db: AsyncSession = Depends(get_async_db),
+):
+    """Delete a data source.
+
+    SECURITY: Requires authentication and verifies data source belongs to tenant.
+    """
+    try:
+        # SECURITY: Filter by tenant_id to prevent IDOR attacks
+        result = await db.execute(select(DataSource).filter(DataSource.id == ds_id, DataSource.tenant_id == tenant_id))
+        ds = result.scalar_one_or_none()
+
+        if not ds:
+            raise HTTPException(status_code=404, detail="Data source not found")
+
+        await db.delete(ds)
+        await db.commit()
+
+        logger.info(f"Deleted data source: {ds.name} (ID: {ds.id})")
+
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"Error deleting data source: {e}")
+        await db.rollback()
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+class LinkOAuthAppRequest(BaseModel):
+    """Request to link an OAuth app to a data source."""
+
+    oauth_app_id: int
+
+
+@router.post("/{ds_id}/link-oauth-app", response_model=DataSourceResponse)
+async def link_oauth_app_to_data_source(
+    ds_id: int,
+    request: LinkOAuthAppRequest,
+    tenant_id: UUID = Depends(get_current_tenant_id),
+    current_account: Account = Depends(get_current_account),
+    db: AsyncSession = Depends(get_async_db),
+):
+    """
+    Link an OAuth app to an existing data source.
+
+    This allows users to connect their account to a data source that was
+    created without an OAuth app, or to change the OAuth connection.
+    """
+    try:
+        from src.models.oauth_app import OAuthApp
+        from src.models.user_oauth_token import UserOAuthToken
+
+        # SECURITY: Filter by tenant_id to prevent IDOR attacks
+        result = await db.execute(select(DataSource).filter(DataSource.id == ds_id, DataSource.tenant_id == tenant_id))
+        ds = result.scalar_one_or_none()
+
+        if not ds:
+            raise HTTPException(status_code=404, detail="Data source not found")
+
+        # Verify OAuth app exists and belongs to tenant
+        result = await db.execute(
+            select(OAuthApp).filter(OAuthApp.id == request.oauth_app_id, OAuthApp.tenant_id == tenant_id)
+        )
+        oauth_app = result.scalar_one_or_none()
+
+        if not oauth_app:
+            raise HTTPException(status_code=404, detail="OAuth app not found")
+
+        # Verify OAuth app provider matches data source type
+        if oauth_app.provider.upper() != ds.type.value:
+            raise HTTPException(
+                status_code=400,
+                detail=f"OAuth app provider ({oauth_app.provider}) does not match data source type ({ds.type.value})",
+            )
+
+        # Verify user has connected their account to this OAuth app
+        result = await db.execute(
+            select(UserOAuthToken).filter(
+                UserOAuthToken.account_id == current_account.id,
+                UserOAuthToken.oauth_app_id == request.oauth_app_id,
+            )
+        )
+        user_token = result.scalar_one_or_none()
+
+        if not user_token:
+            raise HTTPException(
+                status_code=400,
+                detail="You haven't connected your account to this OAuth app. Please connect first.",
+            )
+
+        # Update data source
+        ds.oauth_app_id = request.oauth_app_id
+        ds.config = {
+            **(ds.config or {}),
+            "connected_by_account_id": str(current_account.id),
+        }
+        ds.status = DataSourceStatus.ACTIVE
+
+        await db.commit()
+
+        # Re-fetch with oauth_app eagerly loaded
+        result = await db.execute(
+            select(DataSource).options(selectinload(DataSource.oauth_app)).filter(DataSource.id == ds_id)
+        )
+        ds = result.scalar_one()
+
+        logger.info(f"Linked OAuth app {oauth_app.app_name} to data source {ds.name} (ID: {ds.id})")
+
+        return build_data_source_response(ds)
+
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"Error linking OAuth app: {e}")
+        await db.rollback()
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@router.get("/{ds_id}/oauth-url")
+async def get_oauth_url(
+    ds_id: int,
+    tenant_id: UUID = Depends(get_current_tenant_id),
+    db: AsyncSession = Depends(get_async_db),
+):
+    """Get OAuth authorization URL for a data source.
+
+    SECURITY: Requires authentication and verifies data source belongs to tenant.
+    """
+    try:
+        # SECURITY: Filter by tenant_id to prevent IDOR attacks
+        result = await db.execute(select(DataSource).filter(DataSource.id == ds_id, DataSource.tenant_id == tenant_id))
+        ds = result.scalar_one_or_none()
+
+        if not ds:
+            raise HTTPException(status_code=404, detail="Data source not found")
+
+        connector = get_connector(ds, db)
+        oauth_url = connector.get_oauth_url()
+
+        if not oauth_url:
+            raise HTTPException(status_code=400, detail="OAuth not supported for this data source type")
+
+        return {"oauth_url": oauth_url}
+
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"Error getting OAuth URL: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@router.post("/{ds_id}/oauth-callback")
+async def handle_oauth_callback(
+    ds_id: int,
+    code: str = Query(...),
+    tenant_id: UUID = Depends(get_current_tenant_id),
+    db: AsyncSession = Depends(get_async_db),
+):
+    """Handle OAuth callback for a data source.
+
+    SECURITY: Requires authentication and verifies data source belongs to tenant.
+    """
+    try:
+        # SECURITY: Filter by tenant_id to prevent IDOR attacks
+        result = await db.execute(select(DataSource).filter(DataSource.id == ds_id, DataSource.tenant_id == tenant_id))
+        ds = result.scalar_one_or_none()
+
+        if not ds:
+            raise HTTPException(status_code=404, detail="Data source not found")
+
+        connector = get_connector(ds, db)
+        callback_result = await connector.handle_oauth_callback(code)
+
+        if not callback_result.get("success"):
+            raise HTTPException(status_code=400, detail=callback_result.get("message"))
+
+        return callback_result
+
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"Error handling OAuth callback: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@router.post("/{ds_id}/test-connection", response_model=ConnectionTestResponse)
+async def test_connection(
+    ds_id: int,
+    tenant_id: UUID = Depends(get_current_tenant_id),
+    db: AsyncSession = Depends(get_async_db),
+):
+    """Test connection to a data source.
+
+    SECURITY: Requires authentication and verifies data source belongs to tenant.
+    """
+    try:
+        # SECURITY: Filter by tenant_id to prevent IDOR attacks
+        result = await db.execute(select(DataSource).filter(DataSource.id == ds_id, DataSource.tenant_id == tenant_id))
+        ds = result.scalar_one_or_none()
+
+        if not ds:
+            raise HTTPException(status_code=404, detail="Data source not found")
+
+        connector = get_connector(ds, db)
+        test_result = await connector.test_connection()
+
+        return ConnectionTestResponse(
+            success=test_result["success"], message=test_result["message"], details=test_result.get("details", {})
+        )
+
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"Error testing connection: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@router.post("/{ds_id}/sync", response_model=SyncJobResponse, status_code=202)
+async def trigger_sync(
+    ds_id: int,
+    incremental: bool = Query(True),
+    background_tasks: BackgroundTasks = BackgroundTasks(),
+    tenant_id: UUID = Depends(get_current_tenant_id),
+    db: AsyncSession = Depends(get_async_db),
+):
+    """Trigger a sync job for a data source.
+
+    SECURITY: Requires authentication and verifies data source belongs to tenant.
+    """
+    try:
+        # SECURITY: Filter by tenant_id to prevent IDOR attacks
+        result = await db.execute(select(DataSource).filter(DataSource.id == ds_id, DataSource.tenant_id == tenant_id))
+        ds = result.scalar_one_or_none()
+
+        if not ds:
+            raise HTTPException(status_code=404, detail="Data source not found")
+
+        if ds.status != DataSourceStatus.ACTIVE:
+            raise HTTPException(status_code=400, detail="Data source is not active. Please complete OAuth first.")
+
+        # Check if already syncing by looking at recent sync jobs
+        from src.models.data_source import DataSourceSyncJob, SyncStatus
+
+        result = await db.execute(
+            select(DataSourceSyncJob).filter(
+                DataSourceSyncJob.data_source_id == ds_id, DataSourceSyncJob.status == SyncStatus.IN_PROGRESS
+            )
+        )
+        recent_sync = result.scalar_one_or_none()
+
+        if recent_sync:
+            raise HTTPException(status_code=409, detail="Sync already in progress")
+
+        # Create sync job
+        sync_job = DataSourceSyncJob(
+            data_source_id=ds_id, tenant_id=ds.tenant_id, status=SyncStatus.IN_PROGRESS, started_at=datetime.now(UTC)
+        )
+        db.add(sync_job)
+        await db.commit()
+        await db.refresh(sync_job)
+
+        # Start background sync job
+        background_tasks.add_task(run_sync_job, ds_id, incremental, sync_job.id, db)
+
+        job_id = f"sync_{ds_id}_{int(ds.updated_at.timestamp())}"
+
+        return SyncJobResponse(job_id=job_id, status="started", message=f"Sync job started for {ds.name}")
+
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"Error triggering sync: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@router.get("/{ds_id}/sync-status", response_model=SyncStatusResponse)
+async def get_sync_status(
+    ds_id: int,
+    tenant_id: UUID = Depends(get_current_tenant_id),
+    db: AsyncSession = Depends(get_async_db),
+):
+    """Get sync status for a data source.
+
+    SECURITY: Requires authentication and verifies data source belongs to tenant.
+    """
+    try:
+        # SECURITY: Filter by tenant_id to prevent IDOR attacks
+        result = await db.execute(select(DataSource).filter(DataSource.id == ds_id, DataSource.tenant_id == tenant_id))
+        ds = result.scalar_one_or_none()
+
+        if not ds:
+            raise HTTPException(status_code=404, detail="Data source not found")
+
+        return SyncStatusResponse(
+            status=ds.status.value,
+            total_documents=ds.total_documents,
+            last_sync_at=ds.last_sync_at.isoformat() if ds.last_sync_at else None,
+            last_error=ds.last_error,
+            sync_enabled=ds.sync_enabled,
+        )
+
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"Error getting sync status: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+class SyncHistoryItem(BaseModel):
+    """Response model for sync history item."""
+
+    id: int
+    started_at: str
+    completed_at: str | None
+    status: str
+    documents_processed: int
+    documents_added: int
+    documents_updated: int
+    documents_deleted: int
+    documents_failed: int
+    error_message: str | None
+
+    model_config = ConfigDict(from_attributes=True)
+
+
+@router.get("/{ds_id}/sync-history", response_model=list[SyncHistoryItem])
+async def get_sync_history(
+    ds_id: int,
+    limit: int = Query(20, ge=1, le=100),
+    tenant_id: UUID = Depends(get_current_tenant_id),
+    db: AsyncSession = Depends(get_async_db),
+):
+    """Get sync history for a data source.
+
+    SECURITY: Requires authentication and verifies data source belongs to tenant.
+    """
+    try:
+        # SECURITY: Filter by tenant_id to prevent IDOR attacks
+        result = await db.execute(select(DataSource).filter(DataSource.id == ds_id, DataSource.tenant_id == tenant_id))
+        ds = result.scalar_one_or_none()
+
+        if not ds:
+            raise HTTPException(status_code=404, detail="Data source not found")
+
+        from src.models.data_source import DataSourceSyncJob
+
+        result = await db.execute(
+            select(DataSourceSyncJob)
+            .filter(DataSourceSyncJob.data_source_id == ds_id)
+            .order_by(DataSourceSyncJob.started_at.desc())
+            .limit(limit)
+        )
+        sync_jobs = result.scalars().all()
+
+        return [
+            SyncHistoryItem(
+                id=job.id,
+                started_at=job.started_at.isoformat() if job.started_at else datetime.now(UTC).isoformat(),
+                completed_at=job.completed_at.isoformat() if job.completed_at else None,
+                status=job.status.value,
+                documents_processed=job.documents_processed,
+                documents_added=job.documents_added,
+                documents_updated=job.documents_updated,
+                documents_deleted=job.documents_deleted,
+                documents_failed=job.documents_failed,
+                error_message=job.error_message,
+            )
+            for job in sync_jobs
+        ]
+
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"Error getting sync history: {e}")
+        raise HTTPException(status_code=500, detail=str(e))

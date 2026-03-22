@@ -1,0 +1,76 @@
+# Ruff configuration for synkora API
+
+# Exclude patterns
+exclude = [
+    ".git",
+    ".venv",
+    "__pycache__",
+    "*.pyc",
+    "migrations/versions/*.py",  # Auto-generated migration files
+]
+
+# Line length
+line-length = 120
+
+# Python version
+target-version = "py311"
+
+[lint]
+# Enable specific rule sets
+select = [
+    "E",   # pycodestyle errors
+    "W",   # pycodestyle warnings
+    "F",   # pyflakes
+    "I",   # isort
+    "B",   # flake8-bugbear
+    "C4",  # flake8-comprehensions
+    "UP",  # pyupgrade
+]
+
+# Ignore specific rules
+ignore = [
+    "E402",   # Module level import not at top of file (needed for migrations/env.py)
+    "E501",   # Line too long (handled by formatter, increase line-length to 120)
+    "E722",   # Do not use bare except (legacy code, to be fixed)
+    "ARG001", # Unused function argument (FastAPI dependencies, exception handlers)
+    "B017",   # pytest.raises(Exception) is too broad (acceptable in integration tests)
+    "B008",   # Do not perform function call in argument defaults (FastAPI Depends pattern)
+    "B023",   # Loop variable not bound (legacy async code patterns)
+    "B904",   # raise from (too many existing violations, low priority)
+    "F401",   # Unused imports (some are for re-export in __init__.py)
+    "F403",   # Star imports (used for tool re-exports)
+    "F405",   # May be undefined from star imports
+    "F811",   # Redefinition of unused name
+    "F821",   # Undefined name (forward references, conditional imports)
+    "UP035",  # typing.Dict/List deprecated (gradual migration)
+    "UP045",  # Optional[X] deprecated, use X | None (gradual migration)
+    "W293",   # Blank line contains whitespace (in docstrings)
+]
+
+# Allow autofix for all enabled rules
+fixable = ["ALL"]
+unfixable = []
+
+[lint.per-file-ignores]
+# Ignore all errors in migration files
+"migrations/versions/*.py" = ["ALL"]
+"migrations/env.py" = ["E402"]  # Allow imports after sys.path modification
+
+# Test files can have unused arguments
+"tests/**/*.py" = ["ARG001", "B017"]
+
+# Model files use string forward references for SQLAlchemy relationships
+"src/models/*.py" = ["F821", "E501"]  # Forward references and long repr strings
+
+[format]
+# Use double quotes
+quote-style = "double"
+
+# Indent with spaces
+indent-style = "space"
+
+# Respect magic trailing commas
+skip-magic-trailing-comma = false
+
+# Auto-detect line ending
+line-ending = "auto"

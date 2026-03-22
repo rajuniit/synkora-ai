@@ -1,0 +1,271 @@
+name: Deploy to Production
+
+on:
+  push:
+    branches:
+      - master
+
+env:
+  AWS_REGION: us-east-2
+  AWS_ACCOUNT_ID: 614209211965
+  ECR_REGISTRY: 614209211965.dkr.ecr.us-east-2.amazonaws.com
+  NAMESPACE: synkora-production
+
+concurrency:
+  group: deploy-production
+  cancel-in-progress: false
+
+jobs:
+  build-and-push:
+    name: Build & Push Docker Images
+    runs-on: ubuntu-latest
+    outputs:
+      image-tag: ${{ steps.meta.outputs.tag }}
+    steps:
+      - name: Free disk space
+        run: |
+          sudo rm -rf /usr/share/dotnet
+          sudo rm -rf /usr/local/lib/android
+          sudo rm -rf /opt/ghc
+          sudo rm -rf /opt/hostedtoolcache
+          sudo rm -rf /usr/local/share/boost
+          sudo rm -rf /usr/share/swift
+          sudo docker system prune -af --volumes
+          df -h
+
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Set image tag
+        id: meta
+        run: echo "tag=${{ github.sha }}" >> "$GITHUB_OUTPUT"
+
+      - name: Configure AWS credentials
+        uses: aws-actions/configure-aws-credentials@v4
+        with:
+          aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
+          aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+          aws-region: ${{ env.AWS_REGION }}
+
+      - name: Login to Amazon ECR
+        run: |
+          aws ecr get-login-password --region ${{ env.AWS_REGION }} | docker login --username AWS --password-stdin ${{ env.ECR_REGISTRY }}
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3
+
+      - name: Build and push API image
+        uses: docker/build-push-action@v5
+        with:
+          context: ./api
+          file: ./api/Dockerfile
+          push: true
+          platforms: linux/amd64
+          tags: |
+            ${{ env.ECR_REGISTRY }}/synkora-api:${{ github.sha }}
+            ${{ env.ECR_REGISTRY }}/synkora-api:latest
+          build-args: |
+            COMMIT_SHA=${{ github.sha }}
+          cache-from: type=gha,scope=api
+          cache-to: type=gha,mode=max,scope=api
+
+      - name: Clean up after API build
+        run: |
+          docker builder prune -f
+          df -h
+
+      - name: Prepare frontend env
+        run: |
+          cd web
+          if [ -f env.production ]; then
+            cp env.production .env
+          fi
+
+      - name: Build and push Frontend image
+        uses: docker/build-push-action@v5
+        with:
+          context: ./web
+          file: ./web/Dockerfile
+          push: true
+          platforms: linux/amd64
+          tags: |
+            ${{ env.ECR_REGISTRY }}/synkora-frontend:${{ github.sha }}
+            ${{ env.ECR_REGISTRY }}/synkora-frontend:latest
+          build-args: |
+            COMMIT_SHA=${{ github.sha }}
+            NEXT_PUBLIC_API_URL=https://api.synkora.ai
+            NEXT_PUBLIC_APP_URL=https://synkora.ai
+            NEXT_PUBLIC_SENTRY_DSN=${{ secrets.SENTRY_DSN }}
+          cache-from: type=gha,scope=web
+          cache-to: type=gha,mode=max,scope=web
+
+  deploy:
+    name: Deploy to DOKS
+    runs-on: ubuntu-latest
+    needs: build-and-push
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Install doctl
+        uses: digitalocean/action-doctl@v2
+        with:
+          token: ${{ secrets.DIGITALOCEAN_ACCESS_TOKEN }}
+
+      - name: Configure kubectl for DOKS
+        run: |
+          doctl kubernetes cluster kubeconfig save ${{ secrets.DOKS_CLUSTER_NAME }}
+
+      - name: Ensure namespace exists
+        run: kubectl apply -f k8s/base/namespace.yaml
+
+      - name: Configure AWS credentials (for ECR secret)
+        uses: aws-actions/configure-aws-credentials@v4
+        with:
+          aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
+          aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+          aws-region: ${{ env.AWS_REGION }}
+
+      - name: Update ECR pull secret
+        run: |
+          kubectl delete secret ecr-registry-secret -n ${{ env.NAMESPACE }} --ignore-not-found=true
+          ECR_PASSWORD="$(aws ecr get-login-password --region ${{ env.AWS_REGION }})"
+          kubectl create secret docker-registry ecr-registry-secret \
+            --docker-server=${{ env.ECR_REGISTRY }} \
+            --docker-username=AWS \
+            --docker-password="${ECR_PASSWORD}" \
+            --namespace=${{ env.NAMESPACE }}
+
+      - name: Inject application secrets into cluster
+        run: |
+          kubectl create secret generic synkora-secrets \
+            --namespace=${{ env.NAMESPACE }} \
+            --from-literal=SECRET_KEY="${{ secrets.K8S_SECRET_KEY }}" \
+            --from-literal=JWT_SECRET_KEY="${{ secrets.K8S_JWT_SECRET_KEY }}" \
+            --from-literal=ENCRYPTION_KEY="${{ secrets.K8S_ENCRYPTION_KEY }}" \
+            --from-literal=JWT_ACCESS_TOKEN_EXPIRES="${{ secrets.K8S_JWT_ACCESS_TOKEN_EXPIRES }}" \
+            --from-literal=JWT_REFRESH_TOKEN_EXPIRES="${{ secrets.K8S_JWT_REFRESH_TOKEN_EXPIRES }}" \
+            --from-literal=JWT_ALGORITHM="${{ secrets.K8S_JWT_ALGORITHM }}" \
+            --from-literal=DB_HOST="${{ secrets.K8S_DB_HOST }}" \
+            --from-literal=DB_PORT="${{ secrets.K8S_DB_PORT }}" \
+            --from-literal=DB_USERNAME="${{ secrets.K8S_DB_USERNAME }}" \
+            --from-literal=DB_DATABASE="${{ secrets.K8S_DB_DATABASE }}" \
+            --from-literal=DB_CHARSET="${{ secrets.K8S_DB_CHARSET }}" \
+            --from-literal=DB_EXTRAS="${{ secrets.K8S_DB_EXTRAS }}" \
+            --from-literal=DB_PASSWORD="${{ secrets.K8S_DB_PASSWORD }}" \
+            --from-literal=SQLALCHEMY_DATABASE_URI_SCHEME="${{ secrets.K8S_SQLALCHEMY_DATABASE_URI_SCHEME }}" \
+            --from-literal=SQLALCHEMY_POOL_SIZE="${{ secrets.K8S_SQLALCHEMY_POOL_SIZE }}" \
+            --from-literal=SQLALCHEMY_MAX_OVERFLOW="${{ secrets.K8S_SQLALCHEMY_MAX_OVERFLOW }}" \
+            --from-literal=SQLALCHEMY_POOL_RECYCLE="${{ secrets.K8S_SQLALCHEMY_POOL_RECYCLE }}" \
+            --from-literal=SQLALCHEMY_POOL_USE_LIFO="${{ secrets.K8S_SQLALCHEMY_POOL_USE_LIFO }}" \
+            --from-literal=SQLALCHEMY_POOL_PRE_PING="${{ secrets.K8S_SQLALCHEMY_POOL_PRE_PING }}" \
+            --from-literal=SQLALCHEMY_ECHO="${{ secrets.K8S_SQLALCHEMY_ECHO }}" \
+            --from-literal=SQLALCHEMY_POOL_TIMEOUT="${{ secrets.K8S_SQLALCHEMY_POOL_TIMEOUT }}" \
+            --from-literal=REDIS_URL="${{ secrets.K8S_REDIS_URL }}" \
+            --from-literal=REDIS_MAX_CONNECTIONS="${{ secrets.K8S_REDIS_MAX_CONNECTIONS }}" \
+            --from-literal=CELERY_BROKER_URL="${{ secrets.K8S_CELERY_BROKER_URL }}" \
+            --from-literal=CELERY_RESULT_BACKEND="${{ secrets.K8S_CELERY_RESULT_BACKEND }}" \
+            --from-literal=AWS_ACCESS_KEY_ID="${{ secrets.AWS_ACCESS_KEY_ID }}" \
+            --from-literal=AWS_SECRET_ACCESS_KEY="${{ secrets.AWS_SECRET_ACCESS_KEY }}" \
+            --from-literal=PINECONE_API_KEY="${{ secrets.K8S_PINECONE_API_KEY }}" \
+            --from-literal=LANGFUSE_HOST="${{ secrets.K8S_LANGFUSE_HOST }}" \
+            --from-literal=LANGFUSE_PUBLIC_KEY="${{ secrets.K8S_LANGFUSE_PUBLIC_KEY }}" \
+            --from-literal=LANGFUSE_SECRET_KEY="${{ secrets.K8S_LANGFUSE_SECRET_KEY }}" \
+            --from-literal=SMTP_PASSWORD="${{ secrets.K8S_SMTP_PASSWORD }}" \
+            --from-literal=OPENAI_API_KEY="${{ secrets.K8S_OPENAI_API_KEY }}" \
+            --from-literal=ANTHROPIC_API_KEY="${{ secrets.K8S_ANTHROPIC_API_KEY }}" \
+            --from-literal=SENTRY_DSN="${{ secrets.SENTRY_DSN }}" \
+            --from-literal=SENTRY_ENVIRONMENT="production" \
+            --from-literal=METRICS_AUTH_TOKEN="${{ secrets.K8S_METRICS_AUTH_TOKEN }}" \
+            --dry-run=client -o yaml | kubectl apply -f -
+
+      - name: Apply deployment manifests
+        run: |
+          kubectl apply -f k8s/application/api-deployment.yml
+          kubectl apply -f k8s/application/celery-worker-deployment.yml
+          kubectl apply -f k8s/application/celery-beat-deployment.yml
+          kubectl apply -f k8s/application/flower-deployment.yml
+          kubectl apply -f k8s/application/flower-ingress.yml
+
+      - name: Deploy API
+        run: |
+          IMAGE_TAG="${{ github.sha }}"
+          kubectl set image deployment/synkora-api api=${{ env.ECR_REGISTRY }}/synkora-api:${IMAGE_TAG} -n ${{ env.NAMESPACE }}
+          kubectl set image deployment/synkora-celery-worker celery-worker=${{ env.ECR_REGISTRY }}/synkora-api:${IMAGE_TAG} -n ${{ env.NAMESPACE }}
+          kubectl set image deployment/synkora-celery-beat celery-beat=${{ env.ECR_REGISTRY }}/synkora-api:${IMAGE_TAG} -n ${{ env.NAMESPACE }}
+          kubectl set image deployment/synkora-bot-worker bot-worker=${{ env.ECR_REGISTRY }}/synkora-api:${IMAGE_TAG} -n ${{ env.NAMESPACE }}
+          kubectl set image deployment/synkora-flower flower=${{ env.ECR_REGISTRY }}/synkora-api:${IMAGE_TAG} -n ${{ env.NAMESPACE }}
+
+      - name: Deploy Frontend
+        run: |
+          IMAGE_TAG="${{ github.sha }}"
+          kubectl set image deployment/synkora-frontend frontend=${{ env.ECR_REGISTRY }}/synkora-frontend:${IMAGE_TAG} -n ${{ env.NAMESPACE }}
+
+      - name: Wait for API rollout
+        run: |
+          if ! kubectl rollout status deployment/synkora-api -n ${{ env.NAMESPACE }} --timeout=600s; then
+            echo "API deployment failed, rolling back..."
+            kubectl rollout undo deployment/synkora-api -n ${{ env.NAMESPACE }}
+            exit 1
+          fi
+
+      - name: Wait for Celery worker rollout
+        run: |
+          if ! kubectl rollout status deployment/synkora-celery-worker -n ${{ env.NAMESPACE }} --timeout=600s; then
+            echo "Celery worker deployment failed, rolling back..."
+            kubectl rollout undo deployment/synkora-celery-worker -n ${{ env.NAMESPACE }}
+            exit 1
+          fi
+
+      - name: Wait for Celery beat rollout
+        run: |
+          if ! kubectl rollout status deployment/synkora-celery-beat -n ${{ env.NAMESPACE }} --timeout=600s; then
+            echo "Celery beat deployment failed, rolling back..."
+            kubectl rollout undo deployment/synkora-celery-beat -n ${{ env.NAMESPACE }}
+            exit 1
+          fi
+
+      - name: Wait for Bot worker rollout
+        run: |
+          if ! kubectl rollout status deployment/synkora-bot-worker -n ${{ env.NAMESPACE }} --timeout=600s; then
+            echo "Bot worker deployment failed, rolling back..."
+            kubectl rollout undo deployment/synkora-bot-worker -n ${{ env.NAMESPACE }}
+            exit 1
+          fi
+
+      - name: Wait for Frontend rollout
+        run: |
+          if ! kubectl rollout status deployment/synkora-frontend -n ${{ env.NAMESPACE }} --timeout=600s; then
+            echo "Frontend deployment failed, rolling back..."
+            kubectl rollout undo deployment/synkora-frontend -n ${{ env.NAMESPACE }}
+            exit 1
+          fi
+
+      - name: Health check
+        run: |
+          echo "Waiting 30s for services to stabilize..."
+          sleep 30
+          echo "Checking API health endpoint..."
+          # Use kubectl port-forward to check health internally
+          kubectl run health-check --rm -i --restart=Never --image=curlimages/curl:latest -n ${{ env.NAMESPACE }} -- \
+            curl -sf --max-time 10 "http://synkora-api.${{ env.NAMESPACE }}.svc.cluster.local:5001/api/health" || {
+            echo "Health check failed! Rolling back all deployments..."
+            kubectl rollout undo deployment/synkora-api -n ${{ env.NAMESPACE }}
+            kubectl rollout undo deployment/synkora-celery-worker -n ${{ env.NAMESPACE }}
+            kubectl rollout undo deployment/synkora-celery-beat -n ${{ env.NAMESPACE }}
+            kubectl rollout undo deployment/synkora-bot-worker -n ${{ env.NAMESPACE }}
+            kubectl rollout undo deployment/synkora-frontend -n ${{ env.NAMESPACE }}
+            exit 1
+          }
+          echo "Health check passed!"
+
+      - name: Deployment summary
+        if: success()
+        run: |
+          echo "=== Deployment Summary ==="
+          echo "Image tag: ${{ github.sha }}"
+          echo "Namespace: ${{ env.NAMESPACE }}"
+          echo ""
+          kubectl get deployments -n ${{ env.NAMESPACE }}
+          echo ""
+          kubectl get pods -n ${{ env.NAMESPACE }}

@@ -1,0 +1,25 @@
+{
+  "name": "synkora",
+  "version": "1.0.0",
+  "private": true,
+  "description": "AI/LLM application platform for building, deploying, and managing AI agents",
+  "scripts": {
+    "docs:dev": "cd docs && npm start",
+    "docs:build": "cd docs && npm run build",
+    "docs:serve": "cd docs && npm run serve",
+    "docs:deploy": "cd docs && npm run deploy",
+    "docs:clear": "cd docs && npm run clear"
+  },
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/rajuniit/synkora-ai.git"
+  },
+  "keywords": [
+    "ai",
+    "llm",
+    "agents",
+    "rag",
+    "chatbot"
+  ],
+  "license": "SEE LICENSE IN LICENSE"
+}

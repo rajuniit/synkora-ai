@@ -1,0 +1,1 @@
+export { OktaTenantCard } from './OktaTenantCard';

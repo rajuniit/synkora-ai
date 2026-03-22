@@ -1,0 +1,224 @@
+"""
+Shared helpers for local Git operations.
+
+Provides security constants, input validation, path validation, and the
+core _run_git_command utility used by git_repo_tools, git_branch_tools,
+and git_commit_tools.
+"""
+
+import logging
+import os
+import re
+import subprocess
+import tempfile
+from typing import Any
+from urllib.parse import urlparse
+
+logger = logging.getLogger(__name__)
+
+# ---------------------------------------------------------------------------
+# Security configuration
+# ---------------------------------------------------------------------------
+
+MAX_REPO_SIZE_MB = 500  # Maximum allowed repository size (in MB)
+MAX_CLONE_TIMEOUT = 600  # Maximum clone timeout (10 minutes)
+MAX_COMMAND_TIMEOUT = 300  # Maximum command timeout (5 minutes)
+MAX_BRANCH_NAME_LENGTH = 255
+MAX_COMMIT_MESSAGE_LENGTH = 1000
+MAX_REMOTE_NAME_LENGTH = 100
+ALLOWED_URL_SCHEMES = {"https", "ssh", "git"}
+
+VALID_BRANCH_NAME_PATTERN = re.compile(r"^[a-zA-Z0-9._/-]+$")
+VALID_REMOTE_NAME_PATTERN = re.compile(r"^[a-zA-Z0-9._-]+$")
+SSH_URL_PATTERN = re.compile(r"^git@[\w.-]+:[\w.-]+/[\w.-]+(?:\.git)?$")
+HTTPS_URL_PATTERN = re.compile(r"^https://[\w.-]+/[\w.-]+/[\w.-]+(?:\.git)?$")
+
+BLOCKED_PATTERNS = [
+    r"[;&|`$]",  # Shell injection characters
+    r"\.\.",  # Path traversal
+    r"~",  # Home directory access
+    r"\$\{",  # Variable expansion
+]
+
+
+# ---------------------------------------------------------------------------
+# Path helpers
+# ---------------------------------------------------------------------------
+
+
+def _get_workspace_path(config: dict[str, Any] | None) -> str | None:
+    """Get the workspace path from config or RuntimeContext."""
+    from src.services.agents.workspace_manager import get_workspace_path_from_config
+
+    return get_workspace_path_from_config(config)
+
+
+def _validate_repo_path(repo_path: str, workspace_path: str | None) -> tuple[bool, str | None]:
+    """
+    Validate that a repository path is within the workspace directory.
+
+    Returns:
+        Tuple of (is_valid, error_message)
+    """
+    if not workspace_path:
+        return False, "No workspace path configured. Repository operations require a valid workspace."
+
+    try:
+        real_path = os.path.realpath(repo_path)
+        real_workspace = os.path.realpath(workspace_path)
+
+        real_path = real_path.removeprefix("/private")
+        real_workspace = real_workspace.removeprefix("/private")
+
+        if not (real_path.startswith(real_workspace + os.sep) or real_path == real_workspace):
+            return (
+                False,
+                f"Repository path '{repo_path}' is outside the workspace directory. Use workspace path: {workspace_path}",
+            )
+
+        return True, None
+    except Exception as e:
+        return False, f"Error validating repository path: {str(e)}"
+
+
+# ---------------------------------------------------------------------------
+# Input validation
+# ---------------------------------------------------------------------------
+
+
+def _validate_input(input_str: str, input_type: str) -> dict[str, Any]:
+    """Validate input strings for security compliance."""
+    if not input_str or not isinstance(input_str, str):
+        return {"valid": False, "error": f"Invalid {input_type}: must be a non-empty string"}
+
+    for pattern in BLOCKED_PATTERNS:
+        if re.search(pattern, input_str):
+            logger.warning(f"Blocked pattern detected in {input_type}: {pattern}")
+            return {"valid": False, "error": f"Invalid {input_type}: contains forbidden characters"}
+
+    if input_type == "branch_name":
+        if len(input_str) > MAX_BRANCH_NAME_LENGTH:
+            return {"valid": False, "error": f"Branch name exceeds maximum length ({MAX_BRANCH_NAME_LENGTH})"}
+        if not VALID_BRANCH_NAME_PATTERN.match(input_str):
+            return {"valid": False, "error": "Branch name contains invalid characters"}
+
+    elif input_type == "remote_name":
+        if len(input_str) > MAX_REMOTE_NAME_LENGTH:
+            return {"valid": False, "error": f"Remote name exceeds maximum length ({MAX_REMOTE_NAME_LENGTH})"}
+        if not VALID_REMOTE_NAME_PATTERN.match(input_str):
+            return {"valid": False, "error": "Remote name contains invalid characters"}
+
+    elif input_type == "commit_message":
+        if len(input_str) > MAX_COMMIT_MESSAGE_LENGTH:
+            return {"valid": False, "error": f"Commit message exceeds maximum length ({MAX_COMMIT_MESSAGE_LENGTH})"}
+
+    elif input_type == "repo_url":
+        if not (HTTPS_URL_PATTERN.match(input_str) or SSH_URL_PATTERN.match(input_str)):
+            return {"valid": False, "error": "Invalid repository URL format"}
+        parsed = urlparse(input_str)
+        if parsed.scheme and parsed.scheme not in ALLOWED_URL_SCHEMES:
+            return {"valid": False, "error": f"URL scheme not allowed: {parsed.scheme}"}
+
+    elif input_type == "repo_path":
+        if not os.path.exists(input_str):
+            return {"valid": False, "error": f"Repository path does not exist: {input_str}"}
+        if not input_str.startswith(tempfile.gettempdir()):
+            logger.warning(f"Potentially unsafe repository path: {input_str}")
+
+    return {"valid": True}
+
+
+# ---------------------------------------------------------------------------
+# Output sanitisation
+# ---------------------------------------------------------------------------
+
+
+def _sanitize_output(output: str) -> str:
+    """Remove sensitive information from command output."""
+    if not output:
+        return output
+
+    sanitized = output
+    ssh_key_pattern = r"-----BEGIN [A-Z ]+-----.*?-----END [A-Z ]+-----"
+    sanitized = re.sub(ssh_key_pattern, "[REDACTED SSH KEY]", sanitized, flags=re.DOTALL)
+    token_pattern = r"(token|password|secret)[:=]\s*[^\s]+"
+    sanitized = re.sub(token_pattern, r"\1: [REDACTED]", sanitized, flags=re.IGNORECASE)
+    return sanitized
+
+
+# ---------------------------------------------------------------------------
+# Git command runner
+# ---------------------------------------------------------------------------
+
+
+def _run_git_command(command: list[str], working_directory: str | None = None, timeout: int = 300) -> dict[str, Any]:
+    """
+    Run a git command and return the result.
+
+    Returns:
+        Dictionary with 'success', 'output', 'error', and 'return_code' keys.
+    """
+    try:
+        env = os.environ.copy()
+        env["GIT_SSH_COMMAND"] = "ssh -o StrictHostKeyChecking=yes -o BatchMode=yes"
+
+        result = subprocess.run(
+            command, cwd=working_directory, capture_output=True, text=True, timeout=timeout, check=False, env=env
+        )
+
+        success = result.returncode == 0
+        return {
+            "success": success,
+            "output": result.stdout.strip(),
+            "error": result.stderr.strip() if not success else "",
+            "return_code": result.returncode,
+        }
+    except subprocess.TimeoutExpired:
+        logger.error(f"Command timed out after {timeout}s: {' '.join(command)}")
+        return {
+            "success": False,
+            "output": "",
+            "error": f"Command timed out after {timeout} seconds",
+            "return_code": -1,
+        }
+    except Exception as e:
+        logger.error(f"Failed to run command {' '.join(command)}: {e}")
+        return {"success": False, "output": "", "error": str(e), "return_code": -1}
+
+
+# ---------------------------------------------------------------------------
+# URL helpers
+# ---------------------------------------------------------------------------
+
+
+def _convert_https_to_ssh(url: str) -> str:
+    """Convert an HTTPS Git URL to its SSH equivalent."""
+    if not url.startswith("https://"):
+        return url
+    try:
+        parsed_url = urlparse(url)
+        if not parsed_url.hostname or not parsed_url.path:
+            logger.warning(f"Could not parse URL '{url}', using original")
+            return url
+        ssh_url = f"git@{parsed_url.hostname}:{parsed_url.path.lstrip('/')}"
+        logger.info(f"Converted HTTPS URL to SSH: {ssh_url}")
+        return ssh_url
+    except Exception as e:
+        logger.warning(f"Failed to parse URL '{url}': {e}")
+        return url
+
+
+# ---------------------------------------------------------------------------
+# Repo size helper
+# ---------------------------------------------------------------------------
+
+
+def _get_repo_size(repo_path: str) -> float:
+    """Get repository size in MB."""
+    total_size = 0
+    for dirpath, _dirnames, filenames in os.walk(repo_path):
+        for filename in filenames:
+            filepath = os.path.join(dirpath, filename)
+            if os.path.exists(filepath):
+                total_size += os.path.getsize(filepath)
+    return total_size / (1024 * 1024)

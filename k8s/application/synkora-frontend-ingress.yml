@@ -1,0 +1,37 @@
+apiVersion: networking.k8s.io/v1
+kind: Ingress
+metadata:
+  name: synkora-frontend-ingress
+  namespace: synkora-production
+  annotations:
+    nginx.ingress.kubernetes.io/proxy-body-size: "10m"
+    nginx.ingress.kubernetes.io/ssl-redirect: "true"
+    # Nginx ingress controller automatically sets X-Forwarded-Host header
+    # The application code now checks for this header first
+    cert-manager.io/cluster-issuer: "letsencrypt-prod"
+    # Enable gzip compression for faster JS/CSS/HTML transfer
+    nginx.ingress.kubernetes.io/enable-gzip: "true"
+    nginx.ingress.kubernetes.io/gzip-types: "text/plain text/css text/javascript application/javascript application/json image/svg+xml"
+    # Cache Next.js static assets (content-hashed, safe to cache long-term)
+    nginx.ingress.kubernetes.io/configuration-snippet: |
+      location ~* ^/_next/static/ {
+        expires 1y;
+        add_header Cache-Control "public, max-age=31536000, immutable";
+      }
+spec:
+  ingressClassName: nginx
+  tls:
+  - hosts:
+    - synkora.ai
+    secretName: synkora-frontend-tls
+  rules:
+  - host: synkora.ai
+    http:
+      paths:
+      - path: /
+        pathType: Prefix
+        backend:
+          service:
+            name: synkora-frontend
+            port:
+              number: 3000

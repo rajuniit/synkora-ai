@@ -1,0 +1,147 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: synkora-bot-worker
+  namespace: synkora-production
+  labels:
+    app: synkora-bot-worker
+    component: bot-worker
+spec:
+  replicas: 3
+  selector:
+    matchLabels:
+      app: synkora-bot-worker
+  template:
+    metadata:
+      labels:
+        app: synkora-bot-worker
+        component: bot-worker
+    spec:
+      imagePullSecrets:
+      - name: ecr-registry-secret
+      serviceAccountName: synkora-api
+      containers:
+      - name: bot-worker
+        image: IMAGE_PLACEHOLDER
+        imagePullPolicy: Always
+        command: ["python", "-m", "src.bot_worker.main"]
+        ports:
+        - name: health
+          containerPort: 8080
+          protocol: TCP
+        resources:
+          requests:
+            memory: "512Mi"
+            cpu: "250m"
+          limits:
+            memory: "2Gi"
+            cpu: "1000m"
+        env:
+        - name: BOT_WORKER_CAPACITY
+          value: "1000"
+        - name: BOT_WORKER_HEALTH_PORT
+          value: "8080"
+        - name: BOT_WORKER_HEARTBEAT_INTERVAL
+          value: "10"
+        - name: BOT_WORKER_HEARTBEAT_TIMEOUT
+          value: "30"
+        - name: WORKER_ID
+          valueFrom:
+            fieldRef:
+              fieldPath: metadata.name
+        envFrom:
+        - configMapRef:
+            name: synkora-config
+        - secretRef:
+            name: synkora-secrets
+        livenessProbe:
+          httpGet:
+            path: /healthz
+            port: health
+          initialDelaySeconds: 10
+          periodSeconds: 10
+          timeoutSeconds: 5
+          failureThreshold: 3
+        readinessProbe:
+          httpGet:
+            path: /readyz
+            port: health
+          initialDelaySeconds: 5
+          periodSeconds: 5
+          timeoutSeconds: 3
+          failureThreshold: 3
+        lifecycle:
+          preStop:
+            exec:
+              command: ["/bin/sh", "-c", "sleep 5"]
+      terminationGracePeriodSeconds: 60
+      affinity:
+        podAntiAffinity:
+          preferredDuringSchedulingIgnoredDuringExecution:
+          - weight: 100
+            podAffinityTerm:
+              labelSelector:
+                matchExpressions:
+                - key: app
+                  operator: In
+                  values:
+                  - synkora-bot-worker
+              topologyKey: kubernetes.io/hostname
+---
+apiVersion: autoscaling/v2
+kind: HorizontalPodAutoscaler
+metadata:
+  name: synkora-bot-worker-hpa
+  namespace: synkora-production
+  labels:
+    app: synkora-bot-worker
+spec:
+  scaleTargetRef:
+    apiVersion: apps/v1
+    kind: Deployment
+    name: synkora-bot-worker
+  minReplicas: 3
+  maxReplicas: 1000
+  metrics:
+  - type: Resource
+    resource:
+      name: cpu
+      target:
+        type: Utilization
+        averageUtilization: 70
+  - type: Resource
+    resource:
+      name: memory
+      target:
+        type: Utilization
+        averageUtilization: 80
+  behavior:
+    scaleDown:
+      stabilizationWindowSeconds: 300
+      policies:
+      - type: Percent
+        value: 10
+        periodSeconds: 60
+    scaleUp:
+      stabilizationWindowSeconds: 0
+      policies:
+      - type: Percent
+        value: 100
+        periodSeconds: 15
+      - type: Pods
+        value: 4
+        periodSeconds: 15
+      selectPolicy: Max
+---
+apiVersion: policy/v1
+kind: PodDisruptionBudget
+metadata:
+  name: synkora-bot-worker-pdb
+  namespace: synkora-production
+  labels:
+    app: synkora-bot-worker
+spec:
+  minAvailable: 2
+  selector:
+    matchLabels:
+      app: synkora-bot-worker

@@ -1,0 +1,105 @@
+apiVersion: monitoring.coreos.com/v1
+kind: PrometheusRule
+metadata:
+  name: synkora-alerts
+  namespace: monitoring
+  labels:
+    release: kube-prometheus-stack
+spec:
+  groups:
+    - name: synkora.pods
+      rules:
+        # Pod OOMKilled
+        - alert: PodOOMKilled
+          expr: |
+            kube_pod_container_status_last_terminated_reason{reason="OOMKilled", namespace="synkora-production"} == 1
+          for: 0m
+          labels:
+            severity: critical
+          annotations:
+            summary: "Pod OOMKilled: {{ $labels.pod }}"
+            description: "Container {{ $labels.container }} in pod {{ $labels.pod }} was OOMKilled."
+
+        # Pod CrashLoopBackOff
+        - alert: PodCrashLooping
+          expr: |
+            increase(kube_pod_container_status_restarts_total{namespace="synkora-production"}[15m]) > 3
+          for: 5m
+          labels:
+            severity: critical
+          annotations:
+            summary: "Pod crash looping: {{ $labels.pod }}"
+            description: "Pod {{ $labels.pod }} has restarted {{ $value }} times in the last 15 minutes."
+
+        # Pod not ready
+        - alert: PodNotReady
+          expr: |
+            kube_pod_status_ready{condition="true", namespace="synkora-production"} == 0
+          for: 5m
+          labels:
+            severity: warning
+          annotations:
+            summary: "Pod not ready: {{ $labels.pod }}"
+            description: "Pod {{ $labels.pod }} has been not ready for more than 5 minutes."
+
+    - name: synkora.nodes
+      rules:
+        # Node high memory usage
+        - alert: NodeHighMemoryUsage
+          expr: |
+            (1 - (node_memory_MemAvailable_bytes / node_memory_MemTotal_bytes)) * 100 > 85
+          for: 5m
+          labels:
+            severity: warning
+          annotations:
+            summary: "High memory usage on node {{ $labels.instance }}"
+            description: "Node {{ $labels.instance }} memory usage is {{ $value | printf \"%.1f\" }}%."
+
+        # Node high CPU usage
+        - alert: NodeHighCPUUsage
+          expr: |
+            (1 - avg by(instance)(rate(node_cpu_seconds_total{mode="idle"}[5m]))) * 100 > 85
+          for: 10m
+          labels:
+            severity: warning
+          annotations:
+            summary: "High CPU usage on node {{ $labels.instance }}"
+            description: "Node {{ $labels.instance }} CPU usage is {{ $value | printf \"%.1f\" }}%."
+
+        # Node disk nearly full
+        - alert: NodeDiskNearlyFull
+          expr: |
+            (1 - (node_filesystem_avail_bytes{fstype!="tmpfs"} / node_filesystem_size_bytes{fstype!="tmpfs"})) * 100 > 80
+          for: 5m
+          labels:
+            severity: warning
+          annotations:
+            summary: "Disk nearly full on node {{ $labels.instance }}"
+            description: "Filesystem {{ $labels.mountpoint }} on {{ $labels.instance }} is {{ $value | printf \"%.1f\" }}% full."
+
+    - name: synkora.api
+      rules:
+        # API high error rate (5xx from nginx ingress)
+        - alert: APIHighErrorRate
+          expr: |
+            rate(nginx_ingress_controller_requests{namespace="synkora-production", status=~"5.."}[5m])
+            /
+            rate(nginx_ingress_controller_requests{namespace="synkora-production"}[5m]) * 100 > 5
+          for: 5m
+          labels:
+            severity: critical
+          annotations:
+            summary: "High 5xx error rate on {{ $labels.ingress }}"
+            description: "Error rate is {{ $value | printf \"%.1f\" }}% over the last 5 minutes."
+
+        # Deployment replica mismatch
+        - alert: DeploymentReplicasMismatch
+          expr: |
+            kube_deployment_spec_replicas{namespace="synkora-production"}
+            != kube_deployment_status_available_replicas{namespace="synkora-production"}
+          for: 5m
+          labels:
+            severity: warning
+          annotations:
+            summary: "Deployment replicas mismatch: {{ $labels.deployment }}"
+            description: "Deployment {{ $labels.deployment }} has {{ $value }} available replicas, expected more."

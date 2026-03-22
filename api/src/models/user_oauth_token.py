@@ -1,0 +1,85 @@
+"""
+User OAuth Token Model.
+
+Stores per-user OAuth tokens for different OAuth apps.
+This allows each user to connect their own account to an OAuth app,
+rather than sharing a single token at the OAuthApp level.
+"""
+
+from sqlalchemy import Column, DateTime, ForeignKey, Integer, String, Text, UniqueConstraint
+from sqlalchemy.dialects.postgresql import UUID
+from sqlalchemy.orm import relationship
+
+from .base import BaseModel
+
+
+class UserOAuthToken(BaseModel):
+    """Per-user OAuth token storage."""
+
+    __tablename__ = "user_oauth_tokens"
+
+    # Foreign keys
+    account_id = Column(
+        UUID(as_uuid=True),
+        ForeignKey("accounts.id", ondelete="CASCADE"),
+        nullable=False,
+        index=True,
+        comment="User account that owns this token",
+    )
+    oauth_app_id = Column(
+        Integer,
+        ForeignKey("oauth_apps.id", ondelete="CASCADE"),
+        nullable=False,
+        index=True,
+        comment="OAuth app configuration this token belongs to",
+    )
+
+    # Encrypted tokens
+    access_token = Column(Text, nullable=False, comment="Encrypted access token")
+    refresh_token = Column(Text, nullable=True, comment="Encrypted refresh token (if provided by OAuth provider)")
+    token_expires_at = Column(DateTime(timezone=True), nullable=True, comment="Token expiration timestamp")
+
+    # Provider user info (for display purposes)
+    provider_user_id = Column(String(255), nullable=True, comment="User ID from the OAuth provider")
+    provider_email = Column(String(255), nullable=True, comment="Email from the OAuth provider")
+    provider_username = Column(
+        String(255), nullable=True, comment="Username from the OAuth provider (e.g., GitHub login)"
+    )
+    provider_display_name = Column(String(255), nullable=True, comment="Display name from the OAuth provider")
+    scopes = Column(Text, nullable=True, comment="Comma-separated list of authorized scopes")
+
+    # Relationships
+    account = relationship("Account", backref="oauth_tokens")
+    oauth_app = relationship("OAuthApp", backref="user_tokens")
+
+    __table_args__ = (UniqueConstraint("account_id", "oauth_app_id", name="uq_user_oauth_app"),)
+
+    def __repr__(self):
+        return f"<UserOAuthToken user:{self.account_id} app:{self.oauth_app_id}>"
+
+    def to_dict(self, include_token_status=True):
+        """
+        Convert to dictionary (excluding sensitive data).
+
+        Args:
+            include_token_status: If True, include token presence status
+        """
+        data = {
+            "id": str(self.id),
+            "account_id": str(self.account_id),
+            "oauth_app_id": self.oauth_app_id,
+            "provider_user_id": self.provider_user_id,
+            "provider_email": self.provider_email,
+            "provider_username": self.provider_username,
+            "provider_display_name": self.provider_display_name,
+            "scopes": self.scopes,
+            "created_at": self.created_at.isoformat() if self.created_at else None,
+            "updated_at": self.updated_at.isoformat() if self.updated_at else None,
+        }
+
+        if include_token_status:
+            data["has_access_token"] = bool(self.access_token)
+            data["has_refresh_token"] = bool(self.refresh_token)
+            data["token_expires_at"] = self.token_expires_at.isoformat() if self.token_expires_at else None
+
+        return data

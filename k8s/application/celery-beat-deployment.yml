@@ -1,0 +1,51 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: synkora-celery-beat
+  namespace: synkora-production
+  labels:
+    app: synkora
+    component: celery-beat
+    version: v1
+spec:
+  replicas: 1
+  strategy:
+    type: Recreate
+  selector:
+    matchLabels:
+      app: synkora
+      component: celery-beat
+  template:
+    metadata:
+      labels:
+        app: synkora
+        component: celery-beat
+        version: v1
+    spec:
+      imagePullSecrets:
+      - name: ecr-registry-secret
+      containers:
+      - name: celery-beat
+        image: IMAGE_PLACEHOLDER
+        imagePullPolicy: Always
+        command: ["celery"]
+        args: ["-A", "src.celery_app", "beat", "--loglevel=info"]
+        envFrom:
+        - configMapRef:
+            name: synkora-config
+        - secretRef:
+            name: synkora-secrets
+        resources:
+          requests:
+            memory: "128Mi"
+            cpu: "50m"
+          limits:
+            memory: "512Mi"
+            cpu: "500m"
+        volumeMounts:
+        - name: tmp
+          mountPath: /tmp
+      volumes:
+      - name: tmp
+        emptyDir:
+          sizeLimit: 5Gi

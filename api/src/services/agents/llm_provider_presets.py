@@ -1,0 +1,2241 @@
+"""
+LLM Provider Presets
+
+
+Predefined configurations for various LLM providers to simplify setup.
+"""
+
+from dataclasses import dataclass
+from typing import Any
+
+
+@dataclass
+class ModelPreset:
+    """Preset configuration for a specific model."""
+
+    name: str
+    model_name: str
+    description: str
+    default_temperature: float = 0.7
+    default_max_tokens: int | None = None
+    default_top_p: float | None = None
+    additional_params: dict[str, Any] | None = None
+    max_input_tokens: int | None = None  # Context window (input tokens)
+    max_output_tokens: int | None = None  # Max tokens the model can generate
+
+
+@dataclass
+class ProviderPreset:
+    """Preset configuration for an LLM provider."""
+
+    provider_id: str
+    provider_name: str
+    description: str
+    requires_api_key: bool = True
+    requires_api_base: bool = False
+    default_api_base: str | None = None
+    models: list[ModelPreset] | None = None
+    setup_instructions: str | None = None
+    documentation_url: str | None = None
+
+
+# Commercial Providers
+OPENAI_PRESET = ProviderPreset(
+    provider_id="openai",
+    provider_name="OpenAI",
+    description="Industry-leading models including GPT-4 and GPT-3.5",
+    requires_api_key=True,
+    documentation_url="https://platform.openai.com/docs",
+    models=[
+        # GPT-5 Series
+        ModelPreset(
+            name="GPT-5.2 Pro",
+            model_name="gpt-5.2-pro",
+            description="Most advanced GPT-5 model with enhanced capabilities",
+            default_max_tokens=32768,
+        ),
+        ModelPreset(name="GPT-5.2", model_name="gpt-5.2", description="Latest GPT-5.2 model", default_max_tokens=32768),
+        ModelPreset(
+            name="GPT-5.1 Thinking",
+            model_name="gpt-5.1-thinking",
+            description="GPT-5.1 with advanced reasoning capabilities",
+            default_max_tokens=32768,
+        ),
+        ModelPreset(
+            name="GPT-5.1 Instant",
+            model_name="gpt-5.1-instant",
+            description="Fast GPT-5.1 variant for quick responses",
+            default_max_tokens=16384,
+        ),
+        ModelPreset(
+            name="GPT-5.1 Codex",
+            model_name="gpt-5.1-codex",
+            description="GPT-5.1 specialized for code generation",
+            default_max_tokens=32768,
+        ),
+        ModelPreset(name="GPT-5.1", model_name="gpt-5.1", description="GPT-5.1 base model", default_max_tokens=32768),
+        ModelPreset(
+            name="GPT-5 Codex",
+            model_name="gpt-5-codex",
+            description="GPT-5 specialized for coding tasks",
+            default_max_tokens=32768,
+        ),
+        ModelPreset(
+            name="GPT-5 nano",
+            model_name="gpt-5-nano",
+            description="Compact GPT-5 model for efficient processing",
+            default_max_tokens=8192,
+        ),
+        ModelPreset(
+            name="GPT-5 mini",
+            model_name="gpt-5-mini",
+            description="Smaller GPT-5 model for lightweight tasks",
+            default_max_tokens=16384,
+        ),
+        ModelPreset(name="GPT-5", model_name="gpt-5", description="Base GPT-5 model", default_max_tokens=32768),
+        # GPT-4.5 Series
+        ModelPreset(
+            name="GPT-4.5", model_name="gpt-4.5", description="Enhanced GPT-4.5 model", default_max_tokens=16384
+        ),
+        # GPT-4.1 Series
+        ModelPreset(
+            name="GPT-4.1 nano",
+            model_name="gpt-4.1-nano",
+            description="Compact GPT-4.1 variant",
+            default_max_tokens=8192,
+        ),
+        ModelPreset(
+            name="GPT-4.1 mini",
+            model_name="gpt-4.1-mini",
+            description="Smaller GPT-4.1 model",
+            default_max_tokens=16384,
+        ),
+        ModelPreset(name="GPT-4.1", model_name="gpt-4.1", description="GPT-4.1 base model", default_max_tokens=16384),
+        # GPT-4o Series
+        ModelPreset(
+            name="GPT-4o (Latest)",
+            model_name="gpt-4o",
+            description="High-intelligence flagship model for complex, multi-step tasks",
+            default_max_tokens=16384,
+            max_input_tokens=128000,
+            max_output_tokens=16384,
+        ),
+        ModelPreset(
+            name="GPT-4o Mini",
+            model_name="gpt-4o-mini",
+            description="Affordable and intelligent small model for fast, lightweight tasks",
+            default_max_tokens=16384,
+            max_input_tokens=128000,
+            max_output_tokens=16384,
+        ),
+        # GPT-4 Series
+        ModelPreset(
+            name="GPT-4 Turbo",
+            model_name="gpt-4-turbo",
+            description="GPT-4 Turbo with 128K context window",
+            default_max_tokens=4096,
+            max_input_tokens=128000,
+            max_output_tokens=4096,
+        ),
+        ModelPreset(
+            name="GPT-4 Turbo Preview",
+            model_name="gpt-4-turbo-preview",
+            description="Latest GPT-4 Turbo preview model",
+            default_max_tokens=4096,
+            max_input_tokens=128000,
+            max_output_tokens=4096,
+        ),
+        ModelPreset(
+            name="GPT-4",
+            model_name="gpt-4",
+            description="Original GPT-4 model with 8K context",
+            default_max_tokens=8192,
+            max_input_tokens=8192,
+            max_output_tokens=8192,
+        ),
+        ModelPreset(
+            name="GPT-4 32K",
+            model_name="gpt-4-32k",
+            description="GPT-4 with extended 32K context window",
+            default_max_tokens=32768,
+            max_input_tokens=32768,
+            max_output_tokens=32768,
+        ),
+        # GPT-3.5 Series
+        ModelPreset(
+            name="GPT-3.5 Turbo",
+            model_name="gpt-3.5-turbo",
+            description="Fast and cost-effective model with 16K context",
+            default_max_tokens=4096,
+            max_input_tokens=16385,
+            max_output_tokens=4096,
+        ),
+        ModelPreset(
+            name="GPT-3.5 Turbo 16K",
+            model_name="gpt-3.5-turbo-16k",
+            description="Extended context version of GPT-3.5 Turbo",
+            default_max_tokens=4096,
+            max_input_tokens=16385,
+            max_output_tokens=4096,
+        ),
+        # O-Series (Reasoning Models)
+        ModelPreset(
+            name="O4 Mini",
+            model_name="o4-mini",
+            description="Compact O4 reasoning model",
+            default_max_tokens=65536,
+            max_input_tokens=200000,
+            max_output_tokens=65536,
+        ),
+        ModelPreset(
+            name="O3 Pro",
+            model_name="o3-pro",
+            description="Professional O3 reasoning model",
+            default_max_tokens=65536,
+            max_input_tokens=200000,
+            max_output_tokens=100000,
+        ),
+        ModelPreset(
+            name="O3 Mini",
+            model_name="o3-mini",
+            description="Efficient O3 reasoning model",
+            default_max_tokens=65536,
+            max_input_tokens=200000,
+            max_output_tokens=65536,
+        ),
+        ModelPreset(
+            name="O3",
+            model_name="o3",
+            description="Advanced O3 reasoning model",
+            default_max_tokens=65536,
+            max_input_tokens=200000,
+            max_output_tokens=100000,
+        ),
+        ModelPreset(
+            name="O1 Pro",
+            model_name="o1-pro",
+            description="Professional O1 reasoning model",
+            default_max_tokens=32768,
+            max_input_tokens=200000,
+            max_output_tokens=100000,
+        ),
+        ModelPreset(
+            name="O1 Preview",
+            model_name="o1-preview",
+            description="Advanced reasoning model for complex problem solving",
+            default_max_tokens=32768,
+            max_input_tokens=128000,
+            max_output_tokens=32768,
+        ),
+        ModelPreset(
+            name="O1 Mini",
+            model_name="o1-mini",
+            description="Faster and cheaper reasoning model",
+            default_max_tokens=65536,
+            max_input_tokens=128000,
+            max_output_tokens=65536,
+        ),
+        ModelPreset(
+            name="O1",
+            model_name="o1",
+            description="Base O1 reasoning model",
+            default_max_tokens=32768,
+            max_input_tokens=200000,
+            max_output_tokens=100000,
+        ),
+        # GPT OSS Series
+        ModelPreset(
+            name="GPT OSS 120B",
+            model_name="gpt-oss-120b",
+            description="Open-source GPT 120B parameter model",
+            default_max_tokens=8192,
+        ),
+        ModelPreset(
+            name="GPT OSS 20B",
+            model_name="gpt-oss-20b",
+            description="Open-source GPT 20B parameter model",
+            default_max_tokens=8192,
+        ),
+    ],
+    setup_instructions="Get your API key from https://platform.openai.com/api-keys",
+)
+
+
+ANTHROPIC_PRESET = ProviderPreset(
+    provider_id="anthropic",
+    provider_name="Anthropic",
+    description="Claude models known for safety and nuanced understanding",
+    requires_api_key=True,
+    documentation_url="https://docs.anthropic.com",
+    models=[
+        # Claude 4.6 Series
+        ModelPreset(
+            name="Claude Opus 4.6",
+            model_name="claude-opus-4-6",
+            description="Most powerful Claude 4.6 model with state-of-the-art capabilities",
+            default_max_tokens=16384,
+            max_input_tokens=200000,
+            max_output_tokens=32000,
+        ),
+        ModelPreset(
+            name="Claude Sonnet 4.6",
+            model_name="claude-sonnet-4-6",
+            description="Balanced Claude 4.6 model for enterprise workloads",
+            default_max_tokens=16384,
+            max_input_tokens=200000,
+            max_output_tokens=128000,
+        ),
+        # Claude 4.5 Series
+        ModelPreset(
+            name="Claude Opus 4.5",
+            model_name="claude-opus-4-5",
+            description="Most powerful Claude 4.5 model with enhanced capabilities",
+            default_max_tokens=16384,
+            max_input_tokens=200000,
+            max_output_tokens=32000,
+        ),
+        ModelPreset(
+            name="Claude Sonnet 4.5",
+            model_name="claude-sonnet-4-5",
+            description="Balanced Claude 4.5 model for enterprise workloads",
+            default_max_tokens=16384,
+            max_input_tokens=200000,
+            max_output_tokens=128000,
+        ),
+        ModelPreset(
+            name="Claude Haiku 4.5",
+            model_name="claude-haiku-4-5",
+            description="Fast and efficient Claude 4.5 model",
+            default_max_tokens=8192,
+            max_input_tokens=200000,
+            max_output_tokens=8192,
+        ),
+        # Claude 4.1 Series
+        ModelPreset(
+            name="Claude Opus 4.1",
+            model_name="claude-opus-4-1",
+            description="Advanced Claude 4.1 Opus model",
+            default_max_tokens=16384,
+            max_input_tokens=200000,
+            max_output_tokens=32000,
+        ),
+        # Claude 4 Series
+        ModelPreset(
+            name="Claude Opus 4",
+            model_name="claude-opus-4",
+            description="Next-generation Claude 4 Opus model",
+            default_max_tokens=16384,
+            max_input_tokens=200000,
+            max_output_tokens=32000,
+        ),
+        ModelPreset(
+            name="Claude Sonnet 4",
+            model_name="claude-sonnet-4",
+            description="Balanced Claude 4 Sonnet model",
+            default_max_tokens=16384,
+            max_input_tokens=200000,
+            max_output_tokens=128000,
+        ),
+        # Claude 3.7 Series
+        ModelPreset(
+            name="Claude 3.7 Sonnet",
+            model_name="claude-3.7-sonnet",
+            description="Enhanced Claude 3.7 Sonnet with improved performance",
+            default_max_tokens=8192,
+            max_input_tokens=200000,
+            max_output_tokens=128000,
+        ),
+        # Claude 3.5 Series
+        ModelPreset(
+            name="Claude 3.5 Sonnet (Latest)",
+            model_name="claude-3-5-sonnet-20241022",
+            description="Most intelligent Claude 3.5 model, combining top-tier performance with improved speed",
+            default_max_tokens=8192,
+            max_input_tokens=200000,
+            max_output_tokens=8192,
+        ),
+        ModelPreset(
+            name="Claude 3.5 Sonnet (June 2024)",
+            model_name="claude-3-5-sonnet-20240620",
+            description="Previous version of Claude 3.5 Sonnet",
+            default_max_tokens=8192,
+            max_input_tokens=200000,
+            max_output_tokens=8192,
+        ),
+        ModelPreset(
+            name="Claude 3.5 Sonnet",
+            model_name="claude-3.5-sonnet",
+            description="Claude 3.5 Sonnet base model",
+            default_max_tokens=8192,
+            max_input_tokens=200000,
+            max_output_tokens=8192,
+        ),
+        ModelPreset(
+            name="Claude 3.5 Haiku (Latest)",
+            model_name="claude-3-5-haiku-20241022",
+            description="Fastest and most compact Claude 3.5 model",
+            default_max_tokens=8192,
+            max_input_tokens=200000,
+            max_output_tokens=8192,
+        ),
+        ModelPreset(
+            name="Claude 3.5 Haiku",
+            model_name="claude-3.5-haiku",
+            description="Claude 3.5 Haiku base model",
+            default_max_tokens=8192,
+            max_input_tokens=200000,
+            max_output_tokens=8192,
+        ),
+        # Claude 3 Series
+        ModelPreset(
+            name="Claude 3 Opus",
+            model_name="claude-3-opus-20240229",
+            description="Most powerful Claude 3 model for highly complex tasks",
+            default_max_tokens=4096,
+            max_input_tokens=200000,
+            max_output_tokens=4096,
+        ),
+        ModelPreset(
+            name="Claude 3 Sonnet",
+            model_name="claude-3-sonnet-20240229",
+            description="Balanced Claude 3 model for enterprise workloads",
+            default_max_tokens=4096,
+            max_input_tokens=200000,
+            max_output_tokens=4096,
+        ),
+        ModelPreset(
+            name="Claude 3 Haiku",
+            model_name="claude-3-haiku-20240307",
+            description="Fastest and most compact Claude 3 model",
+            default_max_tokens=4096,
+            max_input_tokens=200000,
+            max_output_tokens=4096,
+        ),
+        # Claude 2 Series
+        ModelPreset(
+            name="Claude 2.1",
+            model_name="claude-2.1",
+            description="Updated Claude 2 with improved accuracy",
+            default_max_tokens=4096,
+            max_input_tokens=200000,
+            max_output_tokens=4096,
+        ),
+        ModelPreset(
+            name="Claude 2.0",
+            model_name="claude-2.0",
+            description="Original Claude 2 model",
+            default_max_tokens=4096,
+            max_input_tokens=100000,
+            max_output_tokens=4096,
+        ),
+    ],
+    setup_instructions="Get your API key from https://console.anthropic.com/settings/keys",
+)
+
+
+GEMINI_PRESET = ProviderPreset(
+    provider_id="gemini",
+    provider_name="Google Gemini",
+    description="Google's multimodal AI models",
+    requires_api_key=True,
+    documentation_url="https://ai.google.dev/docs",
+    models=[
+        # Gemini 3 Series
+        ModelPreset(
+            name="Gemini 3 Pro",
+            model_name="gemini-3-pro",
+            description="Next-generation Gemini 3 Pro model",
+            default_max_tokens=32768,
+        ),
+        # Gemini 2.5 Series
+        ModelPreset(
+            name="Gemini 2.5 Pro Preview 06-05",
+            model_name="gemini-2.5-pro-preview-06-05",
+            description="Preview version of Gemini 2.5 Pro",
+            default_max_tokens=32768,
+        ),
+        ModelPreset(
+            name="Gemini 2.5 Pro",
+            model_name="gemini-2.5-pro",
+            description="Advanced Gemini 2.5 Pro model",
+            default_max_tokens=32768,
+        ),
+        ModelPreset(
+            name="Gemini 2.5 Flash-Lite",
+            model_name="gemini-2.5-flash-lite",
+            description="Lightweight Gemini 2.5 Flash variant",
+            default_max_tokens=16384,
+        ),
+        ModelPreset(
+            name="Gemini 2.5 Flash",
+            model_name="gemini-2.5-flash",
+            description="Fast Gemini 2.5 model",
+            default_max_tokens=16384,
+        ),
+        # Gemini 2.0 Series
+        ModelPreset(
+            name="Gemini 2.0 Flash Thinking",
+            model_name="gemini-2.0-flash-thinking",
+            description="Gemini 2.0 Flash with enhanced reasoning capabilities",
+            default_max_tokens=16384,
+        ),
+        ModelPreset(
+            name="Gemini 2.0 Flash-Lite",
+            model_name="gemini-2.0-flash-lite",
+            description="Lightweight Gemini 2.0 Flash model",
+            default_max_tokens=16384,
+        ),
+        ModelPreset(
+            name="Gemini 2.0 Flash",
+            model_name="gemini-2.0-flash",
+            description="Gemini 2.0 Flash with multimodal capabilities",
+            default_max_tokens=16384,
+        ),
+        # Gemini 1.5 Series
+        ModelPreset(
+            name="Gemini 1.5 Pro",
+            model_name="gemini-1.5-pro",
+            description="Most capable Gemini model with long context",
+            default_max_tokens=32768,
+        ),
+        ModelPreset(
+            name="Gemini 1.5 Flash 8B",
+            model_name="gemini-1.5-flash-8b",
+            description="Compact 8B parameter Gemini Flash model",
+            default_max_tokens=16384,
+        ),
+        ModelPreset(
+            name="Gemini 1.5 Flash",
+            model_name="gemini-1.5-flash",
+            description="Fast and efficient Gemini model",
+            default_max_tokens=16384,
+        ),
+        # Gemini 1.0 Series
+        ModelPreset(
+            name="Gemini 1.0 Pro",
+            model_name="gemini-1.0-pro",
+            description="Original Gemini Pro model",
+            default_max_tokens=32760,
+        ),
+        # Gemma Series (Google's Open Models)
+        ModelPreset(
+            name="Gemma 3 27B",
+            model_name="gemma-3-27b",
+            description="Large 27B parameter Gemma 3 model",
+            default_max_tokens=8192,
+        ),
+        ModelPreset(
+            name="Gemma 3 12B",
+            model_name="gemma-3-12b",
+            description="Medium 12B parameter Gemma 3 model",
+            default_max_tokens=8192,
+        ),
+        ModelPreset(
+            name="Gemma 3 4B",
+            model_name="gemma-3-4b",
+            description="Compact 4B parameter Gemma 3 model",
+            default_max_tokens=8192,
+        ),
+        ModelPreset(
+            name="Gemma 3 1B",
+            model_name="gemma-3-1b",
+            description="Ultra-compact 1B parameter Gemma 3 model",
+            default_max_tokens=4096,
+        ),
+        ModelPreset(
+            name="Gemma 3n E4B Instructed LiteRT Preview",
+            model_name="gemma-3n-e4b-instruct-litert-preview",
+            description="Instruction-tuned Gemma 3n E4B with LiteRT preview",
+            default_max_tokens=8192,
+        ),
+        ModelPreset(
+            name="Gemma 3n E4B Instructed",
+            model_name="gemma-3n-e4b-instruct",
+            description="Instruction-tuned Gemma 3n E4B model",
+            default_max_tokens=8192,
+        ),
+        ModelPreset(
+            name="Gemma 3n E4B",
+            model_name="gemma-3n-e4b",
+            description="Gemma 3n E4B base model",
+            default_max_tokens=8192,
+        ),
+        ModelPreset(
+            name="Gemma 3n E2B Instructed LiteRT (Preview)",
+            model_name="gemma-3n-e2b-instruct-litert-preview",
+            description="Instruction-tuned Gemma 3n E2B with LiteRT preview",
+            default_max_tokens=8192,
+        ),
+        ModelPreset(
+            name="Gemma 3n E2B Instructed",
+            model_name="gemma-3n-e2b-instruct",
+            description="Instruction-tuned Gemma 3n E2B model",
+            default_max_tokens=8192,
+        ),
+        ModelPreset(
+            name="Gemma 3n E2B",
+            model_name="gemma-3n-e2b",
+            description="Gemma 3n E2B base model",
+            default_max_tokens=8192,
+        ),
+        ModelPreset(
+            name="Gemma 2 27B",
+            model_name="gemma-2-27b",
+            description="Large 27B parameter Gemma 2 model",
+            default_max_tokens=8192,
+        ),
+        ModelPreset(
+            name="Gemma 2 9B",
+            model_name="gemma-2-9b",
+            description="Medium 9B parameter Gemma 2 model",
+            default_max_tokens=8192,
+        ),
+        # Specialized Models
+        ModelPreset(
+            name="MedGemma 4B IT",
+            model_name="medgemma-4b-it",
+            description="Medical domain-specialized Gemma model (4B instructed)",
+            default_max_tokens=8192,
+        ),
+        ModelPreset(
+            name="Gemini Diffusion",
+            model_name="gemini-diffusion",
+            description="Gemini model specialized for diffusion tasks",
+            default_max_tokens=8192,
+        ),
+    ],
+    setup_instructions="Get your API key from https://makersuite.google.com/app/apikey",
+)
+
+
+# Cloud Provider Services
+AWS_BEDROCK_PRESET = ProviderPreset(
+    provider_id="bedrock",
+    provider_name="AWS Bedrock",
+    description="Access to multiple foundation models through AWS",
+    requires_api_key=False,
+    documentation_url="https://docs.aws.amazon.com/bedrock/",
+    models=[
+        # Anthropic Claude on Bedrock
+        ModelPreset(
+            name="Claude Sonnet 4.5 (Bedrock)",
+            model_name="anthropic.claude-sonnet-4-5-20250514-v1:0",
+            description="Latest Claude Sonnet 4.5 via Bedrock",
+            default_max_tokens=16384,
+        ),
+        ModelPreset(
+            name="Claude 3.7 Sonnet (Bedrock)",
+            model_name="anthropic.claude-3-7-sonnet-20250219-v1:0",
+            description="Claude 3.7 Sonnet with extended thinking via Bedrock",
+            default_max_tokens=16384,
+        ),
+        ModelPreset(
+            name="Claude 3.5 Sonnet v2 (Bedrock)",
+            model_name="anthropic.claude-3-5-sonnet-20241022-v2:0",
+            description="Claude 3.5 Sonnet v2 via Bedrock",
+            default_max_tokens=8192,
+        ),
+        ModelPreset(
+            name="Claude 3.5 Haiku (Bedrock)",
+            model_name="anthropic.claude-3-5-haiku-20241022-v1:0",
+            description="Fast Claude 3.5 Haiku via Bedrock",
+            default_max_tokens=8192,
+        ),
+        ModelPreset(
+            name="Claude 3.5 Sonnet (Bedrock)",
+            model_name="anthropic.claude-3-5-sonnet-20240620-v1:0",
+            description="Claude 3.5 Sonnet v1 via Bedrock",
+            default_max_tokens=8192,
+        ),
+        ModelPreset(
+            name="Claude 3 Opus (Bedrock)",
+            model_name="anthropic.claude-3-opus-20240229-v1:0",
+            description="Claude 3 Opus via Bedrock",
+            default_max_tokens=4096,
+        ),
+        ModelPreset(
+            name="Claude 3 Haiku (Bedrock)",
+            model_name="anthropic.claude-3-haiku-20240307-v1:0",
+            description="Fast Claude 3 Haiku via Bedrock",
+            default_max_tokens=4096,
+        ),
+        # Amazon Nova Series
+        ModelPreset(
+            name="Amazon Nova Premier",
+            model_name="amazon.nova-premier-v1:0",
+            description="Amazon's most capable Nova model for complex tasks",
+            default_max_tokens=32768,
+        ),
+        ModelPreset(
+            name="Amazon Nova Pro",
+            model_name="amazon.nova-pro-v1:0",
+            description="Amazon Nova Pro — highly capable multimodal model",
+            default_max_tokens=5120,
+        ),
+        ModelPreset(
+            name="Amazon Nova Lite",
+            model_name="amazon.nova-lite-v1:0",
+            description="Amazon Nova Lite — fast, low-cost multimodal model",
+            default_max_tokens=5120,
+        ),
+        ModelPreset(
+            name="Amazon Nova Micro",
+            model_name="amazon.nova-micro-v1:0",
+            description="Amazon Nova Micro — text-only, lowest latency",
+            default_max_tokens=5120,
+        ),
+        # Meta Llama 4
+        ModelPreset(
+            name="Llama 4 Maverick (Bedrock)",
+            model_name="meta.llama4-maverick-17b-128e-instruct-v1:0",
+            description="Meta Llama 4 Maverick 17B MoE via Bedrock",
+            default_max_tokens=8192,
+        ),
+        ModelPreset(
+            name="Llama 4 Scout (Bedrock)",
+            model_name="meta.llama4-scout-17b-16e-instruct-v1:0",
+            description="Meta Llama 4 Scout 17B MoE via Bedrock",
+            default_max_tokens=8192,
+        ),
+        # Meta Llama 3.3
+        ModelPreset(
+            name="Llama 3.3 70B (Bedrock)",
+            model_name="meta.llama3-3-70b-instruct-v1:0",
+            description="Meta Llama 3.3 70B via Bedrock",
+            default_max_tokens=8192,
+        ),
+        # Meta Llama 3.2
+        ModelPreset(
+            name="Llama 3.2 90B (Bedrock)",
+            model_name="meta.llama3-2-90b-instruct-v1:0",
+            description="Meta Llama 3.2 90B vision model via Bedrock",
+            default_max_tokens=8192,
+        ),
+        ModelPreset(
+            name="Llama 3.2 11B (Bedrock)",
+            model_name="meta.llama3-2-11b-instruct-v1:0",
+            description="Meta Llama 3.2 11B vision model via Bedrock",
+            default_max_tokens=8192,
+        ),
+        ModelPreset(
+            name="Llama 3.2 3B (Bedrock)",
+            model_name="meta.llama3-2-3b-instruct-v1:0",
+            description="Meta Llama 3.2 3B via Bedrock",
+            default_max_tokens=8192,
+        ),
+        ModelPreset(
+            name="Llama 3.2 1B (Bedrock)",
+            model_name="meta.llama3-2-1b-instruct-v1:0",
+            description="Meta Llama 3.2 1B — ultra-efficient via Bedrock",
+            default_max_tokens=8192,
+        ),
+        # Meta Llama 3.1
+        ModelPreset(
+            name="Llama 3.1 405B (Bedrock)",
+            model_name="meta.llama3-1-405b-instruct-v1:0",
+            description="Meta Llama 3.1 405B — largest Llama 3.1 via Bedrock",
+            default_max_tokens=8192,
+        ),
+        ModelPreset(
+            name="Llama 3.1 70B (Bedrock)",
+            model_name="meta.llama3-1-70b-instruct-v1:0",
+            description="Meta Llama 3.1 70B via Bedrock",
+            default_max_tokens=8192,
+        ),
+        ModelPreset(
+            name="Llama 3.1 8B (Bedrock)",
+            model_name="meta.llama3-1-8b-instruct-v1:0",
+            description="Meta Llama 3.1 8B via Bedrock",
+            default_max_tokens=8192,
+        ),
+        # Mistral
+        ModelPreset(
+            name="Mistral Large 2 (Bedrock)",
+            model_name="mistral.mistral-large-2407-v1:0",
+            description="Mistral Large 2 via Bedrock",
+            default_max_tokens=8192,
+        ),
+        ModelPreset(
+            name="Mistral Small (Bedrock)",
+            model_name="mistral.mistral-small-2402-v1:0",
+            description="Mistral Small via Bedrock",
+            default_max_tokens=8192,
+        ),
+        ModelPreset(
+            name="Mixtral 8x7B (Bedrock)",
+            model_name="mistral.mixtral-8x7b-instruct-v0:1",
+            description="Mistral Mixtral 8x7B MoE via Bedrock",
+            default_max_tokens=4096,
+        ),
+        # Cohere
+        ModelPreset(
+            name="Command R+ (Bedrock)",
+            model_name="cohere.command-r-plus-v1:0",
+            description="Cohere Command R+ via Bedrock",
+            default_max_tokens=4096,
+        ),
+        ModelPreset(
+            name="Command R (Bedrock)",
+            model_name="cohere.command-r-v1:0",
+            description="Cohere Command R via Bedrock",
+            default_max_tokens=4096,
+        ),
+        # DeepSeek
+        ModelPreset(
+            name="DeepSeek R1 (Bedrock)",
+            model_name="deepseek.r1-v1:0",
+            description="DeepSeek R1 reasoning model via Bedrock Marketplace",
+            default_max_tokens=16384,
+        ),
+    ],
+    setup_instructions="Configure AWS credentials: aws_access_key_id, aws_secret_access_key, aws_region in additional_params",
+)
+
+
+VERTEX_AI_PRESET = ProviderPreset(
+    provider_id="vertex_ai",
+    provider_name="Google Vertex AI",
+    description="Google Cloud's unified AI platform",
+    requires_api_key=False,
+    documentation_url="https://cloud.google.com/vertex-ai/docs",
+    models=[
+        # Gemini 2.5 Series
+        ModelPreset(
+            name="Gemini 2.5 Pro (Vertex)",
+            model_name="gemini-2.5-pro",
+            description="Most capable Gemini 2.5 Pro via Vertex AI",
+            default_max_tokens=32768,
+        ),
+        ModelPreset(
+            name="Gemini 2.5 Flash (Vertex)",
+            model_name="gemini-2.5-flash",
+            description="Fast Gemini 2.5 Flash via Vertex AI",
+            default_max_tokens=16384,
+        ),
+        ModelPreset(
+            name="Gemini 2.5 Flash-Lite (Vertex)",
+            model_name="gemini-2.5-flash-lite",
+            description="Lightweight Gemini 2.5 Flash variant via Vertex AI",
+            default_max_tokens=16384,
+        ),
+        # Gemini 2.0 Series
+        ModelPreset(
+            name="Gemini 2.0 Flash (Vertex)",
+            model_name="gemini-2.0-flash",
+            description="Gemini 2.0 Flash with multimodal capabilities via Vertex AI",
+            default_max_tokens=16384,
+        ),
+        ModelPreset(
+            name="Gemini 2.0 Flash-Lite (Vertex)",
+            model_name="gemini-2.0-flash-lite",
+            description="Lightweight Gemini 2.0 Flash via Vertex AI",
+            default_max_tokens=16384,
+        ),
+        # Gemini 1.5 Series
+        ModelPreset(
+            name="Gemini 1.5 Pro (Vertex)",
+            model_name="gemini-1.5-pro",
+            description="Gemini 1.5 Pro via Vertex AI",
+            default_max_tokens=8192,
+        ),
+        ModelPreset(
+            name="Gemini 1.5 Flash (Vertex)",
+            model_name="gemini-1.5-flash",
+            description="Fast Gemini 1.5 Flash via Vertex AI",
+            default_max_tokens=8192,
+        ),
+        # Claude on Vertex AI
+        ModelPreset(
+            name="Claude 3.7 Sonnet (Vertex)",
+            model_name="claude-3-7-sonnet@20250219",
+            description="Claude 3.7 Sonnet via Vertex AI",
+            default_max_tokens=16384,
+        ),
+        ModelPreset(
+            name="Claude 3.5 Sonnet v2 (Vertex)",
+            model_name="claude-3-5-sonnet-v2@20241022",
+            description="Claude 3.5 Sonnet v2 via Vertex AI",
+            default_max_tokens=8192,
+        ),
+        ModelPreset(
+            name="Claude 3.5 Haiku (Vertex)",
+            model_name="claude-3-5-haiku@20241022",
+            description="Fast Claude 3.5 Haiku via Vertex AI",
+            default_max_tokens=8192,
+        ),
+        ModelPreset(
+            name="Claude 3 Opus (Vertex)",
+            model_name="claude-3-opus@20240229",
+            description="Claude 3 Opus via Vertex AI",
+            default_max_tokens=4096,
+        ),
+        # Llama on Vertex AI (via Model Garden)
+        ModelPreset(
+            name="Llama 3.3 70B (Vertex)",
+            model_name="meta/llama-3.3-70b-instruct-maas",
+            description="Meta Llama 3.3 70B via Vertex AI Model Garden",
+            default_max_tokens=8192,
+        ),
+        ModelPreset(
+            name="Llama 3.1 405B (Vertex)",
+            model_name="meta/llama3-405b-instruct-maas",
+            description="Meta Llama 3.1 405B via Vertex AI Model Garden",
+            default_max_tokens=8192,
+        ),
+        ModelPreset(
+            name="Llama 3.1 70B (Vertex)",
+            model_name="meta/llama3-70b-instruct-maas",
+            description="Meta Llama 3.1 70B via Vertex AI Model Garden",
+            default_max_tokens=8192,
+        ),
+        ModelPreset(
+            name="Llama 3.1 8B (Vertex)",
+            model_name="meta/llama3-8b-instruct-maas",
+            description="Meta Llama 3.1 8B via Vertex AI Model Garden",
+            default_max_tokens=8192,
+        ),
+        # Mistral on Vertex AI
+        ModelPreset(
+            name="Mistral Large (Vertex)",
+            model_name="mistral-large@2411",
+            description="Mistral Large via Vertex AI",
+            default_max_tokens=8192,
+        ),
+        ModelPreset(
+            name="Mistral Nemo (Vertex)",
+            model_name="mistral-nemo@2407",
+            description="Mistral Nemo 12B via Vertex AI",
+            default_max_tokens=8192,
+        ),
+    ],
+    setup_instructions="Configure GCP credentials: vertex_project, vertex_location, service_account_json in additional_params",
+)
+
+
+AZURE_OPENAI_PRESET = ProviderPreset(
+    provider_id="azure_openai",
+    provider_name="Azure OpenAI",
+    description="OpenAI models hosted on Azure",
+    requires_api_key=True,
+    requires_api_base=True,
+    documentation_url="https://learn.microsoft.com/azure/ai-services/openai/",
+    models=[
+        ModelPreset(
+            name="GPT-4.1 (Azure)",
+            model_name="gpt-4.1",
+            description="GPT-4.1 via Azure OpenAI",
+            default_max_tokens=32768,
+        ),
+        ModelPreset(
+            name="GPT-4.1 mini (Azure)",
+            model_name="gpt-4.1-mini",
+            description="GPT-4.1 mini via Azure OpenAI",
+            default_max_tokens=16384,
+        ),
+        ModelPreset(
+            name="GPT-4.1 nano (Azure)",
+            model_name="gpt-4.1-nano",
+            description="GPT-4.1 nano — fastest, most efficient via Azure OpenAI",
+            default_max_tokens=8192,
+        ),
+        ModelPreset(
+            name="GPT-4o (Azure)",
+            model_name="gpt-4o",
+            description="GPT-4o multimodal model via Azure OpenAI",
+            default_max_tokens=16384,
+        ),
+        ModelPreset(
+            name="GPT-4o mini (Azure)",
+            model_name="gpt-4o-mini",
+            description="GPT-4o mini via Azure OpenAI",
+            default_max_tokens=16384,
+        ),
+        ModelPreset(
+            name="O3 (Azure)",
+            model_name="o3",
+            description="OpenAI O3 reasoning model via Azure OpenAI",
+            default_max_tokens=32768,
+        ),
+        ModelPreset(
+            name="O3 mini (Azure)",
+            model_name="o3-mini",
+            description="OpenAI O3 mini via Azure OpenAI",
+            default_max_tokens=65536,
+        ),
+        ModelPreset(
+            name="O4 mini (Azure)",
+            model_name="o4-mini",
+            description="OpenAI O4 mini reasoning model via Azure OpenAI",
+            default_max_tokens=65536,
+        ),
+        ModelPreset(
+            name="GPT-4 Turbo (Azure)",
+            model_name="gpt-4-turbo",
+            description="GPT-4 Turbo via Azure OpenAI",
+            default_max_tokens=4096,
+        ),
+        ModelPreset(
+            name="GPT-4 (Azure)", model_name="gpt-4", description="GPT-4 via Azure OpenAI", default_max_tokens=8192
+        ),
+        ModelPreset(
+            name="GPT-3.5 Turbo (Azure)",
+            model_name="gpt-3.5-turbo",
+            description="GPT-3.5 Turbo via Azure OpenAI",
+            default_max_tokens=4096,
+        ),
+    ],
+    setup_instructions="Set api_base to your Azure endpoint and configure deployment_name, api_version in additional_params",
+)
+
+
+# Open Source / Self-Hosted
+OLLAMA_PRESET = ProviderPreset(
+    provider_id="ollama",
+    provider_name="Ollama",
+    description="Run open-source models locally",
+    requires_api_key=False,
+    requires_api_base=True,
+    default_api_base="http://localhost:11434",
+    documentation_url="https://ollama.ai/",
+    models=[
+        # DeepSeek V3.2 Series
+        ModelPreset(
+            name="DeepSeek-V3.2-Speciale",
+            model_name="deepseek-v3.2-speciale",
+            description="Specialized DeepSeek V3.2 model",
+            default_max_tokens=8192,
+        ),
+        ModelPreset(
+            name="DeepSeek-V3.2-Exp",
+            model_name="deepseek-v3.2-exp",
+            description="Experimental DeepSeek V3.2 model",
+            default_max_tokens=8192,
+        ),
+        ModelPreset(
+            name="DeepSeek-V3.2 (Thinking)",
+            model_name="deepseek-v3.2-thinking",
+            description="DeepSeek V3.2 with enhanced reasoning capabilities",
+            default_max_tokens=8192,
+        ),
+        ModelPreset(
+            name="DeepSeek-V3.2 (Non-thinking)",
+            model_name="deepseek-v3.2",
+            description="Standard DeepSeek V3.2 model",
+            default_max_tokens=8192,
+        ),
+        # DeepSeek V3 Series
+        ModelPreset(
+            name="DeepSeek-V3.1", model_name="deepseek-v3.1", description="DeepSeek V3.1 model", default_max_tokens=8192
+        ),
+        ModelPreset(
+            name="DeepSeek-V3 0324",
+            model_name="deepseek-v3-0324",
+            description="DeepSeek V3 version from March 2024",
+            default_max_tokens=8192,
+        ),
+        ModelPreset(
+            name="DeepSeek-V3", model_name="deepseek-v3", description="DeepSeek V3 base model", default_max_tokens=8192
+        ),
+        # DeepSeek V2 Series
+        ModelPreset(
+            name="DeepSeek-V2.5", model_name="deepseek-v2.5", description="DeepSeek V2.5 model", default_max_tokens=8192
+        ),
+        # DeepSeek R1 Series
+        ModelPreset(
+            name="DeepSeek-R1-0528",
+            model_name="deepseek-r1-0528",
+            description="DeepSeek R1 version from May 2028",
+            default_max_tokens=8192,
+        ),
+        ModelPreset(
+            name="DeepSeek-R1",
+            model_name="deepseek-r1",
+            description="DeepSeek R1 reasoning model",
+            default_max_tokens=8192,
+        ),
+        ModelPreset(
+            name="DeepSeek R1 Zero",
+            model_name="deepseek-r1-zero",
+            description="DeepSeek R1 Zero base model",
+            default_max_tokens=8192,
+        ),
+        # DeepSeek R1 Distill Series
+        ModelPreset(
+            name="DeepSeek R1 Distill Llama 70B",
+            model_name="deepseek-r1-distill-llama-70b",
+            description="DeepSeek R1 distilled into Llama 70B",
+            default_max_tokens=8192,
+        ),
+        ModelPreset(
+            name="DeepSeek R1 Distill Llama 8B",
+            model_name="deepseek-r1-distill-llama-8b",
+            description="DeepSeek R1 distilled into Llama 8B",
+            default_max_tokens=8192,
+        ),
+        ModelPreset(
+            name="DeepSeek R1 Distill Qwen 32B",
+            model_name="deepseek-r1-distill-qwen-32b",
+            description="DeepSeek R1 distilled into Qwen 32B",
+            default_max_tokens=8192,
+        ),
+        ModelPreset(
+            name="DeepSeek R1 Distill Qwen 14B",
+            model_name="deepseek-r1-distill-qwen-14b",
+            description="DeepSeek R1 distilled into Qwen 14B",
+            default_max_tokens=8192,
+        ),
+        ModelPreset(
+            name="DeepSeek R1 Distill Qwen 7B",
+            model_name="deepseek-r1-distill-qwen-7b",
+            description="DeepSeek R1 distilled into Qwen 7B",
+            default_max_tokens=8192,
+        ),
+        ModelPreset(
+            name="DeepSeek R1 Distill Qwen 1.5B",
+            model_name="deepseek-r1-distill-qwen-1.5b",
+            description="DeepSeek R1 distilled into Qwen 1.5B",
+            default_max_tokens=8192,
+        ),
+        # DeepSeek VL Series (Vision-Language)
+        ModelPreset(
+            name="DeepSeek VL2",
+            model_name="deepseek-vl2",
+            description="DeepSeek Vision-Language model v2",
+            default_max_tokens=8192,
+        ),
+        ModelPreset(
+            name="DeepSeek VL2 Small",
+            model_name="deepseek-vl2-small",
+            description="Compact DeepSeek Vision-Language model",
+            default_max_tokens=8192,
+        ),
+        ModelPreset(
+            name="DeepSeek VL2 Tiny",
+            model_name="deepseek-vl2-tiny",
+            description="Ultra-compact DeepSeek Vision-Language model",
+            default_max_tokens=8192,
+        ),
+        # Llama Series
+        ModelPreset(
+            name="Llama 3 70B", model_name="llama3:70b", description="Meta's Llama 3 70B model", default_max_tokens=2048
+        ),
+        ModelPreset(
+            name="Llama 3 8B", model_name="llama3:8b", description="Meta's Llama 3 8B model", default_max_tokens=2048
+        ),
+        # Mistral Series
+        ModelPreset(
+            name="Mistral", model_name="mistral:latest", description="Mistral 7B model", default_max_tokens=8192
+        ),
+        ModelPreset(
+            name="Mixtral 8x7B",
+            model_name="mixtral:8x7b",
+            description="Mixture of experts model",
+            default_max_tokens=4096,
+        ),
+        # Code Models
+        ModelPreset(
+            name="Code Llama",
+            model_name="codellama:34b",
+            description="Code-specialized Llama model",
+            default_max_tokens=4096,
+        ),
+        # Microsoft Models
+        ModelPreset(
+            name="Phi-3 Mini", model_name="phi3:mini", description="Microsoft's compact model", default_max_tokens=2048
+        ),
+    ],
+    setup_instructions="Install Ollama and pull models: ollama pull deepseek-v3.2 or ollama pull llama3:70b",
+)
+
+
+HUGGINGFACE_PRESET = ProviderPreset(
+    provider_id="huggingface",
+    provider_name="Hugging Face",
+    description="Access thousands of open-source models",
+    requires_api_key=True,
+    documentation_url="https://huggingface.co/docs/api-inference/",
+    models=[
+        ModelPreset(
+            name="Mistral 7B Instruct",
+            model_name="mistralai/Mistral-7B-Instruct-v0.2",
+            description="Mistral AI's instruction-tuned model",
+            default_max_tokens=8192,
+        ),
+        ModelPreset(
+            name="Zephyr 7B",
+            model_name="HuggingFaceH4/zephyr-7b-beta",
+            description="Fine-tuned Mistral model",
+            default_max_tokens=4096,
+        ),
+        ModelPreset(
+            name="Llama 2 70B Chat",
+            model_name="meta-llama/Llama-2-70b-chat-hf",
+            description="Meta's Llama 2 70B chat model",
+            default_max_tokens=4096,
+        ),
+    ],
+    setup_instructions="Get your API key from https://huggingface.co/settings/tokens",
+)
+
+
+LM_STUDIO_PRESET = ProviderPreset(
+    provider_id="openai",  # Uses OpenAI-compatible API
+    provider_name="LM Studio",
+    description="Run models locally with LM Studio",
+    requires_api_key=False,
+    requires_api_base=True,
+    default_api_base="http://localhost:1234/v1",
+    documentation_url="https://lmstudio.ai/",
+    models=[
+        ModelPreset(
+            name="Local Model",
+            model_name="local-model",
+            description="Model loaded in LM Studio (use actual model name)",
+            default_max_tokens=2048,
+        ),
+    ],
+    setup_instructions="Start LM Studio local server and load a model",
+)
+
+
+TOGETHER_AI_PRESET = ProviderPreset(
+    provider_id="together_ai",
+    provider_name="Together AI",
+    description="Fast inference for open-source models",
+    requires_api_key=True,
+    documentation_url="https://docs.together.ai/",
+    models=[
+        ModelPreset(
+            name="Llama 3 70B",
+            model_name="meta-llama/Llama-3-70b-chat-hf",
+            description="Meta's Llama 3 70B",
+            default_max_tokens=4096,
+        ),
+        ModelPreset(
+            name="Mixtral 8x7B",
+            model_name="mistralai/Mixtral-8x7B-Instruct-v0.1",
+            description="Mistral's mixture of experts",
+            default_max_tokens=32768,
+        ),
+        ModelPreset(
+            name="Qwen 2 72B",
+            model_name="Qwen/Qwen2-72B-Instruct",
+            description="Alibaba's Qwen 2 model",
+            default_max_tokens=4096,
+        ),
+    ],
+    setup_instructions="Get your API key from https://api.together.xyz/settings/api-keys",
+)
+
+
+REPLICATE_PRESET = ProviderPreset(
+    provider_id="replicate",
+    provider_name="Replicate",
+    description="Run open-source models in the cloud",
+    requires_api_key=True,
+    documentation_url="https://replicate.com/docs",
+    models=[
+        ModelPreset(
+            name="Llama 3 70B",
+            model_name="meta/llama-3-70b-instruct",
+            description="Meta's Llama 3 70B",
+            default_max_tokens=4096,
+        ),
+        ModelPreset(
+            name="Mixtral 8x7B",
+            model_name="mistralai/mixtral-8x7b-instruct-v0.1",
+            description="Mistral's mixture of experts",
+            default_max_tokens=4096,
+        ),
+    ],
+    setup_instructions="Get your API key from https://replicate.com/account/api-tokens",
+)
+
+
+MINIMAX_PRESET = ProviderPreset(
+    provider_id="minimax",
+    provider_name="MiniMax",
+    description="Advanced AI models from MiniMax with strong multilingual capabilities",
+    requires_api_key=True,
+    requires_api_base=False,
+    default_api_base="https://api.minimax.chat/v1",
+    documentation_url="https://www.minimax.chat/document/",
+    models=[
+        ModelPreset(
+            name="MiniMax M2.5",
+            model_name="minimax-m2.5",
+            description="MiniMax's latest flagship model with enhanced reasoning and capabilities",
+            default_max_tokens=8192,
+        ),
+        ModelPreset(
+            name="MiniMax-Text-01",
+            model_name="MiniMax-Text-01",
+            description="MiniMax's text model with 4M context window",
+            default_max_tokens=4096,
+        ),
+        ModelPreset(
+            name="abab6.5s-chat",
+            model_name="abab6.5s-chat",
+            description="Fast and efficient chat model",
+            default_max_tokens=8192,
+        ),
+        ModelPreset(
+            name="abab6.5-chat",
+            model_name="abab6.5-chat",
+            description="Balanced chat model with strong reasoning",
+            default_max_tokens=8192,
+        ),
+        ModelPreset(
+            name="abab6-chat",
+            model_name="abab6-chat",
+            description="Capable general-purpose chat model",
+            default_max_tokens=8192,
+        ),
+        ModelPreset(
+            name="abab5.5s-chat",
+            model_name="abab5.5s-chat",
+            description="Lightweight fast chat model",
+            default_max_tokens=4096,
+        ),
+        ModelPreset(
+            name="abab5.5-chat",
+            model_name="abab5.5-chat",
+            description="Previous generation chat model",
+            default_max_tokens=4096,
+        ),
+    ],
+    setup_instructions="Get your API key from https://www.minimax.chat/",
+)
+
+
+OPENROUTER_PRESET = ProviderPreset(
+    provider_id="openrouter",
+    provider_name="OpenRouter",
+    description="Unified API for 100+ models from OpenAI, Anthropic, Google, Meta and more",
+    requires_api_key=True,
+    requires_api_base=False,
+    default_api_base="https://openrouter.ai/api/v1",
+    documentation_url="https://openrouter.ai/docs",
+    models=[
+        # OpenAI Models
+        ModelPreset(
+            name="GPT-4o",
+            model_name="openai/gpt-4o",
+            description="OpenAI's flagship multimodal model",
+            default_max_tokens=16384,
+        ),
+        ModelPreset(
+            name="GPT-4o Mini",
+            model_name="openai/gpt-4o-mini",
+            description="Affordable and fast GPT-4o variant",
+            default_max_tokens=16384,
+        ),
+        ModelPreset(
+            name="GPT-4 Turbo",
+            model_name="openai/gpt-4-turbo",
+            description="GPT-4 Turbo with 128K context",
+            default_max_tokens=4096,
+        ),
+        ModelPreset(
+            name="O1 Preview",
+            model_name="openai/o1-preview",
+            description="OpenAI's reasoning model",
+            default_max_tokens=32768,
+        ),
+        ModelPreset(
+            name="O1 Mini",
+            model_name="openai/o1-mini",
+            description="Faster, cheaper O1 variant",
+            default_max_tokens=65536,
+        ),
+        # Anthropic Models — Claude 4.x (latest)
+        ModelPreset(
+            name="Claude Opus 4.6",
+            model_name="anthropic/claude-opus-4-6",
+            description="Anthropic's most powerful model — highest intelligence",
+            default_max_tokens=32768,
+            max_input_tokens=200000,
+            max_output_tokens=32768,
+        ),
+        ModelPreset(
+            name="Claude Sonnet 4.6",
+            model_name="anthropic/claude-sonnet-4-6",
+            description="Best balance of intelligence and speed — Claude 4.6",
+            default_max_tokens=16384,
+            max_input_tokens=200000,
+            max_output_tokens=128000,
+        ),
+        ModelPreset(
+            name="Claude Opus 4.5",
+            model_name="anthropic/claude-opus-4-5",
+            description="Anthropic's Claude Opus 4.5 — powerful and capable",
+            default_max_tokens=32768,
+            max_input_tokens=200000,
+            max_output_tokens=32768,
+        ),
+        ModelPreset(
+            name="Claude Sonnet 4.5",
+            model_name="anthropic/claude-sonnet-4-5",
+            description="Claude Sonnet 4.5 — fast and intelligent",
+            default_max_tokens=16384,
+            max_input_tokens=200000,
+            max_output_tokens=64000,
+        ),
+        ModelPreset(
+            name="Claude Haiku 4.5",
+            model_name="anthropic/claude-haiku-4-5",
+            description="Claude Haiku 4.5 — fastest Claude model",
+            default_max_tokens=8192,
+            max_input_tokens=200000,
+            max_output_tokens=8192,
+        ),
+        # Anthropic Models — Claude 3.x
+        ModelPreset(
+            name="Claude 3.7 Sonnet",
+            model_name="anthropic/claude-3.7-sonnet",
+            description="Claude 3.7 Sonnet with extended thinking",
+            default_max_tokens=16000,
+            max_input_tokens=200000,
+            max_output_tokens=64000,
+        ),
+        ModelPreset(
+            name="Claude 3.5 Sonnet",
+            model_name="anthropic/claude-3.5-sonnet",
+            description="Claude 3.5 Sonnet — high intelligence",
+            default_max_tokens=8192,
+            max_input_tokens=200000,
+            max_output_tokens=8192,
+        ),
+        ModelPreset(
+            name="Claude 3.5 Haiku",
+            model_name="anthropic/claude-3.5-haiku",
+            description="Fast and efficient Claude 3.5 model",
+            default_max_tokens=8192,
+            max_input_tokens=200000,
+            max_output_tokens=8192,
+        ),
+        ModelPreset(
+            name="Claude 3 Opus",
+            model_name="anthropic/claude-3-opus",
+            description="Most powerful Claude 3 model",
+            default_max_tokens=4096,
+            max_input_tokens=200000,
+            max_output_tokens=4096,
+        ),
+        ModelPreset(
+            name="Claude 3 Haiku",
+            model_name="anthropic/claude-3-haiku",
+            description="Fastest Claude 3 model",
+            default_max_tokens=4096,
+            max_input_tokens=200000,
+            max_output_tokens=4096,
+        ),
+        # OpenAI Models — latest
+        ModelPreset(
+            name="GPT-4.1",
+            model_name="openai/gpt-4.1",
+            description="OpenAI GPT-4.1 — latest flagship",
+            default_max_tokens=32768,
+            max_input_tokens=1047576,
+            max_output_tokens=32768,
+        ),
+        ModelPreset(
+            name="GPT-4.1 Mini",
+            model_name="openai/gpt-4.1-mini",
+            description="Affordable and fast GPT-4.1 variant",
+            default_max_tokens=16384,
+            max_input_tokens=1047576,
+            max_output_tokens=16384,
+        ),
+        ModelPreset(
+            name="GPT-4.1 Nano",
+            model_name="openai/gpt-4.1-nano",
+            description="Fastest GPT-4.1 variant",
+            default_max_tokens=8192,
+            max_input_tokens=1047576,
+            max_output_tokens=8192,
+        ),
+        ModelPreset(
+            name="O4 Mini",
+            model_name="openai/o4-mini",
+            description="OpenAI's fast reasoning model",
+            default_max_tokens=65536,
+            max_input_tokens=200000,
+            max_output_tokens=100000,
+        ),
+        ModelPreset(
+            name="O3",
+            model_name="openai/o3",
+            description="OpenAI's most powerful reasoning model",
+            default_max_tokens=100000,
+            max_input_tokens=200000,
+            max_output_tokens=100000,
+        ),
+        ModelPreset(
+            name="O3 Mini",
+            model_name="openai/o3-mini",
+            description="Fast and efficient reasoning model",
+            default_max_tokens=65536,
+            max_input_tokens=200000,
+            max_output_tokens=100000,
+        ),
+        ModelPreset(
+            name="GPT-4o",
+            model_name="openai/gpt-4o",
+            description="OpenAI's flagship multimodal model",
+            default_max_tokens=16384,
+            max_input_tokens=128000,
+            max_output_tokens=16384,
+        ),
+        ModelPreset(
+            name="GPT-4o Mini",
+            model_name="openai/gpt-4o-mini",
+            description="Affordable and fast GPT-4o variant",
+            default_max_tokens=16384,
+            max_input_tokens=128000,
+            max_output_tokens=16384,
+        ),
+        # Google Models — latest
+        ModelPreset(
+            name="Gemini 2.5 Pro",
+            model_name="google/gemini-2.5-pro-preview",
+            description="Google's most capable Gemini model with deep thinking",
+            default_max_tokens=16384,
+            max_input_tokens=1048576,
+            max_output_tokens=65536,
+        ),
+        ModelPreset(
+            name="Gemini 2.5 Flash",
+            model_name="google/gemini-2.5-flash-preview",
+            description="Google Gemini 2.5 Flash — fast and capable",
+            default_max_tokens=16384,
+            max_input_tokens=1048576,
+            max_output_tokens=65536,
+        ),
+        ModelPreset(
+            name="Gemini 2.0 Flash",
+            model_name="google/gemini-2.0-flash-001",
+            description="Google's fast multimodal model",
+            default_max_tokens=8192,
+            max_input_tokens=1048576,
+            max_output_tokens=8192,
+        ),
+        ModelPreset(
+            name="Gemini 2.0 Flash Thinking",
+            model_name="google/gemini-2.0-flash-thinking-exp:free",
+            description="Gemini 2.0 Flash with thinking/reasoning",
+            default_max_tokens=8192,
+            max_input_tokens=1048576,
+            max_output_tokens=8192,
+        ),
+        ModelPreset(
+            name="Gemini 1.5 Pro",
+            model_name="google/gemini-pro-1.5",
+            description="Google's Gemini 1.5 Pro",
+            default_max_tokens=8192,
+            max_input_tokens=2097152,
+            max_output_tokens=8192,
+        ),
+        # xAI Grok Models
+        ModelPreset(
+            name="Grok 3",
+            model_name="x-ai/grok-3-beta",
+            description="xAI's Grok 3 — frontier reasoning model",
+            default_max_tokens=32768,
+            max_input_tokens=131072,
+            max_output_tokens=32768,
+        ),
+        ModelPreset(
+            name="Grok 3 Mini",
+            model_name="x-ai/grok-3-mini-beta",
+            description="xAI's fast and efficient Grok 3 Mini",
+            default_max_tokens=16384,
+            max_input_tokens=131072,
+            max_output_tokens=16384,
+        ),
+        ModelPreset(
+            name="Grok 2",
+            model_name="x-ai/grok-2-1212",
+            description="xAI's Grok 2 model",
+            default_max_tokens=16384,
+            max_input_tokens=131072,
+            max_output_tokens=16384,
+        ),
+        # Meta Llama Models — latest
+        ModelPreset(
+            name="Llama 4 Scout",
+            model_name="meta-llama/llama-4-scout",
+            description="Meta's Llama 4 Scout — efficient multimodal model",
+            default_max_tokens=16384,
+            max_input_tokens=10000000,
+            max_output_tokens=16384,
+        ),
+        ModelPreset(
+            name="Llama 4 Maverick",
+            model_name="meta-llama/llama-4-maverick",
+            description="Meta's Llama 4 Maverick — powerful multimodal model",
+            default_max_tokens=16384,
+            max_input_tokens=1000000,
+            max_output_tokens=16384,
+        ),
+        ModelPreset(
+            name="Llama 3.3 70B",
+            model_name="meta-llama/llama-3.3-70b-instruct",
+            description="Meta's Llama 3.3 70B — latest generation",
+            default_max_tokens=8192,
+            max_input_tokens=131072,
+            max_output_tokens=8192,
+        ),
+        ModelPreset(
+            name="Llama 3.1 405B",
+            model_name="meta-llama/llama-3.1-405b-instruct",
+            description="Meta's largest open model",
+            default_max_tokens=4096,
+        ),
+        ModelPreset(
+            name="Llama 3.1 70B",
+            model_name="meta-llama/llama-3.1-70b-instruct",
+            description="Meta's Llama 3.1 70B",
+            default_max_tokens=4096,
+        ),
+        # Mistral Models — latest
+        ModelPreset(
+            name="Mistral Large 2",
+            model_name="mistralai/mistral-large-2411",
+            description="Mistral's most capable model",
+            default_max_tokens=32768,
+            max_input_tokens=131072,
+            max_output_tokens=32768,
+        ),
+        ModelPreset(
+            name="Mistral Small 3.1",
+            model_name="mistralai/mistral-small-3.1-24b-instruct",
+            description="Mistral Small 3.1 — efficient and fast",
+            default_max_tokens=16384,
+            max_input_tokens=128000,
+            max_output_tokens=16384,
+        ),
+        ModelPreset(
+            name="Devstral",
+            model_name="mistralai/devstral-small-2505",
+            description="Mistral's coding-optimized model",
+            default_max_tokens=16384,
+            max_input_tokens=128000,
+            max_output_tokens=16384,
+        ),
+        ModelPreset(
+            name="Mixtral 8x22B",
+            model_name="mistralai/mixtral-8x22b-instruct",
+            description="Large mixture of experts",
+            default_max_tokens=65536,
+        ),
+        # DeepSeek Models — latest
+        ModelPreset(
+            name="DeepSeek V3",
+            model_name="deepseek/deepseek-chat-v3-5",
+            description="DeepSeek V3 — latest version",
+            default_max_tokens=8192,
+            max_input_tokens=163840,
+            max_output_tokens=8192,
+        ),
+        ModelPreset(
+            name="DeepSeek R1",
+            model_name="deepseek/deepseek-r1",
+            description="DeepSeek's reasoning model",
+            default_max_tokens=8192,
+            max_input_tokens=163840,
+            max_output_tokens=8192,
+        ),
+        ModelPreset(
+            name="DeepSeek R1 Distill Qwen 32B",
+            model_name="deepseek/deepseek-r1-distill-qwen-32b",
+            description="DeepSeek R1 distilled into Qwen 32B",
+            default_max_tokens=8192,
+        ),
+        # Qwen Models — latest
+        ModelPreset(
+            name="Qwen3 235B",
+            model_name="qwen/qwen3-235b-a22b",
+            description="Qwen3's largest model with hybrid thinking",
+            default_max_tokens=8192,
+            max_input_tokens=40960,
+            max_output_tokens=8192,
+        ),
+        ModelPreset(
+            name="Qwen3 30B",
+            model_name="qwen/qwen3-30b-a3b",
+            description="Qwen3 30B efficient MoE model",
+            default_max_tokens=8192,
+            max_input_tokens=40960,
+            max_output_tokens=8192,
+        ),
+        ModelPreset(
+            name="Qwen 2.5 72B",
+            model_name="qwen/qwen-2.5-72b-instruct",
+            description="Alibaba's Qwen 2.5 72B",
+            default_max_tokens=4096,
+        ),
+        ModelPreset(
+            name="Qwen 2.5 Coder 32B",
+            model_name="qwen/qwen-2.5-coder-32b-instruct",
+            description="Qwen optimized for coding",
+            default_max_tokens=8192,
+        ),
+        # Cohere Models
+        ModelPreset(
+            name="Command A",
+            model_name="cohere/command-a-03-2025",
+            description="Cohere's latest flagship model",
+            default_max_tokens=8192,
+            max_input_tokens=256000,
+            max_output_tokens=8192,
+        ),
+        ModelPreset(
+            name="Command R+",
+            model_name="cohere/command-r-plus",
+            description="Cohere's most capable model",
+            default_max_tokens=4096,
+        ),
+        ModelPreset(
+            name="Command R",
+            model_name="cohere/command-r",
+            description="Balanced Cohere model",
+            default_max_tokens=4096,
+        ),
+        # Perplexity Models — latest
+        ModelPreset(
+            name="Perplexity Sonar Pro",
+            model_name="perplexity/sonar-pro",
+            description="Perplexity's advanced model with web search",
+            default_max_tokens=8192,
+            max_input_tokens=200000,
+            max_output_tokens=8192,
+        ),
+        ModelPreset(
+            name="Perplexity Sonar",
+            model_name="perplexity/sonar",
+            description="Perplexity's fast model with web search",
+            default_max_tokens=8192,
+            max_input_tokens=200000,
+            max_output_tokens=8192,
+        ),
+        ModelPreset(
+            name="Perplexity Sonar Reasoning",
+            model_name="perplexity/sonar-reasoning-pro",
+            description="Perplexity's reasoning model with web search",
+            default_max_tokens=8192,
+            max_input_tokens=200000,
+            max_output_tokens=8192,
+        ),
+        # Microsoft Phi Models
+        ModelPreset(
+            name="Phi-4",
+            model_name="microsoft/phi-4",
+            description="Microsoft's Phi-4 — powerful small model",
+            default_max_tokens=16384,
+            max_input_tokens=16384,
+            max_output_tokens=16384,
+        ),
+        ModelPreset(
+            name="Phi-4 Mini",
+            model_name="microsoft/phi-4-mini-instruct",
+            description="Microsoft's compact Phi-4 model",
+            default_max_tokens=8192,
+            max_input_tokens=128000,
+            max_output_tokens=8192,
+        ),
+        # MiniMax Models
+        ModelPreset(
+            name="MiniMax M2.5",
+            model_name="minimax/minimax-m2.5",
+            description="MiniMax's latest flagship model",
+            default_max_tokens=8192,
+        ),
+        ModelPreset(
+            name="MiniMax-Text-01",
+            model_name="minimax/minimax-text-01",
+            description="MiniMax's text model with 4M context window",
+            default_max_tokens=4096,
+        ),
+    ],
+    setup_instructions="Get your API key from https://openrouter.ai/keys",
+)
+
+
+VLLM_PRESET = ProviderPreset(
+    provider_id="openai",  # Uses OpenAI-compatible API
+    provider_name="vLLM",
+    description="High-throughput inference server",
+    requires_api_key=False,
+    requires_api_base=True,
+    documentation_url="https://docs.vllm.ai/",
+    models=[
+        ModelPreset(
+            name="Custom vLLM Model",
+            model_name="deployed-model",
+            description="Model deployed on vLLM server (use actual model name)",
+            default_max_tokens=2048,
+        ),
+    ],
+    setup_instructions="Deploy vLLM server and use its OpenAI-compatible endpoint",
+)
+
+
+LITELLM_PRESET = ProviderPreset(
+    provider_id="litellm",
+    provider_name="LiteLLM",
+    description="Unified API for 100+ LLM providers",
+    requires_api_key=True,
+    requires_api_base=True,
+    documentation_url="https://docs.litellm.ai/",
+    models=[
+        # OpenAI Models via LiteLLM - GPT-5 Series
+        ModelPreset(
+            name="GPT-5.2 Pro",
+            model_name="gpt-5.2-pro",
+            description="OpenAI GPT-5.2 Pro via LiteLLM",
+            default_max_tokens=32768,
+        ),
+        ModelPreset(
+            name="GPT-5.2", model_name="gpt-5.2", description="OpenAI GPT-5.2 via LiteLLM", default_max_tokens=32768
+        ),
+        ModelPreset(
+            name="GPT-5.1 Thinking",
+            model_name="gpt-5.1-thinking",
+            description="OpenAI GPT-5.1 Thinking via LiteLLM",
+            default_max_tokens=32768,
+        ),
+        ModelPreset(
+            name="GPT-5.1 Instant",
+            model_name="gpt-5.1-instant",
+            description="OpenAI GPT-5.1 Instant via LiteLLM",
+            default_max_tokens=16384,
+        ),
+        ModelPreset(
+            name="GPT-5.1 Codex",
+            model_name="gpt-5.1-codex",
+            description="OpenAI GPT-5.1 Codex via LiteLLM",
+            default_max_tokens=32768,
+        ),
+        ModelPreset(
+            name="GPT-5.1", model_name="gpt-5.1", description="OpenAI GPT-5.1 via LiteLLM", default_max_tokens=32768
+        ),
+        ModelPreset(
+            name="GPT-5 Codex",
+            model_name="gpt-5-codex",
+            description="OpenAI GPT-5 Codex via LiteLLM",
+            default_max_tokens=32768,
+        ),
+        ModelPreset(
+            name="GPT-5 nano",
+            model_name="gpt-5-nano",
+            description="OpenAI GPT-5 nano via LiteLLM",
+            default_max_tokens=8192,
+        ),
+        ModelPreset(
+            name="GPT-5 mini",
+            model_name="gpt-5-mini",
+            description="OpenAI GPT-5 mini via LiteLLM",
+            default_max_tokens=16384,
+        ),
+        ModelPreset(name="GPT-5", model_name="gpt-5", description="OpenAI GPT-5 via LiteLLM", default_max_tokens=32768),
+        # OpenAI - GPT-4 Series
+        ModelPreset(
+            name="GPT-4.5", model_name="gpt-4.5", description="OpenAI GPT-4.5 via LiteLLM", default_max_tokens=16384
+        ),
+        ModelPreset(
+            name="GPT-4.1 nano",
+            model_name="gpt-4.1-nano",
+            description="OpenAI GPT-4.1 nano via LiteLLM",
+            default_max_tokens=8192,
+        ),
+        ModelPreset(
+            name="GPT-4.1 mini",
+            model_name="gpt-4.1-mini",
+            description="OpenAI GPT-4.1 mini via LiteLLM",
+            default_max_tokens=16384,
+        ),
+        ModelPreset(
+            name="GPT-4.1", model_name="gpt-4.1", description="OpenAI GPT-4.1 via LiteLLM", default_max_tokens=16384
+        ),
+        ModelPreset(
+            name="GPT-4o", model_name="gpt-4o", description="OpenAI GPT-4o via LiteLLM", default_max_tokens=16384
+        ),
+        ModelPreset(
+            name="GPT-4o Mini",
+            model_name="gpt-4o-mini",
+            description="OpenAI GPT-4o Mini via LiteLLM",
+            default_max_tokens=16384,
+        ),
+        ModelPreset(
+            name="GPT-4 Turbo",
+            model_name="gpt-4-turbo",
+            description="OpenAI GPT-4 Turbo via LiteLLM",
+            default_max_tokens=4096,
+        ),
+        ModelPreset(
+            name="GPT-4 Turbo Preview",
+            model_name="gpt-4-turbo-preview",
+            description="OpenAI GPT-4 Turbo Preview via LiteLLM",
+            default_max_tokens=4096,
+        ),
+        ModelPreset(name="GPT-4", model_name="gpt-4", description="OpenAI GPT-4 via LiteLLM", default_max_tokens=8192),
+        ModelPreset(
+            name="GPT-4 32K",
+            model_name="gpt-4-32k",
+            description="OpenAI GPT-4 32K via LiteLLM",
+            default_max_tokens=32768,
+        ),
+        # OpenAI - GPT-3.5 Series
+        ModelPreset(
+            name="GPT-3.5 Turbo",
+            model_name="gpt-3.5-turbo",
+            description="OpenAI GPT-3.5 Turbo via LiteLLM",
+            default_max_tokens=16385,
+        ),
+        ModelPreset(
+            name="GPT-3.5 Turbo 16K",
+            model_name="gpt-3.5-turbo-16k",
+            description="OpenAI GPT-3.5 Turbo 16K via LiteLLM",
+            default_max_tokens=16385,
+        ),
+        # OpenAI - O-Series
+        ModelPreset(
+            name="O4 Mini", model_name="o4-mini", description="OpenAI O4 Mini via LiteLLM", default_max_tokens=65536
+        ),
+        ModelPreset(
+            name="O3 Pro", model_name="o3-pro", description="OpenAI O3 Pro via LiteLLM", default_max_tokens=65536
+        ),
+        ModelPreset(
+            name="O3 Mini", model_name="o3-mini", description="OpenAI O3 Mini via LiteLLM", default_max_tokens=65536
+        ),
+        ModelPreset(name="O3", model_name="o3", description="OpenAI O3 via LiteLLM", default_max_tokens=65536),
+        ModelPreset(
+            name="O1 Pro", model_name="o1-pro", description="OpenAI O1 Pro via LiteLLM", default_max_tokens=32768
+        ),
+        ModelPreset(
+            name="O1 Preview",
+            model_name="o1-preview",
+            description="OpenAI O1 Preview via LiteLLM",
+            default_max_tokens=32768,
+        ),
+        ModelPreset(
+            name="O1 Mini", model_name="o1-mini", description="OpenAI O1 Mini via LiteLLM", default_max_tokens=65536
+        ),
+        ModelPreset(name="O1", model_name="o1", description="OpenAI O1 via LiteLLM", default_max_tokens=32768),
+        # Anthropic Claude Models via LiteLLM - Claude 4.6 Series
+        ModelPreset(
+            name="Claude Opus 4.6",
+            model_name="claude-opus-4-6",
+            description="Anthropic Claude Opus 4.6 via LiteLLM",
+            default_max_tokens=16384,
+        ),
+        ModelPreset(
+            name="Claude Sonnet 4.6",
+            model_name="claude-sonnet-4-6",
+            description="Anthropic Claude Sonnet 4.6 via LiteLLM",
+            default_max_tokens=16384,
+        ),
+        # Anthropic - Claude 4.5 Series
+        ModelPreset(
+            name="Claude 4.5 Sonnet",
+            model_name="claude-sonnet-4-5",
+            description="Anthropic Claude 4.5 Sonnet via LiteLLM",
+            default_max_tokens=16384,
+        ),
+        ModelPreset(
+            name="Claude Haiku 4.5",
+            model_name="claude-haiku-4-5",
+            description="Anthropic Claude Haiku 4.5 via LiteLLM",
+            default_max_tokens=16384,
+        ),
+        # Anthropic - Claude 4 Series
+        ModelPreset(
+            name="Claude 4 Sonnet",
+            model_name="claude-sonnet-4",
+            description="Anthropic Claude 4 Sonnet via LiteLLM",
+            default_max_tokens=16384,
+        ),
+        # Anthropic - Claude 3.7 Series
+        ModelPreset(
+            name="Claude 3.7 Sonnet (Latest)",
+            model_name="claude-3-7-sonnet-latest",
+            description="Anthropic Claude 3.7 Sonnet Latest via LiteLLM (Recommended)",
+            default_max_tokens=8192,
+        ),
+        # Anthropic - Claude 3.5 Series
+        ModelPreset(
+            name="Claude 3.5 Sonnet (Latest)",
+            model_name="claude-3-5-sonnet-latest",
+            description="Anthropic Claude 3.5 Sonnet Latest via LiteLLM",
+            default_max_tokens=8192,
+        ),
+        ModelPreset(
+            name="Claude 3.5 Haiku (Latest)",
+            model_name="claude-3-5-haiku-latest",
+            description="Anthropic Claude 3.5 Haiku Latest via LiteLLM",
+            default_max_tokens=8192,
+        ),
+        # Anthropic - Claude 3 Series
+        ModelPreset(
+            name="Claude 3 Opus",
+            model_name="claude-3-opus-20240229",
+            description="Anthropic Claude 3 Opus via LiteLLM",
+            default_max_tokens=4096,
+        ),
+        ModelPreset(
+            name="Claude 3 Sonnet",
+            model_name="claude-3-sonnet-20240229",
+            description="Anthropic Claude 3 Sonnet via LiteLLM",
+            default_max_tokens=4096,
+        ),
+        ModelPreset(
+            name="Claude 3 Haiku",
+            model_name="claude-3-haiku-20240307",
+            description="Anthropic Claude 3 Haiku via LiteLLM",
+            default_max_tokens=4096,
+        ),
+        # Anthropic - Claude 2 Series
+        ModelPreset(
+            name="Claude 2.1",
+            model_name="claude-2.1",
+            description="Anthropic Claude 2.1 via LiteLLM",
+            default_max_tokens=200000,
+        ),
+        ModelPreset(
+            name="Claude 2.0",
+            model_name="claude-2.0",
+            description="Anthropic Claude 2.0 via LiteLLM",
+            default_max_tokens=100000,
+        ),
+        # Google Gemini Models via LiteLLM - Gemini 3 Series
+        ModelPreset(
+            name="Gemini 3 Pro",
+            model_name="gemini-3-pro",
+            description="Google Gemini 3 Pro via LiteLLM",
+            default_max_tokens=32768,
+        ),
+        # Google - Gemini 2.5 Series
+        ModelPreset(
+            name="Gemini 2.5 Pro Preview",
+            model_name="gemini-2.5-pro-preview-06-05",
+            description="Google Gemini 2.5 Pro Preview via LiteLLM",
+            default_max_tokens=32768,
+        ),
+        ModelPreset(
+            name="Gemini 2.5 Pro",
+            model_name="gemini-2.5-pro",
+            description="Google Gemini 2.5 Pro via LiteLLM",
+            default_max_tokens=32768,
+        ),
+        ModelPreset(
+            name="Gemini 2.5 Flash-Lite",
+            model_name="gemini-2.5-flash-lite",
+            description="Google Gemini 2.5 Flash-Lite via LiteLLM",
+            default_max_tokens=16384,
+        ),
+        ModelPreset(
+            name="Gemini 2.5 Flash",
+            model_name="gemini-2.5-flash",
+            description="Google Gemini 2.5 Flash via LiteLLM",
+            default_max_tokens=16384,
+        ),
+        # Google - Gemini 2.0 Series
+        ModelPreset(
+            name="Gemini 2.0 Flash Thinking",
+            model_name="gemini-2.0-flash-thinking",
+            description="Google Gemini 2.0 Flash Thinking via LiteLLM",
+            default_max_tokens=16384,
+        ),
+        ModelPreset(
+            name="Gemini 2.0 Flash-Lite",
+            model_name="gemini-2.0-flash-lite",
+            description="Google Gemini 2.0 Flash-Lite via LiteLLM",
+            default_max_tokens=16384,
+        ),
+        ModelPreset(
+            name="Gemini 2.0 Flash",
+            model_name="gemini-2.0-flash",
+            description="Google Gemini 2.0 Flash via LiteLLM",
+            default_max_tokens=16384,
+        ),
+        # Google - Gemini 1.5 Series
+        ModelPreset(
+            name="Gemini 1.5 Pro",
+            model_name="gemini-1.5-pro",
+            description="Google Gemini 1.5 Pro via LiteLLM",
+            default_max_tokens=32768,
+        ),
+        ModelPreset(
+            name="Gemini 1.5 Flash 8B",
+            model_name="gemini-1.5-flash-8b",
+            description="Google Gemini 1.5 Flash 8B via LiteLLM",
+            default_max_tokens=16384,
+        ),
+        ModelPreset(
+            name="Gemini 1.5 Flash",
+            model_name="gemini-1.5-flash",
+            description="Google Gemini 1.5 Flash via LiteLLM",
+            default_max_tokens=16384,
+        ),
+        # Google - Gemini 1.0 Series
+        ModelPreset(
+            name="Gemini 1.0 Pro",
+            model_name="gemini-1.0-pro",
+            description="Google Gemini 1.0 Pro via LiteLLM",
+            default_max_tokens=32760,
+        ),
+        # Google - Gemma Series
+        ModelPreset(
+            name="Gemma 3 27B",
+            model_name="gemma-3-27b",
+            description="Google Gemma 3 27B via LiteLLM",
+            default_max_tokens=8192,
+        ),
+        ModelPreset(
+            name="Gemma 3 12B",
+            model_name="gemma-3-12b",
+            description="Google Gemma 3 12B via LiteLLM",
+            default_max_tokens=8192,
+        ),
+        ModelPreset(
+            name="Gemma 3 4B",
+            model_name="gemma-3-4b",
+            description="Google Gemma 3 4B via LiteLLM",
+            default_max_tokens=8192,
+        ),
+        ModelPreset(
+            name="Gemma 3 1B",
+            model_name="gemma-3-1b",
+            description="Google Gemma 3 1B via LiteLLM",
+            default_max_tokens=4096,
+        ),
+        ModelPreset(
+            name="Gemma 2 27B",
+            model_name="gemma-2-27b",
+            description="Google Gemma 2 27B via LiteLLM",
+            default_max_tokens=8192,
+        ),
+        ModelPreset(
+            name="Gemma 2 9B",
+            model_name="gemma-2-9b",
+            description="Google Gemma 2 9B via LiteLLM",
+            default_max_tokens=8192,
+        ),
+        # Other Popular Models
+        ModelPreset(
+            name="Llama 3 70B",
+            model_name="together_ai/meta-llama/Llama-3-70b-chat-hf",
+            description="Meta Llama 3 70B via LiteLLM",
+            default_max_tokens=4096,
+        ),
+        ModelPreset(
+            name="Mixtral 8x7B",
+            model_name="together_ai/mistralai/Mixtral-8x7B-Instruct-v0.1",
+            description="Mistral Mixtral 8x7B via LiteLLM",
+            default_max_tokens=32768,
+        ),
+    ],
+    setup_instructions="Configure LiteLLM proxy and set appropriate model names. LiteLLM supports 100+ providers through a unified API.",
+)
+
+
+# All provider presets
+ALL_PROVIDER_PRESETS: dict[str, ProviderPreset] = {
+    "openai": OPENAI_PRESET,
+    "anthropic": ANTHROPIC_PRESET,
+    "gemini": GEMINI_PRESET,
+    "openrouter": OPENROUTER_PRESET,
+    "minimax": MINIMAX_PRESET,
+    "bedrock": AWS_BEDROCK_PRESET,
+    "vertex_ai": VERTEX_AI_PRESET,
+    "azure_openai": AZURE_OPENAI_PRESET,
+    "ollama": OLLAMA_PRESET,
+    "huggingface": HUGGINGFACE_PRESET,
+    "lm_studio": LM_STUDIO_PRESET,
+    "together_ai": TOGETHER_AI_PRESET,
+    "replicate": REPLICATE_PRESET,
+    "vllm": VLLM_PRESET,
+    "litellm": LITELLM_PRESET,
+}
+
+
+def get_provider_preset(provider_id: str) -> ProviderPreset | None:
+    """Get provider preset by ID."""
+    return ALL_PROVIDER_PRESETS.get(provider_id)
+
+
+def get_all_providers() -> list[ProviderPreset]:
+    """Get all available provider presets."""
+    return list(ALL_PROVIDER_PRESETS.values())
+
+
+def get_provider_models(provider_id: str) -> list[ModelPreset]:
+    """Get all models for a specific provider."""
+    preset = get_provider_preset(provider_id)
+    return preset.models if preset and preset.models else []
+
+
+def get_model_preset(provider_id: str, model_name: str) -> ModelPreset | None:
+    """Get specific model preset."""
+    models = get_provider_models(provider_id)
+    for model in models:
+        if model.model_name == model_name:
+            return model
+    return None
+
+
+def create_config_from_preset(
+    provider_id: str,
+    model_name: str,
+    name: str | None = None,
+    api_key: str | None = None,
+    api_base: str | None = None,
+    **kwargs,
+) -> dict[str, Any]:
+    """
+    Create a configuration dictionary from a preset.
+
+    Args:
+        provider_id: Provider identifier
+        model_name: Model name
+        name: Display name for the configuration
+        api_key: API key (if required)
+        api_base: API base URL (if required)
+        **kwargs: Additional parameters to override defaults
+
+    Returns:
+        Configuration dictionary ready for AgentLLMConfig creation
+    """
+    provider_preset = get_provider_preset(provider_id)
+    model_preset = get_model_preset(provider_id, model_name)
+
+    if not provider_preset:
+        raise ValueError(f"Unknown provider: {provider_id}")
+
+    config = {
+        "name": name or f"{provider_preset.provider_name} - {model_name}",
+        "provider": provider_id,
+        "model_name": model_name,
+        "api_key": api_key or "not-required",
+        "temperature": kwargs.get("temperature", model_preset.default_temperature if model_preset else 0.7),
+    }
+
+    # Add optional parameters
+    if api_base or provider_preset.default_api_base:
+        config["api_base"] = api_base or provider_preset.default_api_base
+
+    if model_preset:
+        if model_preset.default_max_tokens:
+            config["max_tokens"] = kwargs.get("max_tokens", model_preset.default_max_tokens)
+        if model_preset.default_top_p:
+            config["top_p"] = kwargs.get("top_p", model_preset.default_top_p)
+        if model_preset.additional_params:
+            config["additional_params"] = {**model_preset.additional_params, **kwargs.get("additional_params", {})}
+
+    # Add any additional kwargs
+    for key, value in kwargs.items():
+        if key not in config and key not in ["temperature", "max_tokens", "top_p", "additional_params"]:
+            config[key] = value
+
+    return config

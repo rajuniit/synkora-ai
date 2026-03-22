@@ -1,0 +1,57 @@
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: synkora-config
+  namespace: synkora-production
+data:
+  APP_ENV: "production"
+  SERVER_WORKER_AMOUNT: "2"
+  APP_DEBUG: "false"
+  API_HOST: "0.0.0.0"
+  API_PORT: "5001"
+  APP_BASE_URL: "https://synkora.ai"
+
+  INNER_CORS_ORIGINS: "https://synkora.ai"
+
+  RATE_LIMIT_ENABLED: "true"
+  RATE_LIMIT_PER_MINUTE: "60"
+  RATE_LIMIT_PER_HOUR: "1000"
+
+  LOG_LEVEL: "INFO"
+  LOG_FORMAT: "json"
+
+  MAX_UPLOAD_SIZE: "15728640"
+  INNER_ALLOWED_EXTENSIONS: "txt,pdf,docx,md,html"
+
+  AWS_REGION: "us-east-1"
+  AWS_S3_BUCKET: "synkora-ai-01"
+  AWS_ENDPOINT_URL: "https://s3.us-east-1.amazonaws.com"
+
+  STORAGE_TYPE: "s3"
+  S3_BUCKET: "synkora-ai-01"
+  S3_REGION: "us-east-1"
+  S3_ENDPOINT: "https://s3.us-east-1.amazonaws.com"
+
+  VECTOR_STORE: "PINECONE"
+  PINECONE_ENVIRONMENT: "us-east-1"
+  PINECONE_CLOUD: "aws"
+
+  LANGFUSE_ENABLED: "true"
+  LANGFUSE_SAMPLE_RATE: "1.0"
+
+  SMTP_HOST: "smtp.gmail.com"
+  SMTP_PORT: "587"
+  SMTP_USER: "your-email@gmail.com"
+  FROM_EMAIL: "noreply@synkora.ai"
+
+  # Domain & URL Settings
+  PLATFORM_DOMAIN: "synkora.ai"
+  WEBHOOK_BASE_URL: "https://api.synkora.ai"
+  WIDGET_JS_URL: "https://synkora.ai/widget.js"
+  PUBLIC_API_URL: "https://api.synkora.ai/api/v1"
+
+  # Workspace Settings (Agent Sandbox)
+  WORKSPACE_BASE_PATH: "/tmp/synkora/workspaces"
+  WORKSPACE_TTL_HOURS: "24"
+  WORKSPACE_MAX_SIZE_MB: "2000"
+  WORKSPACE_MAX_PER_TENANT: "100"

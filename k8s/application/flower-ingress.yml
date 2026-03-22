@@ -1,0 +1,28 @@
+apiVersion: networking.k8s.io/v1
+kind: Ingress
+metadata:
+  name: synkora-flower-ingress
+  namespace: synkora-production
+  annotations:
+    nginx.ingress.kubernetes.io/proxy-body-size: "10m"
+    cert-manager.io/cluster-issuer: "letsencrypt-prod"
+    nginx.ingress.kubernetes.io/auth-type: basic
+    nginx.ingress.kubernetes.io/auth-secret: flower-basic-auth
+    nginx.ingress.kubernetes.io/auth-realm: "Flower - Restricted"
+spec:
+  ingressClassName: nginx
+  tls:
+  - hosts:
+    - worker.synkora.ai
+    secretName: synkora-flower-tls
+  rules:
+    - host: worker.synkora.ai
+      http:
+        paths:
+          - path: /
+            pathType: Prefix
+            backend:
+              service:
+                name: synkora-flower
+                port:
+                  number: 5555

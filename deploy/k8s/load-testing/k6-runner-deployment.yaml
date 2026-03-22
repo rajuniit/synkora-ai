@@ -1,0 +1,135 @@
+# K6 Test Runner - Isolated Deployment
+# Runs K6 load tests in isolated pods to prevent impact on main platform
+
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: k6-runner
+  namespace: load-testing
+  labels:
+    app: k6-runner
+    app.kubernetes.io/name: k6-runner
+    app.kubernetes.io/component: test-runner
+spec:
+  replicas: 2  # Multiple runners for parallel test execution
+  selector:
+    matchLabels:
+      app: k6-runner
+  template:
+    metadata:
+      labels:
+        app: k6-runner
+    spec:
+      # Use dedicated node pool for load testing (recommended)
+      nodeSelector:
+        node-type: load-testing  # Optional: use dedicated nodes
+      tolerations:
+        - key: "load-testing"
+          operator: "Equal"
+          value: "true"
+          effect: "NoSchedule"
+
+      containers:
+        - name: k6-runner
+          image: synkora/k6-runner:latest
+
+          env:
+            - name: SYNKORA_API_URL
+              value: "http://synkora-api.default.svc.cluster.local"
+            - name: REDIS_URL
+              valueFrom:
+                secretKeyRef:
+                  name: llm-proxy-secrets
+                  key: redis-url
+            - name: CALLBACK_URL
+              value: "http://synkora-api.default.svc.cluster.local/api/v1/test-runs/callback"
+
+          resources:
+            requests:
+              cpu: "1000m"
+              memory: "1Gi"
+            limits:
+              cpu: "4000m"
+              memory: "4Gi"  # K6 needs memory for high VU counts
+
+          volumeMounts:
+            - name: k6-scripts
+              mountPath: /scripts
+            - name: tmp
+              mountPath: /tmp
+
+          securityContext:
+            runAsNonRoot: true
+            runAsUser: 1000
+            readOnlyRootFilesystem: false  # K6 needs to write temp files
+
+      volumes:
+        - name: k6-scripts
+          emptyDir: {}
+        - name: tmp
+          emptyDir: {}
+
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: k6-runner
+  namespace: load-testing
+spec:
+  type: ClusterIP
+  ports:
+    - port: 6565
+      targetPort: 6565
+      name: api
+  selector:
+    app: k6-runner
+
+---
+# For distributed load testing with K6 Operator (optional)
+apiVersion: batch/v1
+kind: Job
+metadata:
+  name: k6-distributed-test
+  namespace: load-testing
+  labels:
+    app: k6-test
+spec:
+  parallelism: 10  # Run 10 K6 instances in parallel
+  completions: 10
+  backoffLimit: 0
+  template:
+    metadata:
+      labels:
+        app: k6-test
+    spec:
+      restartPolicy: Never
+      containers:
+        - name: k6
+          image: grafana/k6:latest
+          command:
+            - k6
+            - run
+            - --out
+            - json=/results/results.json
+            - /scripts/test.js
+          env:
+            - name: K6_PROMETHEUS_RW_SERVER_URL
+              value: "http://prometheus-pushgateway.monitoring:9091/api/v1/write"
+          resources:
+            requests:
+              cpu: "500m"
+              memory: "512Mi"
+            limits:
+              cpu: "2000m"
+              memory: "2Gi"
+          volumeMounts:
+            - name: scripts
+              mountPath: /scripts
+            - name: results
+              mountPath: /results
+      volumes:
+        - name: scripts
+          configMap:
+            name: k6-test-script
+        - name: results
+          emptyDir: {}

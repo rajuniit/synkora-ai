@@ -1,0 +1,206 @@
+"""
+Celery application configuration for scheduled tasks
+"""
+
+import json
+import logging
+import traceback
+from datetime import UTC, datetime
+
+import sentry_sdk
+from celery import Celery
+from celery.schedules import crontab
+from celery.signals import task_failure, task_retry
+from sentry_sdk.integrations.celery import CeleryIntegration
+from sentry_sdk.integrations.logging import LoggingIntegration
+
+from src.config.settings import settings
+
+# Initialize Sentry for Celery workers if configured
+if settings.sentry_dsn:
+    sentry_sdk.init(
+        dsn=settings.sentry_dsn,
+        environment=settings.sentry_environment or settings.app_env,
+        integrations=[
+            CeleryIntegration(),
+            LoggingIntegration(
+                level=logging.INFO,
+                event_level=logging.ERROR,
+            ),
+        ],
+        traces_sample_rate=1.0 if settings.app_debug else 0.1,
+        send_default_pii=False,  # Don't send PII by default
+    )
+    logging.info("Sentry initialized for Celery workers")
+
+# Create Celery app
+celery_app = Celery(
+    "synkora",
+    broker=settings.celery_broker_url_str,
+    backend=settings.celery_result_backend_str,
+    include=[
+        "src.tasks.scheduled_tasks",
+        "src.tasks.database_tasks",
+        "src.tasks.notification_tasks",
+        "src.tasks.agent_tasks",  # Webhook event processing
+        "src.tasks.email_tasks",  # Email sending
+        "src.tasks.billing_tasks",  # Credit deduction and reconciliation
+        "src.tasks.workspace_tasks",  # Workspace cleanup
+    ],
+)
+
+# Celery configuration
+celery_app.conf.update(
+    task_serializer="json",
+    accept_content=["json"],
+    result_serializer="json",
+    timezone="UTC",
+    enable_utc=True,
+    task_track_started=True,
+    task_time_limit=3600,  # 1 hour
+    task_soft_time_limit=3300,  # 55 minutes
+    worker_prefetch_multiplier=1,
+    worker_max_tasks_per_child=1000,
+    # K8s reliability: Acknowledge tasks only after completion
+    # Ensures tasks are requeued if worker crashes/pod terminates
+    task_acks_late=True,
+    task_reject_on_worker_lost=True,
+    # Queue routing - default queue must match worker's -Q flag
+    task_default_queue="default",
+    task_routes={
+        # Email tasks to email queue
+        "send_email_task": {"queue": "email"},
+        "send_verification_email_task": {"queue": "email"},
+        "send_welcome_email_task": {"queue": "email"},
+        "send_password_reset_email_task": {"queue": "email"},
+        "send_bulk_emails_task": {"queue": "email"},
+        "send_team_invitation_email_task": {"queue": "email"},
+        # Notification tasks to notifications queue
+        "send_bulk_notifications_task": {"queue": "notifications"},
+        "send_in_app_notification_task": {"queue": "notifications"},
+        "send_slack_notification_task": {"queue": "notifications"},
+        "send_teams_notification_task": {"queue": "notifications"},
+        "send_webhook_notification_task": {"queue": "notifications"},
+        "send_whatsapp_notification_task": {"queue": "notifications"},
+        "send_task_notification": {"queue": "notifications"},
+        # Agent tasks to agents queue
+        "execute_spawn_agent_task": {"queue": "agents"},
+        "process_webhook_event": {"queue": "agents"},
+        # Billing tasks to billing queue
+        "billing.flush_usage_analytics": {"queue": "billing"},
+    },
+    beat_schedule={
+        # Check for due scheduled tasks every minute
+        "check-scheduled-tasks-every-minute": {
+            "task": "tasks.check_scheduled_tasks",
+            "schedule": 60.0,  # Every 60 seconds
+        },
+        # Clean up old task executions daily at midnight
+        "cleanup-old-executions-daily": {
+            "task": "tasks.cleanup_old_executions",
+            "schedule": crontab(hour=0, minute=0),
+            "args": (30,),  # Keep 30 days of history
+        },
+        # Flush buffered usage counters from Redis to DB every hour
+        "flush-usage-analytics": {
+            "task": "billing.flush_usage_analytics",
+            "schedule": crontab(minute=0),
+        },
+        # Daily credit reconciliation at 2 AM
+        "reconcile-credits-daily": {
+            "task": "billing.reconcile_credits_daily",
+            "schedule": crontab(hour=2, minute=0),
+        },
+        # Clean up expired workspaces every 6 hours
+        "cleanup-expired-workspaces": {
+            "task": "tasks.cleanup_expired_workspaces",
+            "schedule": crontab(minute=0, hour="*/6"),  # Every 6 hours
+            "args": (24,),  # 24-hour TTL
+        },
+    },
+)
+
+# Optional: Configure result backend settings
+if settings.celery_result_backend:
+    import os as _os
+
+    celery_app.conf.update(
+        result_expires=3600,  # Results expire after 1 hour
+        result_backend_transport_options={
+            # Use same env var as get_redis() for consistency
+            "master_name": _os.getenv("REDIS_MASTER_NAME", "mymaster"),
+            "visibility_timeout": 3600,
+        },
+    )
+
+
+# Global Dead-Letter Queue handlers for failed tasks
+DLQ_KEY = "celery:dlq"
+DLQ_MAX_ENTRIES = 10000  # Limit DLQ size to prevent unbounded growth
+
+
+@task_failure.connect
+def handle_task_failure(sender, task_id, exception, args, kwargs, traceback, einfo, **kw):
+    """
+    Global handler for all failed tasks after max retries exhausted.
+    Stores failed task info in Redis sorted set for monitoring and replay.
+    """
+    try:
+        from src.config.redis import get_redis
+
+        redis = get_redis()
+        if not redis:
+            logging.error(f"DLQ: Redis unavailable, cannot store failed task {task_id}")
+            return
+
+        task_name = sender.name if sender else "unknown"
+        failed_at = datetime.now(UTC)
+
+        # Build failure record
+        failed_data = {
+            "task_id": task_id,
+            "task_name": task_name,
+            "args": _safe_serialize(args),
+            "kwargs": _safe_serialize(kwargs),
+            "exception_type": type(exception).__name__,
+            "exception_message": str(exception)[:500],
+            "traceback": str(einfo)[:2000] if einfo else None,
+            "failed_at": failed_at.isoformat(),
+        }
+
+        # Store in sorted set (score = timestamp for ordering)
+        redis.zadd(DLQ_KEY, {json.dumps(failed_data): failed_at.timestamp()})
+
+        # Trim old entries if over limit (keep most recent)
+        dlq_size = redis.zcard(DLQ_KEY)
+        if dlq_size > DLQ_MAX_ENTRIES:
+            redis.zremrangebyrank(DLQ_KEY, 0, dlq_size - DLQ_MAX_ENTRIES - 1)
+
+        logging.warning(f"DLQ: Stored failed task {task_name} (id={task_id}): {type(exception).__name__}")
+
+    except Exception as e:
+        # Don't let DLQ failures break task processing
+        logging.error(f"DLQ: Error storing failed task {task_id}: {e}")
+
+
+@task_retry.connect
+def handle_task_retry(sender, request, reason, einfo, **kw):
+    """Log task retries for monitoring and alerting."""
+    task_name = sender.name if sender else "unknown"
+    retry_count = request.retries if request else 0
+
+    logging.warning(
+        f"Celery task retry: {task_name} (id={request.id if request else 'unknown'}, "
+        f"attempt={retry_count + 1}): {reason}"
+    )
+
+
+def _safe_serialize(obj):
+    """Safely serialize args/kwargs for storage, handling non-JSON-serializable types."""
+    try:
+        # Test if it's JSON serializable
+        json.dumps(obj)
+        return obj
+    except (TypeError, ValueError):
+        # Fall back to string representation
+        return str(obj)[:1000]

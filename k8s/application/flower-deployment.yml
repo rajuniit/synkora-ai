@@ -1,0 +1,70 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: synkora-flower
+  namespace: synkora-production
+  labels:
+    app: synkora
+    component: flower
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: synkora
+      component: flower
+  template:
+    metadata:
+      labels:
+        app: synkora
+        component: flower
+    spec:
+      imagePullSecrets:
+      - name: ecr-registry-secret
+      containers:
+        - name: flower
+          image: IMAGE_PLACEHOLDER
+          imagePullPolicy: Always
+          command: ["celery"]
+          args:
+            - "-A"
+            - "src.celery_app"
+            - "flower"
+            - "--port=5555"
+            - "--address=0.0.0.0"
+          ports:
+            - containerPort: 5555
+              name: http
+              protocol: TCP
+          envFrom:
+          - configMapRef:
+              name: synkora-config
+          - secretRef:
+              name: synkora-secrets
+          resources:
+            requests:
+              memory: "256Mi"
+              cpu: "100m"
+            limits:
+              memory: "512Mi"
+              cpu: "500m"
+
+---
+
+apiVersion: v1
+kind: Service
+metadata:
+  name: synkora-flower
+  namespace: synkora-production
+  labels:
+    app: synkora
+    component: flower
+spec:
+  type: ClusterIP
+  selector:
+    app: synkora
+    component: flower
+  ports:
+    - port: 5555
+      targetPort: 5555
+      protocol: TCP
+      name: http

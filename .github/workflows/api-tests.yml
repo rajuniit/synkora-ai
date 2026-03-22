@@ -1,0 +1,153 @@
+name: Run API Tests
+
+on:
+  workflow_call:
+  workflow_dispatch:  # Allow manual trigger for local testing with act
+
+concurrency:
+  group: api-tests-${{ github.head_ref || github.run_id }}
+  cancel-in-progress: true
+
+jobs:
+  test:
+    name: API Tests
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        shell: bash
+        working-directory: api
+    services:
+      postgres:
+        image: pgvector/pgvector:pg16
+        env:
+          POSTGRES_USER: postgres
+          POSTGRES_PASSWORD: postgres
+          POSTGRES_DB: synkora_test
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd pg_isready
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
+
+      redis:
+        image: redis:7-alpine
+        ports:
+          - 6379:6379
+        options: >-
+          --health-cmd "redis-cli ping"
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Set up Python 3.11
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+
+      - name: Install uv
+        uses: astral-sh/setup-uv@v5
+        with:
+          enable-cache: true
+
+      - name: Install system dependencies for xmlsec
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y pkg-config libxml2-dev libxmlsec1-dev libxmlsec1-openssl
+
+      - name: Install dependencies
+        run: |
+          uv sync --extra dev --extra llm
+
+      - name: Create test environment file
+        run: |
+          cat > .env << EOF
+          APP_ENV=test
+          DB_HOST=localhost
+          DB_PORT=5432
+          DB_USERNAME=postgres
+          DB_PASSWORD=postgres
+          DB_DATABASE=synkora_test
+          DATABASE_URL=postgresql://postgres:postgres@localhost:5432/synkora_test
+          REDIS_URL=redis://localhost:6379/0
+          CELERY_BROKER_URL=redis://localhost:6379/1
+          CELERY_RESULT_BACKEND=redis://localhost:6379/2
+          SECRET_KEY=test-secret-key-for-ci
+          JWT_SECRET_KEY=test-jwt-secret-for-ci
+          JWT_ALGORITHM=HS256
+          ENCRYPTION_KEY=h4TKsK-67AUs1F54Rw5TbbEisyDbVfkOuMZk_q2G6Iw=
+          RATE_LIMIT_ENABLED=false
+          LOG_LEVEL=INFO
+          EOF
+
+      - name: Run unit tests
+        env:
+          APP_ENV: test
+          DB_HOST: localhost
+          DB_PORT: "5432"
+          DB_USERNAME: postgres
+          DB_PASSWORD: postgres
+          DB_DATABASE: synkora_test
+          DATABASE_URL: postgresql://postgres:postgres@localhost:5432/synkora_test
+          REDIS_URL: redis://localhost:6379/0
+          CELERY_BROKER_URL: redis://localhost:6379/1
+          CELERY_RESULT_BACKEND: redis://localhost:6379/2
+          SECRET_KEY: test-secret-key-for-ci
+          JWT_SECRET_KEY: test-jwt-secret-for-ci
+          ENCRYPTION_KEY: h4TKsK-67AUs1F54Rw5TbbEisyDbVfkOuMZk_q2G6Iw=
+          TESTING: true
+        run: |
+          uv run pytest tests/unit/ -v --color=yes --cov=src --cov-report=xml --cov-report=term --cov-report=html
+
+      - name: Run integration tests
+        env:
+          APP_ENV: test
+          DB_HOST: localhost
+          DB_PORT: "5432"
+          DB_USERNAME: postgres
+          DB_PASSWORD: postgres
+          DB_DATABASE: synkora_test
+          DATABASE_URL: postgresql://postgres:postgres@localhost:5432/synkora_test
+          REDIS_URL: redis://localhost:6379/0
+          CELERY_BROKER_URL: redis://localhost:6379/1
+          CELERY_RESULT_BACKEND: redis://localhost:6379/2
+          SECRET_KEY: test-secret-key-for-ci
+          JWT_SECRET_KEY: test-jwt-secret-for-ci
+          ENCRYPTION_KEY: h4TKsK-67AUs1F54Rw5TbbEisyDbVfkOuMZk_q2G6Iw=
+          TESTING: true
+        run: |
+          uv run pytest tests/integration/ -v --color=yes --cov=src --cov-append --cov-report=xml --cov-report=term --cov-report=html
+
+      - name: Generate coverage report
+        run: |
+          uv run coverage report --skip-empty | tee coverage-report.txt
+          # Extract coverage percentage
+          COVERAGE=$(uv run coverage report --skip-empty | grep "TOTAL" | awk '{print $NF}' | sed 's/%//')
+          echo "COVERAGE=$COVERAGE" >> $GITHUB_ENV
+          echo "Coverage: $COVERAGE%"
+
+      - name: Create coverage badge
+        if: github.ref == 'refs/heads/main'
+        uses: schneegans/dynamic-badges-action@v1.7.0
+        with:
+          auth: ${{ secrets.GIST_TOKEN }}
+          gistID: ${{ vars.COVERAGE_GIST_ID }}
+          filename: coverage-badge.json
+          label: coverage
+          message: ${{ env.COVERAGE }}%
+          valColorRange: ${{ env.COVERAGE }}
+          minColorRange: 0
+          maxColorRange: 100
+
+      - name: Upload coverage HTML report
+        uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: coverage-report-py3.11
+          path: htmlcov/
+          retention-days: 30

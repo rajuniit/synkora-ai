@@ -1,0 +1,253 @@
+# LLM Proxy Gateway - Isolated Deployment
+# This runs separately from the main platform to prevent resource contention during load tests
+
+apiVersion: v1
+kind: Namespace
+metadata:
+  name: load-testing
+  labels:
+    app.kubernetes.io/name: load-testing
+    app.kubernetes.io/component: proxy
+
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: llm-proxy
+  namespace: load-testing
+  labels:
+    app: llm-proxy
+    app.kubernetes.io/name: llm-proxy
+    app.kubernetes.io/component: proxy
+spec:
+  replicas: 3  # Start with 3, HPA will scale based on load
+  selector:
+    matchLabels:
+      app: llm-proxy
+  template:
+    metadata:
+      labels:
+        app: llm-proxy
+      annotations:
+        prometheus.io/scrape: "true"
+        prometheus.io/port: "8080"
+        prometheus.io/path: "/metrics"
+    spec:
+      # Ensure proxy pods don't run on same nodes as main platform
+      affinity:
+        podAntiAffinity:
+          preferredDuringSchedulingIgnoredDuringExecution:
+            - weight: 100
+              podAffinityTerm:
+                labelSelector:
+                  matchLabels:
+                    app: synkora-api
+                topologyKey: kubernetes.io/hostname
+        # Spread across availability zones
+        topologySpreadConstraints:
+          - maxSkew: 1
+            topologyKey: topology.kubernetes.io/zone
+            whenUnsatisfiable: ScheduleAnyway
+            labelSelector:
+              matchLabels:
+                app: llm-proxy
+
+      containers:
+        - name: llm-proxy
+          image: synkora/llm-proxy:latest
+          ports:
+            - containerPort: 8080
+              name: http
+
+          env:
+            - name: PROXY_MODE
+              value: "standalone"
+            - name: DATABASE_URL
+              valueFrom:
+                secretKeyRef:
+                  name: llm-proxy-secrets
+                  key: database-url
+            - name: REDIS_URL
+              valueFrom:
+                secretKeyRef:
+                  name: llm-proxy-secrets
+                  key: redis-url
+            - name: LOG_LEVEL
+              value: "info"
+            - name: WORKERS
+              value: "4"
+            - name: MAX_CONNECTIONS
+              value: "10000"
+
+          resources:
+            requests:
+              cpu: "500m"
+              memory: "512Mi"
+            limits:
+              cpu: "2000m"
+              memory: "2Gi"
+
+          livenessProbe:
+            httpGet:
+              path: /health
+              port: 8080
+            initialDelaySeconds: 10
+            periodSeconds: 10
+
+          readinessProbe:
+            httpGet:
+              path: /health
+              port: 8080
+            initialDelaySeconds: 5
+            periodSeconds: 5
+
+          # Security context
+          securityContext:
+            runAsNonRoot: true
+            runAsUser: 1000
+            readOnlyRootFilesystem: true
+            allowPrivilegeEscalation: false
+
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: llm-proxy
+  namespace: load-testing
+  labels:
+    app: llm-proxy
+spec:
+  type: ClusterIP
+  ports:
+    - port: 80
+      targetPort: 8080
+      protocol: TCP
+      name: http
+  selector:
+    app: llm-proxy
+
+---
+# External LoadBalancer for proxy access
+apiVersion: v1
+kind: Service
+metadata:
+  name: llm-proxy-external
+  namespace: load-testing
+  labels:
+    app: llm-proxy
+  annotations:
+    # For AWS
+    service.beta.kubernetes.io/aws-load-balancer-type: "nlb"
+    service.beta.kubernetes.io/aws-load-balancer-cross-zone-load-balancing-enabled: "true"
+    # For GCP
+    cloud.google.com/neg: '{"ingress": true}'
+spec:
+  type: LoadBalancer
+  ports:
+    - port: 443
+      targetPort: 8080
+      protocol: TCP
+      name: https
+  selector:
+    app: llm-proxy
+
+---
+# Horizontal Pod Autoscaler - scales based on CPU/memory
+apiVersion: autoscaling/v2
+kind: HorizontalPodAutoscaler
+metadata:
+  name: llm-proxy-hpa
+  namespace: load-testing
+spec:
+  scaleTargetRef:
+    apiVersion: apps/v1
+    kind: Deployment
+    name: llm-proxy
+  minReplicas: 3
+  maxReplicas: 50  # Can scale up to 50 pods during heavy load tests
+  metrics:
+    - type: Resource
+      resource:
+        name: cpu
+        target:
+          type: Utilization
+          averageUtilization: 70
+    - type: Resource
+      resource:
+        name: memory
+        target:
+          type: Utilization
+          averageUtilization: 80
+  behavior:
+    scaleUp:
+      stabilizationWindowSeconds: 30
+      policies:
+        - type: Percent
+          value: 100
+          periodSeconds: 30
+        - type: Pods
+          value: 10
+          periodSeconds: 30
+      selectPolicy: Max
+    scaleDown:
+      stabilizationWindowSeconds: 300
+      policies:
+        - type: Percent
+          value: 10
+          periodSeconds: 60
+
+---
+# Pod Disruption Budget - ensure availability during updates
+apiVersion: policy/v1
+kind: PodDisruptionBudget
+metadata:
+  name: llm-proxy-pdb
+  namespace: load-testing
+spec:
+  minAvailable: 2
+  selector:
+    matchLabels:
+      app: llm-proxy
+
+---
+# Network Policy - restrict traffic
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: llm-proxy-network-policy
+  namespace: load-testing
+spec:
+  podSelector:
+    matchLabels:
+      app: llm-proxy
+  policyTypes:
+    - Ingress
+    - Egress
+  ingress:
+    # Allow traffic from anywhere (public proxy)
+    - from: []
+      ports:
+        - protocol: TCP
+          port: 8080
+  egress:
+    # Allow DNS
+    - to: []
+      ports:
+        - protocol: UDP
+          port: 53
+    # Allow Redis (for rate limiting)
+    - to:
+        - namespaceSelector:
+            matchLabels:
+              name: redis
+      ports:
+        - protocol: TCP
+          port: 6379
+    # Allow database (for config lookups)
+    - to:
+        - namespaceSelector:
+            matchLabels:
+              name: database
+      ports:
+        - protocol: TCP
+          port: 5432

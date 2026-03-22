@@ -1,0 +1,32 @@
+# Development Dockerfile for Synkora Web
+FROM node:20-alpine
+
+WORKDIR /app/web
+
+# Install dependencies
+RUN apk add --no-cache tzdata curl
+
+# Enable pnpm
+RUN corepack enable
+ENV PNPM_HOME="/pnpm"
+ENV PATH="$PNPM_HOME:$PATH"
+
+# Copy package files
+COPY package.json pnpm-lock.yaml ./
+
+# Install dependencies
+RUN pnpm install
+
+# Copy application code
+COPY . .
+
+# Set environment variables
+ENV NODE_ENV=development
+ENV PORT=3000
+ENV NEXT_TELEMETRY_DISABLED=1
+
+# Expose port
+EXPOSE 3000
+
+# Default command for development (with hot reload)
+CMD ["pnpm", "dev"]

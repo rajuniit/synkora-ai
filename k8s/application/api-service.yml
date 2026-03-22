@@ -1,0 +1,22 @@
+---
+# ClusterIP Service for API
+apiVersion: v1
+kind: Service
+metadata:
+  name: synkora-api
+  namespace: synkora-production
+  labels:
+    app: synkora
+    component: api
+spec:
+  selector:
+    app: synkora
+    component: api
+  ports:
+  - name: http
+    protocol: TCP
+    port: 5001
+    targetPort: 5001
+  type: ClusterIP
+
+# Note: Redis Service is already provided in `redis-deployment.yml` as `synkora-redis`.

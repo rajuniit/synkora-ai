@@ -1,0 +1,54 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: synkora-celery-worker
+  namespace: synkora-production
+  labels:
+    app: synkora
+    component: celery-worker
+    version: v1
+spec:
+  replicas: 1
+  strategy:
+    type: RollingUpdate
+    rollingUpdate:
+      maxSurge: 1
+      maxUnavailable: 0
+  selector:
+    matchLabels:
+      app: synkora
+      component: celery-worker
+  template:
+    metadata:
+      labels:
+        app: synkora
+        component: celery-worker
+        version: v1
+    spec:
+      imagePullSecrets:
+      - name: ecr-registry-secret
+      containers:
+      - name: celery-worker
+        image: IMAGE_PLACEHOLDER
+        imagePullPolicy: Always
+        command: ["celery"]
+        args: ["-A", "src.celery_app", "worker", "--loglevel=info", "-Q", "default,email,notifications,agents"]
+        envFrom:
+        - configMapRef:
+            name: synkora-config
+        - secretRef:
+            name: synkora-secrets
+        resources:
+          requests:
+            memory: "256Mi"
+            cpu: "100m"
+          limits:
+            memory: "1Gi"
+            cpu: "1000m"
+        volumeMounts:
+        - name: tmp
+          mountPath: /tmp
+      volumes:
+      - name: tmp
+        emptyDir:
+          sizeLimit: 20Gi

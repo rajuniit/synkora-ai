@@ -1,0 +1,294 @@
+# Byte-compiled / optimized / DLL files
+__pycache__/
+*.py[cod]
+*$py.class
+
+# C extensions
+*.so
+
+# Distribution / packaging
+.Python
+build/
+develop-eggs/
+dist/
+downloads/
+eggs/
+.eggs/
+/lib/
+lib64/
+parts/
+sdist/
+var/
+wheels/
+pip-wheel-metadata/
+share/python-wheels/
+*.egg-info/
+.installed.cfg
+*.egg
+MANIFEST
+
+# PyInstaller
+*.manifest
+*.spec
+
+# Installer logs
+pip-log.txt
+pip-delete-this-directory.txt
+
+# Unit test / coverage reports
+htmlcov/
+.tox/
+.nox/
+.coverage
+.coverage.*
+.cache
+nosetests.xml
+coverage.xml
+coverage.json
+*.cover
+*.py,cover
+.hypothesis/
+.pytest_cache/
+
+# Translations
+*.mo
+*.pot
+
+# Django stuff:
+*.log
+local_settings.py
+db.sqlite3
+db.sqlite3-journal
+
+# Flask stuff:
+instance/
+.webassets-cache
+
+# Scrapy stuff:
+.scrapy
+
+# Sphinx documentation
+docs/_build/
+
+# PyBuilder
+target/
+
+# Jupyter Notebook
+.ipynb_checkpoints
+
+# IPython
+profile_default/
+ipython_config.py
+
+# pyenv
+.python-version
+
+# pipenv
+#Pipfile.lock
+
+# PEP 582
+__pypackages__/
+
+# Celery stuff
+celerybeat-schedule
+celerybeat.pid
+
+# SageMath parsed files
+*.sage.py
+
+# Environments
+.env
+.env.local
+.env.*.local
+.venv
+env/
+venv/
+ENV/
+env.bak/
+venv.bak/
+.conda/
+
+# Spyder project settings
+.spyderproject
+.spyproject
+
+# Rope project settings
+.ropeproject
+
+# mkdocs documentation
+/site
+
+# Type checking
+.mypy_cache/
+.dmypy.json
+dmypy.json
+.pyre/
+
+# IDEs
+.idea/
+.vscode/
+*.swp
+*.swo
+*~
+.DS_Store
+
+# API specific
+api/.env
+api/.env.local
+api/.env.test.local
+api/.vscode/
+api/.idea/
+
+# Web specific
+web/.env
+web/.env.local
+web/.env.*.local
+web/.next/
+web/out/
+web/build/
+web/.vscode/
+web/.idea/
+web/node_modules/
+
+# Next.js
+.next/
+out/
+
+# PWA generated files
+web/public/sw.js
+web/public/sw.js.map
+web/public/workbox-*.js
+web/public/workbox-*.js.map
+web/public/fallback-*.js
+
+# Node
+node_modules/
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+.pnpm-debug.log*
+.pnpm-store/
+
+# Docker volumes
+docker/volumes/
+!docker/volumes/.gitkeep
+docker/nginx/ssl/*
+!docker/nginx/ssl/.gitkeep
+docker/nginx/conf.d/default.conf
+docker/middleware.env
+docker/docker-compose.override.yaml
+
+# Docker Compose
+docker-compose.override.yml
+docker-compose.override.yaml
+
+# Kubernetes
+k8s/secrets/
+*.kubeconfig
+
+# Helm
+helm/*/charts/
+helm/*/Chart.lock
+helm/*/*.tgz
+
+# Terraform
+*.tfstate
+*.tfstate.*
+.terraform/
+.terraform.lock.hcl
+
+# AWS
+.aws/
+*.pem
+
+# Logs
+logs/
+*.log
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+
+# Runtime data
+pids/
+*.pid
+*.seed
+*.pid.lock
+
+# Testing
+.coverage
+.pytest_cache/
+coverage/
+*.cover
+
+# Temporary files
+tmp/
+temp/
+*.tmp
+
+# OS
+.DS_Store
+.DS_Store?
+._*
+.Spotlight-V100
+.Trashes
+ehthumbs.db
+Thumbs.db
+
+# Backup files
+*.bak
+*.backup
+*.old
+*~
+
+# Database
+*.db
+*.sqlite
+*.sqlite3
+
+# Secrets and credentials
+secrets/
+*.key
+*.crt
+*.pem
+credentials.json
+service-account.json
+
+# Local configuration
+local_settings.py
+.env.backup
+
+# Build artifacts
+build/
+dist/
+*.egg-info/
+
+# Python virtual environments
+venv/
+ENV/
+env/
+
+# Alembic
+api/migrations/versions/*.pyc
+
+# Storage
+uploads/
+media/
+
+# Cache
+.cache/
+*.cache
+
+# Misc
+.history/
+.roo/
+.serena/
+.playwright-mcp/
+.ruff_cache/
+
+# Ensure .env files are always excluded
+**/.env
+**/.env.local
+**/.env.*.local
+!**/.env.example
+.claude
+agent-docs/

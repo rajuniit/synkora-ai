@@ -1,0 +1,62 @@
+# ============================================================================
+# K6 Runner - Dockerfile
+# ============================================================================
+# Container for running K6 load tests with Python orchestration.
+#
+# Features:
+# - K6 binary for load test execution
+# - Python for script generation and orchestration
+# - Redis client for result streaming
+#
+# Build: docker build -f Dockerfile.k6-runner -t synkora/k6-runner .
+# ============================================================================
+
+FROM python:3.11-slim-bookworm
+
+WORKDIR /app
+
+# Install system dependencies and K6 (using binary for ARM support)
+RUN apt-get update && apt-get install -y --no-install-recommends \
+    curl \
+    ca-certificates \
+    && rm -rf /var/lib/apt/lists/* \
+    && ARCH=$(dpkg --print-architecture) \
+    && K6_VERSION="v0.49.0" \
+    && if [ "$ARCH" = "arm64" ]; then \
+         curl -fsSL "https://github.com/grafana/k6/releases/download/${K6_VERSION}/k6-${K6_VERSION}-linux-arm64.tar.gz" | tar xz -C /tmp \
+         && mv /tmp/k6-${K6_VERSION}-linux-arm64/k6 /usr/local/bin/; \
+       else \
+         curl -fsSL "https://github.com/grafana/k6/releases/download/${K6_VERSION}/k6-${K6_VERSION}-linux-amd64.tar.gz" | tar xz -C /tmp \
+         && mv /tmp/k6-${K6_VERSION}-linux-amd64/k6 /usr/local/bin/; \
+       fi \
+    && chmod +x /usr/local/bin/k6 \
+    && rm -rf /tmp/k6-*
+
+# Install Python dependencies
+RUN pip install --no-cache-dir \
+    redis \
+    httpx \
+    pydantic
+
+# Create directories
+RUN mkdir -p /scripts /results /app
+
+# Copy the K6 runner script
+COPY k6_runner_service.py ./
+
+# Create non-root user
+RUN groupadd -r k6runner && useradd -r -g k6runner k6runner \
+    && chown -R k6runner:k6runner /app /scripts /results
+
+USER k6runner
+
+# Environment variables
+ENV PYTHONUNBUFFERED=1
+ENV K6_SCRIPTS_DIR=/scripts
+ENV K6_RESULTS_DIR=/results
+
+# Verify K6 installation
+RUN k6 version
+
+# Default command - run the K6 runner service
+CMD ["python", "k6_runner_service.py"]

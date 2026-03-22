@@ -1,0 +1,559 @@
+# ============================================================================
+# LOCAL DEVELOPMENT: defaults below are for convenience only.
+# PRODUCTION: override every variable marked "DEV ONLY" in a .env file.
+#
+# Required env vars for production (no safe defaults):
+#   SECRET_KEY=<random 64-char hex>
+#   JWT_SECRET_KEY=<random 64-char hex>
+#   ENCRYPTION_KEY=<valid Fernet key>
+#   POSTGRES_PASSWORD=<strong password>
+#   MINIO_ROOT_PASSWORD=<strong password>
+#   LANGFUSE_ENCRYPTION_KEY=<64 hex chars — must NOT be all zeros>
+#   LANGFUSE_NEXTAUTH_SECRET=<random secret>
+#   LANGFUSE_SALT=<random salt>
+#   LANGFUSE_REDIS_PASSWORD=<strong password>
+# ============================================================================
+
+services:
+  # PostgreSQL Database
+  postgres:
+    image: pgvector/pgvector:pg14
+    container_name: synkora-postgres
+    environment:
+      POSTGRES_DB: ${POSTGRES_DB:-synkora}
+      POSTGRES_USER: ${POSTGRES_USER:-synkora}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-synkora}
+      PGDATA: /var/lib/postgresql/data/pgdata
+    ports:
+      - "5438:5432"
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER:-synkora}"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    networks:
+      - synkora-network
+
+  # PostgreSQL Test Database
+  postgres-test:
+    image: pgvector/pgvector:pg14
+    container_name: synkora-postgres-test
+    environment:
+      POSTGRES_DB: synkora_test
+      POSTGRES_USER: ${POSTGRES_USER:-synkora}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-synkora}
+      PGDATA: /var/lib/postgresql/data/pgdata
+    ports:
+      - "5439:5432"
+    tmpfs:
+      - /var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER:-synkora}"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    networks:
+      - synkora-network
+
+  # Redis Cache
+  redis:
+    image: redis:7-alpine
+    container_name: synkora-redis
+    # Production-ready Redis config:
+    # - 2GB memory limit (adjust for production)
+    # - allkeys-lfu: Least Frequently Used eviction (better than LRU for caches)
+    # - lazyfree: Background memory cleanup to avoid blocking
+    command: >
+      sh -c "redis-server
+      --appendonly yes
+      --maxmemory 2gb
+      --maxmemory-policy allkeys-lfu
+      --lazyfree-lazy-eviction yes
+      --lazyfree-lazy-expire yes
+      --tcp-keepalive 300
+      --timeout 0
+      $${REDIS_PASSWORD:+--requirepass $$REDIS_PASSWORD}"
+    ports:
+      # DEV ONLY: remove or restrict this port binding in production
+      - "127.0.0.1:6379:6379"
+    volumes:
+      - redis_data:/data
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    networks:
+      - synkora-network
+
+  # Qdrant Vector Database
+  qdrant:
+    image: qdrant/qdrant:latest
+    container_name: synkora-qdrant
+    ports:
+      - "6333:6333"
+      - "6334:6334"
+    volumes:
+      - qdrant_data:/qdrant/storage
+    environment:
+      - QDRANT__SERVICE__GRPC_PORT=6334
+    networks:
+      - synkora-network
+
+  # Elasticsearch
+  elasticsearch:
+    image: docker.elastic.co/elasticsearch/elasticsearch:8.15.5
+    platform: linux/amd64
+    container_name: synkora-elasticsearch
+    environment:
+      - discovery.type=single-node
+      - xpack.security.enabled=false
+      - "ES_JAVA_OPTS=-Xms512m -Xmx512m"
+      - bootstrap.memory_lock=true
+    ulimits:
+      memlock:
+        soft: -1
+        hard: -1
+    ports:
+      - "9200:9200"
+      - "9300:9300"
+    volumes:
+      - elasticsearch_data:/usr/share/elasticsearch/data
+    healthcheck:
+      test:
+        ["CMD-SHELL", "curl -f http://localhost:9200/_cluster/health || exit 1"]
+      interval: 30s
+      timeout: 10s
+      retries: 5
+      start_period: 60s
+    networks:
+      - synkora-network
+
+  # Langfuse PostgreSQL Database
+  langfuse-postgres:
+    image: postgres:17-alpine
+    container_name: synkora-langfuse-postgres
+    environment:
+      POSTGRES_DB: langfuse
+      POSTGRES_USER: langfuse
+      POSTGRES_PASSWORD: langfuse
+      TZ: UTC
+      PGTZ: UTC
+    ports:
+      - "5440:5432"
+    volumes:
+      - langfuse_postgres_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U langfuse"]
+      interval: 3s
+      timeout: 3s
+      retries: 10
+    networks:
+      - synkora-network
+
+  # Langfuse ClickHouse Database
+  langfuse-clickhouse:
+    image: clickhouse/clickhouse-server:latest
+    container_name: synkora-langfuse-clickhouse
+    user: "101:101"
+    environment:
+      CLICKHOUSE_DB: default
+      CLICKHOUSE_USER: langfuse_clickhouse
+      CLICKHOUSE_PASSWORD: langfuse_clickhouse
+    ports:
+      - "8123:8123"
+      - "9002:9000"
+    volumes:
+      - langfuse_clickhouse_data:/var/lib/clickhouse
+      - langfuse_clickhouse_logs:/var/log/clickhouse-server
+    healthcheck:
+      test: wget --no-verbose --tries=1 --spider http://localhost:8123/ping || exit 1
+      interval: 5s
+      timeout: 5s
+      retries: 10
+      start_period: 1s
+    networks:
+      - synkora-network
+
+  # Langfuse Redis (separate from main Redis)
+  langfuse-redis:
+    image: redis:7-alpine
+    container_name: synkora-langfuse-redis
+    command: redis-server --requirepass ${LANGFUSE_REDIS_PASSWORD:-langfuse_redis_dev}
+    ports:
+      - "6380:6379"
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 3s
+      timeout: 10s
+      retries: 10
+    networks:
+      - synkora-network
+
+  # Langfuse Worker
+  langfuse-worker:
+    image: langfuse/langfuse-worker:3
+    container_name: synkora-langfuse-worker
+    restart: always
+    depends_on:
+      langfuse-postgres:
+        condition: service_healthy
+      langfuse-clickhouse:
+        condition: service_healthy
+      langfuse-redis:
+        condition: service_healthy
+      minio:
+        condition: service_healthy
+    ports:
+      - "3030:3030"
+    environment:
+      - NEXTAUTH_URL=http://localhost:3001
+      - DATABASE_URL=postgresql://langfuse:langfuse@langfuse-postgres:5432/langfuse
+      - SALT=${LANGFUSE_SALT:-langfuse_dev_salt}
+      - ENCRYPTION_KEY=${LANGFUSE_ENCRYPTION_KEY:-deadbeefdeadbeefdeadbeefdeadbeefdeadbeefdeadbeefdeadbeefdeadbeef}
+      - TELEMETRY_ENABLED=false
+      - LANGFUSE_ENABLE_EXPERIMENTAL_FEATURES=true
+      - CLICKHOUSE_MIGRATION_URL=clickhouse://langfuse_clickhouse:langfuse_clickhouse@langfuse-clickhouse:9000
+      - CLICKHOUSE_URL=http://langfuse-clickhouse:8123
+      - CLICKHOUSE_USER=langfuse_clickhouse
+      - CLICKHOUSE_PASSWORD=langfuse_clickhouse
+      - CLICKHOUSE_CLUSTER_ENABLED=false
+      - LANGFUSE_S3_EVENT_UPLOAD_BUCKET=langfuse
+      - LANGFUSE_S3_EVENT_UPLOAD_REGION=auto
+      - LANGFUSE_S3_EVENT_UPLOAD_ACCESS_KEY_ID=${MINIO_ROOT_USER:-minioadmin}
+      - LANGFUSE_S3_EVENT_UPLOAD_SECRET_ACCESS_KEY=${MINIO_ROOT_PASSWORD:-minioadmin_dev_password}
+      - LANGFUSE_S3_EVENT_UPLOAD_ENDPOINT=http://minio:9000
+      - LANGFUSE_S3_EVENT_UPLOAD_FORCE_PATH_STYLE=true
+      - LANGFUSE_S3_EVENT_UPLOAD_PREFIX=events/
+      - LANGFUSE_S3_MEDIA_UPLOAD_BUCKET=langfuse
+      - LANGFUSE_S3_MEDIA_UPLOAD_REGION=auto
+      - LANGFUSE_S3_MEDIA_UPLOAD_ACCESS_KEY_ID=${MINIO_ROOT_USER:-minioadmin}
+      - LANGFUSE_S3_MEDIA_UPLOAD_SECRET_ACCESS_KEY=${MINIO_ROOT_PASSWORD:-minioadmin_dev_password}
+      - LANGFUSE_S3_MEDIA_UPLOAD_ENDPOINT=http://minio:9000
+      - LANGFUSE_S3_MEDIA_UPLOAD_FORCE_PATH_STYLE=true
+      - LANGFUSE_S3_MEDIA_UPLOAD_PREFIX=media/
+      - REDIS_HOST=langfuse-redis
+      - REDIS_PORT=6379
+      - REDIS_AUTH=${LANGFUSE_REDIS_PASSWORD:-langfuse_redis_dev}
+    networks:
+      - synkora-network
+
+  # Langfuse Web UI
+  langfuse-web:
+    image: langfuse/langfuse:3
+    container_name: synkora-langfuse-web
+    restart: always
+    depends_on:
+      langfuse-postgres:
+        condition: service_healthy
+      langfuse-clickhouse:
+        condition: service_healthy
+      langfuse-redis:
+        condition: service_healthy
+      minio:
+        condition: service_healthy
+    ports:
+      - "3001:3000"
+    environment:
+      - NEXTAUTH_URL=http://localhost:3001
+      - NEXTAUTH_SECRET=${LANGFUSE_NEXTAUTH_SECRET:-langfuse_dev_secret_change_in_prod}
+      - DATABASE_URL=postgresql://langfuse:langfuse@langfuse-postgres:5432/langfuse
+      - SALT=${LANGFUSE_SALT:-langfuse_dev_salt}
+      - ENCRYPTION_KEY=${LANGFUSE_ENCRYPTION_KEY:-deadbeefdeadbeefdeadbeefdeadbeefdeadbeefdeadbeefdeadbeefdeadbeef}
+      - TELEMETRY_ENABLED=false
+      - LANGFUSE_ENABLE_EXPERIMENTAL_FEATURES=true
+      - CLICKHOUSE_MIGRATION_URL=clickhouse://langfuse_clickhouse:langfuse_clickhouse@langfuse-clickhouse:9000
+      - CLICKHOUSE_URL=http://langfuse-clickhouse:8123
+      - CLICKHOUSE_USER=langfuse_clickhouse
+      - CLICKHOUSE_PASSWORD=langfuse_clickhouse
+      - CLICKHOUSE_CLUSTER_ENABLED=false
+      - LANGFUSE_S3_EVENT_UPLOAD_BUCKET=langfuse
+      - LANGFUSE_S3_EVENT_UPLOAD_REGION=auto
+      - LANGFUSE_S3_EVENT_UPLOAD_ACCESS_KEY_ID=${MINIO_ROOT_USER:-minioadmin}
+      - LANGFUSE_S3_EVENT_UPLOAD_SECRET_ACCESS_KEY=${MINIO_ROOT_PASSWORD:-minioadmin_dev_password}
+      - LANGFUSE_S3_EVENT_UPLOAD_ENDPOINT=http://minio:9000
+      - LANGFUSE_S3_EVENT_UPLOAD_FORCE_PATH_STYLE=true
+      - LANGFUSE_S3_EVENT_UPLOAD_PREFIX=events/
+      - LANGFUSE_S3_MEDIA_UPLOAD_BUCKET=langfuse
+      - LANGFUSE_S3_MEDIA_UPLOAD_REGION=auto
+      - LANGFUSE_S3_MEDIA_UPLOAD_ACCESS_KEY_ID=${MINIO_ROOT_USER:-minioadmin}
+      - LANGFUSE_S3_MEDIA_UPLOAD_SECRET_ACCESS_KEY=${MINIO_ROOT_PASSWORD:-minioadmin_dev_password}
+      - LANGFUSE_S3_MEDIA_UPLOAD_ENDPOINT=http://minio:9000
+      - LANGFUSE_S3_MEDIA_UPLOAD_FORCE_PATH_STYLE=true
+      - LANGFUSE_S3_MEDIA_UPLOAD_PREFIX=media/
+      - REDIS_HOST=langfuse-redis
+      - REDIS_PORT=6379
+      - REDIS_AUTH=${LANGFUSE_REDIS_PASSWORD:-langfuse_redis_dev}
+    networks:
+      - synkora-network
+
+  # MinIO S3-Compatible Storage
+  minio:
+    image: minio/minio:latest
+    container_name: synkora-minio
+    command: server /data --console-address ":9001"
+    ports:
+      - "9000:9000"
+      - "9001:9001"
+    environment:
+      MINIO_ROOT_USER: ${MINIO_ROOT_USER:-minioadmin}           # DEV ONLY default
+      MINIO_ROOT_PASSWORD: ${MINIO_ROOT_PASSWORD:-minioadmin}   # DEV ONLY — change in production
+      MINIO_SERVER_URL: "http://localhost:9000"
+    volumes:
+      - minio_data:/data
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:9000/minio/health/live"]
+      interval: 30s
+      timeout: 20s
+      retries: 3
+    networks:
+      - synkora-network
+
+  # MinIO Client - Create buckets on startup
+  minio-init:
+    image: minio/mc:latest
+    container_name: synkora-minio-init
+    depends_on:
+      minio:
+        condition: service_healthy
+    entrypoint: >
+      /bin/sh -c "
+      /usr/bin/mc alias set myminio http://minio:9000 ${MINIO_ROOT_USER:-minioadmin} ${MINIO_ROOT_PASSWORD:-minioadmin};
+      /usr/bin/mc mb myminio/synkora-storage --ignore-existing;
+      /usr/bin/mc mb myminio/langfuse --ignore-existing;
+      exit 0;
+      "
+    networks:
+      - synkora-network
+
+  # API Service
+  api:
+    build:
+      context: ./api
+      dockerfile: Dockerfile.dev
+    container_name: synkora-api
+    env_file:
+      - ./api/.env
+    environment:
+      - DB_HOST=postgres
+      - PYTHONUNBUFFERED=1
+      # Workspace Settings (uses /tmp which is already writable)
+      - WORKSPACE_BASE_PATH=/tmp/synkora/workspaces
+      - WORKSPACE_TTL_HOURS=24
+      - WORKSPACE_MAX_SIZE_MB=2000
+    volumes:
+      - ./api:/app/api
+      - /app/api/.venv
+      # Mount SSH keys from host machine for git operations
+      - ${HOME}/.ssh:/root/.ssh:ro
+    ports:
+      - "5001:5001"
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+      qdrant:
+        condition: service_started
+      elasticsearch:
+        condition: service_healthy
+      minio:
+        condition: service_healthy
+    networks:
+      - synkora-network
+
+  # Celery Worker - Default queue
+  celery-worker:
+    build:
+      context: ./api
+      dockerfile: Dockerfile.dev
+    container_name: synkora-celery-worker
+    command: celery -A src.celery_app worker --loglevel=info --concurrency=${CELERY_CONCURRENCY:-4} -Q default,email,notifications,agents
+    env_file:
+      - ./api/.env
+    environment:
+      - DB_HOST=postgres
+      - PYTHONUNBUFFERED=1
+      - CELERY_CONCURRENCY=${CELERY_CONCURRENCY:-4}
+      # Workspace Settings (uses /tmp which is already writable)
+      - WORKSPACE_BASE_PATH=/tmp/synkora/workspaces
+      - WORKSPACE_TTL_HOURS=24
+      - WORKSPACE_MAX_SIZE_MB=2000
+    volumes:
+      - ./api:/app/api
+      - /app/api/.venv
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    networks:
+      - synkora-network
+
+  # Celery Worker - Billing queue (dedicated for critical billing tasks)
+  celery-worker-billing:
+    build:
+      context: ./api
+      dockerfile: Dockerfile.dev
+    container_name: synkora-celery-worker-billing
+    command: celery -A src.celery_app worker --loglevel=info --concurrency=2 -Q billing
+    env_file:
+      - ./api/.env
+    environment:
+      - DB_HOST=postgres
+      - PYTHONUNBUFFERED=1
+      # Workspace Settings (uses /tmp which is already writable)
+      - WORKSPACE_BASE_PATH=/tmp/synkora/workspaces
+      - WORKSPACE_TTL_HOURS=24
+    volumes:
+      - ./api:/app/api
+      - /app/api/.venv
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    networks:
+      - synkora-network
+
+  # Celery Beat Scheduler
+  celery-beat:
+    build:
+      context: ./api
+      dockerfile: Dockerfile.dev
+    container_name: synkora-celery-beat
+    command: celery -A src.celery_app beat --loglevel=info
+    env_file:
+      - ./api/.env
+    environment:
+      - DB_HOST=postgres
+      - PYTHONUNBUFFERED=1
+      # Workspace Settings (uses /tmp which is already writable)
+      - WORKSPACE_BASE_PATH=/tmp/synkora/workspaces
+      - WORKSPACE_TTL_HOURS=24
+    volumes:
+      - ./api:/app/api
+      - /app/api/.venv
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    networks:
+      - synkora-network
+
+  # Bot Worker - Manages Slack/Telegram bot connections at scale
+  bot-worker:
+    build:
+      context: ./api
+      dockerfile: Dockerfile.dev
+    container_name: synkora-bot-worker
+    command: python -m src.bot_worker.main
+    env_file:
+      - ./api/.env
+    environment:
+      - DB_HOST=postgres
+      - PYTHONUNBUFFERED=1
+      - BOT_WORKER_CAPACITY=1000
+      - BOT_WORKER_HEALTH_PORT=8080
+    volumes:
+      - ./api:/app/api
+      - /app/api/.venv
+    ports:
+      - "8080:8080"
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8080/healthz"]
+      interval: 10s
+      timeout: 5s
+      retries: 3
+      start_period: 10s
+    networks:
+      - synkora-network
+
+  # Web Frontend Service
+  # web:
+  #   build:
+  #     context: ./web
+  #     dockerfile: Dockerfile.dev
+  #   container_name: synkora-web
+  #   env_file:
+  #     - ./web/.env
+  #   environment:
+  #     - NODE_ENV=development
+  #     - PORT=3000
+  #     - NEXT_TELEMETRY_DISABLED=1
+  #   volumes:
+  #     - ./web:/app/web
+  #     - web_node_modules:/app/web/node_modules
+  #     - /app/web/.next
+  #   ports:
+  #     - "3005:3000"
+  #   depends_on:
+  #     - api
+  #   networks:
+  #     - synkora-network
+
+  # Documentation Site
+  docs:
+    build:
+      context: ./docs
+      dockerfile: Dockerfile.dev
+    container_name: synkora-docs
+    volumes:
+      - ./docs:/app
+      - docs_node_modules:/app/node_modules
+      - /app/.docusaurus
+      - /app/build
+    ports:
+      - "3002:3000"
+    networks:
+      - synkora-network
+
+  # Documentation Site (Production - nginx)
+  # docs-prod:
+  #   build:
+  #     context: ./docs
+  #     dockerfile: Dockerfile
+  #   container_name: synkora-docs-prod
+  #   ports:
+  #     - "3002:80"
+  #   healthcheck:
+  #     test: ["CMD", "wget", "--no-verbose", "--tries=1", "--spider", "http://localhost:80/"]
+  #     interval: 30s
+  #     timeout: 3s
+  #     retries: 3
+  #   networks:
+  #     - synkora-network
+
+volumes:
+  postgres_data:
+    driver: local
+  redis_data:
+    driver: local
+  qdrant_data:
+    driver: local
+  elasticsearch_data:
+    driver: local
+  minio_data:
+    driver: local
+  langfuse_postgres_data:
+    driver: local
+  langfuse_clickhouse_data:
+    driver: local
+  langfuse_clickhouse_logs:
+    driver: local
+  web_node_modules:
+    driver: local
+  docs_node_modules:
+    driver: local
+
+networks:
+  synkora-network:
+    driver: bridge

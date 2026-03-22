@@ -1,0 +1,17 @@
+raju:
+  name: Raju Mazumder
+  title: Creator of Synkora
+  url: https://linkedin.com/in/rajumazumder
+  image_url: /img/authors/synkora-team.svg
+
+synkora:
+  name: Synkora Team
+  title: Synkora Engineering
+  url: https://github.com/rajuniit/synkora-ai
+  image_url: /img/authors/synkora-team.svg
+
+engineering:
+  name: Engineering Team
+  title: Synkora Engineering
+  url: https://github.com/rajuniit/synkora-ai
+  image_url: /img/authors/engineering-team.svg

@@ -1,0 +1,104 @@
+# ============================================================================
+# LLM Proxy Gateway - Dockerfile
+# ============================================================================
+# Lightweight container for the LLM Proxy service.
+# Provides mock LLM endpoints for load testing without real API costs.
+#
+# Build: docker build -f Dockerfile.llm-proxy -t synkora/llm-proxy .
+# Run:   docker run -p 8080:8080 synkora/llm-proxy
+# ============================================================================
+
+FROM python:3.11-slim-bookworm as builder
+
+WORKDIR /app
+
+# Install build dependencies
+RUN apt-get update && apt-get install -y --no-install-recommends \
+    gcc \
+    g++ \
+    make \
+    python3-dev \
+    libpq-dev \
+    && rm -rf /var/lib/apt/lists/*
+
+# Install uv for fast dependency management
+ENV UV_VERSION=0.5.11
+RUN pip install --no-cache-dir uv==${UV_VERSION}
+
+# Copy dependency files
+COPY pyproject.toml uv.lock ./
+
+# Install only required dependencies (no dev dependencies)
+RUN uv pip install --system --no-cache \
+    fastapi \
+    uvicorn \
+    sqlalchemy \
+    asyncpg \
+    psycopg2-binary \
+    redis \
+    pydantic \
+    pydantic-settings \
+    python-multipart \
+    cryptography
+
+# ============================================================================
+# Production image
+# ============================================================================
+FROM python:3.11-slim-bookworm
+
+WORKDIR /app
+
+# Install runtime dependencies only
+RUN apt-get update && apt-get install -y --no-install-recommends \
+    libpq5 \
+    curl \
+    && rm -rf /var/lib/apt/lists/*
+
+# Create non-root user for security (use existing proxy group if it exists)
+RUN groupadd -r llmproxy || true && useradd -r -g llmproxy llmproxy || true
+
+# Copy installed packages from builder
+COPY --from=builder /usr/local/lib/python3.11/site-packages /usr/local/lib/python3.11/site-packages
+COPY --from=builder /usr/local/bin /usr/local/bin
+
+# Copy application code
+COPY src/core/ ./src/core/
+COPY src/config/ ./src/config/
+COPY src/models/base.py ./src/models/base.py
+COPY src/models/proxy_config.py ./src/models/proxy_config.py
+COPY src/models/__init__.py ./src/models/__init__.py
+COPY src/services/load_testing/ ./src/services/load_testing/
+COPY src/services/agents/security.py ./src/services/agents/security.py
+COPY src/controllers/llm_proxy.py ./src/controllers/llm_proxy.py
+COPY src/schemas/load_testing.py ./src/schemas/load_testing.py
+
+# Copy the standalone entrypoint
+COPY llm_proxy_entrypoint.py ./
+
+# Create __init__.py files for proper module structure
+RUN touch ./src/__init__.py && \
+    touch ./src/services/__init__.py && \
+    touch ./src/services/agents/__init__.py && \
+    touch ./src/controllers/__init__.py && \
+    touch ./src/schemas/__init__.py
+
+# Set ownership
+RUN chown -R llmproxy:llmproxy /app
+
+USER llmproxy
+
+# Environment variables
+ENV PYTHONPATH=/app
+ENV PYTHONUNBUFFERED=1
+ENV PYTHONDONTWRITEBYTECODE=1
+ENV WORKERS=4
+ENV PORT=8080
+ENV LOG_LEVEL=info
+
+EXPOSE 8080
+
+# Health check
+HEALTHCHECK --interval=30s --timeout=10s --start-period=10s --retries=3 \
+    CMD curl -f http://localhost:8080/health || exit 1
+
+CMD ["python", "llm_proxy_entrypoint.py"]
