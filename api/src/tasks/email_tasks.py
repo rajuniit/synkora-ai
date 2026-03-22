@@ -328,7 +328,12 @@ def send_bulk_emails_task(
 
 @celery_app.task(name="send_team_invitation_email_task", bind=True, max_retries=3, default_retry_delay=60)
 def send_team_invitation_email_task(
-    self, tenant_id: str, to_email: str, inviter_name: str, invitation_token: str, base_url: str = "http://localhost:3005"
+    self,
+    tenant_id: str,
+    to_email: str,
+    inviter_name: str,
+    invitation_token: str,
+    base_url: str = "http://localhost:3005",
 ) -> dict[str, Any]:
     """
     Send team invitation email.

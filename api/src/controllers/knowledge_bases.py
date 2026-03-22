@@ -463,9 +463,7 @@ async def get_knowledge_base_stats(
             raise HTTPException(status_code=404, detail="Knowledge base not found")
 
         # Get data sources (limit to prevent loading thousands of rows)
-        result = await db.execute(
-            select(DataSource).filter(DataSource.knowledge_base_id == kb_id).limit(500)
-        )
+        result = await db.execute(select(DataSource).filter(DataSource.knowledge_base_id == kb_id).limit(500))
         data_sources = result.scalars().all()
 
         data_source_info = [

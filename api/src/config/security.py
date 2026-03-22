@@ -22,7 +22,7 @@ class SecurityConfig(BaseSettings):
         ...,
         description=(
             "Secret key used for session signing and CSRF protection. "
-            "Must be a long random string. Generate with: python -c \"import secrets; print(secrets.token_hex(32))\""
+            'Must be a long random string. Generate with: python -c "import secrets; print(secrets.token_hex(32))"'
         ),
     )
 
@@ -31,7 +31,7 @@ class SecurityConfig(BaseSettings):
         description=(
             "Secret key used exclusively for signing JWT access and refresh tokens. "
             "Separate from secret_key so token signing keys can be rotated independently. "
-            "Generate with: python -c \"import secrets; print(secrets.token_hex(32))\""
+            'Generate with: python -c "import secrets; print(secrets.token_hex(32))"'
         ),
     )
 
@@ -79,7 +79,7 @@ class SecurityConfig(BaseSettings):
         description=(
             "Fernet encryption key for encrypting sensitive data at rest (OAuth tokens, API keys). "
             "Must be a URL-safe base64-encoded 32-byte key. "
-            "Generate with: python -c \"from cryptography.fernet import Fernet; print(Fernet.generate_key().decode())\""
+            'Generate with: python -c "from cryptography.fernet import Fernet; print(Fernet.generate_key().decode())"'
         ),
     )
 

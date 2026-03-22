@@ -361,7 +361,6 @@ class BrowserSession:
                 )
         return pages_info
 
-
     def _on_context_page(self, new_page: "Page"):
         """Called when context opens a new page (e.g. target=_blank links)."""
         asyncio.ensure_future(self._register_popup(new_page))

@@ -69,9 +69,7 @@ def _normalize_path(path: str) -> str:
 
 
 _DB_POOL_SIZE = Gauge("db_pool_size", "Database connection pool size", registry=_registry)
-_DB_POOL_CHECKED_OUT = Gauge(
-    "db_pool_checked_out", "Database connections currently in use", registry=_registry
-)
+_DB_POOL_CHECKED_OUT = Gauge("db_pool_checked_out", "Database connections currently in use", registry=_registry)
 _DB_QUERIES = Counter("db_queries_total", "Total database queries", registry=_registry)
 _CACHE_HITS = Counter("cache_hits_total", "Total cache hits", registry=_registry)
 _CACHE_MISSES = Counter("cache_misses_total", "Total cache misses", registry=_registry)

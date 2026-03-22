@@ -236,7 +236,9 @@ class DataAnalysisService:
                         # SECURITY: Check individual file size before reading
                         member_info = zip_file.getinfo(csv_filename)
                         if member_info.file_size > MAX_CSV_BYTES:
-                            results[csv_filename] = {"error": f"CSV exceeds maximum size ({MAX_CSV_BYTES // 1024 // 1024} MB)"}
+                            results[csv_filename] = {
+                                "error": f"CSV exceeds maximum size ({MAX_CSV_BYTES // 1024 // 1024} MB)"
+                            }
                             continue
 
                         with zip_file.open(csv_filename) as csv_file:

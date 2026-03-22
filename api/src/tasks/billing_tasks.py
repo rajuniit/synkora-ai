@@ -450,7 +450,7 @@ def _find_missing_deductions(db) -> list:
     bind=True,
     max_retries=2,
     default_retry_delay=60,
-    time_limit=300,        # 5 minutes — generous for large key counts
+    time_limit=300,  # 5 minutes — generous for large key counts
     soft_time_limit=270,
     queue="billing",
     acks_late=True,
@@ -520,14 +520,16 @@ def flush_usage_analytics(self):
                     key_str = key.decode() if isinstance(key, bytes) else key
                     # Format: usage:{tenant_id}:{agent_id_or_none}:{metric_type}:{YYYY-MM-DD}
                     _, tenant_id_str, agent_id_str, metric_type, date_str = key_str.split(":", 4)
-                    entries.append({
-                        "tenant_id": UUID(tenant_id_str),
-                        "agent_id": UUID(agent_id_str) if agent_id_str != "none" else None,
-                        "metric_type": metric_type,
-                        "date": date.fromisoformat(date_str),
-                        "count": count,
-                        "credits": credits,
-                    })
+                    entries.append(
+                        {
+                            "tenant_id": UUID(tenant_id_str),
+                            "agent_id": UUID(agent_id_str) if agent_id_str != "none" else None,
+                            "metric_type": metric_type,
+                            "date": date.fromisoformat(date_str),
+                            "count": count,
+                            "credits": credits,
+                        }
+                    )
                 except Exception as parse_err:
                     logger.warning(f"Skipping unparseable usage key '{key}': {parse_err}")
 
@@ -589,14 +591,16 @@ async def _upsert_usage_entries(db, entries: list[dict]) -> None:
 
         if result.rowcount == 0:
             # Row does not exist yet — create it
-            db.add(UsageAnalytics(
-                tenant_id=entry["tenant_id"],
-                agent_id=entry["agent_id"],
-                date=entry["date"],
-                metric_type=entry["metric_type"],
-                total_count=entry["count"],
-                credits_consumed=entry["credits"],
-            ))
+            db.add(
+                UsageAnalytics(
+                    tenant_id=entry["tenant_id"],
+                    agent_id=entry["agent_id"],
+                    date=entry["date"],
+                    metric_type=entry["metric_type"],
+                    total_count=entry["count"],
+                    credits_consumed=entry["credits"],
+                )
+            )
 
 
 def _store_reconciliation_report(report: dict) -> None:

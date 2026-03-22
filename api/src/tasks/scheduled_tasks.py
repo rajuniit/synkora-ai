@@ -107,13 +107,11 @@ def execute_scheduled_task(self, task_id: str) -> dict[str, Any]:
                 from src.services.agents.chat_stream_service import ChatStreamService
 
                 # Load agent from DB — scope to task's tenant to prevent cross-tenant access
-                agent = (
-                    db.query(Agent)
-                    .filter(Agent.id == agent_id, Agent.tenant_id == task.tenant_id)
-                    .first()
-                )
+                agent = db.query(Agent).filter(Agent.id == agent_id, Agent.tenant_id == task.tenant_id).first()
                 if not agent:
-                    logger.error(f"Agent {agent_id} not found for task {task_id} (tenant {task.tenant_id}) — deactivating task")
+                    logger.error(
+                        f"Agent {agent_id} not found for task {task_id} (tenant {task.tenant_id}) — deactivating task"
+                    )
                     task.is_active = False
                     execution.status = TaskStatus.FAILED
                     execution.error_message = f"Agent {agent_id} not found — task deactivated"

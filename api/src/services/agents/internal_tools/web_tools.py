@@ -262,6 +262,7 @@ async def internal_web_fetch(
             # Resolve relative redirects
             if redirect_url.startswith("/"):
                 from urllib.parse import urlparse as _urlparse
+
                 parsed = _urlparse(url)
                 redirect_url = f"{parsed.scheme}://{parsed.netloc}{redirect_url}"
             # Re-check SSRF for redirect target

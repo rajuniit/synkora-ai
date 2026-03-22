@@ -250,6 +250,7 @@ class SignatureVerifier:
             else:
                 # Unknown provider — reject rather than silently bypass verification
                 import logging
+
                 logging.getLogger(__name__).warning(f"Signature verification skipped: unknown provider '{provider}'")
                 return False
 

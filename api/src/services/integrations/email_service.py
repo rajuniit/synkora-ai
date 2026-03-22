@@ -789,7 +789,7 @@ class EmailService:
                         </p>
                         <div class="social-links">
                             <a href="{_APP_BASE_URL}">Website</a>
-                            {('<a href="' + _DOCS_URL + '">Docs</a>') if _DOCS_URL else ''}
+                            {('<a href="' + _DOCS_URL + '">Docs</a>') if _DOCS_URL else ""}
                             <a href="mailto:{_SUPPORT_EMAIL}">Support</a>
                         </div>
                         <p class="footer-copyright">
@@ -818,7 +818,7 @@ class EmailService:
 
         ---
         Website: {_APP_BASE_URL}
-        {('Docs: ' + _DOCS_URL) if _DOCS_URL else ''}
+        {("Docs: " + _DOCS_URL) if _DOCS_URL else ""}
         Support: {_SUPPORT_EMAIL}
 
         (c) {datetime.now().year} Synkora AI. All rights reserved.

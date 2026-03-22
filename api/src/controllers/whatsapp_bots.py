@@ -336,6 +336,7 @@ async def unlink_whatsapp_device(
         try:
             from ..config.redis import get_redis
             from ..services.bot_worker.bot_deployment_service import BotDeploymentService
+
             redis_client = get_redis()
             deployment = BotDeploymentService(db, redis_client)
             await deployment.deactivate_whatsapp_bot(bot_uuid)

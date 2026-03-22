@@ -339,6 +339,7 @@ def create_app() -> FastAPI:
 
     # Prometheus labeled HTTP metrics (method/endpoint/status_code)
     from src.services.performance.metrics import PrometheusMiddleware
+
     app.add_middleware(PrometheusMiddleware)
 
     # SECURITY: Add security headers middleware (CSP, X-Frame-Options, etc.)
@@ -346,6 +347,7 @@ def create_app() -> FastAPI:
 
     # SECURITY: Add XSS input sanitization middleware
     from src.middleware.security_middleware import InputSanitizationMiddleware
+
     app.add_middleware(InputSanitizationMiddleware)
 
     # SECURITY: Add request size limit middleware (first defense against large payloads)

@@ -233,7 +233,7 @@ async def login(data: LoginRequest, db: AsyncSession = Depends(get_async_db)):
     response.set_cookie(
         key="refresh_token",
         value=session_data["refresh_token"],
-        httponly=True,       # JS-unreachable — XSS cannot steal the refresh token
+        httponly=True,  # JS-unreachable — XSS cannot steal the refresh token
         secure=COOKIE_SECURE,
         samesite="lax",
         max_age=30 * 24 * 3600,  # 30 days — matches refresh token lifetime

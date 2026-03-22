@@ -505,6 +505,7 @@ class BotWorker:
                 self._whatsapp_clients[bot_id]["client"] = client
 
                 if message_ev is not None:
+
                     @client.event(message_ev)
                     def _on_message(cli, evt) -> None:
                         try:
@@ -771,6 +772,7 @@ class BotWorker:
                     except Exception:
                         pass
                 import shutil
+
                 session_dir = entry.get("session_dir")
                 if session_dir:
                     shutil.rmtree(session_dir, ignore_errors=True)

@@ -212,7 +212,9 @@ class WhatsAppWebService:
                 if phone:
                     logger.info(f"Session {session_id} connected as {phone}")
                 else:
-                    logger.warning(f"Could not extract phone number for session {session_id} (will still mark connected)")
+                    logger.warning(
+                        f"Could not extract phone number for session {session_id} (will still mark connected)"
+                    )
             except Exception:
                 logger.warning(f"get_me() failed for session {session_id} (will still mark connected)")
             if session_id in cls._sessions:
@@ -242,16 +244,19 @@ class WhatsAppWebService:
                 cls._sessions[session_id]["client"] = client
 
                 if connected_ev is not None:
+
                     @client.event(connected_ev)
                     def _on_connected(cli, evt) -> None:  # noqa: ARG001
                         _handle_connected(cli)
 
                 if history_sync_ev is not None:
+
                     @client.event(history_sync_ev)
                     def _on_history_sync(cli, evt) -> None:  # noqa: ARG001
                         pass  # suppress default behaviour / logging
 
                 if logged_out_ev is not None:
+
                     @client.event(logged_out_ev)
                     def _on_logged_out(cli, evt) -> None:  # noqa: ARG001
                         logger.info(f"Session {session_id} received LoggedOut event")

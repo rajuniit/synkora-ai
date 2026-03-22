@@ -592,7 +592,9 @@ class PaddleService:
             True if signature is valid
         """
         if not self.webhook_secret:
-            logger.error("SECURITY: Paddle webhook secret not configured — rejecting webhook. Set PADDLE_WEBHOOK_SECRET.")
+            logger.error(
+                "SECURITY: Paddle webhook secret not configured — rejecting webhook. Set PADDLE_WEBHOOK_SECRET."
+            )
             return False
 
         try:

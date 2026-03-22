@@ -75,8 +75,8 @@ class AuthService:
         return settings.jwt_audience
 
     # Keep these as class-level shortcuts for backward compatibility in tests.
-    JWT_ISSUER = "synkora-api"   # default; real value comes from settings
-    JWT_AUDIENCE = "synkora-app" # default; real value comes from settings
+    JWT_ISSUER = "synkora-api"  # default; real value comes from settings
+    JWT_AUDIENCE = "synkora-app"  # default; real value comes from settings
 
     @staticmethod
     def generate_access_token(

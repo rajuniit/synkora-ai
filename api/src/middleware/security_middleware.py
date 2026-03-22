@@ -263,5 +263,3 @@ class InputSanitizationMiddleware:
     def _contains_xss(self, content: str) -> bool:
         """Check content against the compiled XSS pattern."""
         return self._XSS_RE.search(content) is not None
-
-

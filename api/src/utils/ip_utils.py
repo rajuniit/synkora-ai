@@ -26,15 +26,15 @@ logger = logging.getLogger(__name__)
 
 # Standard RFC-1918 private ranges plus loopback — shared by both middlewares.
 TRUSTED_PROXY_NETWORKS: list[ipaddress.IPv4Network | ipaddress.IPv6Network] = [
-    ipaddress.ip_network("127.0.0.0/8"),    # IPv4 loopback
-    ipaddress.ip_network("::1/128"),         # IPv6 loopback
-    ipaddress.ip_network("10.0.0.0/8"),      # RFC-1918 class A
-    ipaddress.ip_network("172.16.0.0/12"),   # RFC-1918 class B
+    ipaddress.ip_network("127.0.0.0/8"),  # IPv4 loopback
+    ipaddress.ip_network("::1/128"),  # IPv6 loopback
+    ipaddress.ip_network("10.0.0.0/8"),  # RFC-1918 class A
+    ipaddress.ip_network("172.16.0.0/12"),  # RFC-1918 class B
     ipaddress.ip_network("192.168.0.0/16"),  # RFC-1918 class C
     ipaddress.ip_network("169.254.0.0/16"),  # IPv4 link-local
-    ipaddress.ip_network("172.17.0.0/16"),   # Docker default bridge
-    ipaddress.ip_network("fc00::/7"),        # IPv6 ULA
-    ipaddress.ip_network("fe80::/10"),       # IPv6 link-local
+    ipaddress.ip_network("172.17.0.0/16"),  # Docker default bridge
+    ipaddress.ip_network("fc00::/7"),  # IPv6 ULA
+    ipaddress.ip_network("fe80::/10"),  # IPv6 link-local
 ]
 
 # Operators can extend the allowlist via environment variable.

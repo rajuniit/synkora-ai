@@ -185,12 +185,7 @@ async def list_agents(
         agents = [result.scalar_one_or_none()]
         agents = [a for a in agents if a is not None]
     else:
-        result = await db.execute(
-            select(Agent)
-            .where(Agent.tenant_id == api_key.tenant_id)
-            .limit(limit)
-            .offset(offset)
-        )
+        result = await db.execute(select(Agent).where(Agent.tenant_id == api_key.tenant_id).limit(limit).offset(offset))
         agents = result.scalars().all()
 
     agent_list = [

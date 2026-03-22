@@ -171,6 +171,7 @@ class WhatsAppDeviceLinkManager:
                 cls._running[bot_id]["client"] = client
 
                 if message_ev is not None:
+
                     @client.event(message_ev)
                     def _on_message(cli, evt) -> None:
                         _handle_message(cli, evt)
@@ -221,9 +222,7 @@ class WhatsAppDeviceLinkManager:
                 )
                 # Log any exception from the coroutine
                 future.add_done_callback(
-                    lambda f: logger.exception(f"Message processing error for bot {bot_id}")
-                    if f.exception()
-                    else None
+                    lambda f: logger.exception(f"Message processing error for bot {bot_id}") if f.exception() else None
                 )
 
             except Exception:
@@ -237,6 +236,7 @@ class WhatsAppDeviceLinkManager:
 # -------------------------------------------------------------------------
 # Helpers (module-level to keep class clean)
 # -------------------------------------------------------------------------
+
 
 def _extract_text(evt) -> str:
     """Pull plain text from a neonize MessageEv."""
@@ -282,6 +282,7 @@ def _extract_sender_phone(evt) -> str | None:
             return str(user)
         # Fallback: regex on string representation
         import re
+
         match = re.search(r'User:\s*"(\d+)"', str(sender_jid))
         if match:
             return match.group(1)
@@ -306,7 +307,9 @@ def _extract_sender_jid_server(evt) -> str:
     return "s.whatsapp.net"
 
 
-async def _process_message_async(cli, bot_id: str, agent_id: str, sender_phone: str, sender_server: str, text: str) -> None:
+async def _process_message_async(
+    cli, bot_id: str, agent_id: str, sender_phone: str, sender_server: str, text: str
+) -> None:
     """Async: get or create conversation, call agent, send reply."""
     from ...core.database import get_async_session_factory
     from ...models.agent import Agent
@@ -437,6 +440,7 @@ def _send_reply(cli, to_phone: str, sender_server: str, text: str) -> None:
     msg = text[:4096]
     try:
         from neonize.proto.Neonize_pb2 import JID  # type: ignore[import]
+
         jid = JID(User=to_phone, Server=sender_server, RawAgent=0, Device=0, Integrator=0)
     except Exception:
         logger.exception(f"Failed to build JID for {to_phone}")
@@ -445,6 +449,7 @@ def _send_reply(cli, to_phone: str, sender_server: str, text: str) -> None:
     # Correct import path discovered: waE2E.WAWebProtobufsE2E_pb2.Message
     try:
         from waE2E.WAWebProtobufsE2E_pb2 import Message as WAMessage  # type: ignore[import]
+
         cli.send_message(jid, WAMessage(conversation=msg))
         logger.info(f"Sent reply to {to_phone}")
         return
@@ -454,6 +459,7 @@ def _send_reply(cli, to_phone: str, sender_server: str, text: str) -> None:
     # Fallback via neonize.utils.message re-export
     try:
         from neonize.utils.message import Message as WAMessage  # type: ignore[import]
+
         cli.send_message(jid, WAMessage(conversation=msg))
         logger.info(f"Sent reply to {to_phone} via utils.Message")
         return
