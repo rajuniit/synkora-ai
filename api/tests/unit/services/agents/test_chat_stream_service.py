@@ -473,11 +473,12 @@ class TestLoadAgentResources:
         mock_result.scalars.return_value.all.return_value = []
         mock_db.execute = AsyncMock(return_value=mock_result)
 
-        agent_kbs, agent_tools = await service._load_agent_resources(sample_db_agent, mock_db)
+        agent_kbs, agent_tools, mcp_tool_names = await service._load_agent_resources(sample_db_agent, mock_db)
 
         # Results should be empty lists
         assert agent_kbs == []
         assert agent_tools == []
+        assert mcp_tool_names == []
 
     @pytest.mark.asyncio
     async def test_load_agent_resources_with_exception(
@@ -491,11 +492,12 @@ class TestLoadAgentResources:
         # Mock execute that raises exception
         mock_db.execute = AsyncMock(side_effect=Exception("Database error"))
 
-        agent_kbs, agent_tools = await service._load_agent_resources(sample_db_agent, mock_db)
+        agent_kbs, agent_tools, mcp_tool_names = await service._load_agent_resources(sample_db_agent, mock_db)
 
         # Should return empty lists on error
         assert agent_kbs == []
         assert agent_tools == []
+        assert mcp_tool_names == []
 
 
 class TestRetrieveRagContext:

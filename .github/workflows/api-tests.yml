@@ -20,11 +20,11 @@ jobs:
       postgres:
         image: pgvector/pgvector:pg16
         env:
-          POSTGRES_USER: postgres
-          POSTGRES_PASSWORD: postgres
+          POSTGRES_USER: synkora
+          POSTGRES_PASSWORD: synkora
           POSTGRES_DB: synkora_test
         ports:
-          - 5432:5432
+          - 5439:5432
         options: >-
           --health-cmd pg_isready
           --health-interval 10s
@@ -64,63 +64,15 @@ jobs:
         run: |
           uv sync --extra dev --extra llm
 
-      - name: Create test environment file
-        run: |
-          cat > .env << 'EOF'
-          APP_ENV=test
-          DB_HOST=localhost
-          DB_PORT=5432
-          DB_USERNAME=postgres
-          DB_PASSWORD=postgres
-          DB_DATABASE=synkora_test
-          DATABASE_URL=postgresql://postgres:postgres@localhost:5432/synkora_test
-          REDIS_URL=redis://localhost:6379/0
-          CELERY_BROKER_URL=redis://localhost:6379/1
-          CELERY_RESULT_BACKEND=redis://localhost:6379/2
-          SECRET_KEY=test-secret-key-for-ci
-          JWT_SECRET_KEY=test-jwt-secret-for-ci
-          JWT_ALGORITHM=HS256
-          ENCRYPTION_KEY=h4TKsK-67AUs1F54Rw5TbbEisyDbVfkOuMZk_q2G6Iw=
-          RATE_LIMIT_ENABLED=false
-          LOG_LEVEL=INFO
-          TESTING=true
-          EOF
-
       - name: Run unit tests
         env:
-          APP_ENV: test
-          DB_HOST: localhost
-          DB_PORT: "5432"
-          DB_USERNAME: postgres
-          DB_PASSWORD: postgres
-          DB_DATABASE: synkora_test
-          DATABASE_URL: postgresql://postgres:postgres@localhost:5432/synkora_test
-          REDIS_URL: redis://localhost:6379/0
-          CELERY_BROKER_URL: redis://localhost:6379/1
-          CELERY_RESULT_BACKEND: redis://localhost:6379/2
-          SECRET_KEY: test-secret-key-for-ci
-          JWT_SECRET_KEY: test-jwt-secret-for-ci
-          ENCRYPTION_KEY: h4TKsK-67AUs1F54Rw5TbbEisyDbVfkOuMZk_q2G6Iw=
-          TESTING: true
+          TESTING: "true"
         run: |
           uv run pytest tests/unit/ -v --color=yes --cov=src --cov-report=xml --cov-report=term --cov-report=html
 
       - name: Run integration tests
         env:
-          APP_ENV: test
-          DB_HOST: localhost
-          DB_PORT: "5432"
-          DB_USERNAME: postgres
-          DB_PASSWORD: postgres
-          DB_DATABASE: synkora_test
-          DATABASE_URL: postgresql://postgres:postgres@localhost:5432/synkora_test
-          REDIS_URL: redis://localhost:6379/0
-          CELERY_BROKER_URL: redis://localhost:6379/1
-          CELERY_RESULT_BACKEND: redis://localhost:6379/2
-          SECRET_KEY: test-secret-key-for-ci
-          JWT_SECRET_KEY: test-jwt-secret-for-ci
-          ENCRYPTION_KEY: h4TKsK-67AUs1F54Rw5TbbEisyDbVfkOuMZk_q2G6Iw=
-          TESTING: true
+          TESTING: "true"
         run: |
           uv run pytest tests/integration/ -v --color=yes --cov=src --cov-append --cov-report=xml --cov-report=term --cov-report=html
 

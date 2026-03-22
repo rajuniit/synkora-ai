@@ -10,6 +10,7 @@ from fastapi.testclient import TestClient
 
 from src.controllers.mcp_servers import router
 from src.core.database import get_async_db
+from src.middleware.auth_middleware import get_current_tenant_id
 
 
 def setup_db_execute_mock(mock_db, return_value, return_list=False):
@@ -42,11 +43,17 @@ def client(mock_db_session):
     app = FastAPI()
     app.include_router(router)
 
+    _tenant_id = uuid.uuid4()
+
     # Mock dependencies
     async def mock_db():
         yield mock_db_session
 
+    def mock_tenant_id():
+        return _tenant_id
+
     app.dependency_overrides[get_async_db] = mock_db
+    app.dependency_overrides[get_current_tenant_id] = mock_tenant_id
 
     return TestClient(app), mock_db_session
 
