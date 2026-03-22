@@ -16,8 +16,6 @@ import logging
 import os
 from datetime import timedelta
 
-
-
 logger = logging.getLogger(__name__)
 
 # Redis pub/sub channel for distributed cache invalidation

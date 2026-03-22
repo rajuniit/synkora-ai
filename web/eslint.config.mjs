@@ -17,6 +17,7 @@ const eslintConfig = [
       "out/**",
       "build/**",
       "dist/**",
+      "public/**",
       "*.config.js",
       "*.config.mjs",
     ],

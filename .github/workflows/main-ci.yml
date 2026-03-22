@@ -48,31 +48,31 @@ jobs:
               - 'web/Dockerfile'
               - '.github/workflows/docker-build.yml'
 
-  # Run tests in parallel
+  style-check:
+    name: Style Check
+    uses: ./.github/workflows/style.yml
+
+  # Run tests in parallel — only after style check passes
   api-tests:
     name: API Tests
-    needs: check-changes
+    needs: [check-changes, style-check]
     if: needs.check-changes.outputs.api-changed == 'true'
     uses: ./.github/workflows/api-tests.yml
 
   web-tests:
     name: Web Tests
-    needs: check-changes
+    needs: [check-changes, style-check]
     if: needs.check-changes.outputs.web-changed == 'true'
     uses: ./.github/workflows/web-tests.yml
 
-  style-check:
-    name: Style Check
-    uses: ./.github/workflows/style.yml
-
   db-migration-test:
     name: DB Migration Test
-    needs: check-changes
+    needs: [check-changes, style-check]
     if: needs.check-changes.outputs.migration-changed == 'true'
     uses: ./.github/workflows/db-migration-test.yml
 
   docker-build:
     name: Docker Build Test
-    needs: check-changes
+    needs: [check-changes, style-check]
     if: needs.check-changes.outputs.docker-changed == 'true'
     uses: ./.github/workflows/docker-build.yml

@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react'
+import { useState, useEffect, useCallback } from 'react'
 import { apiClient } from '@/lib/api/client'
 import { Webhook, WebhookCreate, WebhookUpdate, WebhookEvent, WebhookStats } from '@/types/webhooks'
 
@@ -7,7 +7,7 @@ export function useWebhooks(agentName: string) {
   const [isLoading, setIsLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
 
-  const fetchWebhooks = async () => {
+  const fetchWebhooks = useCallback(async () => {
     try {
       setIsLoading(true)
       const data = await apiClient.request('GET', `/api/v1/agents/${agentName}/webhooks`)
@@ -19,7 +19,7 @@ export function useWebhooks(agentName: string) {
     } finally {
       setIsLoading(false)
     }
-  }
+  }, [agentName])
 
   const createWebhook = async (webhookData: WebhookCreate): Promise<Webhook> => {
     const data = await apiClient.request('POST', `/api/v1/agents/${agentName}/webhooks`, webhookData)
@@ -56,7 +56,7 @@ export function useWebhooks(agentName: string) {
     if (agentName) {
       fetchWebhooks()
     }
-  }, [agentName])
+  }, [agentName, fetchWebhooks])
 
   return {
     webhooks,
