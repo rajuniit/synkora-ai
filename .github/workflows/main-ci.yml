@@ -1,6 +1,8 @@
 name: Main CI Pipeline
 
 on:
+  push:
+    branches: ["master"]
   pull_request:
     branches: ["master"]
 

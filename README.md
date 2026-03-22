@@ -7,7 +7,7 @@
 <!-- CI/CD Badges -->
 [![CI Pipeline](https://github.com/rajuniit/synkora-ai/actions/workflows/main-ci.yml/badge.svg)](https://github.com/rajuniit/synkora-ai/actions/workflows/main-ci.yml)
 [![API Tests](https://github.com/rajuniit/synkora-ai/actions/workflows/api-tests.yml/badge.svg)](https://github.com/rajuniit/synkora-ai/actions/workflows/api-tests.yml)
-[![codecov](https://codecov.io/gh/rajuniit/synkora-ai/branch/main/graph/badge.svg)](https://codecov.io/gh/rajuniit/synkora-ai)
+[![codecov](https://codecov.io/gh/rajuniit/synkora-ai/branch/master/graph/badge.svg)](https://codecov.io/gh/rajuniit/synkora-ai)
 
 
 <!-- Tech Stack Badges -->
@@ -403,7 +403,7 @@ Our CI/CD pipeline runs on every push and pull request:
 We use [Codecov](https://codecov.io/gh/rajuniit/synkora-ai) for code coverage tracking:
 
 
-[![codecov](https://codecov.io/gh/rajuniit/synkora-ai/branch/main/graph/badge.svg)](https://codecov.io/gh/rajuniit/synkora-ai)
+[![codecov](https://codecov.io/gh/rajuniit/synkora-ai/branch/master/graph/badge.svg)](https://codecov.io/gh/rajuniit/synkora-ai)
 
 
 Coverage reports are generated for every pull request with inline annotations.
