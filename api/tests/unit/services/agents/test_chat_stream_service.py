@@ -459,23 +459,36 @@ class TestStreamAgentResponse:
 class TestLoadAgentResources:
     """Tests for _load_agent_resources method."""
 
+    def _make_session_factory(self, mock_db):
+        """Return a mock session factory whose context manager yields mock_db."""
+        mock_cm = MagicMock()
+        mock_cm.__aenter__ = AsyncMock(return_value=mock_db)
+        mock_cm.__aexit__ = AsyncMock(return_value=None)
+        return MagicMock(return_value=mock_cm)
+
     @pytest.mark.asyncio
     async def test_load_agent_resources_success(
         self, mock_agent_loader, mock_chat_service, mock_tool_registry, mock_db, sample_db_agent
     ):
         """Test successful resource loading."""
+        from unittest.mock import patch
+
         from src.services.agents.chat_stream_service import ChatStreamService
 
+        mock_tool_registry.load_agent_mcp_tools = AsyncMock(return_value=[])
+        mock_tool_registry.load_agent_custom_tools = AsyncMock(return_value=None)
         service = ChatStreamService(mock_agent_loader, mock_chat_service, tool_registry=mock_tool_registry)
 
-        # The method uses db.execute(select(...).options(...).filter(...)) and result.scalars().all()
         mock_result = MagicMock()
         mock_result.scalars.return_value.all.return_value = []
         mock_db.execute = AsyncMock(return_value=mock_result)
 
-        agent_kbs, agent_tools, mcp_tool_names = await service._load_agent_resources(sample_db_agent, mock_db)
+        with patch(
+            "src.services.agents.chat_stream_service.get_async_session_factory",
+            return_value=self._make_session_factory(mock_db),
+        ):
+            agent_kbs, agent_tools, mcp_tool_names = await service._load_agent_resources(sample_db_agent, mock_db)
 
-        # Results should be empty lists
         assert agent_kbs == []
         assert agent_tools == []
         assert mcp_tool_names == []
@@ -485,16 +498,22 @@ class TestLoadAgentResources:
         self, mock_agent_loader, mock_chat_service, mock_tool_registry, mock_db, sample_db_agent
     ):
         """Test resource loading handles exceptions."""
+        from unittest.mock import patch
+
         from src.services.agents.chat_stream_service import ChatStreamService
 
+        mock_tool_registry.load_agent_mcp_tools = AsyncMock(side_effect=Exception("MCP error"))
+        mock_tool_registry.load_agent_custom_tools = AsyncMock(side_effect=Exception("Custom tool error"))
         service = ChatStreamService(mock_agent_loader, mock_chat_service, tool_registry=mock_tool_registry)
 
-        # Mock execute that raises exception
         mock_db.execute = AsyncMock(side_effect=Exception("Database error"))
 
-        agent_kbs, agent_tools, mcp_tool_names = await service._load_agent_resources(sample_db_agent, mock_db)
+        with patch(
+            "src.services.agents.chat_stream_service.get_async_session_factory",
+            return_value=self._make_session_factory(mock_db),
+        ):
+            agent_kbs, agent_tools, mcp_tool_names = await service._load_agent_resources(sample_db_agent, mock_db)
 
-        # Should return empty lists on error
         assert agent_kbs == []
         assert agent_tools == []
         assert mcp_tool_names == []
