@@ -11,12 +11,13 @@ import pytest
 import pytest_asyncio
 from fastapi import status
 from fastapi.testclient import TestClient
+from httpx import AsyncClient
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 
 @pytest_asyncio.fixture
-async def auth_headers(client: TestClient, async_db_session: AsyncSession):
+async def auth_headers(async_client: AsyncClient, async_db_session: AsyncSession):
     """Create authenticated user and return headers with tenant info."""
     from src.models import Account, AccountStatus
 
@@ -24,7 +25,7 @@ async def auth_headers(client: TestClient, async_db_session: AsyncSession):
     password = "SecureTestPass123!"
 
     # Register
-    response = client.post(
+    response = await async_client.post(
         "/console/api/auth/register",
         json={
             "email": email,
@@ -44,7 +45,7 @@ async def auth_headers(client: TestClient, async_db_session: AsyncSession):
     await async_db_session.commit()
 
     # Login
-    login_response = client.post(
+    login_response = await async_client.post(
         "/console/api/auth/login",
         json={"email": email, "password": password},
     )

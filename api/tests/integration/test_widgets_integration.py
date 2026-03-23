@@ -246,9 +246,7 @@ class TestWidgetsCRUDIntegration:
         original_key = create_response.json()["data"]["api_key"]
 
         # Regenerate API key
-        regenerate_response = await async_client.post(
-            f"/api/v1/widgets/{widget_id}/regenerate-key", headers=headers
-        )
+        regenerate_response = await async_client.post(f"/api/v1/widgets/{widget_id}/regenerate-key", headers=headers)
         assert regenerate_response.status_code == status.HTTP_200_OK
         new_key = regenerate_response.json()["data"]["api_key"]
 

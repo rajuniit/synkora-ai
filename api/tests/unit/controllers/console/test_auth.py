@@ -145,7 +145,11 @@ class TestRegister:
 
         with (
             patch("src.controllers.console.auth.AuthService") as MockAuthService,
-            patch("src.controllers.console.auth.get_app_base_url", new_callable=AsyncMock, return_value="https://example.com"),
+            patch(
+                "src.controllers.console.auth.get_app_base_url",
+                new_callable=AsyncMock,
+                return_value="https://example.com",
+            ),
             patch("src.tasks.email_tasks.send_verification_email_task") as mock_email,
         ):
             MockAuthService.register = AsyncMock(return_value=(mock_account, mock_tenant))
@@ -178,7 +182,11 @@ class TestRegister:
 
         with (
             patch("src.controllers.console.auth.AuthService") as MockAuthService,
-            patch("src.controllers.console.auth.get_app_base_url", new_callable=AsyncMock, return_value="https://example.com"),
+            patch(
+                "src.controllers.console.auth.get_app_base_url",
+                new_callable=AsyncMock,
+                return_value="https://example.com",
+            ),
             patch("src.tasks.email_tasks.send_verification_email_task") as mock_email,
         ):
             MockAuthService.register = AsyncMock(return_value=(mock_account, mock_tenant))
@@ -316,7 +324,11 @@ class TestForgotPassword:
 
         with (
             patch("src.controllers.console.auth.AuthService") as MockAuthService,
-            patch("src.controllers.console.auth.get_app_base_url", new_callable=AsyncMock, return_value="https://example.com"),
+            patch(
+                "src.controllers.console.auth.get_app_base_url",
+                new_callable=AsyncMock,
+                return_value="https://example.com",
+            ),
             patch("src.tasks.email_tasks.send_password_reset_email_task") as mock_email,
         ):
             MockAuthService.request_password_reset = AsyncMock(return_value=(mock_account, "reset_token"))
@@ -428,7 +440,11 @@ class TestResendVerification:
         mock_db.execute = AsyncMock(return_value=mock_result)
 
         with (
-            patch("src.controllers.console.auth.get_app_base_url", new_callable=AsyncMock, return_value="https://example.com"),
+            patch(
+                "src.controllers.console.auth.get_app_base_url",
+                new_callable=AsyncMock,
+                return_value="https://example.com",
+            ),
             patch("src.tasks.email_tasks.send_verification_email_task") as mock_email,
         ):
             mock_email.delay = MagicMock()
@@ -476,7 +492,11 @@ class TestAliasRoutes:
 
         with (
             patch("src.controllers.console.auth.AuthService") as MockAuthService,
-            patch("src.controllers.console.auth.get_app_base_url", new_callable=AsyncMock, return_value="https://example.com"),
+            patch(
+                "src.controllers.console.auth.get_app_base_url",
+                new_callable=AsyncMock,
+                return_value="https://example.com",
+            ),
             patch("src.tasks.email_tasks.send_verification_email_task") as mock_email,
         ):
             MockAuthService.register = AsyncMock(return_value=(mock_account, mock_tenant))
@@ -506,7 +526,9 @@ class TestAliasRoutes:
         ):
             MockAuthService.authenticate = AsyncMock(return_value=mock_account)
             MockAuthService.get_account_tenants = AsyncMock(return_value=[])
-            MockSessionService.create_session = AsyncMock(return_value={"access_token": "token", "refresh_token": "refresh"})
+            MockSessionService.create_session = AsyncMock(
+                return_value={"access_token": "token", "refresh_token": "refresh"}
+            )
 
             response = test_client.post("/signin", json={"email": "test@example.com", "password": "SecureTestPass123!"})
 

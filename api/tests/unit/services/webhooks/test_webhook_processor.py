@@ -283,7 +283,15 @@ class TestProcessWebhook:
     @patch.object(WebhookProcessor, "verify_signature")
     @patch("src.services.webhooks.webhook_processor.ProviderParser")
     async def test_successful_processing(
-        self, mock_parser, mock_verify, mock_should_process, mock_create_event, mock_trigger, processor, mock_webhook, mock_db
+        self,
+        mock_parser,
+        mock_verify,
+        mock_should_process,
+        mock_create_event,
+        mock_trigger,
+        processor,
+        mock_webhook,
+        mock_db,
     ):
         """Test successful webhook processing."""
         mock_verify.return_value = True

@@ -373,9 +373,7 @@ class TestProjectsTenantIsolation:
     """Test projects tenant isolation."""
 
     @pytest.mark.asyncio
-    async def test_cannot_access_other_tenant_project(
-        self, async_client: AsyncClient, async_db_session: AsyncSession
-    ):
+    async def test_cannot_access_other_tenant_project(self, async_client: AsyncClient, async_db_session: AsyncSession):
         """Test that users cannot access projects from other tenants."""
         from src.models import Account, AccountStatus
 

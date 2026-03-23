@@ -230,7 +230,9 @@ class TestUpdateConversation:
         mock_conversation = MagicMock()
         mock_conversation.id = conversation_id
 
-        with patch.object(ConversationService, "get_conversation", new_callable=AsyncMock, return_value=mock_conversation):
+        with patch.object(
+            ConversationService, "get_conversation", new_callable=AsyncMock, return_value=mock_conversation
+        ):
             await ConversationService.update_conversation(mock_db, conversation_id, name="Updated Name")
 
             assert mock_conversation.name == "Updated Name"
@@ -243,7 +245,9 @@ class TestUpdateConversation:
 
         mock_conversation = MagicMock()
 
-        with patch.object(ConversationService, "get_conversation", new_callable=AsyncMock, return_value=mock_conversation):
+        with patch.object(
+            ConversationService, "get_conversation", new_callable=AsyncMock, return_value=mock_conversation
+        ):
             await ConversationService.update_conversation(mock_db, conversation_id, summary="New summary")
 
             assert mock_conversation.summary == "New summary"
@@ -255,7 +259,9 @@ class TestUpdateConversation:
 
         mock_conversation = MagicMock()
 
-        with patch.object(ConversationService, "get_conversation", new_callable=AsyncMock, return_value=mock_conversation):
+        with patch.object(
+            ConversationService, "get_conversation", new_callable=AsyncMock, return_value=mock_conversation
+        ):
             await ConversationService.update_conversation(mock_db, conversation_id, status=ConversationStatus.ARCHIVED)
 
             assert mock_conversation.status == ConversationStatus.ARCHIVED
@@ -282,7 +288,9 @@ class TestDeleteConversation:
 
         mock_conversation = MagicMock()
 
-        with patch.object(ConversationService, "get_conversation", new_callable=AsyncMock, return_value=mock_conversation):
+        with patch.object(
+            ConversationService, "get_conversation", new_callable=AsyncMock, return_value=mock_conversation
+        ):
             result = await ConversationService.delete_conversation(mock_db, conversation_id, soft_delete=True)
 
             assert result is True
@@ -296,7 +304,9 @@ class TestDeleteConversation:
 
         mock_conversation = MagicMock()
 
-        with patch.object(ConversationService, "get_conversation", new_callable=AsyncMock, return_value=mock_conversation):
+        with patch.object(
+            ConversationService, "get_conversation", new_callable=AsyncMock, return_value=mock_conversation
+        ):
             result = await ConversationService.delete_conversation(mock_db, conversation_id, soft_delete=False)
 
             assert result is True

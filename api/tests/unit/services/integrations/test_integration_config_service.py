@@ -94,9 +94,7 @@ class TestIntegrationConfigService:
         mock_result_config.scalar_one_or_none.return_value = mock_platform_config
 
         # tenant default -> None, tenant any -> None, platform default -> config
-        mock_db_session.execute = AsyncMock(
-            side_effect=[mock_result_none, mock_result_none, mock_result_config]
-        )
+        mock_db_session.execute = AsyncMock(side_effect=[mock_result_none, mock_result_none, mock_result_config])
 
         result = await service.get_active_config(tenant_id, "email", "smtp")
         assert result is not None

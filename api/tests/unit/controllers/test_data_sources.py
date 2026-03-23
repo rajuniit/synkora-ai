@@ -321,7 +321,9 @@ class TestTriggerSync:
             if execute_call_count[0] == 1:
                 mock_result.scalar_one_or_none.return_value = mock_ds  # First query returns data source
             else:
-                mock_result.scalar_one_or_none.return_value = None  # Subsequent queries return None (no in-progress sync)
+                mock_result.scalar_one_or_none.return_value = (
+                    None  # Subsequent queries return None (no in-progress sync)
+                )
             return mock_result
 
         mock_db.execute = AsyncMock(side_effect=execute_side_effect)

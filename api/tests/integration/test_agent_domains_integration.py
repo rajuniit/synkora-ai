@@ -175,9 +175,7 @@ class TestAgentDomainsCRUDIntegration:
             domain_id = create_response.json()["id"]
 
             # Get the domain
-            response = await async_client.get(
-                f"/api/v1/agents/{test_agent}/domains/{domain_id}", headers=headers
-            )
+            response = await async_client.get(f"/api/v1/agents/{test_agent}/domains/{domain_id}", headers=headers)
 
             assert response.status_code in [status.HTTP_200_OK, status.HTTP_404_NOT_FOUND]
 
@@ -191,9 +189,7 @@ class TestAgentDomainsCRUDIntegration:
         headers, tenant_id, account = auth_headers
 
         fake_domain_id = str(uuid.uuid4())
-        response = await async_client.get(
-            f"/api/v1/agents/{test_agent}/domains/{fake_domain_id}", headers=headers
-        )
+        response = await async_client.get(f"/api/v1/agents/{test_agent}/domains/{fake_domain_id}", headers=headers)
 
         assert response.status_code in [status.HTTP_404_NOT_FOUND, status.HTTP_500_INTERNAL_SERVER_ERROR]
 
@@ -241,9 +237,7 @@ class TestAgentDomainsCRUDIntegration:
             domain_id = create_response.json()["id"]
 
             # Delete the domain
-            response = await async_client.delete(
-                f"/api/v1/agents/{test_agent}/domains/{domain_id}", headers=headers
-            )
+            response = await async_client.delete(f"/api/v1/agents/{test_agent}/domains/{domain_id}", headers=headers)
 
             assert response.status_code in [status.HTTP_204_NO_CONTENT, status.HTTP_404_NOT_FOUND]
 

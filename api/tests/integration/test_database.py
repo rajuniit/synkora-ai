@@ -85,7 +85,11 @@ class TestTenantQueries:
 
     @pytest.mark.asyncio
     async def test_query_tenant_with_members(
-        self, async_db_session: AsyncSession, async_tenant: Tenant, async_account: Account, async_tenant_member: TenantAccountJoin
+        self,
+        async_db_session: AsyncSession,
+        async_tenant: Tenant,
+        async_account: Account,
+        async_tenant_member: TenantAccountJoin,
     ) -> None:
         """Test querying tenant with its members."""
         # Query tenant and load members
@@ -119,7 +123,11 @@ class TestAccountQueries:
 
     @pytest.mark.asyncio
     async def test_query_account_with_tenants(
-        self, async_db_session: AsyncSession, async_account: Account, async_tenant: Tenant, async_tenant_member: TenantAccountJoin
+        self,
+        async_db_session: AsyncSession,
+        async_account: Account,
+        async_tenant: Tenant,
+        async_tenant_member: TenantAccountJoin,
     ) -> None:
         """Test querying account with its tenant memberships."""
         result = await async_db_session.execute(select(Account).filter_by(id=async_account.id))
@@ -166,14 +174,14 @@ class TestTenantAccountRelationships:
         await async_db_session.flush()
 
         # Verify using explicit query to avoid MissingGreenlet error
-        members_result = await async_db_session.execute(
-            select(TenantAccountJoin).filter_by(tenant_id=async_tenant.id)
-        )
+        members_result = await async_db_session.execute(select(TenantAccountJoin).filter_by(tenant_id=async_tenant.id))
         members = members_result.scalars().all()
         assert len(members) >= 3
 
     @pytest.mark.asyncio
-    async def test_add_account_to_multiple_tenants(self, async_db_session: AsyncSession, async_account: Account) -> None:
+    async def test_add_account_to_multiple_tenants(
+        self, async_db_session: AsyncSession, async_account: Account
+    ) -> None:
         """Test adding an account to multiple tenants."""
         # Create multiple tenants
         tenants = []
@@ -213,7 +221,9 @@ class TestTenantAccountRelationships:
         # Add memberships
         async_db_session.add(TenantAccountJoin(tenant_id=async_tenant.id, account_id=owner.id, role=AccountRole.OWNER))
         async_db_session.add(TenantAccountJoin(tenant_id=async_tenant.id, account_id=admin.id, role=AccountRole.ADMIN))
-        async_db_session.add(TenantAccountJoin(tenant_id=async_tenant.id, account_id=editor.id, role=AccountRole.EDITOR))
+        async_db_session.add(
+            TenantAccountJoin(tenant_id=async_tenant.id, account_id=editor.id, role=AccountRole.EDITOR)
+        )
         await async_db_session.flush()
 
         # Query owners

@@ -478,9 +478,7 @@ class TestAgentApiKeysTenantIsolation:
     """Test API Keys tenant isolation."""
 
     @pytest.mark.asyncio
-    async def test_cannot_access_other_tenant_api_key(
-        self, async_client: AsyncClient, async_db_session: AsyncSession
-    ):
+    async def test_cannot_access_other_tenant_api_key(self, async_client: AsyncClient, async_db_session: AsyncSession):
         """Test that users cannot access API keys from other tenants."""
         from src.models import Account, AccountStatus
         from src.models.agent import Agent

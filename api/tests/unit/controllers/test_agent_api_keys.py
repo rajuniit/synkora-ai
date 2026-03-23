@@ -104,7 +104,9 @@ class TestCreateApiKey:
         plain_key = "sk_test_1234567890abcdef"
 
         mock_api_key = _create_mock_api_key(
-            key_id, tenant_id, agent_id,
+            key_id,
+            tenant_id,
+            agent_id,
             key_name="Test Key",
             key_prefix=plain_key[:12],
             permissions=["chat", "read"],
@@ -155,7 +157,9 @@ class TestCreateApiKey:
         plain_key = "sk_test_1234567890abcdef"
 
         mock_api_key = _create_mock_api_key(
-            key_id, tenant_id, tenant_id,
+            key_id,
+            tenant_id,
+            tenant_id,
             key_name="Tenant Key",
             key_prefix=plain_key[:12],
         )
@@ -263,7 +267,8 @@ class TestUpdateApiKey:
 
         key_id = uuid.uuid4()
         mock_api_key = _create_mock_api_key(
-            key_id, tenant_id,
+            key_id,
+            tenant_id,
             key_name="Updated Key",
             permissions=["chat", "write"],
             rate_limit_per_minute=120,

@@ -10,12 +10,13 @@ import pytest
 import pytest_asyncio
 from fastapi import status
 from fastapi.testclient import TestClient
+from httpx import AsyncClient
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 
 @pytest_asyncio.fixture
-async def auth_headers(client: TestClient, async_db_session: AsyncSession):
+async def auth_headers(async_client: AsyncClient, async_db_session: AsyncSession):
     """Create authenticated user and return headers with tenant info."""
     from src.models import Account, AccountStatus
 
@@ -23,7 +24,7 @@ async def auth_headers(client: TestClient, async_db_session: AsyncSession):
     password = "SecureTestPass123!"
 
     # Register
-    response = client.post(
+    response = await async_client.post(
         "/console/api/auth/register",
         json={
             "email": email,
@@ -43,7 +44,7 @@ async def auth_headers(client: TestClient, async_db_session: AsyncSession):
     await async_db_session.commit()
 
     # Login
-    login_response = client.post(
+    login_response = await async_client.post(
         "/console/api/auth/login",
         json={"email": email, "password": password},
     )
@@ -266,13 +267,13 @@ class TestScheduledTasksTenantIsolation:
     """Test scheduled tasks tenant isolation."""
 
     @pytest.mark.asyncio
-    async def test_cannot_access_other_tenant_task(self, client: TestClient, async_db_session: AsyncSession):
+    async def test_cannot_access_other_tenant_task(self, async_client: AsyncClient, async_db_session: AsyncSession):
         """Test that users cannot access tasks from other tenants."""
         from src.models import Account, AccountStatus
 
         # Create first user/tenant
         email1 = f"tenant1_task_{uuid.uuid4().hex[:8]}@example.com"
-        client.post(
+        await async_client.post(
             "/console/api/auth/register",
             json={
                 "email": email1,
@@ -286,13 +287,15 @@ class TestScheduledTasksTenantIsolation:
         account1.status = AccountStatus.ACTIVE
         await async_db_session.commit()
 
-        login1 = client.post("/console/api/auth/login", json={"email": email1, "password": "SecureTestPass123!"})
+        login1 = await async_client.post(
+            "/console/api/auth/login", json={"email": email1, "password": "SecureTestPass123!"}
+        )
         token1 = login1.json()["data"]["access_token"]
         headers1 = {"Authorization": f"Bearer {token1}"}
 
         # Create second user/tenant
         email2 = f"tenant2_task_{uuid.uuid4().hex[:8]}@example.com"
-        client.post(
+        await async_client.post(
             "/console/api/auth/register",
             json={
                 "email": email2,
@@ -306,13 +309,15 @@ class TestScheduledTasksTenantIsolation:
         account2.status = AccountStatus.ACTIVE
         await async_db_session.commit()
 
-        login2 = client.post("/console/api/auth/login", json={"email": email2, "password": "SecureTestPass123!"})
+        login2 = await async_client.post(
+            "/console/api/auth/login", json={"email": email2, "password": "SecureTestPass123!"}
+        )
         token2 = login2.json()["data"]["access_token"]
         headers2 = {"Authorization": f"Bearer {token2}"}
 
         # Create task as tenant 1
         task_name = f"IsolatedTask_{uuid.uuid4().hex[:8]}"
-        create_response = client.post(
+        create_response = await async_client.post(
             "/api/v1/scheduled-tasks",
             json={
                 "name": task_name,
@@ -329,11 +334,11 @@ class TestScheduledTasksTenantIsolation:
 
         # Tenant 2 should not be able to access tenant 1's task
         # Either 403 (Forbidden) or 404 (Not Found) is acceptable for tenant isolation
-        get_response = client.get(f"/api/v1/scheduled-tasks/{task_id}", headers=headers2)
+        get_response = await async_client.get(f"/api/v1/scheduled-tasks/{task_id}", headers=headers2)
         assert get_response.status_code in [status.HTTP_403_FORBIDDEN, status.HTTP_404_NOT_FOUND]
 
         # Tenant 2 should not be able to update tenant 1's task
-        update_response = client.put(
+        update_response = await async_client.put(
             f"/api/v1/scheduled-tasks/{task_id}",
             json={"name": "Hacked Task"},
             headers=headers2,
@@ -341,7 +346,7 @@ class TestScheduledTasksTenantIsolation:
         assert update_response.status_code in [status.HTTP_403_FORBIDDEN, status.HTTP_404_NOT_FOUND]
 
         # Tenant 2 should not be able to delete tenant 1's task
-        delete_response = client.delete(f"/api/v1/scheduled-tasks/{task_id}", headers=headers2)
+        delete_response = await async_client.delete(f"/api/v1/scheduled-tasks/{task_id}", headers=headers2)
         assert delete_response.status_code in [status.HTTP_403_FORBIDDEN, status.HTTP_404_NOT_FOUND]
 
 

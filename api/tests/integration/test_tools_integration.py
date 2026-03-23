@@ -10,12 +10,13 @@ import pytest
 import pytest_asyncio
 from fastapi import status
 from fastapi.testclient import TestClient
+from httpx import AsyncClient
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 
 @pytest_asyncio.fixture
-async def admin_auth_headers(client: TestClient, async_db_session: AsyncSession):
+async def admin_auth_headers(async_client: AsyncClient, async_db_session: AsyncSession):
     """Create authenticated admin user and return headers with tenant info."""
     from src.models import Account, AccountStatus
 
@@ -23,7 +24,7 @@ async def admin_auth_headers(client: TestClient, async_db_session: AsyncSession)
     password = "SecureTestPass123!"
 
     # Register
-    response = client.post(
+    response = await async_client.post(
         "/console/api/auth/register",
         json={
             "email": email,
@@ -46,7 +47,7 @@ async def admin_auth_headers(client: TestClient, async_db_session: AsyncSession)
     # The registration creates an OWNER role which has admin permissions
 
     # Login
-    login_response = client.post(
+    login_response = await async_client.post(
         "/console/api/auth/login",
         json={"email": email, "password": password},
     )
@@ -56,7 +57,7 @@ async def admin_auth_headers(client: TestClient, async_db_session: AsyncSession)
 
 
 @pytest_asyncio.fixture
-async def normal_auth_headers(client: TestClient, async_db_session: AsyncSession, admin_auth_headers):
+async def normal_auth_headers(async_client: AsyncClient, async_db_session: AsyncSession, admin_auth_headers):
     """Create authenticated normal (non-admin) user."""
     from src.models import Account, AccountRole, AccountStatus, TenantAccountJoin
     from src.services.auth_service import AuthService
@@ -87,7 +88,7 @@ async def normal_auth_headers(client: TestClient, async_db_session: AsyncSession
     await async_db_session.commit()
 
     # Login
-    login_response = client.post(
+    login_response = await async_client.post(
         "/console/api/auth/login",
         json={"email": email, "password": password},
     )

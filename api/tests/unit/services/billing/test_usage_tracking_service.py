@@ -35,9 +35,7 @@ class TestUsageTrackingService:
         count = 5
         credits = 10
 
-        with patch(
-            "src.services.billing.usage_tracking_service.record_usage_buffered"
-        ) as mock_buffered:
+        with patch("src.services.billing.usage_tracking_service.record_usage_buffered") as mock_buffered:
             result = await service.record_usage(
                 tenant_id=tenant_id, metric_type=metric_type, count=count, credits=credits, agent_id=agent_id
             )

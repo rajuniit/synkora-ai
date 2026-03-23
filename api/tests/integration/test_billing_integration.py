@@ -108,7 +108,9 @@ class TestCreditTransactionsIntegration:
         headers, tenant_id, account = auth_headers
 
         # TransactionType enum uses UPPERCASE: PURCHASE, USAGE, REFUND, etc.
-        response = await async_client.get("/api/v1/billing/credits/transactions?transaction_type=USAGE", headers=headers)
+        response = await async_client.get(
+            "/api/v1/billing/credits/transactions?transaction_type=USAGE", headers=headers
+        )
 
         assert response.status_code == status.HTTP_200_OK
         data = response.json()

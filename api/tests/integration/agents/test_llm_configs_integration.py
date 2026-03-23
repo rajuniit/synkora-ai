@@ -50,9 +50,7 @@ async def auth_headers(async_client: AsyncClient, async_db_session: AsyncSession
 
 class TestLLMConfigsIntegration:
     @pytest.mark.asyncio
-    async def test_llm_config_lifecycle(
-        self, async_client: AsyncClient, async_db_session: AsyncSession, auth_headers
-    ):
+    async def test_llm_config_lifecycle(self, async_client: AsyncClient, async_db_session: AsyncSession, auth_headers):
         headers, tenant_id, account_id = auth_headers
 
         # 1. Create Agent

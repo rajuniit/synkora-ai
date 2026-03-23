@@ -152,7 +152,9 @@ class TestDataSourcesTenantIsolation:
     """Test data sources tenant isolation."""
 
     @pytest.mark.asyncio
-    async def test_data_sources_list_is_tenant_isolated(self, async_client: AsyncClient, async_db_session: AsyncSession):
+    async def test_data_sources_list_is_tenant_isolated(
+        self, async_client: AsyncClient, async_db_session: AsyncSession
+    ):
         """Test that users only see their own tenant's data sources."""
         # Create first user/tenant
         email1 = f"tenant1_ds_{uuid.uuid4().hex[:8]}@example.com"

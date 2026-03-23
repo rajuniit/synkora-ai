@@ -259,7 +259,9 @@ class TestADKToolRegistryExecution:
     @pytest.mark.asyncio
     async def test_execute_tool_git_clone(self):
         # Patch the name in the module where it is imported from (the registry wrapper)
-        with patch("src.services.agents.internal_tools.git_repo_tools.internal_git_clone_repo", new_callable=AsyncMock) as mock_clone:
+        with patch(
+            "src.services.agents.internal_tools.git_repo_tools.internal_git_clone_repo", new_callable=AsyncMock
+        ) as mock_clone:
             mock_clone.return_value = {"path": "/tmp/repo"}
 
             # Create registry inside patch context

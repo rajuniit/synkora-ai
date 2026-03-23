@@ -364,7 +364,9 @@ class TestEscalationsTenantIsolation:
     """Test escalations tenant isolation."""
 
     @pytest.mark.asyncio
-    async def test_cannot_access_other_tenant_escalation(self, async_client: AsyncClient, async_db_session: AsyncSession):
+    async def test_cannot_access_other_tenant_escalation(
+        self, async_client: AsyncClient, async_db_session: AsyncSession
+    ):
         """Test that users cannot access escalations from other tenants."""
         # Create first user/tenant
         email1 = f"tenant1_esc_{uuid.uuid4().hex[:8]}@example.com"

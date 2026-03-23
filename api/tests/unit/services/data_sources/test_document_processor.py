@@ -167,9 +167,7 @@ class TestDocumentProcessor:
                 mock_result_count = MagicMock()
                 mock_result_count.scalar_one.return_value = 1
 
-                mock_db_session.execute = AsyncMock(
-                    side_effect=[mock_result_none, mock_result_count]
-                )
+                mock_db_session.execute = AsyncMock(side_effect=[mock_result_none, mock_result_count])
 
                 # Mock Image extraction
                 processor._extract_and_store_images = AsyncMock()

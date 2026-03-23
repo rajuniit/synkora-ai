@@ -301,7 +301,9 @@ class TestAgentCapabilitiesIntegration:
         )
 
         # Then disable it
-        response = await async_client.delete(f"/api/v1/agents/{test_agent.id}/capabilities/files-storage", headers=headers)
+        response = await async_client.delete(
+            f"/api/v1/agents/{test_agent.id}/capabilities/files-storage", headers=headers
+        )
         assert response.status_code == status.HTTP_200_OK
         data = response.json()
         assert data["success"] is True
@@ -356,7 +358,9 @@ class TestAgentToolsTenantIsolation:
     """Test Agent Tools tenant isolation."""
 
     @pytest.mark.asyncio
-    async def test_cannot_access_other_tenant_agent_tools(self, async_client: AsyncClient, async_db_session: AsyncSession):
+    async def test_cannot_access_other_tenant_agent_tools(
+        self, async_client: AsyncClient, async_db_session: AsyncSession
+    ):
         """Test that users cannot access tools for agents from other tenants."""
         from src.models import Account, AccountStatus
 
@@ -377,7 +381,9 @@ class TestAgentToolsTenantIsolation:
         account1.status = AccountStatus.ACTIVE
         await async_db_session.commit()
 
-        login1 = await async_client.post("/console/api/auth/login", json={"email": email1, "password": "SecureTestPass123!"})
+        login1 = await async_client.post(
+            "/console/api/auth/login", json={"email": email1, "password": "SecureTestPass123!"}
+        )
         login1.json()["data"]["access_token"]
 
         # Create agent for tenant 1
@@ -410,7 +416,9 @@ class TestAgentToolsTenantIsolation:
         account2.status = AccountStatus.ACTIVE
         await async_db_session.commit()
 
-        login2 = await async_client.post("/console/api/auth/login", json={"email": email2, "password": "SecureTestPass123!"})
+        login2 = await async_client.post(
+            "/console/api/auth/login", json={"email": email2, "password": "SecureTestPass123!"}
+        )
         token2 = login2.json()["data"]["access_token"]
         headers2 = {"Authorization": f"Bearer {token2}"}
 
