@@ -45,6 +45,9 @@ jobs:
       - name: Checkout code
         uses: actions/checkout@v4
 
+      - name: Use CI test environment
+        run: cp .env.test.ci .env.test
+
       - name: Set up Python 3.11
         uses: actions/setup-python@v5
         with:
