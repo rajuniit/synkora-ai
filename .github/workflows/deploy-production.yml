@@ -232,6 +232,7 @@ jobs:
       - name: Run database migrations
         run: |
           IMAGE_TAG="${{ github.sha }}"
+          kubectl delete pod alembic-migrate-${IMAGE_TAG:0:8} -n ${{ env.NAMESPACE }} --ignore-not-found=true
           kubectl run alembic-migrate-${IMAGE_TAG:0:8} \
             --image=${{ env.ECR_REGISTRY }}/synkora-api:${IMAGE_TAG} \
             --restart=Never \
