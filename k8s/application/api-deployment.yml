@@ -60,7 +60,7 @@ spec:
             name: synkora-secrets
         resources:
           requests:
-            memory: "1500Mi"
+            memory: "1Gi"
             cpu: "500m"
             ephemeral-storage: "1Gi"
           limits:

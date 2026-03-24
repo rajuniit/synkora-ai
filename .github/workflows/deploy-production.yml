@@ -189,6 +189,29 @@ jobs:
           kubectl apply -f k8s/application/flower-deployment.yml
           kubectl apply -f k8s/application/flower-ingress.yml
 
+      - name: Run database migrations
+        run: |
+          IMAGE_TAG="${{ github.sha }}"
+          kubectl run alembic-migrate-${IMAGE_TAG:0:8} \
+            --image=${{ env.ECR_REGISTRY }}/synkora-api:${IMAGE_TAG} \
+            --restart=Never \
+            --namespace=${{ env.NAMESPACE }} \
+            --overrides='{"spec":{"imagePullSecrets":[{"name":"ecr-registry-secret"}],"containers":[{"name":"migrate","image":"${{ env.ECR_REGISTRY }}/synkora-api:'"${IMAGE_TAG}"'","command":["alembic","upgrade","head"],"envFrom":[{"secretRef":{"name":"synkora-secrets"}}]}]}}' \
+            --command -- alembic upgrade head
+          echo "Waiting for migration to complete..."
+          kubectl wait pod/alembic-migrate-${IMAGE_TAG:0:8} \
+            --for=condition=Ready \
+            --timeout=30s \
+            -n ${{ env.NAMESPACE }} || true
+          kubectl logs -f alembic-migrate-${IMAGE_TAG:0:8} -n ${{ env.NAMESPACE }}
+          EXIT_CODE=$(kubectl get pod alembic-migrate-${IMAGE_TAG:0:8} -n ${{ env.NAMESPACE }} -o jsonpath='{.status.containerStatuses[0].state.terminated.exitCode}')
+          kubectl delete pod alembic-migrate-${IMAGE_TAG:0:8} -n ${{ env.NAMESPACE }} --ignore-not-found=true
+          if [ "$EXIT_CODE" != "0" ]; then
+            echo "Migration failed with exit code $EXIT_CODE, aborting deploy."
+            exit 1
+          fi
+          echo "Migration completed successfully."
+
       - name: Deploy API
         run: |
           IMAGE_TAG="${{ github.sha }}"
