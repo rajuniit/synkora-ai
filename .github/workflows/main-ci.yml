@@ -46,6 +46,8 @@ jobs:
               - 'docker-compose.yml'
               - 'api/Dockerfile'
               - 'web/Dockerfile'
+              - 'services/ml/**'
+              - 'services/scraper/**'
               - '.github/workflows/docker-build.yml'
 
   style-check:

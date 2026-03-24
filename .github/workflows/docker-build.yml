@@ -73,3 +73,67 @@ jobs:
           cache-to: type=gha,mode=max
           build-args: |
             NEXT_PUBLIC_API_URL=http://localhost:5000
+
+  build-ml:
+    name: Build ML Service Docker Image
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Free disk space
+        uses: jlumbroso/free-disk-space@main
+        with:
+          tool-cache: false
+          android: true
+          dotnet: true
+          haskell: true
+          large-packages: true
+          docker-images: true
+          swap-storage: true
+
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3
+
+      - name: Build ML service image
+        uses: docker/build-push-action@v5
+        with:
+          context: ./services/ml
+          file: ./services/ml/Dockerfile
+          push: false
+          tags: synkora-ml:test
+          cache-from: type=gha,scope=ml
+          cache-to: type=gha,mode=max,scope=ml
+
+  build-scraper:
+    name: Build Scraper Service Docker Image
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Free disk space
+        uses: jlumbroso/free-disk-space@main
+        with:
+          tool-cache: false
+          android: true
+          dotnet: true
+          haskell: true
+          large-packages: true
+          docker-images: true
+          swap-storage: true
+
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3
+
+      - name: Build scraper service image
+        uses: docker/build-push-action@v5
+        with:
+          context: ./services/scraper
+          file: ./services/scraper/Dockerfile
+          push: false
+          tags: synkora-scraper:test
+          cache-from: type=gha,scope=scraper
+          cache-to: type=gha,mode=max,scope=scraper
