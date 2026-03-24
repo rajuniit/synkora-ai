@@ -245,6 +245,10 @@ jobs:
             --timeout=180s \
             -n ${{ env.NAMESPACE }} || true
           kubectl logs -f alembic-migrate-${IMAGE_TAG:0:8} -n ${{ env.NAMESPACE }} || true
+          kubectl wait pod/alembic-migrate-${IMAGE_TAG:0:8} \
+            --for=jsonpath='{.status.phase}'=Succeeded \
+            --timeout=60s \
+            -n ${{ env.NAMESPACE }} || true
           EXIT_CODE=$(kubectl get pod alembic-migrate-${IMAGE_TAG:0:8} -n ${{ env.NAMESPACE }} -o jsonpath='{.status.containerStatuses[0].state.terminated.exitCode}')
           kubectl delete pod alembic-migrate-${IMAGE_TAG:0:8} -n ${{ env.NAMESPACE }} --ignore-not-found=true
           if [ "$EXIT_CODE" != "0" ]; then
