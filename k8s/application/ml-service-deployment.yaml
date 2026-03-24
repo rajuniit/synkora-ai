@@ -1,0 +1,87 @@
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: synkora-ml
+  namespace: synkora-production
+  labels:
+    app: synkora
+    component: ml
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: synkora
+      component: ml
+  template:
+    metadata:
+      labels:
+        app: synkora
+        component: ml
+    spec:
+      imagePullSecrets:
+      - name: ecr-registry-secret
+      containers:
+      - name: ml
+        image: IMAGE_PLACEHOLDER
+        imagePullPolicy: Always
+        ports:
+        - containerPort: 5002
+          name: http
+          protocol: TCP
+        resources:
+          requests:
+            memory: "1.5Gi"
+            cpu: "500m"
+          limits:
+            memory: "3Gi"
+            cpu: "2000m"
+        livenessProbe:
+          httpGet:
+            path: /health
+            port: 5002
+          initialDelaySeconds: 60
+          periodSeconds: 30
+          timeoutSeconds: 10
+          failureThreshold: 3
+        readinessProbe:
+          httpGet:
+            path: /health
+            port: 5002
+          initialDelaySeconds: 30
+          periodSeconds: 10
+          timeoutSeconds: 5
+          failureThreshold: 3
+        startupProbe:
+          httpGet:
+            path: /health
+            port: 5002
+          initialDelaySeconds: 0
+          periodSeconds: 10
+          timeoutSeconds: 5
+          failureThreshold: 30
+        volumeMounts:
+        - name: model-cache
+          mountPath: /root/.cache
+      volumes:
+      - name: model-cache
+        emptyDir: {}
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: synkora-ml
+  namespace: synkora-production
+  labels:
+    app: synkora
+    component: ml
+spec:
+  type: ClusterIP
+  selector:
+    app: synkora
+    component: ml
+  ports:
+  - name: http
+    port: 5002
+    targetPort: 5002
+    protocol: TCP

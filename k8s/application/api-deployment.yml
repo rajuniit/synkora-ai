@@ -103,17 +103,13 @@ spec:
           mountPath: /app/cache
         - name: storage
           mountPath: /app/storage
-        - name: crawl4ai
-          mountPath: /home/appuser/.crawl4ai
       volumes:
       - name: tmp
         emptyDir:
-          sizeLimit: 20Gi
+          sizeLimit: 5Gi
       - name: cache
         emptyDir: {}
       - name: storage
-        emptyDir: {}
-      - name: crawl4ai
         emptyDir: {}
       affinity:
         podAntiAffinity:

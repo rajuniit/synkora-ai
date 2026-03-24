@@ -50,7 +50,8 @@ ENV PYTHONIOENCODING=utf-8
 
 WORKDIR /app/api
 
-# Install runtime dependencies including Node.js for MCP stdio servers, GitHub CLI, SAML/xmlsec, and Playwright dependencies
+# Install runtime dependencies: Node.js (npx for MCP servers), SAML/xmlsec libs
+# Playwright/Chromium now lives in synkora-scraper; those libs removed here.
 RUN apt-get update \
     && apt-get install -y --no-install-recommends \
         curl \
@@ -58,47 +59,21 @@ RUN apt-get update \
         libpq5 \
         libmagic1 \
         ca-certificates \
-        gnupg \
         git \
         openssh-client \
         # SAML/xmlsec runtime libraries
         libxml2 \
         libxmlsec1 \
         libxmlsec1-openssl \
-        # Playwright/Chromium dependencies
-        libnss3 \
-        libnspr4 \
-        libatk1.0-0 \
-        libatk-bridge2.0-0 \
-        libcups2 \
-        libdrm2 \
-        libdbus-1-3 \
-        libxkbcommon0 \
-        libxcomposite1 \
-        libxdamage1 \
-        libxfixes3 \
-        libxrandr2 \
-        libgbm1 \
-        libpango-1.0-0 \
-        libcairo2 \
-        libasound2 \
-        libatspi2.0-0 \
-    && mkdir -p /etc/apt/keyrings \
-    && curl -fsSL https://deb.nodesource.com/gpgkey/nodesource-repo.gpg.key | gpg --dearmor -o /etc/apt/keyrings/nodesource.gpg \
-    && echo "deb [signed-by=/etc/apt/keyrings/nodesource.gpg] https://deb.nodesource.com/node_20.x nodistro main" | tee /etc/apt/sources.list.d/nodesource.list \
-    && curl -fsSL https://cli.github.com/packages/githubcli-archive-keyring.gpg | gpg --dearmor -o /usr/share/keyrings/githubcli-archive-keyring.gpg \
-    && echo "deb [arch=$(dpkg --print-architecture) signed-by=/usr/share/keyrings/githubcli-archive-keyring.gpg] https://cli.github.com/packages stable main" | tee /etc/apt/sources.list.d/github-cli.list \
-    && apt-get update \
-    && apt-get install -y --no-install-recommends nodejs gh \
+        # Node.js (Debian bookworm ships Node 18 — sufficient for npx/MCP)
+        nodejs \
+        npm \
     && apt-get autoremove -y \
     && rm -rf /var/lib/apt/lists/*
 
 # Copy Python packages from packages stage
 COPY --from=packages /usr/local/lib/python3.11/site-packages /usr/local/lib/python3.11/site-packages
 COPY --from=packages /usr/local/bin /usr/local/bin
-
-# Install Playwright browsers for crawl4ai
-RUN playwright install chromium --with-deps
 
 # Configure git identity for agent git operations (commit requires user.name + user.email)
 # These are overridden at runtime by GIT_AGENT_EMAIL / GIT_AGENT_NAME env vars in git_commit_tools.py

@@ -70,9 +70,7 @@ dependencies = [
     # Pin xmlsec to 1.3.13 to avoid libxml2 version mismatch bug in newer versions
     "xmlsec==1.3.13",
     "python3-saml>=1.16.0,<2.0.0",
-    # Web Scraping
-    "crawl4ai>=0.4.0,<1.0.0",
-    "playwright>=1.48.0,<2.0.0",
+    # python-dateutil used by various date parsing helpers
     "python-dateutil>=2.8.2,<3.0.0",
     # AWS S3 Storage
     "boto3>=1.35.0,<2.0.0",
@@ -94,11 +92,10 @@ dependencies = [
     "reportlab>=4.0.0,<5.0.0",
     "python-pptx>=0.6.23,<1.0.0",
     "markdown>=3.5.0,<4.0.0",
-    # Vector Database & Embeddings
+    # Vector Database
     "qdrant-client>=1.12.0,<2.0.0",
     "pinecone-client>=5.0.0,<6.0.0",
-    "sentence-transformers>=3.3.0,<4.0.0",
-    "faiss-cpu>=1.8.0,<2.0.0",
+    # sentence-transformers and faiss-cpu live in synkora-ml microservice
     # Background Tasks
     "apscheduler>=3.10.4,<4.0.0",
     "croniter>=2.0.0,<3.0.0",

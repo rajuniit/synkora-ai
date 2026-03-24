@@ -1,4 +1,4 @@
-"""Embedding service for generating vector embeddings."""
+"""Embedding service — delegates sentence_transformers to the ML microservice."""
 
 import logging
 
@@ -6,19 +6,17 @@ logger = logging.getLogger(__name__)
 
 
 class EmbeddingService:
-    """Service for generating text embeddings using multiple providers."""
+    """Service for generating text embeddings using multiple providers.
+
+    The ``sentence_transformers`` and ``huggingface`` providers are served by the
+    ML microservice (``synkora-ml``) so that the API image does not need to bundle
+    those heavy packages.  All other providers (OPENAI, cohere, LITELLM) are still
+    executed in-process.
+    """
 
     def __init__(
         self, provider: str = "sentence_transformers", model_name: str = "all-MiniLM-L6-v2", config: dict | None = None
     ):
-        """
-        Initialize the embedding service.
-
-        Args:
-            provider: Embedding provider ('sentence_transformers', 'OPENAI', 'cohere', 'huggingface', 'LITELLM')
-            model_name: Name of the model to use
-            config: Provider-specific configuration (API keys, api_base, etc.)
-        """
         self.provider = provider
         self.model_name = model_name
         self.config = config or {}
@@ -31,10 +29,9 @@ class EmbeddingService:
         try:
             logger.info(f"Loading embedding model: {self.provider}/{self.model_name}")
 
-            if self.provider == "sentence_transformers":
-                from sentence_transformers import SentenceTransformer
-
-                self.model = SentenceTransformer(self.model_name)
+            if self.provider in ("sentence_transformers", "huggingface"):
+                # Handled by ML microservice — no local model to load
+                logger.info(f"Using ML microservice for provider={self.provider}")
 
             elif self.provider == "OPENAI":
                 import openai
@@ -52,18 +49,9 @@ class EmbeddingService:
                     raise ValueError("Cohere API key not provided in embedding_config")
                 self.client = cohere.Client(api_key)
 
-            elif self.provider == "huggingface":
-                from sentence_transformers import SentenceTransformer
-
-                # HuggingFace models can be loaded via sentence-transformers
-                self.model = SentenceTransformer(self.model_name)
-
             elif self.provider == "LITELLM":
                 import litellm
 
-                # LiteLLM doesn't need a client object, it's a function-based API
-                # It routes to the appropriate provider based on model name prefix
-                # e.g., "openai/text-embedding-ada-002", "cohere/embed-english-v3.0"
                 self.client = litellm
                 if self.config.get("api_base"):
                     litellm.api_base = self.config["api_base"]
@@ -78,21 +66,15 @@ class EmbeddingService:
             raise
 
     def embed_text(self, text: str) -> list[float]:
-        """
-        Generate embedding for a single text.
-
-        Args:
-            text: Text to embed
-
-        Returns:
-            List of floats representing the embedding vector
-        """
+        """Generate embedding for a single text."""
         try:
-            if self.provider in ["sentence_transformers", "huggingface"]:
-                if not self.model:
-                    raise RuntimeError("Embedding model not loaded")
-                embedding = self.model.encode(text, convert_to_numpy=True)
-                return embedding.tolist()
+            if self.provider in ("sentence_transformers", "huggingface"):
+                import asyncio
+
+                from src.core.ml_client import get_ml_client
+
+                client = get_ml_client()
+                return asyncio.run(client.embed_text(text, model=self.model_name))
 
             elif self.provider == "OPENAI":
                 response = self.client.embeddings.create(model=self.model_name, input=text)
@@ -105,7 +87,6 @@ class EmbeddingService:
             elif self.provider == "LITELLM":
                 import litellm
 
-                # LiteLLM embedding API
                 response = litellm.embedding(
                     model=self.model_name,
                     input=[text],
@@ -119,42 +100,28 @@ class EmbeddingService:
             raise
 
     def embed_texts(self, texts: list[str], batch_size: int = 32) -> list[list[float]]:
-        """
-        Generate embeddings for multiple texts in batches.
-
-        Args:
-            texts: List of texts to embed
-            batch_size: Number of texts to process in each batch
-
-        Returns:
-            List of embedding vectors
-        """
+        """Generate embeddings for multiple texts in batches."""
         try:
-            if self.provider in ["sentence_transformers", "huggingface"]:
-                if not self.model:
-                    raise RuntimeError("Embedding model not loaded")
-                embeddings = self.model.encode(
-                    texts,
-                    batch_size=batch_size,
-                    show_progress_bar=len(texts) > 100,
-                    convert_to_numpy=True,
-                )
-                return [emb.tolist() for emb in embeddings]
+            if self.provider in ("sentence_transformers", "huggingface"):
+                import asyncio
+
+                from src.core.ml_client import get_ml_client
+
+                client = get_ml_client()
+                # ML service handles batching internally
+                return asyncio.run(client.embed(texts, model=self.model_name))
 
             elif self.provider == "OPENAI":
-                # OpenAI supports batch embedding
                 response = self.client.embeddings.create(model=self.model_name, input=texts)
                 return [item.embedding for item in response.data]
 
             elif self.provider == "cohere":
-                # Cohere supports batch embedding
                 response = self.client.embed(texts=texts, model=self.model_name)
                 return response.embeddings
 
             elif self.provider == "LITELLM":
                 import litellm
 
-                # LiteLLM supports batch embedding
                 response = litellm.embedding(
                     model=self.model_name,
                     input=texts,
@@ -168,23 +135,18 @@ class EmbeddingService:
             raise
 
     def get_embedding_dimension(self) -> int:
-        """
-        Get the dimension of the embedding vectors.
-
-        Returns:
-            Dimension of the embedding vectors
-        """
-        # Always use dimension from config if provided
+        """Get the dimension of the embedding vectors."""
         if "dimension" in self.config:
             return self.config["dimension"]
 
-        # For sentence transformers, we can get it from the model
-        if self.provider in ["sentence_transformers", "huggingface"]:
-            if not self.model:
-                raise RuntimeError("Embedding model not loaded")
-            return self.model.get_sentence_embedding_dimension()
+        if self.provider in ("sentence_transformers", "huggingface"):
+            import asyncio
 
-        # For all other providers (OPENAI, cohere, LITELLM), dimension must be configured
+            from src.core.ml_client import get_ml_client
+
+            client = get_ml_client()
+            return asyncio.run(client.get_embedding_dimension(model=self.model_name))
+
         raise ValueError(
             f"Embedding dimension not configured for provider '{self.provider}'. "
             "Please specify 'dimension' in embedding_config."

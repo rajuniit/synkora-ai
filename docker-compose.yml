@@ -328,6 +328,26 @@ services:
     networks:
       - synkora-network
 
+  # ML Microservice (sentence-transformers + FAISS)
+  # Internal only — reachable within the Docker network as http://synkora-ml:5002
+  synkora-ml:
+    build:
+      context: ./services/ml
+      dockerfile: Dockerfile
+    container_name: synkora-ml
+    networks:
+      - synkora-network
+
+  # Scraper Microservice (Playwright browser + crawl4ai)
+  # Internal only — reachable within the Docker network as http://synkora-scraper:5003
+  synkora-scraper:
+    build:
+      context: ./services/scraper
+      dockerfile: Dockerfile
+    container_name: synkora-scraper
+    networks:
+      - synkora-network
+
   # API Service
   api:
     build:
@@ -339,6 +359,8 @@ services:
     environment:
       - DB_HOST=postgres
       - PYTHONUNBUFFERED=1
+      - ML_SERVICE_URL=http://synkora-ml:5002
+      - SCRAPER_SERVICE_URL=http://synkora-scraper:5003
       # Workspace Settings (uses /tmp which is already writable)
       - WORKSPACE_BASE_PATH=/tmp/synkora/workspaces
       - WORKSPACE_TTL_HOURS=24
@@ -361,6 +383,10 @@ services:
         condition: service_healthy
       minio:
         condition: service_healthy
+      synkora-ml:
+        condition: service_started
+      synkora-scraper:
+        condition: service_started
     networks:
       - synkora-network
 
@@ -377,6 +403,8 @@ services:
       - DB_HOST=postgres
       - PYTHONUNBUFFERED=1
       - CELERY_CONCURRENCY=${CELERY_CONCURRENCY:-4}
+      - ML_SERVICE_URL=http://synkora-ml:5002
+      - SCRAPER_SERVICE_URL=http://synkora-scraper:5003
       # Workspace Settings (uses /tmp which is already writable)
       - WORKSPACE_BASE_PATH=/tmp/synkora/workspaces
       - WORKSPACE_TTL_HOURS=24
@@ -404,6 +432,8 @@ services:
     environment:
       - DB_HOST=postgres
       - PYTHONUNBUFFERED=1
+      - ML_SERVICE_URL=http://synkora-ml:5002
+      - SCRAPER_SERVICE_URL=http://synkora-scraper:5003
       # Workspace Settings (uses /tmp which is already writable)
       - WORKSPACE_BASE_PATH=/tmp/synkora/workspaces
       - WORKSPACE_TTL_HOURS=24
@@ -430,6 +460,8 @@ services:
     environment:
       - DB_HOST=postgres
       - PYTHONUNBUFFERED=1
+      - ML_SERVICE_URL=http://synkora-ml:5002
+      - SCRAPER_SERVICE_URL=http://synkora-scraper:5003
       # Workspace Settings (uses /tmp which is already writable)
       - WORKSPACE_BASE_PATH=/tmp/synkora/workspaces
       - WORKSPACE_TTL_HOURS=24
@@ -456,6 +488,8 @@ services:
     environment:
       - DB_HOST=postgres
       - PYTHONUNBUFFERED=1
+      - ML_SERVICE_URL=http://synkora-ml:5002
+      - SCRAPER_SERVICE_URL=http://synkora-scraper:5003
       - BOT_WORKER_CAPACITY=1000
       - BOT_WORKER_HEALTH_PORT=8080
     volumes:

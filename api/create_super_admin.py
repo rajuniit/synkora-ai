@@ -125,6 +125,7 @@ def create_super_admin(email: str, password: str, name: str, tenant_name: str, d
         # 7. Create Enterprise subscription (never-expiring) for super admin
         print("\n📋 Step 6: Assigning Enterprise subscription...")
         from datetime import datetime, timezone
+
         enterprise_plan = (
             db.query(SubscriptionPlan)
             .filter(SubscriptionPlan.tier == PlanTier.ENTERPRISE, SubscriptionPlan.is_active.is_(True))

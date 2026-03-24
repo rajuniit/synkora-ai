@@ -1,0 +1,89 @@
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: synkora-scraper
+  namespace: synkora-production
+  labels:
+    app: synkora
+    component: scraper
+spec:
+  # Single replica — browser sessions are stateful in-memory
+  replicas: 1
+  selector:
+    matchLabels:
+      app: synkora
+      component: scraper
+  template:
+    metadata:
+      labels:
+        app: synkora
+        component: scraper
+    spec:
+      imagePullSecrets:
+      - name: ecr-registry-secret
+      containers:
+      - name: scraper
+        image: IMAGE_PLACEHOLDER
+        imagePullPolicy: Always
+        ports:
+        - containerPort: 5003
+          name: http
+          protocol: TCP
+        resources:
+          requests:
+            memory: "1Gi"
+            cpu: "500m"
+          limits:
+            memory: "2Gi"
+            cpu: "1000m"
+        livenessProbe:
+          httpGet:
+            path: /health
+            port: 5003
+          initialDelaySeconds: 30
+          periodSeconds: 30
+          timeoutSeconds: 10
+          failureThreshold: 3
+        readinessProbe:
+          httpGet:
+            path: /health
+            port: 5003
+          initialDelaySeconds: 10
+          periodSeconds: 10
+          timeoutSeconds: 5
+          failureThreshold: 3
+        volumeMounts:
+        - name: tmp
+          mountPath: /tmp
+        - name: crawl4ai
+          mountPath: /home/appuser/.crawl4ai
+        - name: playwright-tmp
+          mountPath: /ms-playwright/tmp
+      volumes:
+      - name: tmp
+        emptyDir:
+          sizeLimit: 5Gi
+      - name: crawl4ai
+        emptyDir: {}
+      - name: playwright-tmp
+        emptyDir: {}
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: synkora-scraper
+  namespace: synkora-production
+  labels:
+    app: synkora
+    component: scraper
+spec:
+  type: ClusterIP
+  selector:
+    app: synkora
+    component: scraper
+  ports:
+  - name: http
+    port: 5003
+    targetPort: 5003
+    protocol: TCP

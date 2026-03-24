@@ -15,9 +15,13 @@ import logging
 from dataclasses import dataclass
 from typing import Any
 
-from .browser_session import BrowserSession
-
 logger = logging.getLogger(__name__)
+
+
+def _scraper():
+    from src.core.scraper_client import get_scraper_client
+
+    return get_scraper_client()
 
 
 @dataclass
@@ -758,180 +762,18 @@ async def internal_browser_set_country(
     runtime_context: Any | None = None,
     config: dict[str, Any] | None = None,
 ) -> dict[str, Any]:
-    """
-    Configure browser session to simulate browsing from a specific country.
-
-    This sets:
-    - Geolocation (latitude/longitude)
-    - Timezone
-    - Locale/Language
-    - Accept-Language headers
-    - Proxy (optional) - for IP-based geolocation
-
-    Args:
-        country_code: ISO 3166-1 alpha-2 country code (e.g., "US", "DE", "JP", "AM")
-        session_id: Browser session ID (default: "default")
-        apply_to_existing: If True, recreates the context with new settings.
-                          If False, only affects new pages/sessions.
-        proxy_url: Proxy server URL for IP-based geolocation. Formats:
-                   - http://host:port
-                   - http://user:pass@host:port
-                   - socks5://user:pass@host:port
-                   For country-specific proxies (e.g., Bright Data):
-                   - http://user-country-am:pass@proxy.brightdata.com:22225
-        custom_latitude: Override the default latitude for the country
-        custom_longitude: Override the default longitude for the country
-        custom_timezone: Override the default timezone
-        custom_locale: Override the default locale
-
-    Returns:
-        Dict with configuration result including applied settings
-
-    Example:
-        # Simulate browsing from Armenia (browser-level only)
-        result = await internal_browser_set_country(country_code="AM")
-
-        # Full simulation with proxy (browser + IP)
-        result = await internal_browser_set_country(
-            country_code="AM",
-            proxy_url="http://user-country-am:pass@proxy.brightdata.com:22225"
-        )
-
-        # Simulate from Germany with custom location
-        result = await internal_browser_set_country(
-            country_code="DE",
-            custom_latitude=48.1351,  # Munich
-            custom_longitude=11.5820,
-            proxy_url="http://user:pass@de-proxy.example.com:8080"
-        )
-    """
+    """Configure browser session to simulate browsing from a specific country."""
     try:
-        country = get_country_config(country_code)
-        if not country:
-            return {
-                "success": False,
-                "error": f"Country code '{country_code}' not found. Use internal_browser_list_countries to see supported countries.",
-                "supported_countries": len(COUNTRY_DATA),
-            }
-
-        # Determine settings
-        latitude = custom_latitude if custom_latitude is not None else country.latitude
-        longitude = custom_longitude if custom_longitude is not None else country.longitude
-        timezone = custom_timezone or country.timezone
-        locale = custom_locale or country.locale
-        languages = country.languages
-
-        # Get or create session
-        session = await BrowserSession.get_or_create(session_id)
-
-        # Parse proxy config if provided
-        proxy_config = None
-        if proxy_url:
-            try:
-                proxy_config = parse_proxy_url(proxy_url)
-            except Exception as e:
-                return {
-                    "success": False,
-                    "error": f"Invalid proxy URL: {e}. Expected format: http://user:pass@host:port",
-                }
-
-        # Build context options for country simulation
-        geolocation_config = {
-            "geolocation": {"latitude": latitude, "longitude": longitude, "accuracy": 100},
-            "timezone_id": timezone,
-            "locale": locale,
-            "permissions": ["geolocation"],  # Grant geolocation permission
-            "extra_http_headers": {"Accept-Language": build_accept_language_header(languages)},
-        }
-
-        # Apply to existing session by recreating context
-        if apply_to_existing and session.context:
-            # Store current pages' URLs
-            current_urls = {}
-            for page_id, page in session.pages.items():
-                try:
-                    current_urls[page_id] = page.url
-                except Exception:
-                    pass
-
-            # Close existing context and browser (proxy requires browser-level config)
-            await session.context.close()
-
-            if proxy_config:
-                # Proxy is set at browser launch level in Playwright
-                # Need to relaunch browser with proxy
-                if session.browser:
-                    await session.browser.close()
-                session.browser = await session.playwright.chromium.launch(
-                    headless=True,
-                    proxy=proxy_config,
-                    args=[
-                        "--no-sandbox",
-                        "--disable-setuid-sandbox",
-                        "--disable-dev-shm-usage",
-                        "--disable-accelerated-2d-canvas",
-                        "--disable-gpu",
-                    ],
-                )
-
-            # Create new context with country settings
-            session.context = await session.browser.new_context(
-                viewport={"width": 1280, "height": 720},
-                user_agent=get_country_user_agent(country_code),
-                geolocation=geolocation_config["geolocation"],
-                timezone_id=geolocation_config["timezone_id"],
-                locale=geolocation_config["locale"],
-                permissions=geolocation_config["permissions"],
-                extra_http_headers=geolocation_config["extra_http_headers"],
-            )
-
-            # Clear old pages
-            session.pages.clear()
-            session._page_state_store.clear()
-            session.current_page_id = None
-
-            # Restore pages at their URLs
-            for page_id, url in current_urls.items():
-                try:
-                    _, page = await session.new_page(page_id)
-                    if url and url != "about:blank":
-                        await page.goto(url)
-                except Exception as e:
-                    logger.warning(f"Failed to restore page {page_id}: {e}")
-
-        # Store config in session for future reference
-        session._country_config = geolocation_config
-        session._country_code = country_code
-        session._proxy_config = proxy_config
-
-        using_proxy = proxy_config is not None
-        note = f"Browser geolocation, timezone, and locale are now simulating {country.name}."
-        if using_proxy:
-            note += " Proxy is active - IP-based geolocation will also show the target country."
-        else:
-            note += (
-                " Note: IP-based geolocation will still show your actual location."
-                " Pass proxy_url for full country simulation."
-            )
-
-        return {
-            "success": True,
-            "country_code": country_code,
-            "country_name": country.name,
-            "proxy_active": using_proxy,
-            "applied_settings": {
-                "latitude": latitude,
-                "longitude": longitude,
-                "timezone": timezone,
-                "locale": locale,
-                "languages": languages,
-                "accept_language": build_accept_language_header(languages),
-                "proxy": proxy_config["server"] if proxy_config else None,
-            },
-            "session_id": session_id,
-            "note": note,
-        }
-
+        return await _scraper().browser_set_country(
+            country_code=country_code,
+            session_id=session_id,
+            apply_to_existing=apply_to_existing,
+            proxy_url=proxy_url,
+            custom_latitude=custom_latitude,
+            custom_longitude=custom_longitude,
+            custom_timezone=custom_timezone,
+            custom_locale=custom_locale,
+        )
     except Exception as e:
         logger.error(f"Error setting country simulation: {e}")
         return {"success": False, "error": str(e)}
@@ -969,24 +811,9 @@ async def internal_browser_set_geolocation(
             return {"success": False, "error": "Latitude must be between -90 and 90"}
         if not -180 <= longitude <= 180:
             return {"success": False, "error": "Longitude must be between -180 and 180"}
-
-        session = await BrowserSession.get_or_create(session_id)
-
-        if not session.context:
-            return {"success": False, "error": "No browser context available"}
-
-        # Set geolocation on context
-        await session.context.set_geolocation({"latitude": latitude, "longitude": longitude, "accuracy": accuracy})
-
-        # Grant permission
-        await session.context.grant_permissions(["geolocation"])
-
-        return {
-            "success": True,
-            "geolocation": {"latitude": latitude, "longitude": longitude, "accuracy": accuracy},
-            "session_id": session_id,
-        }
-
+        return await _scraper().browser_set_geolocation(
+            latitude=latitude, longitude=longitude, accuracy=accuracy, session_id=session_id
+        )
     except Exception as e:
         logger.error(f"Error setting geolocation: {e}")
         return {"success": False, "error": str(e)}
@@ -1111,32 +938,7 @@ async def internal_browser_get_current_location(
         result = await internal_browser_get_current_location()
     """
     try:
-        session = await BrowserSession.get_or_create(session_id)
-
-        # Get stored country config if set
-        country_code = getattr(session, "_country_code", None)
-        country_config = getattr(session, "_country_config", None)
-        proxy_config = getattr(session, "_proxy_config", None)
-
-        if country_code and country_config:
-            return {
-                "success": True,
-                "simulating_country": country_code,
-                "settings": country_config,
-                "proxy_active": proxy_config is not None,
-                "proxy_server": proxy_config.get("server") if proxy_config else None,
-                "session_id": session_id,
-            }
-
-        return {
-            "success": True,
-            "simulating_country": None,
-            "proxy_active": proxy_config is not None,
-            "proxy_server": proxy_config.get("server") if proxy_config else None,
-            "message": "No country simulation configured. Browser using default settings.",
-            "session_id": session_id,
-        }
-
+        return await _scraper().browser_get_location(session_id=session_id)
     except Exception as e:
         logger.error(f"Error getting current location: {e}")
         return {"success": False, "error": str(e)}
@@ -1186,74 +988,7 @@ async def internal_browser_set_proxy(
         )
     """
     try:
-        # Parse proxy URL
-        try:
-            proxy_config = parse_proxy_url(proxy_url)
-        except Exception as e:
-            return {
-                "success": False,
-                "error": f"Invalid proxy URL: {e}. Expected format: http://user:pass@host:port",
-            }
-
-        session = await BrowserSession.get_or_create(session_id)
-
-        # Store current pages' URLs
-        current_urls = {}
-        if session.context:
-            for page_id, page in session.pages.items():
-                try:
-                    current_urls[page_id] = page.url
-                except Exception:
-                    pass
-            await session.context.close()
-
-        # Close browser and relaunch with proxy
-        if session.browser:
-            await session.browser.close()
-
-        session.browser = await session.playwright.chromium.launch(
-            headless=True,
-            proxy=proxy_config,
-            args=[
-                "--no-sandbox",
-                "--disable-setuid-sandbox",
-                "--disable-dev-shm-usage",
-                "--disable-accelerated-2d-canvas",
-                "--disable-gpu",
-            ],
-        )
-
-        # Create new context
-        session.context = await session.browser.new_context(
-            viewport={"width": 1280, "height": 720},
-            user_agent="Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36",
-        )
-
-        # Clear old pages
-        session.pages.clear()
-        session._page_state_store.clear()
-        session.current_page_id = None
-
-        # Store proxy config
-        session._proxy_config = proxy_config
-
-        # Restore pages at their URLs
-        for page_id, url in current_urls.items():
-            try:
-                _, page = await session.new_page(page_id)
-                if url and url != "about:blank":
-                    await page.goto(url)
-            except Exception as e:
-                logger.warning(f"Failed to restore page {page_id}: {e}")
-
-        return {
-            "success": True,
-            "proxy_server": proxy_config["server"],
-            "authenticated": "username" in proxy_config,
-            "session_id": session_id,
-            "note": "Proxy is now active. All browser traffic will route through the proxy server.",
-        }
-
+        return await _scraper().browser_set_proxy(proxy_url=proxy_url, session_id=session_id)
     except Exception as e:
         logger.error(f"Error setting proxy: {e}")
         return {"success": False, "error": str(e)}
@@ -1277,69 +1012,7 @@ async def internal_browser_clear_proxy(
         result = await internal_browser_clear_proxy()
     """
     try:
-        session = await BrowserSession.get_or_create(session_id)
-
-        # Check if proxy is set
-        proxy_config = getattr(session, "_proxy_config", None)
-        if not proxy_config:
-            return {
-                "success": True,
-                "message": "No proxy was configured.",
-                "session_id": session_id,
-            }
-
-        # Store current pages' URLs
-        current_urls = {}
-        if session.context:
-            for page_id, page in session.pages.items():
-                try:
-                    current_urls[page_id] = page.url
-                except Exception:
-                    pass
-            await session.context.close()
-
-        # Close browser and relaunch without proxy
-        if session.browser:
-            await session.browser.close()
-
-        session.browser = await session.playwright.chromium.launch(
-            headless=True,
-            args=[
-                "--no-sandbox",
-                "--disable-setuid-sandbox",
-                "--disable-dev-shm-usage",
-                "--disable-accelerated-2d-canvas",
-                "--disable-gpu",
-            ],
-        )
-
-        # Create new context
-        session.context = await session.browser.new_context(
-            viewport={"width": 1280, "height": 720},
-            user_agent="Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36",
-        )
-
-        # Clear old pages and proxy config
-        session.pages.clear()
-        session._page_state_store.clear()
-        session.current_page_id = None
-        session._proxy_config = None
-
-        # Restore pages at their URLs
-        for page_id, url in current_urls.items():
-            try:
-                _, page = await session.new_page(page_id)
-                if url and url != "about:blank":
-                    await page.goto(url)
-            except Exception as e:
-                logger.warning(f"Failed to restore page {page_id}: {e}")
-
-        return {
-            "success": True,
-            "message": "Proxy removed. Browser now using direct connection.",
-            "session_id": session_id,
-        }
-
+        return await _scraper().browser_clear_proxy(session_id=session_id)
     except Exception as e:
         logger.error(f"Error clearing proxy: {e}")
         return {"success": False, "error": str(e)}

@@ -7,7 +7,8 @@ WORKDIR /app/api
 ENV LXML_FORCE_EXTERNAL_LIBS=1
 ENV XMLSEC_FORCE_EXTERNAL_LIBS=1
 
-# Install system dependencies including Node.js for MCP stdio servers, GitHub CLI, SAML/xmlsec, and Playwright dependencies
+# Install system dependencies including Node.js for MCP stdio servers, SAML/xmlsec
+# Playwright/Chromium now lives in synkora-scraper; those libs removed here.
 RUN apt-get update && apt-get install -y \
     postgresql-client \
     gcc \
@@ -18,7 +19,6 @@ RUN apt-get update && apt-get install -y \
     curl \
     libmagic1 \
     ca-certificates \
-    gnupg \
     git \
     openssh-client \
     libxml2-dev \
@@ -27,30 +27,8 @@ RUN apt-get update && apt-get install -y \
     libxml2 \
     libxmlsec1 \
     pkg-config \
-    libnss3 \
-    libnspr4 \
-    libatk1.0-0 \
-    libatk-bridge2.0-0 \
-    libcups2 \
-    libdrm2 \
-    libdbus-1-3 \
-    libxkbcommon0 \
-    libxcomposite1 \
-    libxdamage1 \
-    libxfixes3 \
-    libxrandr2 \
-    libgbm1 \
-    libpango-1.0-0 \
-    libcairo2 \
-    libasound2 \
-    libatspi2.0-0 \
-    && mkdir -p /etc/apt/keyrings \
-    && curl -fsSL https://deb.nodesource.com/gpgkey/nodesource-repo.gpg.key | gpg --dearmor -o /etc/apt/keyrings/nodesource.gpg \
-    && echo "deb [signed-by=/etc/apt/keyrings/nodesource.gpg] https://deb.nodesource.com/node_20.x nodistro main" | tee /etc/apt/sources.list.d/nodesource.list \
-    && curl -fsSL https://cli.github.com/packages/githubcli-archive-keyring.gpg | gpg --dearmor -o /usr/share/keyrings/githubcli-archive-keyring.gpg \
-    && echo "deb [arch=$(dpkg --print-architecture) signed-by=/usr/share/keyrings/githubcli-archive-keyring.gpg] https://cli.github.com/packages stable main" | tee /etc/apt/sources.list.d/github-cli.list \
-    && apt-get update \
-    && apt-get install -y nodejs gh \
+    nodejs \
+    npm \
     && rm -rf /var/lib/apt/lists/*
 
 # Install uv for faster dependency management
@@ -69,9 +47,6 @@ RUN pip uninstall -y lxml xmlsec && \
     XMLSEC_FORCE_EXTERNAL_LIBS=1 \
     pip install --no-binary=:all: lxml xmlsec
 
-
-# Install Playwright browsers for crawl4ai
-RUN playwright install chromium --with-deps
 
 # Copy application code
 COPY . .

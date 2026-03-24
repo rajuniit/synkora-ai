@@ -115,8 +115,10 @@ class K6RunnerService:
             cmd = [
                 "k6",
                 "run",
-                "--out", f"json={results_file}",
-                "--summary-export", str(self.results_dir / f"{job.test_run_id}_summary.json"),
+                "--out",
+                f"json={results_file}",
+                "--summary-export",
+                str(self.results_dir / f"{job.test_run_id}_summary.json"),
                 str(script_file),
             ]
 
@@ -152,7 +154,7 @@ class K6RunnerService:
                     try:
                         redis_client.publish(
                             f"k6:output:{job.test_run_id}",
-                            json.dumps({"line": line, "timestamp": datetime.now(UTC).isoformat()})
+                            json.dumps({"line": line, "timestamp": datetime.now(UTC).isoformat()}),
                         )
                     except Exception as e:
                         logger.warning(f"Failed to publish to Redis: {e}")
@@ -188,10 +190,7 @@ class K6RunnerService:
                 await self._send_callback(job.callback_url or self.callback_url, result)
 
             # Publish completion
-            redis_client.publish(
-                f"k6:complete:{job.test_run_id}",
-                json.dumps(result)
-            )
+            redis_client.publish(f"k6:complete:{job.test_run_id}", json.dumps(result))
 
             return result
 

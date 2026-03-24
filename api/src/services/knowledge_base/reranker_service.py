@@ -1,11 +1,8 @@
 """
 Reranking Service for Production-Grade RAG.
 
-Implements cross-encoder reranking to improve retrieval quality.
-Supports multiple reranking backends:
-- Sentence Transformers Cross-Encoders (local)
-- Cohere Rerank API
-- LLM-based reranking (fallback)
+The ``cross_encoder`` provider is delegated to the ML microservice so that
+``sentence-transformers`` is not required in the API image.
 """
 
 import logging
@@ -19,7 +16,7 @@ logger = logging.getLogger(__name__)
 class RerankerProvider(StrEnum):
     """Supported reranker providers."""
 
-    CROSS_ENCODER = "cross_encoder"  # Local sentence-transformers
+    CROSS_ENCODER = "cross_encoder"  # ML microservice
     COHERE = "cohere"  # Cohere Rerank API
     LLM = "llm"  # LLM-based scoring
 
@@ -37,14 +34,8 @@ class RerankResult:
 
 
 class RerankerService:
-    """
-    Production-grade reranking service for RAG.
+    """Production-grade reranking service for RAG."""
 
-    Uses cross-encoders to score query-document pairs directly,
-    providing much better relevance ranking than bi-encoder similarity alone.
-    """
-
-    # Default cross-encoder model (small and fast, good quality)
     DEFAULT_MODEL = "cross-encoder/ms-marco-MiniLM-L-6-v2"
 
     def __init__(
@@ -53,52 +44,26 @@ class RerankerService:
         model_name: str | None = None,
         config: dict[str, Any] | None = None,
     ):
-        """
-        Initialize the reranker service.
-
-        Args:
-            provider: Reranking provider to use
-            model_name: Model name (provider-specific)
-            config: Provider-specific configuration (API keys, etc.)
-        """
         self.provider = provider
         self.model_name = model_name or self.DEFAULT_MODEL
         self.config = config or {}
-        self._model = None
         self._client = None
         self._initialized = False
 
     def _lazy_init(self) -> None:
-        """Lazy initialization of the reranker model/client."""
         if self._initialized:
             return
-
         try:
-            if self.provider == RerankerProvider.CROSS_ENCODER:
-                self._init_cross_encoder()
-            elif self.provider == RerankerProvider.COHERE:
+            if self.provider == RerankerProvider.COHERE:
                 self._init_cohere()
-            # LLM provider doesn't need initialization
-
+            # CROSS_ENCODER and LLM don't need initialization here
             self._initialized = True
             logger.info(f"Initialized reranker: {self.provider.value}/{self.model_name}")
         except Exception as e:
             logger.error(f"Failed to initialize reranker: {e}")
             raise
 
-    def _init_cross_encoder(self) -> None:
-        """Initialize sentence-transformers cross-encoder."""
-        try:
-            from sentence_transformers import CrossEncoder
-
-            self._model = CrossEncoder(self.model_name)
-            logger.info(f"Loaded cross-encoder model: {self.model_name}")
-        except ImportError:
-            logger.warning("sentence-transformers not installed, falling back to LLM reranking")
-            self.provider = RerankerProvider.LLM
-
     def _init_cohere(self) -> None:
-        """Initialize Cohere rerank client."""
         try:
             import cohere
 
@@ -108,9 +73,8 @@ class RerankerService:
             self._client = cohere.Client(api_key)
             self.model_name = self.model_name or "rerank-english-v3.0"
         except ImportError:
-            logger.warning("cohere package not installed, falling back to cross-encoder")
+            logger.warning("cohere package not installed, falling back to cross-encoder via ML service")
             self.provider = RerankerProvider.CROSS_ENCODER
-            self._init_cross_encoder()
 
     def rerank(
         self,
@@ -119,19 +83,7 @@ class RerankerService:
         top_k: int = 5,
         score_weight: float = 0.3,
     ) -> list[RerankResult]:
-        """
-        Rerank search results using cross-encoder scoring.
-
-        Args:
-            query: The search query
-            results: List of search results with 'payload' containing 'text'
-            top_k: Number of top results to return after reranking
-            score_weight: Weight for original score in combined score (0-1)
-                         combined = (1-weight)*rerank + weight*original
-
-        Returns:
-            List of RerankResult objects sorted by combined score
-        """
+        """Rerank search results using cross-encoder scoring."""
         if not results:
             return []
 
@@ -155,48 +107,35 @@ class RerankerService:
         top_k: int,
         score_weight: float,
     ) -> list[RerankResult]:
-        """Rerank using cross-encoder model."""
-        # Prepare query-document pairs
-        pairs = []
-        for result in results:
-            text = result.get("payload", {}).get("text", "")
-            if not text:
-                text = str(result.get("payload", {}))
-            pairs.append([query, text])
+        """Rerank via ML microservice cross-encoder."""
+        import asyncio
 
-        # Get cross-encoder scores
-        scores = self._model.predict(pairs)
+        from src.core.ml_client import get_ml_client
 
-        # Normalize scores to 0-1 range (cross-encoder scores can be any range)
-        min_score = min(scores) if len(scores) > 0 else 0
-        max_score = max(scores) if len(scores) > 0 else 1
-        score_range = max_score - min_score if max_score != min_score else 1
-        normalized_scores = [(s - min_score) / score_range for s in scores]
-
-        # Combine with original scores
+        client = get_ml_client()
+        raw = asyncio.run(
+            client.rerank(
+                query=query,
+                results=results,
+                top_k=top_k,
+                score_weight=score_weight,
+                model=self.model_name,
+            )
+        )
         rerank_results = []
-        for i, (result, rerank_score) in enumerate(zip(results, normalized_scores, strict=False)):
-            original_score = result.get("score", 0)
-            combined = (1 - score_weight) * rerank_score + score_weight * original_score
-
+        for item in raw:
             rerank_results.append(
                 RerankResult(
-                    id=result.get("id", f"result_{i}"),
-                    original_score=original_score,
-                    rerank_score=rerank_score,
-                    combined_score=combined,
-                    payload=result.get("payload", {}),
-                    rank=0,  # Will be set after sorting
+                    id=item["id"],
+                    original_score=item["original_score"],
+                    rerank_score=item["rerank_score"],
+                    combined_score=item["combined_score"],
+                    payload=item["payload"],
+                    rank=item["rank"],
                 )
             )
-
-        # Sort by combined score and assign ranks
-        rerank_results.sort(key=lambda x: x.combined_score, reverse=True)
-        for i, result in enumerate(rerank_results[:top_k]):
-            result.rank = i + 1
-
-        logger.info(f"Reranked {len(results)} results with cross-encoder, returning top {top_k}")
-        return rerank_results[:top_k]
+        logger.info(f"Reranked {len(results)} results with ML cross-encoder, returning top {top_k}")
+        return rerank_results
 
     def _rerank_cohere(
         self,
@@ -206,7 +145,6 @@ class RerankerService:
         score_weight: float,
     ) -> list[RerankResult]:
         """Rerank using Cohere Rerank API."""
-        # Extract documents
         documents = []
         for result in results:
             text = result.get("payload", {}).get("text", "")
@@ -214,7 +152,6 @@ class RerankerService:
                 text = str(result.get("payload", {}))
             documents.append(text)
 
-        # Call Cohere rerank
         response = self._client.rerank(
             model=self.model_name,
             query=query,
@@ -222,7 +159,6 @@ class RerankerService:
             top_n=min(top_k, len(documents)),
         )
 
-        # Build results
         rerank_results = []
         for i, rerank_item in enumerate(response.results):
             idx = rerank_item.index
@@ -230,7 +166,6 @@ class RerankerService:
             original_score = original_result.get("score", 0)
             rerank_score = rerank_item.relevance_score
             combined = (1 - score_weight) * rerank_score + score_weight * original_score
-
             rerank_results.append(
                 RerankResult(
                     id=original_result.get("id", f"result_{idx}"),
@@ -252,34 +187,20 @@ class RerankerService:
         top_k: int,
         score_weight: float,
     ) -> list[RerankResult]:
-        """
-        Fallback LLM-based reranking using simple heuristics.
-
-        Uses keyword matching and text overlap as a lightweight reranking method
-        when cross-encoder or API-based reranking is not available.
-        """
+        """Fallback LLM-based reranking using keyword heuristics."""
         import re
 
-        # Extract query keywords (simple tokenization)
         query_keywords = set(re.findall(r"\b\w{3,}\b", query.lower()))
-
         rerank_results = []
         for i, result in enumerate(results):
             text = result.get("payload", {}).get("text", "").lower()
             original_score = result.get("score", 0)
-
-            # Calculate keyword overlap score
             text_words = set(re.findall(r"\b\w{3,}\b", text))
             overlap = len(query_keywords & text_words)
             keyword_score = overlap / max(len(query_keywords), 1)
-
-            # Calculate exact phrase match bonus
             phrase_bonus = 0.2 if query.lower() in text else 0
-
-            # Combine scores
             rerank_score = min(keyword_score + phrase_bonus, 1.0)
             combined = (1 - score_weight) * rerank_score + score_weight * original_score
-
             rerank_results.append(
                 RerankResult(
                     id=result.get("id", f"result_{i}"),
@@ -291,20 +212,13 @@ class RerankerService:
                 )
             )
 
-        # Sort and assign ranks
         rerank_results.sort(key=lambda x: x.combined_score, reverse=True)
         for i, result in enumerate(rerank_results[:top_k]):
             result.rank = i + 1
-
         logger.info(f"Reranked {len(results)} results with keyword heuristics, returning top {top_k}")
         return rerank_results[:top_k]
 
-    def _fallback_results(
-        self,
-        results: list[dict[str, Any]],
-        top_k: int,
-    ) -> list[RerankResult]:
-        """Convert results to RerankResult without actual reranking."""
+    def _fallback_results(self, results: list[dict[str, Any]], top_k: int) -> list[RerankResult]:
         rerank_results = []
         for i, result in enumerate(results[:top_k]):
             score = result.get("score", 0)
@@ -321,7 +235,6 @@ class RerankerService:
         return rerank_results
 
 
-# Singleton instance for reuse
 _reranker_instance: RerankerService | None = None
 
 
@@ -332,12 +245,6 @@ def get_reranker(
 ) -> RerankerService:
     """Get or create a reranker service instance."""
     global _reranker_instance
-
     if _reranker_instance is None:
-        _reranker_instance = RerankerService(
-            provider=provider,
-            model_name=model_name,
-            config=config,
-        )
-
+        _reranker_instance = RerankerService(provider=provider, model_name=model_name, config=config)
     return _reranker_instance

@@ -194,6 +194,34 @@ class TestResolveLocator:
         assert result is not None
 
 
+def _make_scraper_mock(side_effect=None, return_value=None):
+    """Return a mock _scraper() that raises or returns as specified."""
+    mock_client = AsyncMock()
+    if side_effect is not None:
+        for attr in (
+            "browser_navigate",
+            "browser_click",
+            "browser_screenshot",
+            "browser_get_cookies",
+            "browser_clear_cookies",
+            "browser_list_pages",
+            "browser_close_session",
+        ):
+            getattr(mock_client, attr).side_effect = side_effect
+    elif return_value is not None:
+        for attr in (
+            "browser_navigate",
+            "browser_click",
+            "browser_screenshot",
+            "browser_get_cookies",
+            "browser_clear_cookies",
+            "browser_list_pages",
+            "browser_close_session",
+        ):
+            getattr(mock_client, attr).return_value = return_value
+    return mock_client
+
+
 class TestBrowserNavigate:
     """Tests for internal_browser_navigate function."""
 
@@ -201,49 +229,30 @@ class TestBrowserNavigate:
     async def test_navigate_success(self):
         from src.services.agents.internal_tools.browser_interactive import internal_browser_navigate
 
-        mock_page = AsyncMock()
-        mock_page.url = "https://example.com"
-        mock_page.title.return_value = "Example"
+        mock_result = {"success": True, "url": "https://example.com", "title": "Example", "status": 200}
+        mock_client = AsyncMock()
+        mock_client.browser_navigate.return_value = mock_result
 
-        mock_response = MagicMock()
-        mock_response.status = 200
-        mock_page.goto.return_value = mock_response
-
-        mock_session = MagicMock()
-        mock_session.current_page_id = "page_1"
-
-        with patch(
-            "src.services.agents.internal_tools.browser_interactive._get_session_and_page", new_callable=AsyncMock
-        ) as mock_get:
-            mock_get.return_value = (mock_session, mock_page)
-
+        with patch("src.services.agents.internal_tools.browser_interactive._scraper", return_value=mock_client):
             result = await internal_browser_navigate(url="https://example.com")
 
-            assert result["success"] is True
-            assert result["url"] == "https://example.com"
-            assert result["title"] == "Example"
-            assert result["status"] == 200
+        assert result["success"] is True
+        assert result["url"] == "https://example.com"
+        assert result["title"] == "Example"
+        assert result["status"] == 200
 
     @pytest.mark.asyncio
-    async def test_navigate_timeout(self):
-        from playwright.async_api import TimeoutError as PlaywrightTimeout
-
+    async def test_navigate_error(self):
         from src.services.agents.internal_tools.browser_interactive import internal_browser_navigate
 
-        mock_page = AsyncMock()
-        mock_page.goto.side_effect = PlaywrightTimeout("Navigation timed out")
+        mock_client = AsyncMock()
+        mock_client.browser_navigate.side_effect = Exception("Connection refused")
 
-        mock_session = MagicMock()
-
-        with patch(
-            "src.services.agents.internal_tools.browser_interactive._get_session_and_page", new_callable=AsyncMock
-        ) as mock_get:
-            mock_get.return_value = (mock_session, mock_page)
-
+        with patch("src.services.agents.internal_tools.browser_interactive._scraper", return_value=mock_client):
             result = await internal_browser_navigate(url="https://slow-site.com")
 
-            assert result["success"] is False
-            assert "timeout" in result["error"].lower()
+        assert result["success"] is False
+        assert "error" in result
 
 
 class TestBrowserClick:
@@ -253,15 +262,14 @@ class TestBrowserClick:
     async def test_click_error_handling(self):
         from src.services.agents.internal_tools.browser_interactive import internal_browser_click
 
-        with patch(
-            "src.services.agents.internal_tools.browser_interactive._get_session_and_page", new_callable=AsyncMock
-        ) as mock_get:
-            mock_get.side_effect = Exception("Session error")
+        mock_client = AsyncMock()
+        mock_client.browser_click.side_effect = Exception("Session error")
 
+        with patch("src.services.agents.internal_tools.browser_interactive._scraper", return_value=mock_client):
             result = await internal_browser_click(ref="#submit-btn")
 
-            assert result["success"] is False
-            assert "error" in result
+        assert result["success"] is False
+        assert "error" in result
 
 
 class TestBrowserScreenshot:
@@ -271,14 +279,13 @@ class TestBrowserScreenshot:
     async def test_screenshot_requires_session(self):
         from src.services.agents.internal_tools.browser_interactive import internal_browser_screenshot
 
-        with patch(
-            "src.services.agents.internal_tools.browser_interactive._get_session_and_page", new_callable=AsyncMock
-        ) as mock_get:
-            mock_get.side_effect = Exception("Session not found")
+        mock_client = AsyncMock()
+        mock_client.browser_screenshot.side_effect = Exception("Session not found")
 
+        with patch("src.services.agents.internal_tools.browser_interactive._scraper", return_value=mock_client):
             result = await internal_browser_screenshot()
 
-            assert result["success"] is False
+        assert result["success"] is False
 
 
 class TestBrowserCookies:
@@ -288,27 +295,25 @@ class TestBrowserCookies:
     async def test_get_cookies_error_handling(self):
         from src.services.agents.internal_tools.browser_interactive import internal_browser_get_cookies
 
-        with patch(
-            "src.services.agents.internal_tools.browser_interactive._get_session_and_page", new_callable=AsyncMock
-        ) as mock_get:
-            mock_get.side_effect = Exception("No session")
+        mock_client = AsyncMock()
+        mock_client.browser_get_cookies.side_effect = Exception("No session")
 
+        with patch("src.services.agents.internal_tools.browser_interactive._scraper", return_value=mock_client):
             result = await internal_browser_get_cookies()
 
-            assert result["success"] is False
+        assert result["success"] is False
 
     @pytest.mark.asyncio
     async def test_clear_cookies_error_handling(self):
         from src.services.agents.internal_tools.browser_interactive import internal_browser_clear_cookies
 
-        with patch(
-            "src.services.agents.internal_tools.browser_interactive._get_session_and_page", new_callable=AsyncMock
-        ) as mock_get:
-            mock_get.side_effect = Exception("No session")
+        mock_client = AsyncMock()
+        mock_client.browser_clear_cookies.side_effect = Exception("No session")
 
+        with patch("src.services.agents.internal_tools.browser_interactive._scraper", return_value=mock_client):
             result = await internal_browser_clear_cookies()
 
-            assert result["success"] is False
+        assert result["success"] is False
 
 
 class TestBrowserPageManagement:
@@ -318,27 +323,23 @@ class TestBrowserPageManagement:
     async def test_list_pages_error_handling(self):
         from src.services.agents.internal_tools.browser_interactive import internal_browser_list_pages
 
-        with patch(
-            "src.services.agents.internal_tools.browser_interactive.BrowserSession.get_or_create",
-            new_callable=AsyncMock,
-        ) as mock_get:
-            mock_get.side_effect = Exception("No session")
+        mock_client = AsyncMock()
+        mock_client.browser_list_pages.side_effect = Exception("No session")
 
+        with patch("src.services.agents.internal_tools.browser_interactive._scraper", return_value=mock_client):
             result = await internal_browser_list_pages()
 
-            assert result["success"] is False
+        assert result["success"] is False
 
     @pytest.mark.asyncio
     async def test_close_session_error_handling(self):
         from src.services.agents.internal_tools.browser_interactive import internal_browser_close_session
 
-        with patch(
-            "src.services.agents.internal_tools.browser_interactive.BrowserSession.close_session",
-            new_callable=AsyncMock,
-        ) as mock_close:
-            mock_close.side_effect = Exception("Session close error")
+        mock_client = AsyncMock()
+        mock_client.browser_close_session.side_effect = Exception("Session close error")
 
+        with patch("src.services.agents.internal_tools.browser_interactive._scraper", return_value=mock_client):
             result = await internal_browser_close_session()
 
-            assert result["success"] is False
-            assert "Session close error" in result["error"]
+        assert result["success"] is False
+        assert "Session close error" in result["error"]

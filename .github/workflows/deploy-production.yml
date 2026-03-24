@@ -76,6 +76,42 @@ jobs:
           docker builder prune -f
           df -h
 
+      - name: Build and push ML service image
+        uses: docker/build-push-action@v5
+        with:
+          context: ./services/ml
+          file: ./services/ml/Dockerfile
+          push: true
+          platforms: linux/amd64
+          tags: |
+            ${{ env.ECR_REGISTRY }}/synkora-ml:${{ github.sha }}
+            ${{ env.ECR_REGISTRY }}/synkora-ml:latest
+          cache-from: type=gha,scope=ml
+          cache-to: type=gha,mode=max,scope=ml
+
+      - name: Clean up after ML build
+        run: |
+          docker builder prune -f
+          df -h
+
+      - name: Build and push scraper service image
+        uses: docker/build-push-action@v5
+        with:
+          context: ./services/scraper
+          file: ./services/scraper/Dockerfile
+          push: true
+          platforms: linux/amd64
+          tags: |
+            ${{ env.ECR_REGISTRY }}/synkora-scraper:${{ github.sha }}
+            ${{ env.ECR_REGISTRY }}/synkora-scraper:latest
+          cache-from: type=gha,scope=scraper
+          cache-to: type=gha,mode=max,scope=scraper
+
+      - name: Clean up after scraper build
+        run: |
+          docker builder prune -f
+          df -h
+
       - name: Prepare frontend env
         run: |
           cd web
@@ -142,6 +178,8 @@ jobs:
         run: |
           kubectl create secret generic synkora-secrets \
             --namespace=${{ env.NAMESPACE }} \
+            --from-literal=ML_SERVICE_URL="http://synkora-ml:5002" \
+            --from-literal=SCRAPER_SERVICE_URL="http://synkora-scraper:5003" \
             --from-literal=SECRET_KEY="${{ secrets.K8S_SECRET_KEY }}" \
             --from-literal=JWT_SECRET_KEY="${{ secrets.K8S_JWT_SECRET_KEY }}" \
             --from-literal=ENCRYPTION_KEY="${{ secrets.K8S_ENCRYPTION_KEY }}" \
@@ -183,6 +221,8 @@ jobs:
 
       - name: Apply deployment manifests
         run: |
+          kubectl apply -f k8s/application/ml-service-deployment.yaml
+          kubectl apply -f k8s/application/scraper-service-deployment.yaml
           kubectl apply -f k8s/application/api-deployment.yml
           kubectl apply -f k8s/application/celery-worker-deployment.yml
           kubectl apply -f k8s/application/celery-beat-deployment.yml
@@ -211,6 +251,25 @@ jobs:
             exit 1
           fi
           echo "Migration completed successfully."
+
+      - name: Deploy ML and scraper services
+        run: |
+          IMAGE_TAG="${{ github.sha }}"
+          kubectl set image deployment/synkora-ml ml=${{ env.ECR_REGISTRY }}/synkora-ml:${IMAGE_TAG} -n ${{ env.NAMESPACE }}
+          kubectl set image deployment/synkora-scraper scraper=${{ env.ECR_REGISTRY }}/synkora-scraper:${IMAGE_TAG} -n ${{ env.NAMESPACE }}
+
+      - name: Wait for ML and scraper rollouts
+        run: |
+          if ! kubectl rollout status deployment/synkora-ml -n ${{ env.NAMESPACE }} --timeout=300s; then
+            echo "ML service deployment failed, rolling back..."
+            kubectl rollout undo deployment/synkora-ml -n ${{ env.NAMESPACE }}
+            exit 1
+          fi
+          if ! kubectl rollout status deployment/synkora-scraper -n ${{ env.NAMESPACE }} --timeout=300s; then
+            echo "Scraper service deployment failed, rolling back..."
+            kubectl rollout undo deployment/synkora-scraper -n ${{ env.NAMESPACE }}
+            exit 1
+          fi
 
       - name: Deploy API
         run: |
