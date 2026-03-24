@@ -265,7 +265,7 @@ jobs:
 
       - name: Wait for ML and scraper rollouts
         run: |
-          if ! kubectl rollout status deployment/synkora-ml -n ${{ env.NAMESPACE }} --timeout=300s; then
+          if ! kubectl rollout status deployment/synkora-ml -n ${{ env.NAMESPACE }} --timeout=600s; then
             echo "ML service deployment failed, rolling back..."
             kubectl rollout undo deployment/synkora-ml -n ${{ env.NAMESPACE }}
             exit 1
