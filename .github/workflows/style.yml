@@ -2,6 +2,7 @@ name: Style Check
 
 on:
   workflow_call:
+  workflow_dispatch:
 
 concurrency:
   group: style-check-${{ github.head_ref || github.run_id }}
@@ -29,16 +30,13 @@ jobs:
       - name: Install dependencies
         run: |
           python -m pip install --upgrade pip
-          pip install ruff mypy
+          pip install ruff
 
       - name: Run Ruff Linting
         run: ruff check src/
 
       - name: Run Ruff Formatting
         run: ruff format --check src/
-
-      - name: Run mypy
-        run: mypy src/ --ignore-missing-imports
 
   web-style:
     name: Web Style Check

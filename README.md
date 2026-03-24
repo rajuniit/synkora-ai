@@ -5,7 +5,7 @@
 <!-- CI/CD Badges -->
 [![CI Pipeline](https://github.com/rajuniit/synkora-ai/actions/workflows/main-ci.yml/badge.svg)](https://github.com/rajuniit/synkora-ai/actions/workflows/main-ci.yml)
 [![API Tests](https://github.com/rajuniit/synkora-ai/actions/workflows/api-tests.yml/badge.svg)](https://github.com/rajuniit/synkora-ai/actions/workflows/api-tests.yml)
-[![codecov](https://codecov.io/gh/rajuniit/synkora-ai/branch/master/graph/badge.svg)](https://codecov.io/gh/rajuniit/synkora-ai)
+[![Coverage](https://img.shields.io/endpoint?url=https://gist.githubusercontent.com/rajuniit/6adfe45792942ae62d18c5e89128498b/raw/coverage-badge.json)](https://github.com/rajuniit/synkora-ai/actions/workflows/api-tests.yml)
 
 <!-- Tech Stack Badges -->
 [![Python](https://img.shields.io/badge/python-3.11+-blue.svg)](https://www.python.org/downloads/)
@@ -356,7 +356,7 @@ Our CI/CD pipeline runs on every push and pull request:
 
 ### Code Coverage
 
-[![codecov](https://codecov.io/gh/rajuniit/synkora-ai/branch/master/graph/badge.svg)](https://codecov.io/gh/rajuniit/synkora-ai)
+[![Coverage](https://img.shields.io/endpoint?url=https://gist.githubusercontent.com/rajuniit/6adfe45792942ae62d18c5e89128498b/raw/coverage-badge.json)](https://github.com/rajuniit/synkora-ai/actions/workflows/api-tests.yml)
 
 Coverage reports are generated for every pull request with inline annotations.
 
