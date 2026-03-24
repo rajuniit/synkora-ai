@@ -1,14 +1,11 @@
 <div align="center">
 
-
-# 🚀 Synkora
-
+# Synkora
 
 <!-- CI/CD Badges -->
 [![CI Pipeline](https://github.com/rajuniit/synkora-ai/actions/workflows/main-ci.yml/badge.svg)](https://github.com/rajuniit/synkora-ai/actions/workflows/main-ci.yml)
 [![API Tests](https://github.com/rajuniit/synkora-ai/actions/workflows/api-tests.yml/badge.svg)](https://github.com/rajuniit/synkora-ai/actions/workflows/api-tests.yml)
 [![codecov](https://codecov.io/gh/rajuniit/synkora-ai/branch/master/graph/badge.svg)](https://codecov.io/gh/rajuniit/synkora-ai)
-
 
 <!-- Tech Stack Badges -->
 [![Python](https://img.shields.io/badge/python-3.11+-blue.svg)](https://www.python.org/downloads/)
@@ -16,32 +13,25 @@
 [![FastAPI](https://img.shields.io/badge/FastAPI-0.115+-009688.svg)](https://fastapi.tiangolo.com/)
 [![PostgreSQL](https://img.shields.io/badge/PostgreSQL-14+-336791.svg)](https://www.postgresql.org/)
 
-
 <!-- Project Badges -->
 [![License](https://img.shields.io/badge/License-MIT-blue.svg)](LICENSE)
 [![PRs Welcome](https://img.shields.io/badge/PRs-welcome-brightgreen.svg)](CONTRIBUTING.md)
 [![Code of Conduct](https://img.shields.io/badge/code%20of-conduct-ff69b4.svg)](CODE_OF_CONDUCT.md)
 [![Maintenance](https://img.shields.io/badge/Maintained%3F-yes-green.svg)](https://github.com/rajuniit/synkora-ai/graphs/commit-activity)
 
+**Build AI agents for every role in your company. From product management to engineering to marketing — deploy intelligent AI teammates that handle real work, not just chat. Open-source, use your own LLM keys, full control.**
 
-**Build AI agents for every role in your company. From product management to engineering to marketing—deploy intelligent AI teammates that handle real work, not just chat. Open-source, use your own LLM keys, full control.**
-
-
-[Features](#-key-features) •
-[Quick Start](#-quick-start) •
-[Documentation](#-documentation) •
-[Contributing](#-contributing) •
-[Community](#-community)
-
+[Features](#key-features) •
+[Quick Start](#quick-start) •
+[Documentation](#documentation) •
+[Contributing](#contributing) •
+[Community](#support--community)
 
 </div>
 
-
 ---
 
-
-## 🚀 Overview
-
+## Overview
 
 Synkora is an open-source platform for building AI-powered teammates. Create agents that act as your AI Product Manager, AI Software Engineer, AI Marketing Lead, AI Support Agent, and more. Each agent can be equipped with custom tools, knowledge bases, and integrations to handle real work autonomously.
 
@@ -52,8 +42,7 @@ Synkora is an open-source platform for building AI-powered teammates. Create age
 - **Open source** - Self-host on your infrastructure or use our cloud. You own your data
 
 
-## ✨ Key Features
-
+## Key Features
 
 ### AI Teammates for Every Role
 - **AI Product Manager** - Backlog prioritization, sprint planning, status reports (Jira, Linear, Notion)
@@ -64,13 +53,12 @@ Synkora is an open-source platform for building AI-powered teammates. Create age
 - **AI HR Coordinator** - Onboarding automation, policy Q&A, leave management (BambooHR, Gusto)
 
 ### Core Capabilities
-- **Multi-Provider LLM Support**: OpenAI, Anthropic, Google, and more via LiteLLM—use your own keys
+- **Multi-Provider LLM Support**: OpenAI, Anthropic, Google, and more via LiteLLM — use your own keys
 - **Knowledge Bases**: Vector-based knowledge management with Qdrant, Pinecone, and Elasticsearch
 - **Custom Tools**: 50+ pre-built integrations plus extensible tool system
 - **Real-time Chat**: WebSocket-based chat interface with streaming responses
 - **MCP Servers**: Model Context Protocol server integration
 - **Voice Services**: ElevenLabs integration for voice interactions
-
 
 ### Enterprise Features
 - **Multi-Tenant Architecture**: Complete tenant isolation with role-based access control
@@ -81,7 +69,6 @@ Synkora is an open-source platform for building AI-powered teammates. Create age
 - **Widgets**: Embeddable chat widgets for websites
 - **Observability**: Langfuse integration for LLM observability and analytics
 
-
 ### Developer Experience
 - **RESTful API**: Comprehensive FastAPI-based API with OpenAPI documentation
 - **Agent API Keys**: Per-agent API keys for secure access
@@ -90,7 +77,7 @@ Synkora is an open-source platform for building AI-powered teammates. Create age
 - **Usage Statistics**: Track usage and performance metrics
 
 
-## 🏗️ Architecture
+## Architecture
 
 > For a comprehensive technical analysis, see [ARCHITECTURE.md](ARCHITECTURE.md)
 
@@ -115,7 +102,12 @@ Synkora is an open-source platform for building AI-powered teammates. Create age
     ┌─────────▼─────────┐ ┌─────────▼─────────┐ ┌─────────▼─────────┐
     │  Celery Workers    │ │  Celery Beat       │ │  Bot Workers       │
     │  (default+billing) │ │  (scheduler)       │ │  (Slack/Telegram)  │
-    └─────────┬─────────┘ └───────────────────┘ └───────────────────┘
+    └─────────┬─────────┘ └───────────────────┘ └─────────┬─────────┘
+              │                                            │
+    ┌─────────▼──────────────────────────────────────────-▼─────────┐
+    │  synkora-ml (embeddings + reranking)                           │
+    │  synkora-scraper (browser automation + app-store scraping)     │
+    └────────────────────────────────────────────────────────────────┘
               │
     ┌─────────▼──────────────────────────────────────────────────────┐
     │                                                                 │
@@ -138,7 +130,6 @@ Synkora is an open-source platform for building AI-powered teammates. Create age
 
 ### Tech Stack
 
-
 **Backend:**
 - **Framework**: FastAPI (Python 3.11+)
 - **Database**: PostgreSQL 14+ with pgvector extension
@@ -149,14 +140,12 @@ Synkora is an open-source platform for building AI-powered teammates. Create age
 - **Migrations**: Alembic
 - **Validation**: Pydantic v2
 
-
 **Frontend:**
 - **Framework**: Next.js 15.1 with App Router
 - **UI**: React 19, Tailwind CSS
 - **State Management**: Zustand
 - **HTTP Client**: Axios
 - **Forms**: React Hook Form with Zod validation
-
 
 **Infrastructure:**
 - **Containerization**: Docker & Docker Compose
@@ -165,8 +154,7 @@ Synkora is an open-source platform for building AI-powered teammates. Create age
 - **Observability**: Langfuse for LLM tracking
 
 
-## 📁 Project Structure
-
+## Project Structure
 
 ```
 synkora/
@@ -191,25 +179,25 @@ synkora/
 │   ├── hooks/             # Custom React hooks
 │   └── types/             # TypeScript type definitions
 │
+├── services/
+│   ├── ml/                # ML microservice (embeddings + reranking)
+│   └── scraper/           # Scraper microservice (browser + app-store)
+│
 ├── docker-compose.yml      # Local development environment
 ├── helm/                   # Kubernetes Helm charts
 └── docs/                   # Documentation
 ```
 
 
-## 🚀 Quick Start
-
+## Quick Start
 
 ### Prerequisites
-
 
 - Docker and Docker Compose
 - Node.js 18+ and pnpm (for local frontend development)
 - Python 3.11+ and uv (for local backend development)
 
-
 ### Using Docker Compose (Recommended)
-
 
 1. **Clone the repository**
   ```bash
@@ -217,12 +205,10 @@ synkora/
   cd synkora-ai
   ```
 
-
 2. **Start all services**
   ```bash
   docker-compose up -d
   ```
-
 
   This starts:
   - PostgreSQL (port 5432)
@@ -233,22 +219,20 @@ synkora/
   - Langfuse (port 3001)
   - API (port 5001)
   - Web frontend (port 3005)
-
+  - ML service (internal, port 5002)
+  - Scraper service (internal, port 5003)
 
 3. **Initialize the database**
   ```bash
   # Run migrations
   docker-compose exec api alembic upgrade head
 
-
   # Create super admin
   docker-compose exec api python create_super_admin.py
-
 
   # Seed platform configuration
   docker-compose exec api python seed_platform_config.py
   ```
-
 
 4. **Access the application**
   - Frontend: http://localhost:3005
@@ -256,89 +240,70 @@ synkora/
   - Langfuse: http://localhost:3001
   - MinIO Console: http://localhost:9001 (minioadmin/minioadmin)
 
-
 ### Local Development
 
-
 #### Backend Setup
-
 
 ```bash
 cd api
 
-
 # Install dependencies (using uv)
 uv sync
-
 
 # Or using pip
 pip install -e .
 
-
 # Set up environment
 cp .env.example .env
 # Edit .env with your configuration
-
 
 # Initialize database
 alembic upgrade head
 python create_super_admin.py
 python seed_platform_config.py
 
-
 # Run development server
 uvicorn src.app:app --reload --host 0.0.0.0 --port 5001
 ```
 
-
 #### Frontend Setup
-
 
 ```bash
 cd web
 
-
 # Install dependencies
 pnpm install
-
 
 # Set up environment
 cp .env.example .env.local
 # Edit .env.local if needed
-
 
 # Run development server
 pnpm dev
 ```
 
 
-## 🔧 Configuration
-
+## Configuration
 
 ### Environment Variables
-
 
 #### Backend (`api/.env`)
 ```bash
 # Database
 DATABASE_URL=postgresql://synkora:synkora@localhost:5432/synkora
 
-
 # Redis
 REDIS_URL=redis://localhost:6379/0
-
 
 # Security
 SECRET_KEY=your-secret-key
 JWT_SECRET_KEY=your-jwt-secret
 ENCRYPTION_KEY=your-encryption-key
 
-
 # Application
 APP_ENV=development
 API_HOST=0.0.0.0
 API_PORT=5001
-
 
 # Storage
 STORAGE_PROVIDER=s3
@@ -347,18 +312,15 @@ AWS_SECRET_ACCESS_KEY=minioadmin
 AWS_ENDPOINT_URL=http://localhost:9000
 AWS_BUCKET_NAME=synkora-storage
 
-
 # LLM Providers (optional)
 OPENAI_API_KEY=sk-...
 ANTHROPIC_API_KEY=sk-ant-...
-
 
 # Langfuse (optional)
 LANGFUSE_PUBLIC_KEY=pk-...
 LANGFUSE_SECRET_KEY=sk-...
 LANGFUSE_HOST=http://localhost:3001
 ```
-
 
 #### Frontend (`web/.env.local`)
 ```bash
@@ -367,8 +329,7 @@ NEXT_PUBLIC_APP_URL=http://localhost:3005
 ```
 
 
-## 📚 Documentation
-
+## Documentation
 
 - [Architecture Report](ARCHITECTURE.md) - Comprehensive technical analysis, design patterns, and scorecard
 - [API Documentation](api/README.md) - Backend API details and setup
@@ -379,14 +340,11 @@ NEXT_PUBLIC_APP_URL=http://localhost:3005
 - [Load Testing Guide](api/tests/load/README.md) - k6 load testing suite documentation
 
 
-## 🧪 Testing
-
+## Testing
 
 ### CI/CD Pipeline
 
-
 Our CI/CD pipeline runs on every push and pull request:
-
 
 | Workflow | Description | Status |
 |----------|-------------|--------|
@@ -396,18 +354,11 @@ Our CI/CD pipeline runs on every push and pull request:
 | **Style Check** | Code formatting & linting | [![Style](https://github.com/rajuniit/synkora-ai/actions/workflows/style.yml/badge.svg)](https://github.com/rajuniit/synkora-ai/actions/workflows/style.yml) |
 | **Docker Build** | Container build validation | [![Docker](https://github.com/rajuniit/synkora-ai/actions/workflows/docker-build.yml/badge.svg)](https://github.com/rajuniit/synkora-ai/actions/workflows/docker-build.yml) |
 
-
 ### Code Coverage
-
-
-We use [Codecov](https://codecov.io/gh/rajuniit/synkora-ai) for code coverage tracking:
-
 
 [![codecov](https://codecov.io/gh/rajuniit/synkora-ai/branch/master/graph/badge.svg)](https://codecov.io/gh/rajuniit/synkora-ai)
 
-
 Coverage reports are generated for every pull request with inline annotations.
-
 
 ### Backend Tests
 ```bash
@@ -421,55 +372,44 @@ pytest -v -k "test_name"            # Run specific test
 pytest -x                           # Stop on first failure
 ```
 
-
 ### Frontend Tests
 ```bash
 cd web
-pnpm test                # Run tests (when configured)
+pnpm test                # Run tests
 pnpm type-check          # TypeScript type checking
 pnpm lint                # ESLint
 ```
 
-
 ### Running Tests Locally with Act
 
-
 You can run GitHub Actions locally using [act](https://github.com/nektos/act):
-
 
 ```bash
 # Install act (macOS)
 brew install act
-
 
 # Run API tests locally
 act workflow_dispatch -W .github/workflows/api-tests.yml -j test --matrix python-version:3.11 -P ubuntu-latest=catthehacker/ubuntu:act-latest --container-architecture linux/amd64
 ```
 
 
-## 🛠️ Development
-
+## Development
 
 ### Database Migrations
-
 
 ```bash
 # Create a new migration
 cd api
 alembic revision --autogenerate -m "Description"
 
-
 # Apply migrations
 alembic upgrade head
-
 
 # Rollback
 alembic downgrade -1
 ```
 
-
 ### Code Quality
-
 
 **Backend:**
 ```bash
@@ -479,7 +419,6 @@ ruff check .            # Lint code
 basedpyright            # Type checking
 ```
 
-
 **Frontend:**
 ```bash
 cd web
@@ -487,9 +426,7 @@ pnpm lint               # ESLint
 pnpm type-check         # TypeScript
 ```
 
-
 ### Adding Dependencies
-
 
 **Backend:**
 ```bash
@@ -497,7 +434,6 @@ cd api
 uv add package-name              # Production dependency
 uv add --dev package-name        # Development dependency
 ```
-
 
 **Frontend:**
 ```bash
@@ -507,46 +443,35 @@ pnpm add -D package-name         # Development dependency
 ```
 
 
-## 🚢 Deployment
+## Deployment
 
-
-### Docker
-
+### Docker Compose
 
 ```bash
-# Build images
+# Build all images
 docker-compose build
 
-
-# Production deployment
-docker-compose -f docker-compose.prod.yml up -d
+# Start all services
+docker-compose up -d
 ```
-
 
 ### Kubernetes
 
-
 Helm charts are provided in the `helm/` directory:
-
 
 ```bash
 # Install
 helm install synkora ./helm/synkora
 
-
 # Upgrade
 helm upgrade synkora ./helm/synkora
-
 
 # Uninstall
 helm uninstall synkora
 ```
 
 
-See the [Deployment](#-deployment) section above for detailed instructions.
-
-
-## 🔐 Security
+## Security
 
 > Detailed in [ARCHITECTURE.md — Security](ARCHITECTURE.md#security)
 
@@ -560,8 +485,7 @@ See the [Deployment](#-deployment) section above for detailed instructions.
 - **SSO**: Okta and SAML support for enterprise authentication
 
 
-## 📊 Monitoring & Observability
-
+## Monitoring & Observability
 
 - **Langfuse**: LLM observability, tracing, and analytics
 - **Prometheus Metrics**: `/metrics` endpoint for scraping (request counts, latencies, LLM usage)
@@ -570,7 +494,7 @@ See the [Deployment](#-deployment) section above for detailed instructions.
 - **Logging**: Structured JSON logging with configurable levels
 
 
-## ⚡ Performance & Scalability
+## Performance & Scalability
 
 > Detailed in [ARCHITECTURE.md — Scalability](ARCHITECTURE.md#scalability--horizontal-scaling)
 
@@ -596,67 +520,50 @@ See the [Deployment](#-deployment) section above for detailed instructions.
 See [Load Testing Guide](api/tests/load/README.md) for running your own tests.
 
 
-## 🤝 Contributing
-
+## Contributing
 
 We welcome contributions from the community! Whether you're fixing bugs, improving documentation, or proposing new features, your help is appreciated.
 
-
 ### How to Contribute
 
-
-1. **Fork the repository** and create your branch from `main`
+1. **Fork the repository** and create your branch from `master`
 2. **Make your changes** following our coding standards
 3. **Add tests** for any new functionality
 4. **Run the test suite** to ensure everything passes
 5. **Update documentation** as needed
 6. **Submit a pull request** with a clear description of your changes
 
-
 Please read our [Contributing Guidelines](CONTRIBUTING.md) for detailed information.
-
 
 ### Code of Conduct
 
-
 This project adheres to a [Code of Conduct](CODE_OF_CONDUCT.md). By participating, you are expected to uphold this code. Please report unacceptable behavior to the project maintainers.
-
 
 ### Development Setup
 
+See the [Quick Start](#quick-start) section for development environment setup instructions.
 
-See the [Quick Start](#-quick-start) section for development environment setup instructions.
 
-
-## 🐛 Bug Reports & Feature Requests
-
+## Bug Reports & Feature Requests
 
 - **Bug Reports**: [Submit a bug report](.github/ISSUE_TEMPLATE/bug_report.md)
 - **Feature Requests**: [Request a feature](.github/ISSUE_TEMPLATE/feature_request.md)
 - **Security Issues**: See our [Security Policy](SECURITY.md)
 
 
-## 📄 License
+## License
 
 This project is licensed under the **MIT License** — see the [LICENSE](LICENSE) file for details.
 
 You are free to use, copy, modify, merge, publish, distribute, sublicense, and/or sell copies of this software for any purpose, including commercial use, without restriction.
 
 
-## 🌟 Star History
-
-
-If you find Synkora useful, please consider giving us a star ⭐️
-
-
-## 📜 Changelog
-
+## Changelog
 
 See [CHANGELOG.md](CHANGELOG.md) for a list of changes and version history.
 
 
-## 🙏 Acknowledgments
-
+## Acknowledgments
 
 Built with amazing open source technologies:
 - [FastAPI](https://fastapi.tiangolo.com/) - Modern Python web framework
@@ -667,32 +574,26 @@ Built with amazing open source technologies:
 - And many more! See [package files](api/pyproject.toml) for complete list
 
 
-## 🆘 Support & Community
-
+## Support & Community
 
 ### Getting Help
 
-
-- 📖 **Documentation**: See [api/README.md](api/README.md) and [web/README.md](web/README.md) for detailed setup
-- 🔍 **API Reference**: Interactive API docs at `/api/v1/docs` when running locally
-- 💬 **Discussions**: Join our GitHub Discussions for questions and community support
-- 🐛 **Issues**: Report bugs via [GitHub Issues](https://github.com/rajuniit/synkora-ai/issues)
-- 🔒 **Security**: Report vulnerabilities via our [Security Policy](SECURITY.md)
-
+- **Documentation**: See [api/README.md](api/README.md) and [web/README.md](web/README.md) for detailed setup
+- **API Reference**: Interactive API docs at `/api/v1/docs` when running locally
+- **Discussions**: Join our GitHub Discussions for questions and community support
+- **Issues**: Report bugs via [GitHub Issues](https://github.com/rajuniit/synkora-ai/issues)
+- **Security**: Report vulnerabilities via our [Security Policy](SECURITY.md)
 
 ### Community
-
 
 - **GitHub Discussions**: Ask questions and share ideas
 - **Contributing**: See [CONTRIBUTING.md](CONTRIBUTING.md) for guidelines
 - **Code of Conduct**: Read our [CODE_OF_CONDUCT.md](CODE_OF_CONDUCT.md)
 
 
-## 🗺️ Roadmap
-
+## Roadmap
 
 See [CHANGELOG.md](CHANGELOG.md) for recent changes and version history.
-
 
 ### Upcoming Features
 - Enhanced multi-agent workflow orchestration
@@ -701,33 +602,22 @@ See [CHANGELOG.md](CHANGELOG.md) for recent changes and version history.
 - Improved knowledge base search with hybrid retrieval
 - Multi-language UI support
 - Plugin marketplace
-- And more!
 
 
-## 📊 Project Status
-
+## Project Status
 
 Synkora is actively maintained and in production use. We follow semantic versioning and maintain backward compatibility wherever possible.
-
 
 - **Stability**: Production-ready
 - **Maintenance**: Actively maintained
 - **Release Cycle**: Regular updates and security patches
 
-
 ---
-
 
 <div align="center">
 
+Built with ❤️ by the Synkora Community
 
-**Built with ❤️ by the Synkora Community**
-
-
-[⬆ Back to Top](#-synkora)
-
+[Back to Top](#synkora)
 
 </div>
-
-
-

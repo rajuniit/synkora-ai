@@ -68,3 +68,4 @@ jobs:
           file: ./web/coverage/coverage-final.json
           flags: web
           name: web-coverage
+          fail_ci_if_error: false

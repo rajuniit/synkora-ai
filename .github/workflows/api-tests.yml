@@ -88,7 +88,7 @@ jobs:
           echo "Coverage: $COVERAGE%"
 
       - name: Create coverage badge
-        if: github.ref == 'refs/heads/main'
+        if: github.ref == 'refs/heads/master'
         uses: schneegans/dynamic-badges-action@v1.7.0
         with:
           auth: ${{ secrets.GIST_TOKEN }}

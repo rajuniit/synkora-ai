@@ -7,9 +7,9 @@ on:
     branches: [master]
 
 env:
-  AWS_REGION: us-east-2
-  AWS_ACCOUNT_ID: 614209211965
-  ECR_REGISTRY: 614209211965.dkr.ecr.us-east-2.amazonaws.com
+  AWS_REGION: ${{ vars.AWS_REGION || 'us-east-2' }}
+  AWS_ACCOUNT_ID: ${{ vars.AWS_ACCOUNT_ID }}
+  ECR_REGISTRY: ${{ vars.AWS_ACCOUNT_ID }}.dkr.ecr.${{ vars.AWS_REGION || 'us-east-2' }}.amazonaws.com
   NAMESPACE: synkora-production
 
 concurrency:
@@ -111,13 +111,6 @@ jobs:
         run: |
           docker builder prune -f
           df -h
-
-      - name: Prepare frontend env
-        run: |
-          cd web
-          if [ -f env.production ]; then
-            cp env.production .env
-          fi
 
       - name: Build and push Frontend image
         uses: docker/build-push-action@v5
