@@ -118,7 +118,7 @@ class TestRevenueService:
 
             assert result["success"] is True
             assert result["payout_reference"] == "tr_123"
-            mock_stripe.create_payout.assert_called_once_with(account_id="acct_123", amount=6000)
+            mock_stripe.create_payout.assert_called_once_with(account_id="acct_123", amount_cents=6000)
 
     async def test_process_payout_stripe_failure(self, service, mock_db):
         tenant_id = uuid4()
