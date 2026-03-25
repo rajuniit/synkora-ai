@@ -9,7 +9,9 @@ Handles all Stripe payment operations including:
 - Payouts for agent creators
 """
 
+import asyncio
 import logging
+import os
 from datetime import UTC, datetime
 from decimal import Decimal
 from uuid import UUID
@@ -133,7 +135,7 @@ class StripeService:
             customer_metadata = metadata or {}
             customer_metadata["tenant_id"] = str(tenant_id)
 
-            customer = stripe.Customer.create(email=email, name=name, metadata=customer_metadata)
+            customer = await asyncio.to_thread(stripe.Customer.create, email=email, name=name, metadata=customer_metadata)
 
             # Store customer ID in tenant's subscription record
             # Check if tenant has a subscription record, if not create one
@@ -173,7 +175,7 @@ class StripeService:
 
     # Subscription Management
 
-    def create_subscription(
+    async def create_subscription(
         self, customer_id: str, price_id: str, trial_days: int | None = None, metadata: dict | None = None
     ) -> dict:
         """
@@ -196,12 +198,17 @@ class StripeService:
                 "payment_behavior": "default_incomplete",
                 "payment_settings": {"save_default_payment_method": "on_subscription"},
                 "expand": ["latest_invoice.payment_intent"],
+                "invoice_settings": {
+                    "custom_fields": [
+                        {"name": "Platform", "value": "Synkora"},
+                    ]
+                },
             }
 
             if trial_days:
                 subscription_params["trial_period_days"] = trial_days
 
-            subscription = stripe.Subscription.create(**subscription_params)
+            subscription = await asyncio.to_thread(stripe.Subscription.create, **subscription_params)
 
             return {
                 "subscription_id": subscription.id,
@@ -212,7 +219,7 @@ class StripeService:
         except stripe.error.StripeError as e:
             raise Exception(f"Failed to create subscription: {str(e)}")
 
-    def update_subscription(
+    async def update_subscription(
         self, subscription_id: str, price_id: str | None = None, proration_behavior: str = "create_prorations"
     ) -> dict:
         """
@@ -227,7 +234,7 @@ class StripeService:
             Updated subscription data
         """
         try:
-            subscription = stripe.Subscription.retrieve(subscription_id)
+            subscription = await asyncio.to_thread(stripe.Subscription.retrieve, subscription_id)
 
             update_params = {"proration_behavior": proration_behavior}
 
@@ -236,7 +243,7 @@ class StripeService:
                     {"id": subscription.get("items", {}).get("data", [{}])[0].get("id"), "price": price_id}
                 ]
 
-            updated_subscription = stripe.Subscription.modify(subscription_id, **update_params)
+            updated_subscription = await asyncio.to_thread(stripe.Subscription.modify, subscription_id, **update_params)
 
             return {
                 "subscription_id": updated_subscription.id,
@@ -247,7 +254,7 @@ class StripeService:
         except stripe.error.StripeError as e:
             raise Exception(f"Failed to update subscription: {str(e)}")
 
-    def cancel_subscription(self, subscription_id: str, immediate: bool = False) -> bool:
+    async def cancel_subscription(self, subscription_id: str, immediate: bool = False) -> bool:
         """
         Cancel a Stripe subscription
 
@@ -260,9 +267,9 @@ class StripeService:
         """
         try:
             if immediate:
-                stripe.Subscription.delete(subscription_id)
+                await asyncio.to_thread(stripe.Subscription.delete, subscription_id)
             else:
-                stripe.Subscription.modify(subscription_id, cancel_at_period_end=True)
+                await asyncio.to_thread(stripe.Subscription.modify, subscription_id, cancel_at_period_end=True)
             return True
 
         except stripe.error.StripeError as e:
@@ -270,7 +277,7 @@ class StripeService:
 
     # Payment Intents
 
-    def create_payment_intent(
+    async def create_payment_intent(
         self,
         amount: int,  # Amount in cents
         customer_id: str,
@@ -290,7 +297,8 @@ class StripeService:
             Payment intent data
         """
         try:
-            payment_intent = stripe.PaymentIntent.create(
+            payment_intent = await asyncio.to_thread(
+                stripe.PaymentIntent.create,
                 amount=amount,
                 currency=currency,
                 customer=customer_id,
@@ -309,7 +317,7 @@ class StripeService:
 
     # Checkout Sessions (Hosted Payment Page)
 
-    def create_checkout_session(
+    async def create_checkout_session(
         self,
         customer_id: str,
         line_items: list[dict],
@@ -333,23 +341,35 @@ class StripeService:
             Checkout session data with URL
         """
         try:
-            session = stripe.checkout.Session.create(
-                customer=customer_id,
-                line_items=line_items,
-                mode=mode,
-                success_url=success_url,
-                cancel_url=cancel_url,
-                metadata=metadata or {},
-                payment_method_types=["card"],
-                billing_address_collection="auto",
-            )
+            support_email = os.environ.get("SUPPORT_EMAIL", "support@your-domain.com")
+            session_params: dict = {
+                "customer": customer_id,
+                "line_items": line_items,
+                "mode": mode,
+                "success_url": success_url,
+                "cancel_url": cancel_url,
+                "metadata": metadata or {},
+                "payment_method_types": ["card"],
+                "billing_address_collection": "auto",
+                # Safe per-session branding — does not affect account-wide Stripe Dashboard settings
+                "custom_text": {"submit": {"message": "You'll be charged by Synkora"}},
+            }
+            if mode == "payment":
+                session_params["invoice_creation"] = {
+                    "enabled": True,
+                    "invoice_data": {
+                        "footer": f"Synkora Platform | {support_email}",
+                    },
+                }
+
+            session = await asyncio.to_thread(stripe.checkout.Session.create, **session_params)
 
             return {"session_id": session.id, "checkout_url": session.url, "status": session.status}
 
         except stripe.error.StripeError as e:
             raise Exception(f"Failed to create checkout session: {str(e)}")
 
-    def create_topup_checkout_session(
+    async def create_topup_checkout_session(
         self,
         tenant_id: UUID,
         topup_id: UUID,
@@ -395,7 +415,7 @@ class StripeService:
             "type": "credit_topup",
         }
 
-        return self.create_checkout_session(
+        return await self.create_checkout_session(
             customer_id=customer_id,
             line_items=line_items,
             success_url=success_url,
@@ -404,7 +424,7 @@ class StripeService:
             mode="payment",
         )
 
-    def create_subscription_checkout_session(
+    async def create_subscription_checkout_session(
         self, customer_id: str, price_id: str, success_url: str, cancel_url: str, metadata: dict | None = None
     ) -> dict:
         """
@@ -422,7 +442,7 @@ class StripeService:
         """
         line_items = [{"price": price_id, "quantity": 1}]
 
-        return self.create_checkout_session(
+        return await self.create_checkout_session(
             customer_id=customer_id,
             line_items=line_items,
             success_url=success_url,
@@ -461,7 +481,7 @@ class StripeService:
         await self.db.refresh(topup)
 
         # Create payment intent
-        payment_intent = self.create_payment_intent(
+        payment_intent = await self.create_payment_intent(
             amount=price_cents,
             customer_id=customer_id,
             metadata={
@@ -778,7 +798,9 @@ class StripeService:
         """
         try:
             # Retrieve the checkout session from Stripe
-            session = stripe.checkout.Session.retrieve(session_id, expand=["subscription", "customer"])
+            session = await asyncio.to_thread(
+                stripe.checkout.Session.retrieve, session_id, expand=["subscription", "customer"]
+            )
 
             # Only process if the session is completed
             if session.payment_status == "paid" and session.status == "complete":
@@ -864,7 +886,7 @@ class StripeService:
 
     # Payout Management (for agent creators)
 
-    def create_payout(
+    async def create_payout(
         self, account_id: str, amount_cents: int, currency: str = "usd", metadata: dict | None = None
     ) -> dict:
         """
@@ -880,7 +902,8 @@ class StripeService:
             Payout data
         """
         try:
-            payout = stripe.Payout.create(
+            payout = await asyncio.to_thread(
+                stripe.Payout.create,
                 amount=amount_cents, currency=currency, metadata=metadata or {}, stripe_account=account_id
             )
 
@@ -889,7 +912,7 @@ class StripeService:
         except stripe.error.StripeError as e:
             raise Exception(f"Failed to create payout: {str(e)}")
 
-    def create_connected_account(self, email: str, country: str = "US", metadata: dict | None = None) -> str:
+    async def create_connected_account(self, email: str, country: str = "US", metadata: dict | None = None) -> str:
         """
         Create a Stripe connected account for an agent creator
 
@@ -902,7 +925,8 @@ class StripeService:
             Connected account ID
         """
         try:
-            account = stripe.Account.create(
+            account = await asyncio.to_thread(
+                stripe.Account.create,
                 type="express",
                 country=country,
                 email=email,
@@ -915,7 +939,7 @@ class StripeService:
         except stripe.error.StripeError as e:
             raise Exception(f"Failed to create connected account: {str(e)}")
 
-    def create_account_link(self, account_id: str, refresh_url: str, return_url: str) -> str:
+    async def create_account_link(self, account_id: str, refresh_url: str, return_url: str) -> str:
         """
         Create an account link for onboarding
 
@@ -928,7 +952,8 @@ class StripeService:
             Account link URL
         """
         try:
-            account_link = stripe.AccountLink.create(
+            account_link = await asyncio.to_thread(
+                stripe.AccountLink.create,
                 account=account_id, refresh_url=refresh_url, return_url=return_url, type="account_onboarding"
             )
 
@@ -939,7 +964,7 @@ class StripeService:
 
     # Payment Method Management
 
-    def create_setup_intent(self, customer_id: str, metadata: dict | None = None) -> dict:
+    async def create_setup_intent(self, customer_id: str, metadata: dict | None = None) -> dict:
         """
         Create a setup intent for collecting payment method without charging
 
@@ -951,7 +976,8 @@ class StripeService:
             Setup intent data with client secret
         """
         try:
-            setup_intent = stripe.SetupIntent.create(
+            setup_intent = await asyncio.to_thread(
+                stripe.SetupIntent.create,
                 customer=customer_id, payment_method_types=["card"], metadata=metadata or {}, usage="off_session"
             )
 
@@ -964,7 +990,7 @@ class StripeService:
         except stripe.error.StripeError as e:
             raise Exception(f"Failed to create setup intent: {str(e)}")
 
-    def list_payment_methods(self, customer_id: str, type: str = "card") -> list[dict]:
+    async def list_payment_methods(self, customer_id: str, type: str = "card") -> list[dict]:
         """
         List payment methods for a customer
 
@@ -976,7 +1002,7 @@ class StripeService:
             List of payment methods
         """
         try:
-            payment_methods = stripe.PaymentMethod.list(customer=customer_id, type=type)
+            payment_methods = await asyncio.to_thread(stripe.PaymentMethod.list, customer=customer_id, type=type)
 
             return [
                 {
@@ -998,7 +1024,7 @@ class StripeService:
         except stripe.error.StripeError as e:
             raise Exception(f"Failed to list payment methods: {str(e)}")
 
-    def detach_payment_method(self, payment_method_id: str) -> bool:
+    async def detach_payment_method(self, payment_method_id: str) -> bool:
         """
         Detach (remove) a payment method from customer
 
@@ -1009,13 +1035,13 @@ class StripeService:
             Success status
         """
         try:
-            stripe.PaymentMethod.detach(payment_method_id)
+            await asyncio.to_thread(stripe.PaymentMethod.detach, payment_method_id)
             return True
 
         except stripe.error.StripeError as e:
             raise Exception(f"Failed to detach payment method: {str(e)}")
 
-    def set_default_payment_method(self, customer_id: str, payment_method_id: str) -> bool:
+    async def set_default_payment_method(self, customer_id: str, payment_method_id: str) -> bool:
         """
         Set default payment method for a customer
 
@@ -1027,7 +1053,9 @@ class StripeService:
             Success status
         """
         try:
-            stripe.Customer.modify(customer_id, invoice_settings={"default_payment_method": payment_method_id})
+            await asyncio.to_thread(
+                stripe.Customer.modify, customer_id, invoice_settings={"default_payment_method": payment_method_id}
+            )
             return True
 
         except stripe.error.StripeError as e:

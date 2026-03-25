@@ -106,10 +106,10 @@ class RevenueService:
 
             # Process Stripe payout if account ID provided
             if stripe_account_id:
-                stripe_service = StripeService()
-                payout_result = stripe_service.create_payout(
+                stripe_service = await StripeService.create(self.db)
+                payout_result = await stripe_service.create_payout(
                     account_id=stripe_account_id,
-                    amount=int(total_amount * 100),  # Convert to cents
+                    amount_cents=int(total_amount * 100),  # Convert to cents
                 )
 
                 if not payout_result.get("success"):

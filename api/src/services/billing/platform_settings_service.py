@@ -190,6 +190,8 @@ class PlatformSettingsService:
             raise ValueError("Stripe is not configured")
 
         try:
+            import asyncio
+
             import stripe
 
             secret_key = await self.get_stripe_secret_key()
@@ -197,7 +199,7 @@ class PlatformSettingsService:
 
             # Test the connection by retrieving account info
             # Note: stripe.Account.retrieve() without ID retrieves the platform account itself
-            account = stripe.Account.retrieve()
+            account = await asyncio.to_thread(stripe.Account.retrieve)
 
             return {
                 "success": True,

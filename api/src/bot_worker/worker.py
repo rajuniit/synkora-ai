@@ -378,14 +378,15 @@ class BotWorker:
             # Update Redis assignment
             self.redis_state.assign_bot(bot_id, self.worker_id, BotType.SLACK)
 
-            # Update database
+            # Update database (columns are TIMESTAMP WITHOUT TIME ZONE — strip tzinfo)
+            now_naive = datetime.now(UTC).replace(tzinfo=None)
             async with get_async_session_factory()() as db:
                 bot = await db.get(SlackBot, slack_bot.id)
                 if bot:
                     bot.assigned_worker_id = self.worker_id
-                    bot.worker_connected_at = datetime.now(UTC)
+                    bot.worker_connected_at = now_naive
                     bot.connection_status = "connected"
-                    bot.last_connected_at = datetime.now(UTC)
+                    bot.last_connected_at = now_naive
                     await db.commit()
 
             logger.info(f"Started Slack bot {slack_bot.bot_name} ({bot_id})")
@@ -426,14 +427,15 @@ class BotWorker:
             # Update Redis assignment
             self.redis_state.assign_bot(bot_id, self.worker_id, BotType.TELEGRAM)
 
-            # Update database
+            # Update database (columns are TIMESTAMP WITHOUT TIME ZONE — strip tzinfo)
+            now_naive = datetime.now(UTC).replace(tzinfo=None)
             async with get_async_session_factory()() as db:
                 bot = await db.get(TelegramBot, telegram_bot.id)
                 if bot:
                     bot.assigned_worker_id = self.worker_id
-                    bot.worker_connected_at = datetime.now(UTC)
+                    bot.worker_connected_at = now_naive
                     bot.connection_status = "connected"
-                    bot.last_connected_at = datetime.now(UTC)
+                    bot.last_connected_at = now_naive
                     await db.commit()
 
             logger.info(f"Started Telegram bot {telegram_bot.bot_name} ({bot_id})")
@@ -842,11 +844,17 @@ class BotWorker:
         Args:
             event: Event to handle
         """
+        # If the ring is empty (e.g. after a dead-worker cleanup removed us),
+        # rebuild it before deciding who owns this bot.
+        if not self._hash_ring.ring:
+            logger.warning("Hash ring is empty when handling event — rebuilding")
+            await self._rebuild_hash_ring()
+
         # Check if this bot should be managed by this worker
         try:
             assigned_worker = self._hash_ring.get_node(event.bot_id)
         except ValueError:
-            logger.warning("No workers in hash ring, skipping event")
+            logger.warning("No workers in hash ring after rebuild, skipping event")
             return
 
         if assigned_worker != self.worker_id:
@@ -920,10 +928,12 @@ class BotWorker:
                 if dead_workers:
                     logger.info(f"Found {len(dead_workers)} dead workers: {dead_workers}")
 
-                    # Rebuild hash ring without dead workers
+                    # Unregister dead workers from Redis
                     for worker_id in dead_workers:
-                        self._hash_ring.remove_node(worker_id)
                         self.redis_state.unregister_worker(worker_id)
+
+                    # Rebuild ring from scratch so the current worker is always present
+                    await self._rebuild_hash_ring()
 
                     # Claim bots that should now be ours
                     await self._claim_orphaned_bots()

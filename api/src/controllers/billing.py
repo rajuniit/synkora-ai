@@ -287,7 +287,7 @@ async def purchase_credit_topup(
             name=tenant.name if hasattr(tenant, "name") else None,
         )
 
-        checkout_session = stripe_service.create_topup_checkout_session(
+        checkout_session = await stripe_service.create_topup_checkout_session(
             tenant_id=tenant_id,
             topup_id=UUID(request.topup_id),
             credits_amount=topup.credits_amount,
@@ -476,7 +476,7 @@ async def create_subscription(
         if not price_id:
             raise HTTPException(status_code=400, detail="Plan does not have a Stripe price ID configured")
 
-        checkout_session = stripe_service.create_subscription_checkout_session(
+        checkout_session = await stripe_service.create_subscription_checkout_session(
             customer_id=customer_id,
             price_id=price_id,
             success_url=stripe_success_url,
@@ -577,7 +577,7 @@ async def upgrade_subscription(
         if not price_id:
             raise HTTPException(status_code=400, detail="Plan does not have a Stripe price ID configured")
 
-        checkout_session = stripe_service.create_subscription_checkout_session(
+        checkout_session = await stripe_service.create_subscription_checkout_session(
             customer_id=customer_id,
             price_id=price_id,
             success_url=stripe_success_url,
@@ -617,7 +617,7 @@ async def cancel_subscription(
     elif subscription.stripe_subscription_id:
         try:
             stripe_service = await StripeService.create(db)
-            stripe_service.cancel_subscription(subscription.stripe_subscription_id, immediate=immediate)
+            await stripe_service.cancel_subscription(subscription.stripe_subscription_id, immediate=immediate)
         except Exception as e:
             raise HTTPException(status_code=400, detail=f"Failed to cancel Stripe subscription: {str(e)}")
 
@@ -822,7 +822,7 @@ async def create_setup_intent(
     )
 
     # Create setup intent
-    setup_intent = stripe_service.create_setup_intent(customer_id)
+    setup_intent = await stripe_service.create_setup_intent(customer_id)
 
     return {"client_secret": setup_intent["client_secret"], "setup_intent_id": setup_intent["setup_intent_id"]}
 
@@ -848,7 +848,7 @@ async def list_payment_methods(
     customer_id = tenant.metadata["stripe_customer_id"]
 
     # List payment methods
-    payment_methods = stripe_service.list_payment_methods(customer_id)
+    payment_methods = await stripe_service.list_payment_methods(customer_id)
 
     return {"payment_methods": payment_methods}
 
@@ -861,7 +861,7 @@ async def delete_payment_method(
     stripe_service = await StripeService.create(db)
 
     # Detach payment method
-    success = stripe_service.detach_payment_method(payment_method_id)
+    success = await stripe_service.detach_payment_method(payment_method_id)
 
     return {"success": success}
 
@@ -887,7 +887,7 @@ async def set_default_payment_method(
     customer_id = tenant.metadata["stripe_customer_id"]
 
     # Set default payment method
-    success = stripe_service.set_default_payment_method(customer_id, payment_method_id)
+    success = await stripe_service.set_default_payment_method(customer_id, payment_method_id)
 
     return {"success": success}
 

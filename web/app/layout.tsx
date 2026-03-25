@@ -23,21 +23,21 @@ export default function RootLayout({
         <Toaster 
           position="top-right"
           toastOptions={{
-            // Success toasts - new brand color #ff444f
+            // Success toasts - green
             success: {
               duration: 4000,
               style: {
-                background: '#ffffff',
-                color: '#1f2937', // gray-800
-                border: '2px solid #ff444f',
+                background: '#f0fdf4', // green-50
+                color: '#14532d', // green-900
+                border: '2px solid #22c55e', // green-500
                 padding: '16px',
                 borderRadius: '12px',
                 fontWeight: '500',
-                boxShadow: '0 10px 15px -3px rgba(255, 68, 79, 0.2), 0 4px 6px -2px rgba(255, 68, 79, 0.1)',
+                boxShadow: '0 10px 15px -3px rgba(34, 197, 94, 0.2), 0 4px 6px -2px rgba(34, 197, 94, 0.1)',
               },
               iconTheme: {
-                primary: '#ff444f',
-                secondary: '#ffffff',
+                primary: '#22c55e', // green-500
+                secondary: '#f0fdf4', // green-50
               },
             },
             // Error toasts

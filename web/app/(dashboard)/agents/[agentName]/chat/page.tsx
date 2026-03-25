@@ -355,7 +355,6 @@ export default function AdvancedChatPage() {
       // Skip loading messages for newly created conversation (it's empty)
       skipLoadMessagesRef.current = true
       setCurrentConversation(newConv)
-      setMessages([])
       setSources([])
       setKeyPeople([])
       setNews([])
