@@ -135,7 +135,9 @@ class StripeService:
             customer_metadata = metadata or {}
             customer_metadata["tenant_id"] = str(tenant_id)
 
-            customer = await asyncio.to_thread(stripe.Customer.create, email=email, name=name, metadata=customer_metadata)
+            customer = await asyncio.to_thread(
+                stripe.Customer.create, email=email, name=name, metadata=customer_metadata
+            )
 
             # Store customer ID in tenant's subscription record
             # Check if tenant has a subscription record, if not create one
@@ -904,7 +906,10 @@ class StripeService:
         try:
             payout = await asyncio.to_thread(
                 stripe.Payout.create,
-                amount=amount_cents, currency=currency, metadata=metadata or {}, stripe_account=account_id
+                amount=amount_cents,
+                currency=currency,
+                metadata=metadata or {},
+                stripe_account=account_id,
             )
 
             return {"payout_id": payout.id, "status": payout.status, "arrival_date": payout.arrival_date}
@@ -954,7 +959,10 @@ class StripeService:
         try:
             account_link = await asyncio.to_thread(
                 stripe.AccountLink.create,
-                account=account_id, refresh_url=refresh_url, return_url=return_url, type="account_onboarding"
+                account=account_id,
+                refresh_url=refresh_url,
+                return_url=return_url,
+                type="account_onboarding",
             )
 
             return account_link.url
@@ -978,7 +986,10 @@ class StripeService:
         try:
             setup_intent = await asyncio.to_thread(
                 stripe.SetupIntent.create,
-                customer=customer_id, payment_method_types=["card"], metadata=metadata or {}, usage="off_session"
+                customer=customer_id,
+                payment_method_types=["card"],
+                metadata=metadata or {},
+                usage="off_session",
             )
 
             return {
