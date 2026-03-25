@@ -37,7 +37,7 @@ def mock_usage_service():
 @pytest.fixture
 def mock_stripe_service():
     with patch("src.controllers.billing.StripeService") as mock:
-        mock_instance = MagicMock()  # StripeService methods are sync
+        mock_instance = AsyncMock()  # All StripeService methods are async
         mock.create = AsyncMock(return_value=mock_instance)  # factory method is async
         mock.return_value = mock_instance  # for backwards compatibility
         yield mock
@@ -332,8 +332,7 @@ class TestPaymentMethodEndpoints:
 
         mock_payment_methods = [{"id": "pm_123", "card": {"brand": "visa", "last4": "4242"}, "is_default": True}]
 
-        # Note: list_payment_methods is a sync method in StripeService
-        mock_stripe.list_payment_methods = MagicMock(return_value=mock_payment_methods)
+        mock_stripe.list_payment_methods = AsyncMock(return_value=mock_payment_methods)
 
         # Mock tenant with stripe customer ID
         mock_tenant = MagicMock()
@@ -356,8 +355,7 @@ class TestPaymentMethodEndpoints:
         mock_setup_intent = {"client_secret": "seti_xxx_secret_xxx", "setup_intent_id": "seti_xxx"}
 
         mock_stripe.get_or_create_customer = AsyncMock(return_value="cus_123")
-        # Note: create_setup_intent is a sync method in StripeService
-        mock_stripe.create_setup_intent = MagicMock(return_value=mock_setup_intent)
+        mock_stripe.create_setup_intent = AsyncMock(return_value=mock_setup_intent)
 
         # Mock tenant
         mock_tenant = MagicMock()
@@ -379,8 +377,7 @@ class TestPaymentMethodEndpoints:
         test_client, tenant_id, mocks, mock_db = client
         mock_stripe = mocks["stripe"].return_value
 
-        # Note: detach_payment_method is a sync method in StripeService
-        mock_stripe.detach_payment_method = MagicMock(return_value=True)
+        mock_stripe.detach_payment_method = AsyncMock(return_value=True)
 
         response = test_client.delete("/api/v1/billing/payment-methods/pm_123")
 

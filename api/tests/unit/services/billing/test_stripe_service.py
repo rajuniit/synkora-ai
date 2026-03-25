@@ -122,14 +122,14 @@ class TestStripeService:
         cus_id = await service.get_or_create_customer(tenant_id, "email@test.com")
         assert cus_id == "cus_new"
 
-    def test_create_subscription(self, service, mock_stripe):
+    async def test_create_subscription(self, service, mock_stripe):
         mock_sub = MagicMock()
         mock_sub.id = "sub_123"
         mock_sub.status = "active"
         mock_sub.latest_invoice.payment_intent.client_secret = "pi_secret"
         mock_stripe.Subscription.create.return_value = mock_sub
 
-        result = service.create_subscription("cus_1", "price_1", trial_days=14)
+        result = await service.create_subscription("cus_1", "price_1", trial_days=14)
 
         assert result["subscription_id"] == "sub_123"
         assert result["client_secret"] == "pi_secret"
@@ -143,7 +143,7 @@ class TestStripeService:
             trial_period_days=14,
         )
 
-    def test_update_subscription(self, service, mock_stripe):
+    async def test_update_subscription(self, service, mock_stripe):
         mock_sub = MagicMock()
         mock_sub.__getitem__.return_value = [{"id": "si_1"}]  # items data
         mock_stripe.Subscription.retrieve.return_value = mock_sub
@@ -154,56 +154,56 @@ class TestStripeService:
         mock_updated.current_period_end = 1234567890
         mock_stripe.Subscription.modify.return_value = mock_updated
 
-        result = service.update_subscription("sub_123", "new_price")
+        result = await service.update_subscription("sub_123", "new_price")
 
         assert result["subscription_id"] == "sub_123"
         mock_stripe.Subscription.modify.assert_called()
 
-    def test_cancel_subscription(self, service, mock_stripe):
-        service.cancel_subscription("sub_1", immediate=True)
+    async def test_cancel_subscription(self, service, mock_stripe):
+        await service.cancel_subscription("sub_1", immediate=True)
         mock_stripe.Subscription.delete.assert_called_with("sub_1")
 
-        service.cancel_subscription("sub_1", immediate=False)
+        await service.cancel_subscription("sub_1", immediate=False)
         mock_stripe.Subscription.modify.assert_called_with("sub_1", cancel_at_period_end=True)
 
-    def test_create_payment_intent(self, service, mock_stripe):
+    async def test_create_payment_intent(self, service, mock_stripe):
         mock_pi = MagicMock()
         mock_pi.id = "pi_1"
         mock_pi.client_secret = "secret"
         mock_pi.status = "requires_payment_method"
         mock_stripe.PaymentIntent.create.return_value = mock_pi
 
-        result = service.create_payment_intent(1000, "cus_1")
+        result = await service.create_payment_intent(1000, "cus_1")
 
         assert result["payment_intent_id"] == "pi_1"
         mock_stripe.PaymentIntent.create.assert_called()
 
-    def test_create_checkout_session(self, service, mock_stripe):
+    async def test_create_checkout_session(self, service, mock_stripe):
         mock_session = MagicMock()
         mock_session.id = "sess_1"
         mock_session.url = "url"
         mock_session.status = "open"
         mock_stripe.checkout.Session.create.return_value = mock_session
 
-        result = service.create_checkout_session("cus_1", [], "success", "cancel")
+        result = await service.create_checkout_session("cus_1", [], "success", "cancel")
 
         assert result["session_id"] == "sess_1"
         mock_stripe.checkout.Session.create.assert_called()
 
-    def test_create_topup_checkout_session(self, service, mock_stripe):
+    async def test_create_topup_checkout_session(self, service, mock_stripe):
         # Mock internal call
-        service.create_checkout_session = MagicMock(return_value={"session_id": "sess_1"})
+        service.create_checkout_session = AsyncMock(return_value={"session_id": "sess_1"})
 
-        result = service.create_topup_checkout_session(uuid4(), uuid4(), 100, 1000, "cus_1", "success", "cancel")
+        result = await service.create_topup_checkout_session(uuid4(), uuid4(), 100, 1000, "cus_1", "success", "cancel")
 
         assert result["session_id"] == "sess_1"
         service.create_checkout_session.assert_called()
 
-    def test_create_subscription_checkout_session(self, service, mock_stripe):
+    async def test_create_subscription_checkout_session(self, service, mock_stripe):
         # Mock internal call
-        service.create_checkout_session = MagicMock(return_value={"session_id": "sess_1"})
+        service.create_checkout_session = AsyncMock(return_value={"session_id": "sess_1"})
 
-        result = service.create_subscription_checkout_session("cus_1", "price_1", "success", "cancel")
+        result = await service.create_subscription_checkout_session("cus_1", "price_1", "success", "cancel")
 
         assert result["session_id"] == "sess_1"
         service.create_checkout_session.assert_called()
@@ -214,7 +214,7 @@ class TestStripeService:
         mock_stripe.PaymentIntent.create.return_value = mock_pi
 
         # Just mock create_payment_intent to simplify
-        service.create_payment_intent = MagicMock(return_value={"payment_intent_id": "pi_1"})
+        service.create_payment_intent = AsyncMock(return_value={"payment_intent_id": "pi_1"})
 
         tenant_id = uuid4()
 
@@ -365,31 +365,31 @@ class TestStripeService:
         assert result is True
         assert mock_topup.status == TopupStatus.FAILED
 
-    def test_payout_methods(self, service, mock_stripe):
+    async def test_payout_methods(self, service, mock_stripe):
         mock_stripe.Payout.create.return_value = MagicMock(id="po_1")
-        res = service.create_payout("acct_1", 1000)
+        res = await service.create_payout("acct_1", 1000)
         assert res["payout_id"] == "po_1"
 
         mock_stripe.Account.create.return_value = MagicMock(id="acct_1")
-        res = service.create_connected_account("email@test.com")
+        res = await service.create_connected_account("email@test.com")
         assert res == "acct_1"
 
         mock_stripe.AccountLink.create.return_value = MagicMock(url="http://link")
-        res = service.create_account_link("acct_1", "ref", "ret")
+        res = await service.create_account_link("acct_1", "ref", "ret")
         assert res == "http://link"
 
-    def test_payment_methods(self, service, mock_stripe):
+    async def test_payment_methods(self, service, mock_stripe):
         mock_stripe.SetupIntent.create.return_value = MagicMock(id="si_1", client_secret="sec")
-        res = service.create_setup_intent("cus_1")
+        res = await service.create_setup_intent("cus_1")
         assert res["setup_intent_id"] == "si_1"
 
         mock_stripe.PaymentMethod.list.return_value = MagicMock(data=[MagicMock(id="pm_1", type="card")])
-        res = service.list_payment_methods("cus_1")
+        res = await service.list_payment_methods("cus_1")
         assert len(res) == 1
         assert res[0]["id"] == "pm_1"
 
-        service.detach_payment_method("pm_1")
+        await service.detach_payment_method("pm_1")
         mock_stripe.PaymentMethod.detach.assert_called()
 
-        service.set_default_payment_method("cus_1", "pm_1")
+        await service.set_default_payment_method("cus_1", "pm_1")
         mock_stripe.Customer.modify.assert_called()

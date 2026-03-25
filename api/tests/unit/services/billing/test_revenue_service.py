@@ -110,8 +110,9 @@ class TestRevenueService:
         mock_db.execute.return_value = mock_result
 
         with patch("src.services.billing.revenue_service.StripeService") as MockStripeService:
-            mock_stripe = MockStripeService.return_value
-            mock_stripe.create_payout.return_value = {"success": True, "id": "tr_123"}
+            mock_stripe = AsyncMock()
+            MockStripeService.create = AsyncMock(return_value=mock_stripe)
+            mock_stripe.create_payout = AsyncMock(return_value={"success": True, "id": "tr_123"})
 
             result = await service.process_payout(tenant_id, stripe_account_id="acct_123")
 
@@ -129,8 +130,9 @@ class TestRevenueService:
         mock_db.execute.return_value = mock_result
 
         with patch("src.services.billing.revenue_service.StripeService") as MockStripeService:
-            mock_stripe = MockStripeService.return_value
-            mock_stripe.create_payout.return_value = {"success": False, "error": "Failed"}
+            mock_stripe = AsyncMock()
+            MockStripeService.create = AsyncMock(return_value=mock_stripe)
+            mock_stripe.create_payout = AsyncMock(return_value={"success": False, "error": "Failed"})
 
             result = await service.process_payout(tenant_id, stripe_account_id="acct_123")
 
