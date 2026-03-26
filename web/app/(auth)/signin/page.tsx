@@ -33,20 +33,18 @@ function SignInContent() {
     const loginStatus = searchParams.get('login')
     const provider = searchParams.get('provider')
     const exchangeCode = searchParams.get('exchange_code')
-    const oauthRedirect = searchParams.get('state') // OAuth returns redirect in state param
 
     if (loginStatus === 'success' && exchangeCode) {
       const apiUrl = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8000'
-      fetch(`${apiUrl}/api/v1/auth/token-exchange?code=${exchangeCode}`)
+      fetch(`${apiUrl}/api/v1/auth/token-exchange?code=${exchangeCode}`, { credentials: 'include' })
         .then((res) => {
           if (!res.ok) throw new Error('Exchange failed')
           return res.json()
         })
-        .then(({ access_token, refresh_token, expires_in }) => {
-          secureStorage.storeTokens({ access_token, refresh_token, expires_in })
+        .then(({ access_token, expires_in }) => {
+          secureStorage.storeTokens({ access_token, expires_in })
           toast.success(`Signed in successfully with ${provider}!`)
-          const targetUrl = oauthRedirect ? decodeURIComponent(oauthRedirect) : '/agents'
-          window.location.href = targetUrl
+          window.location.href = redirectUrl ? decodeURIComponent(redirectUrl) : '/agents'
         })
         .catch(() => {
           const msg = 'Sign-in failed. Please try again.'
@@ -94,10 +92,8 @@ function SignInContent() {
   }
 
   const handleSocialLogin = (provider: 'google' | 'microsoft' | 'apple') => {
-    // Redirect to backend OAuth endpoint with redirect URL in state param
     const apiUrl = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8000'
-    const stateParam = redirectUrl ? `?state=${encodeURIComponent(redirectUrl)}` : ''
-    window.location.href = `${apiUrl}/api/v1/auth/${provider}/login${stateParam}`
+    window.location.href = `${apiUrl}/api/v1/auth/${provider}/login`
   }
 
   return (

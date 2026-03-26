@@ -16,11 +16,12 @@ from typing import Any
 from urllib.parse import urlparse
 
 from fastapi import APIRouter, Depends, HTTPException, Query, Request
-from fastapi.responses import RedirectResponse
+from fastapi.responses import JSONResponse, RedirectResponse
 from pydantic import BaseModel
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from src.config import settings
 from src.utils.config_helper import get_app_base_url
 
 from ..core.database import get_async_db
@@ -33,6 +34,9 @@ from ..services.oauth.apple_oauth import AppleOAuth
 from ..services.oauth.google_oauth import GoogleOAuth
 from ..services.oauth.microsoft_oauth import MicrosoftOAuth
 from ..services.social_auth import AccountLinkingService
+
+COOKIE_SECURE = settings.is_production
+COOKIE_DOMAIN = settings.cookie_domain if hasattr(settings, "cookie_domain") else None
 
 logger = logging.getLogger(__name__)
 
@@ -212,12 +216,26 @@ async def token_exchange(code: str = Query(..., description="One-time exchange c
     Exchange a one-time OAuth code for access and refresh tokens.
 
     SECURITY: Codes are single-use and expire in 60 seconds.
-    This avoids exposing long-lived tokens in redirect URLs or browser history.
+    The refresh token is returned as an HttpOnly cookie (matching the regular login
+    endpoint) so JS cannot read or exfiltrate it.  The access token is returned in
+    the response body only.
     """
     tokens = _consume_exchange_tokens(code)
     if not tokens:
         raise HTTPException(status_code=400, detail="Invalid or expired exchange code")
-    return tokens
+
+    response = JSONResponse(content={"access_token": tokens["access_token"]})
+    response.set_cookie(
+        key="refresh_token",
+        value=tokens["refresh_token"],
+        httponly=True,
+        secure=COOKIE_SECURE,
+        samesite="lax",
+        max_age=30 * 24 * 3600,
+        path="/console/api/auth/refresh",
+        domain=COOKIE_DOMAIN,
+    )
+    return response
 
 
 # Google OAuth Endpoints
