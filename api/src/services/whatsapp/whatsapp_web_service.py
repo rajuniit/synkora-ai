@@ -221,12 +221,15 @@ class WhatsAppWebService:
         db_path = str(Path(session_dir) / "session.db")
 
         # Initialise shared state in Redis (visible to all pods immediately)
-        cls._redis_write(session_id, {
-            "status": "pending",
-            "qr_data": None,
-            "phone_number": None,
-            "session_db_b64": None,
-        })
+        cls._redis_write(
+            session_id,
+            {
+                "status": "pending",
+                "qr_data": None,
+                "phone_number": None,
+                "session_db_b64": None,
+            },
+        )
 
         # Track pod-local resources (not shared)
         cls._local[session_id] = {"client": None, "session_dir": session_dir}
@@ -451,7 +454,9 @@ class WhatsAppWebService:
         session_db_b64 = data.get("session_db_b64")
         if not session_db_b64:
             return None
-        return json.dumps({
-            "session_db": session_db_b64,
-            "phone_number": data.get("phone_number"),
-        })
+        return json.dumps(
+            {
+                "session_db": session_db_b64,
+                "phone_number": data.get("phone_number"),
+            }
+        )

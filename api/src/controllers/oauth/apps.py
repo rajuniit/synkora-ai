@@ -354,9 +354,7 @@ async def delete_oauth_app(
 
         # Delete associated user tokens first — oauth_app_id is NOT NULL so
         # SQLAlchemy cannot nullify the FK before deleting the parent row.
-        tokens_result = await db.execute(
-            select(UserOAuthToken).filter(UserOAuthToken.oauth_app_id == app_id)
-        )
+        tokens_result = await db.execute(select(UserOAuthToken).filter(UserOAuthToken.oauth_app_id == app_id))
         tokens = tokens_result.scalars().all()
         for token in tokens:
             await db.delete(token)

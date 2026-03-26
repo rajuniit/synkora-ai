@@ -593,13 +593,17 @@ async def internal_slack_send_dm(
                     key = f"slack:dm_callback:{agent_id}:{dm_channel_id}"
                     await redis.set(
                         key,
-                        json.dumps({
-                            "requester_channel_id": report_back_channel_id,
-                            "request_message_ts": request_message_ts,
-                        }),
+                        json.dumps(
+                            {
+                                "requester_channel_id": report_back_channel_id,
+                                "request_message_ts": request_message_ts,
+                            }
+                        ),
                         ex=604800,  # 7 days
                     )
-                    logger.info(f"Stored DM callback: {dm_channel_id} → {report_back_channel_id} (request_ts={request_message_ts})")
+                    logger.info(
+                        f"Stored DM callback: {dm_channel_id} → {report_back_channel_id} (request_ts={request_message_ts})"
+                    )
                 except Exception as e:
                     logger.warning(f"Failed to store DM callback: {e}")
 
