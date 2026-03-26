@@ -309,11 +309,30 @@ class SlackSocketService:
             # IMPORTANT: Fetch Slack thread history to provide full context
             # This ensures the LLM has access to the entire thread conversation
             thread_context = []
+
+            # For DM channels: fetch channel history so the agent has the full back-and-forth
+            if channel_id.startswith("D"):
+                try:
+                    history = await client.conversations_history(channel=channel_id, limit=50)
+                    for msg in reversed(history.get("messages", [])):
+                        if msg.get("ts") == message_ts:
+                            continue
+                        msg_text = msg.get("text", "").strip()
+                        if not msg_text:
+                            continue
+                        if msg.get("bot_id") or msg.get("subtype") == "bot_message":
+                            thread_context.append({"role": "assistant", "content": msg_text})
+                        else:
+                            thread_context.append({"role": "user", "content": msg_text})
+                    logger.info(f"Built DM history context with {len(thread_context)} messages")
+                except Exception as e:
+                    logger.warning(f"Failed to fetch DM history: {e}")
+
             # OPTIMIZATION: Only fetch thread if this is a reply to an existing thread
             # Skip for first messages (thread_ts is None) or messages that start a thread (thread_ts == message_ts)
             # This saves ~300ms API call for non-threaded messages
             effective_thread_ts = thread_ts if thread_ts and thread_ts != message_ts else None
-            if effective_thread_ts:
+            if effective_thread_ts and not channel_id.startswith("D"):
                 try:
                     thread_replies = await client.conversations_replies(
                         channel=channel_id,
@@ -406,6 +425,7 @@ class SlackSocketService:
                 attachments=None,
                 llm_config_id=None,
                 db=self.db_session,
+                shared_state={"slack_message_ts": message_ts, "slack_channel_id": channel_id},
             ):
                 # Parse SSE data
                 if event_data.startswith("data: "):
@@ -472,6 +492,18 @@ class SlackSocketService:
             # OPTIMIZATION: Single commit for both user and assistant messages (fsync once)
             await self.db_session.commit()
 
+            # If this is a DM reply, check whether the bot previously sent this DM
+            # on behalf of someone else and notify them immediately.
+            if channel_id.startswith("D"):
+                await self._notify_requester_if_callback(
+                    client=client,
+                    slack_bot=slack_bot,
+                    dm_channel_id=channel_id,
+                    replier_name=user_name,
+                    reply_text=clean_text,
+                    current_message_ts=message_ts,
+                )
+
         except Exception as e:
             logger.error(f"Error handling Slack message: {str(e)}")
             # Rollback the session on error
@@ -484,15 +516,25 @@ class SlackSocketService:
         self, slack_bot: SlackBot, channel_id: str, user_id: str, thread_ts: str | None
     ) -> Conversation:
         """Get existing conversation or create new one."""
-        # Try to find existing conversation
-        stmt = select(SlackConversation).where(
-            SlackConversation.slack_bot_id == slack_bot.id,
-            SlackConversation.slack_channel_id == channel_id,
-            SlackConversation.slack_user_id == user_id,
-            SlackConversation.slack_thread_ts == thread_ts,
-        )
+        is_dm = channel_id.startswith("D")
+
+        if is_dm:
+            # One conversation per user per DM channel — ignore thread_ts
+            stmt = select(SlackConversation).where(
+                SlackConversation.slack_bot_id == slack_bot.id,
+                SlackConversation.slack_channel_id == channel_id,
+                SlackConversation.slack_user_id == user_id,
+            )
+        else:
+            # Channel messages: separate conversation per thread
+            stmt = select(SlackConversation).where(
+                SlackConversation.slack_bot_id == slack_bot.id,
+                SlackConversation.slack_channel_id == channel_id,
+                SlackConversation.slack_user_id == user_id,
+                SlackConversation.slack_thread_ts == thread_ts,
+            )
         result = await self.db_session.execute(stmt)
-        slack_conv = result.scalar_one_or_none()
+        slack_conv = result.scalars().first()
 
         if slack_conv:
             # Return existing conversation
@@ -518,6 +560,48 @@ class SlackSocketService:
         await self.db_session.commit()
 
         return conversation
+
+    async def _notify_requester_if_callback(
+        self,
+        client: AsyncWebClient,
+        slack_bot: SlackBot,
+        dm_channel_id: str,
+        replier_name: str,
+        reply_text: str,
+        current_message_ts: str | None = None,
+    ) -> None:
+        """Check Redis for a report-back callback and notify the requester if one exists."""
+        try:
+            import json
+
+            from ...config.redis import get_redis_async
+
+            redis = get_redis_async()
+            key = f"slack:dm_callback:{slack_bot.agent_id}:{dm_channel_id}"
+            data = await redis.get(key)
+            if not data:
+                return
+
+            callback = json.loads(data)
+            requester_channel_id = callback.get("requester_channel_id")
+            if not requester_channel_id:
+                return
+
+            # Skip if this is the same message turn that stored the callback (e.g. self-DM
+            # where requester and DM target are the same person/channel).
+            request_message_ts = callback.get("request_message_ts")
+            if request_message_ts and current_message_ts and request_message_ts == current_message_ts:
+                logger.info(f"Skipping report-back: callback was stored this turn (ts={current_message_ts})")
+                return
+
+            # One-time notification — delete so repeat messages don't keep pinging the requester
+            await redis.delete(key)
+
+            notification = f"*[Update]* *{replier_name} replied:* {reply_text}"
+            await client.chat_postMessage(channel=requester_channel_id, text=notification)
+            logger.info(f"Notified {requester_channel_id}: {replier_name} replied in {dm_channel_id}")
+        except Exception as e:
+            logger.warning(f"Failed to send report-back notification: {e}")
 
     def _remove_bot_mention(self, text: str, app_id: str) -> str:
         """Remove bot mention from message text."""

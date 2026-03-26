@@ -6,6 +6,7 @@ and error message sanitization.
 """
 
 import logging
+import os
 from urllib.parse import quote, urlparse
 
 logger = logging.getLogger(__name__)
@@ -57,10 +58,21 @@ def validate_redirect_url(redirect_url: str, allowed_base_url: str) -> tuple[boo
         if redirect_domain.endswith(f".{allowed_domain}"):
             return True, None
 
-        # Special case: allow localhost variants in development
+        # Always allow localhost redirects — they are not an open-redirect risk to
+        # external attackers and are necessary for local-frontend / tunnel-API setups.
         localhost_variants = {"localhost", "127.0.0.1", "0.0.0.0"}
-        if redirect_domain in localhost_variants and allowed_domain in localhost_variants:
+        if redirect_domain in localhost_variants:
             return True, None
+
+        # Also accept the operator-configured APP_BASE_URL (may differ from DB value)
+        env_base_url = os.getenv("APP_BASE_URL", "").rstrip("/")
+        if env_base_url:
+            env_parsed = urlparse(env_base_url)
+            env_domain = env_parsed.netloc.lower().split(":")[0]
+            if redirect_domain == env_domain:
+                return True, None
+            if redirect_domain.endswith(f".{env_domain}"):
+                return True, None
 
         return False, f"Redirect URL domain '{redirect_domain}' is not allowed"
 

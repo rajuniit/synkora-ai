@@ -664,27 +664,22 @@ class AuthService:
         return secrets.token_urlsafe(32)
 
     @staticmethod
-    async def request_password_reset(db: AsyncSession, email: str, base_url: str = "http://localhost:3005") -> dict:
+    async def request_password_reset(db: AsyncSession, email: str) -> tuple["Account", str] | None:
         """
-        Request a password reset for an account and send email.
+        Generate a password reset token for an account.
 
         Args:
             db: Async database session
             email: User email
-            base_url: Base URL for reset link
 
         Returns:
-            Dict with success status and message
+            (account, reset_token) tuple if account exists, None otherwise
         """
         result = await db.execute(select(Account).filter_by(email=email))
         account = result.scalar_one_or_none()
 
         if not account:
-            # Return success even if account not found (security best practice)
-            return {
-                "success": True,
-                "message": "If an account exists with this email, a password reset link has been sent.",
-            }
+            return None
 
         # Generate reset token
         reset_token = AuthService.generate_reset_token()
@@ -693,32 +688,13 @@ class AuthService:
         expires_at = datetime.now(UTC) + timedelta(hours=1)
 
         # SECURITY: Store hashed token to prevent database-level attacks
-        # If an attacker gains DB read access, they cannot use the hashed tokens
         account.reset_token = AuthService.hash_token(reset_token)
         account.reset_token_expires_at = expires_at.isoformat()
 
         await db.commit()
         await db.refresh(account)
 
-        # Send password reset email (with the UNHASHED token - user needs this)
-        email_service = EmailService(db)
-
-        # Get tenant_id from account's first tenant membership
-        tenant_id = None
-        result = await db.execute(select(TenantAccountJoin).filter_by(account_id=account.id))
-        membership = result.scalar_one_or_none()
-        if membership:
-            tenant_id = membership.tenant_id
-
-        result = await email_service.send_password_reset_email(
-            to_email=email, reset_token=reset_token, tenant_id=tenant_id, base_url=base_url
-        )
-
-        if result["success"]:
-            return {"success": True, "message": "Password reset email sent successfully."}
-        else:
-            logger.error(f"Failed to send password reset email: {result['message']}")
-            return {"success": False, "message": "Failed to send password reset email. Please try again later."}
+        return account, reset_token
 
     @staticmethod
     async def reset_password(db: AsyncSession, token: str, new_password: str) -> Account | None:

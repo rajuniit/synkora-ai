@@ -256,8 +256,8 @@ async def regenerate_api_key(
 
     # Regenerate key by generating new key and updating
     plain_key, hashed_key = AgentApiKeyService.generate_api_key()
-    api_key.key_hash = hashed_key
-    api_key.key_prefix = plain_key[:12]  # Store prefix for display
+    api_key.api_key = hashed_key
+    api_key.key_prefix = plain_key[:20]  # Must match the 20-char prefix used in validation
     api_key.updated_at = datetime.now(UTC)
     await db.commit()
     await db.refresh(api_key)

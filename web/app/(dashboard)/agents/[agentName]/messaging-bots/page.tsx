@@ -2,7 +2,7 @@
 
 import { useState, useEffect } from "react";
 import { useParams, useRouter } from "next/navigation";
-import { Power, PowerOff, Settings, Trash2, ExternalLink, MessageCircle, Users } from "lucide-react";
+import { Power, PowerOff, Settings, Trash2, ExternalLink, MessageCircle, Users, ChevronRight } from "lucide-react";
 import { useWhatsAppBots, useTeamsBots } from "@/hooks/useMessagingBots";
 import type { WhatsAppBot, TeamsBot } from "@/types/messaging-bots";
 import { apiClient } from "@/lib/api/client";
@@ -107,6 +107,25 @@ export default function MessagingBotsPage() {
   return (
     <div className="min-h-screen bg-gray-50 p-6">
       <div className="max-w-7xl mx-auto">
+        {/* Breadcrumb */}
+        <div className="flex items-center gap-1.5 text-sm mb-4">
+          <button
+            onClick={() => router.push("/agents")}
+            className="text-gray-500 hover:text-primary-600 transition-colors"
+          >
+            Agents
+          </button>
+          <ChevronRight className="w-3.5 h-3.5 text-gray-400" />
+          <button
+            onClick={() => router.push(`/agents/${encodeURIComponent(agentName)}/view`)}
+            className="text-gray-500 hover:text-primary-600 transition-colors"
+          >
+            {agentName}
+          </button>
+          <ChevronRight className="w-3.5 h-3.5 text-gray-400" />
+          <span className="text-gray-900 font-medium">Messaging Bots</span>
+        </div>
+
         {/* Header */}
         <div className="flex justify-between items-center mb-6">
           <div>

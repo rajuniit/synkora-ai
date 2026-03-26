@@ -90,7 +90,11 @@ def register_slack_tools(registry):
     async def internal_slack_send_dm_wrapper(config: dict[str, Any] | None = None, **kwargs):
         runtime_context = config.get("_runtime_context") if config else None
         return await internal_slack_send_dm(
-            user_id=kwargs.get("user_id"), text=kwargs.get("text"), runtime_context=runtime_context, config=config
+            user_id=kwargs.get("user_id"),
+            text=kwargs.get("text"),
+            report_back_channel_id=kwargs.get("report_back_channel_id"),
+            runtime_context=runtime_context,
+            config=config,
         )
 
     # Register all Slack tools
@@ -113,7 +117,7 @@ def register_slack_tools(registry):
 
     registry.register_tool(
         name="internal_slack_read_channel_messages",
-        description="Read recent messages from a Slack channel to understand what's being discussed. Use this to monitor channels and decide if you should participate. The agent should use this proactively to stay informed about team discussions.",
+        description="Read recent messages from a Slack channel or DM conversation. Works for public/private channels AND direct message channels (IDs starting with 'D'). Use this to check for replies after sending a DM via internal_slack_send_dm — pass the channel_id returned by that tool. Also use this to monitor channels and decide if you should participate.",
         parameters={
             "type": "object",
             "properties": {
@@ -146,7 +150,7 @@ def register_slack_tools(registry):
 
     registry.register_tool(
         name="internal_slack_send_message",
-        description="Send a message to a Slack channel or thread. Use this when you've decided that responding would be valuable based on the context. Consider carefully whether your response adds value to the conversation. Be human-like in your communication style.",
+        description="Send a message to a Slack channel or thread. Only call this tool when the user explicitly asks you to send or post a message to a specific channel or thread. Do not call this tool to echo, summarize, or follow up on a response you have already given.",
         parameters={
             "type": "object",
             "properties": {
@@ -210,7 +214,13 @@ def register_slack_tools(registry):
 
     registry.register_tool(
         name="internal_slack_send_dm",
-        description="Send a direct message (DM) to a Slack user. Use this to send private messages directly to individual users. Provide the user's Slack ID (e.g., 'U1234567890') and the message text.",
+        description=(
+            "Send a direct message (DM) to a Slack user. Returns channel_id and message_ts. "
+            "When sending this DM on behalf of a user in another channel (e.g., Raju asked you "
+            "to reach out to someone), set report_back_channel_id to the channel ID from the "
+            "[Slack Context] header of Raju's message. The bot will then automatically notify "
+            "Raju's channel the moment the DM recipient replies — Raju does not need to ask."
+        ),
         parameters={
             "type": "object",
             "properties": {
@@ -219,6 +229,15 @@ def register_slack_tools(registry):
                     "description": "Slack user ID (e.g., 'U1234567890'). This is the unique identifier for the user, not their display name.",
                 },
                 "text": {"type": "string", "description": "Message text to send to the user"},
+                "report_back_channel_id": {
+                    "type": "string",
+                    "description": (
+                        "Optional. Channel ID to notify automatically when the DM recipient replies. "
+                        "Extract this from the (ID: ...) part of the [Slack Context] header in the "
+                        "current message. Set this whenever you are sending a DM on behalf of someone "
+                        "else so they receive an instant update without needing to ask."
+                    ),
+                },
             },
             "required": ["user_id", "text"],
         },

@@ -14,7 +14,9 @@ import {
   CheckCircle,
   Search,
   Clock,
-  FolderOpen
+  FolderOpen,
+  ChevronRight,
+  Home
 } from 'lucide-react'
 import { apiClient } from '@/lib/api/client'
 
@@ -131,6 +133,16 @@ export default function KnowledgeBasesPage() {
   return (
     <div className="min-h-screen bg-gradient-to-br from-red-50 via-white to-red-50/30 p-6">
       <div className="max-w-6xl mx-auto">
+        {/* Breadcrumb */}
+        <div className="flex items-center gap-1.5 text-sm mb-4">
+          <Link href="/" className="text-gray-500 hover:text-red-600 transition-colors flex items-center gap-1">
+            <Home className="w-3.5 h-3.5" />
+            Home
+          </Link>
+          <ChevronRight className="w-3.5 h-3.5 text-gray-400" />
+          <span className="text-gray-900 font-medium">Knowledge Bases</span>
+        </div>
+
         {/* Header */}
         <div className="mb-8">
           <div className="flex items-center justify-between mb-6">

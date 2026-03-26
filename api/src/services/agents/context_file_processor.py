@@ -15,6 +15,7 @@ from typing import BinaryIO
 
 import docx
 import PyPDF2
+from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from src.models.agent import Agent
@@ -85,7 +86,7 @@ class AgentContextFileProcessor:
 
         return True, None
 
-    def validate_agent_limits(self, agent: Agent, new_file_size: int) -> tuple[bool, str | None]:
+    async def validate_agent_limits(self, agent: Agent, new_file_size: int) -> tuple[bool, str | None]:
         """
         Validate agent file limits.
 
@@ -96,13 +97,17 @@ class AgentContextFileProcessor:
         Returns:
             Tuple of (is_valid, error_message)
         """
-        # Check number of files
-        current_file_count = len(agent.context_files)
+        # Use an aggregate query — avoids lazy-loading the relationship in an async session
+        result = await self.db.execute(
+            select(func.count(AgentContextFile.id), func.coalesce(func.sum(AgentContextFile.file_size), 0)).filter(
+                AgentContextFile.agent_id == agent.id
+            )
+        )
+        current_file_count, current_total_size = result.one()
+
         if current_file_count >= self.MAX_FILES_PER_AGENT:
             return False, f"Maximum of {self.MAX_FILES_PER_AGENT} files per agent"
 
-        # Check total size
-        current_total_size = sum(f.file_size for f in agent.context_files)
         if current_total_size + new_file_size > self.MAX_TOTAL_SIZE_PER_AGENT:
             max_size_mb = self.MAX_TOTAL_SIZE_PER_AGENT / (1024 * 1024)
             return False, f"Total file size would exceed maximum of {max_size_mb}MB"
@@ -142,7 +147,7 @@ class AgentContextFileProcessor:
             raise ValueError(error)
 
         # Validate agent limits
-        is_valid, error = self.validate_agent_limits(agent, file_size)
+        is_valid, error = await self.validate_agent_limits(agent, file_size)
         if not is_valid:
             raise ValueError(error)
 
@@ -164,6 +169,12 @@ class AgentContextFileProcessor:
             # Get S3 bucket from config
             s3_bucket = self.s3_storage.bucket_name
 
+            # Get current file count for display_order (async query — avoids lazy-load)
+            count_result = await self.db.execute(
+                select(func.count(AgentContextFile.id)).filter(AgentContextFile.agent_id == agent.id)
+            )
+            current_count = count_result.scalar() or 0
+
             # Create database record
             context_file = AgentContextFile(
                 agent_id=agent.id,
@@ -174,7 +185,7 @@ class AgentContextFileProcessor:
                 s3_key=s3_key,
                 s3_bucket=s3_bucket,
                 extraction_status="PENDING",
-                display_order=len(agent.context_files),
+                display_order=current_count,
             )
 
             self.db.add(context_file)

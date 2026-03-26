@@ -358,6 +358,8 @@ class DocumentProcessor:
                 except Exception as e:
                     logger.error(f"Error processing document {doc.get('id')}: {e}", exc_info=True)
                     await self.db.rollback()  # Rollback on error
+                    # Refresh kb so it is not expired after the rollback
+                    await self.db.refresh(kb)
                     continue
 
             # Update knowledge base stats

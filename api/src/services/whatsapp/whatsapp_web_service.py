@@ -1,4 +1,12 @@
-"""WhatsApp Web device-link service using neonize (Whatsmeow Python bindings)."""
+"""WhatsApp Web device-link service using neonize (Whatsmeow Python bindings).
+
+Session state is stored in Redis so all API pods share the same view.
+The neonize client (background thread + SQLite temp file) is pod-local,
+but status, QR image, phone number, and the serialised session DB are
+written to Redis as soon as they are available.  This means start_session,
+stream/status polling, and save can all be served by different pods without
+sticky routing.
+"""
 
 import base64
 import io
@@ -92,24 +100,100 @@ class _NeonizeQRLogCapture(logging.Handler):
 
 class WhatsAppWebService:
     """
-    Manages in-memory WhatsApp Web QR linking sessions.
+    Manages WhatsApp Web QR linking sessions across multiple pods.
 
-    Each session lives in memory while QR scanning is in progress.
-    On successful connection the session_data can be retrieved for
-    encrypted persistence to the database.
+    Session state is split into two layers:
+      - Redis (shared):  status, qr_data, phone_number, session_db_b64
+        Any pod can read/write this, so SSE polling and the save endpoint
+        work regardless of which pod started the session.
+      - Pod-local (_local): neonize client object + temp session_dir
+        These are OS resources that cannot be serialised; only the pod
+        that called start_session holds them.
+
+    TTL: Redis keys expire after _REDIS_TTL seconds (10 min).  This covers
+    the 5-min QR window plus buffer, and auto-cleans abandoned sessions.
     """
 
-    # session_id -> {status, qr_data, phone_number, client, session_dir}
-    _sessions: dict[str, dict] = {}
+    # Pod-local resources only — NOT shared across pods.
+    # { session_id -> {client, session_dir} }
+    _local: dict[str, dict] = {}
+
+    _REDIS_PREFIX = "wa_qr_session:"
+    _REDIS_TTL = 600  # 10 minutes
+
+    # ------------------------------------------------------------------
+    # Redis helpers
+    # ------------------------------------------------------------------
+
+    @classmethod
+    def _rkey(cls, session_id: str) -> str:
+        return f"{cls._REDIS_PREFIX}{session_id}"
+
+    @classmethod
+    def _redis_write(cls, session_id: str, data: dict) -> None:
+        """Overwrite the full session doc in Redis."""
+        try:
+            from ...config.redis import get_redis
+
+            r = get_redis()
+            if r:
+                r.setex(cls._rkey(session_id), cls._REDIS_TTL, json.dumps(data))
+        except Exception:
+            logger.warning(f"Redis write failed for QR session {session_id}", exc_info=True)
+
+    @classmethod
+    def _redis_patch(cls, session_id: str, **fields) -> None:
+        """Atomically patch specific fields in the Redis session doc."""
+        try:
+            from ...config.redis import get_redis
+
+            r = get_redis()
+            if r:
+                raw = r.get(cls._rkey(session_id))
+                current: dict = json.loads(raw) if raw else {}
+                current.update(fields)
+                r.setex(cls._rkey(session_id), cls._REDIS_TTL, json.dumps(current))
+        except Exception:
+            logger.warning(f"Redis patch failed for QR session {session_id}", exc_info=True)
+
+    @classmethod
+    def _redis_read(cls, session_id: str) -> dict | None:
+        """Return the session doc from Redis, or None if not found."""
+        try:
+            from ...config.redis import get_redis
+
+            r = get_redis()
+            if r:
+                raw = r.get(cls._rkey(session_id))
+                if raw:
+                    return json.loads(raw)
+        except Exception:
+            logger.warning(f"Redis read failed for QR session {session_id}", exc_info=True)
+        return None
+
+    @classmethod
+    def _redis_delete(cls, session_id: str) -> None:
+        try:
+            from ...config.redis import get_redis
+
+            r = get_redis()
+            if r:
+                r.delete(cls._rkey(session_id))
+        except Exception:
+            logger.warning(f"Redis delete failed for QR session {session_id}", exc_info=True)
+
+    # ------------------------------------------------------------------
+    # Public API
+    # ------------------------------------------------------------------
 
     @classmethod
     async def start_session(cls, session_id: str) -> None:
         """
         Start a new QR linking session.
 
-        Launches a background thread running the neonize client.
-        QR codes are captured via the Go-bridge log and status is updated
-        in _sessions[session_id].
+        Launches a background thread running the neonize client on this pod.
+        QR codes and connection state are published to Redis so that any pod
+        can serve subsequent status/stream/save requests.
         """
         try:
             import neonize.events as neonize_events  # type: ignore[import]
@@ -136,16 +220,19 @@ class WhatsAppWebService:
         session_dir = tempfile.mkdtemp(prefix=f"neonize_{session_id}_")
         db_path = str(Path(session_dir) / "session.db")
 
-        cls._sessions[session_id] = {
+        # Initialise shared state in Redis (visible to all pods immediately)
+        cls._redis_write(session_id, {
             "status": "pending",
             "qr_data": None,
             "phone_number": None,
-            "client": None,
-            "session_dir": session_dir,
-        }
+            "session_db_b64": None,
+        })
+
+        # Track pod-local resources (not shared)
+        cls._local[session_id] = {"client": None, "session_dir": session_dir}
 
         def _handle_qr(qr_string: str) -> None:
-            """Render a QR string to a base64 PNG and store it in the session."""
+            """Render a QR string to a base64 PNG and publish to Redis."""
             try:
                 import qrcode  # type: ignore[import]
 
@@ -161,8 +248,8 @@ class WhatsAppWebService:
                 img = qr.make_image(fill_color="black", back_color="white")
                 buf = io.BytesIO()
                 img.save(buf, format="PNG")
-                cls._sessions[session_id]["qr_data"] = base64.b64encode(buf.getvalue()).decode()
-                cls._sessions[session_id]["status"] = "qr_ready"
+                qr_b64 = base64.b64encode(buf.getvalue()).decode()
+                cls._redis_patch(session_id, status="qr_ready", qr_data=qr_b64)
                 logger.info(f"QR code ready for session {session_id}")
             except Exception:
                 logger.exception(f"Failed to render QR image for session {session_id}")
@@ -200,10 +287,16 @@ class WhatsAppWebService:
             return None
 
         def _handle_connected(cli) -> None:
-            """Extract the linked phone number and mark the session connected."""
+            """
+            Extract phone number, serialise the neonize SQLite session to Redis,
+            and mark the session connected.  All written atomically so any pod
+            can serve the save endpoint immediately after this fires.
+            """
             # Guard: only fire once
-            if cls._sessions.get(session_id, {}).get("status") == "connected":
+            current = cls._redis_read(session_id) or {}
+            if current.get("status") == "connected":
                 return
+
             phone = None
             try:
                 me = cli.get_me()
@@ -217,31 +310,39 @@ class WhatsAppWebService:
                     )
             except Exception:
                 logger.warning(f"get_me() failed for session {session_id} (will still mark connected)")
-            if session_id in cls._sessions:
-                cls._sessions[session_id]["phone_number"] = phone
-                cls._sessions[session_id]["status"] = "connected"
+
+            # Serialise the SQLite session file → base64 → Redis so any pod can
+            # retrieve it when the user calls the save endpoint.
+            session_db_b64 = None
+            try:
+                db_file = Path(db_path)
+                if db_file.exists():
+                    session_db_b64 = base64.b64encode(db_file.read_bytes()).decode()
+            except Exception:
+                logger.exception(f"Failed to serialise session DB for {session_id}")
+
+            cls._redis_patch(session_id, status="connected", phone_number=phone, session_db_b64=session_db_b64)
 
         def _handle_connected_log_fallback() -> None:
             """Called when the Go-bridge logger reports pair success (fallback path)."""
-            if cls._sessions.get(session_id, {}).get("status") == "connected":
+            current = cls._redis_read(session_id) or {}
+            if current.get("status") == "connected":
                 return
             logger.info(f"Session {session_id} connected via log-fallback (phone unknown)")
-            if session_id in cls._sessions:
-                cls._sessions[session_id]["status"] = "connected"
+            cls._redis_patch(session_id, status="connected")
 
         def _run_client() -> None:
             """Background thread: installs QR log capture + noise filter, runs neonize, cleans up."""
             root_logger = logging.getLogger()
-            # Handler: captures QR strings and pair-success signals from Go-bridge log
             qr_capture = _NeonizeQRLogCapture(_handle_qr, on_connected_fn=_handle_connected_log_fallback)
             root_logger.addHandler(qr_capture)
-            # Filter: drops known high-volume neonize noise from ALL handlers (console, etc.)
             noise_filter = _NeonizeNoiseFilter()
             root_logger.addFilter(noise_filter)
 
             try:
                 client = NewClient(db_path)
-                cls._sessions[session_id]["client"] = client
+                if session_id in cls._local:
+                    cls._local[session_id]["client"] = client
 
                 if connected_ev is not None:
 
@@ -260,18 +361,23 @@ class WhatsAppWebService:
                     @client.event(logged_out_ev)
                     def _on_logged_out(cli, evt) -> None:  # noqa: ARG001
                         logger.info(f"Session {session_id} received LoggedOut event")
-                        if session_id in cls._sessions:
-                            cls._sessions[session_id]["status"] = "disconnected"
+                        cls._redis_patch(session_id, status="disconnected")
 
                 client.connect()
 
             except Exception:
                 logger.exception(f"Neonize client error for session {session_id}")
-                if session_id in cls._sessions:
-                    cls._sessions[session_id]["status"] = "disconnected"
+                cls._redis_patch(session_id, status="disconnected")
             finally:
                 root_logger.removeHandler(qr_capture)
                 root_logger.removeFilter(noise_filter)
+                # Clean up pod-local temp dir; Redis entry expires on its own TTL
+                local = cls._local.pop(session_id, None)
+                if local:
+                    session_dir_ = local.get("session_dir")
+                    if session_dir_:
+                        shutil.rmtree(session_dir_, ignore_errors=True)
+                logger.info(f"Neonize thread exited for session {session_id}")
 
         thread = threading.Thread(target=_run_client, daemon=True, name=f"neonize-{session_id[:8]}")
         thread.start()
@@ -279,42 +385,51 @@ class WhatsAppWebService:
     @classmethod
     def get_qr_data(cls, session_id: str) -> str | None:
         """Return the current QR code as a base64-encoded PNG string, or None."""
-        session = cls._sessions.get(session_id)
-        return session["qr_data"] if session else None
+        data = cls._redis_read(session_id)
+        return data.get("qr_data") if data else None
 
     @classmethod
     def get_status(cls, session_id: str) -> str:
         """
-        Return the current session status.
+        Return the current session status (reads from Redis — works on any pod).
 
         Values: pending | qr_ready | scanning | connected | disconnected | not_found
         """
-        session = cls._sessions.get(session_id)
-        if session is None:
+        data = cls._redis_read(session_id)
+        if data is None:
             return "not_found"
-        return session["status"]
+        return data.get("status", "not_found")
 
     @classmethod
     def get_phone_number(cls, session_id: str) -> str | None:
         """Return the connected phone number, or None if not yet connected."""
-        session = cls._sessions.get(session_id)
-        return session["phone_number"] if session else None
+        data = cls._redis_read(session_id)
+        return data.get("phone_number") if data else None
 
     @classmethod
     async def stop_session(cls, session_id: str) -> None:
-        """Disconnect the client and remove the session from memory."""
-        session = cls._sessions.pop(session_id, None)
-        if session is None:
+        """
+        Cancel a QR session.
+
+        Deletes the Redis key (visible to all pods immediately) and disconnects
+        the local neonize client if this pod happens to own it.  If this pod
+        does not own the session, the neonize thread on the owning pod will
+        detect the Redis key is gone on its next write and clean up naturally.
+        """
+        cls._redis_delete(session_id)
+
+        local = cls._local.pop(session_id, None)
+        if local is None:
             return
 
-        client = session.get("client")
+        client = local.get("client")
         if client is not None:
             try:
                 client.disconnect()
             except Exception:
                 logger.debug(f"Error disconnecting neonize client for session {session_id}", exc_info=True)
 
-        session_dir = session.get("session_dir")
+        session_dir = local.get("session_dir")
         if session_dir:
             try:
                 shutil.rmtree(session_dir, ignore_errors=True)
@@ -324,30 +439,19 @@ class WhatsAppWebService:
     @classmethod
     def get_session_data(cls, session_id: str) -> str | None:
         """
-        Return serialised session data for DB persistence.
+        Return serialised session data for DB persistence (reads from Redis).
 
-        Reads the neonize SQLite database, base64-encodes it, and returns it
-        as a JSON string. The caller is responsible for encrypting the result.
+        The neonize SQLite bytes are base64-encoded into Redis by _handle_connected
+        on the pod that owns the neonize thread, so this works on any pod.
+        The caller is responsible for encrypting the result before storing it.
         """
-        session = cls._sessions.get(session_id)
-        if session is None:
+        data = cls._redis_read(session_id)
+        if not data:
             return None
-
-        session_dir = session.get("session_dir")
-        if not session_dir:
+        session_db_b64 = data.get("session_db_b64")
+        if not session_db_b64:
             return None
-
-        db_file = Path(session_dir) / "session.db"
-        if db_file.exists():
-            try:
-                db_bytes = db_file.read_bytes()
-                return json.dumps(
-                    {
-                        "session_db": base64.b64encode(db_bytes).decode(),
-                        "phone_number": session.get("phone_number"),
-                    }
-                )
-            except Exception:
-                logger.exception(f"Failed to read session DB for {session_id}")
-
-        return None
+        return json.dumps({
+            "session_db": session_db_b64,
+            "phone_number": data.get("phone_number"),
+        })

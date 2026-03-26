@@ -67,7 +67,7 @@ api:
 
   service:
     type: ClusterIP
-    port: 5000
+    port: 5001
     annotations: {}
 
   resources:
@@ -101,7 +101,7 @@ api:
   livenessProbe:
     httpGet:
       path: /health
-      port: 5000
+      port: 5001
     initialDelaySeconds: 30
     periodSeconds: 10
     timeoutSeconds: 5
@@ -110,7 +110,7 @@ api:
   readinessProbe:
     httpGet:
       path: /health
-      port: 5000
+      port: 5001
     initialDelaySeconds: 10
     periodSeconds: 5
     timeoutSeconds: 3

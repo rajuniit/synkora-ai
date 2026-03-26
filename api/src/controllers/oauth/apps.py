@@ -352,10 +352,19 @@ async def delete_oauth_app(
         provider = app.provider
         app_name = app.app_name
 
+        # Delete associated user tokens first — oauth_app_id is NOT NULL so
+        # SQLAlchemy cannot nullify the FK before deleting the parent row.
+        tokens_result = await db.execute(
+            select(UserOAuthToken).filter(UserOAuthToken.oauth_app_id == app_id)
+        )
+        tokens = tokens_result.scalars().all()
+        for token in tokens:
+            await db.delete(token)
+
         await db.delete(app)
         await db.commit()
 
-        logger.info(f"Deleted OAuth app: {provider}/{app_name}")
+        logger.info(f"Deleted OAuth app: {provider}/{app_name} (removed {len(tokens)} user token(s))")
 
         return {"success": True, "message": f"OAuth app '{app_name}' deleted successfully"}
 
@@ -364,4 +373,7 @@ async def delete_oauth_app(
     except Exception as e:
         logger.error(f"Delete OAuth app error: {e}", exc_info=True)
         await db.rollback()
-        raise HTTPException(status_code=500, detail=str(e))
+        raise HTTPException(
+            status_code=500,
+            detail="Failed to delete OAuth app. Please disconnect all connected accounts before deleting.",
+        )

@@ -194,33 +194,48 @@ async def internal_slack_read_channel_messages(
         # Process messages
         messages = []
         user_cache = {}
+        is_dm = channel_id.startswith("D")
 
         for msg in response.get("messages", []):
-            # Skip bot messages and system messages
-            if msg.get("subtype") in ["bot_message", "channel_join", "channel_leave"]:
+            subtype = msg.get("subtype", "")
+            is_bot_msg = bool(msg.get("bot_id")) or subtype == "bot_message"
+
+            # Non-DM channels: skip bot/system messages to reduce noise
+            if not is_dm and subtype in ("bot_message", "channel_join", "channel_leave"):
+                continue
+
+            # All channels: skip system join/leave noise
+            if subtype in ("channel_join", "channel_leave"):
                 continue
 
             user_id = msg.get("user")
 
-            # Get user info (cached)
-            if user_id and user_id not in user_cache:
-                try:
-                    user_info = await client.users_info(user=user_id)
-                    user_data = user_info.get("user", {})
-                    user_cache[user_id] = {
-                        "name": user_data.get("real_name") or user_data.get("name"),
-                        "display_name": user_data.get("profile", {}).get("display_name", ""),
-                    }
-                except:
-                    user_cache[user_id] = {"name": "Unknown", "display_name": ""}
+            if is_bot_msg:
+                sender_name = "Bot"
+                display_name = "Bot"
+            else:
+                # Get user info (cached)
+                if user_id and user_id not in user_cache:
+                    try:
+                        user_info = await client.users_info(user=user_id)
+                        user_data = user_info.get("user", {})
+                        user_cache[user_id] = {
+                            "name": user_data.get("real_name") or user_data.get("name"),
+                            "display_name": user_data.get("profile", {}).get("display_name", ""),
+                        }
+                    except:
+                        user_cache[user_id] = {"name": "Unknown", "display_name": ""}
 
-            user = user_cache.get(user_id, {"name": "Unknown", "display_name": ""})
+                user = user_cache.get(user_id, {"name": "Unknown", "display_name": ""})
+                sender_name = user.get("name")
+                display_name = user.get("display_name")
 
             messages.append(
                 {
                     "text": msg.get("text", ""),
-                    "user_name": user.get("name"),
-                    "user_display_name": user.get("display_name"),
+                    "user_name": sender_name,
+                    "user_display_name": display_name,
+                    "is_bot": is_bot_msg,
                     "timestamp": msg.get("ts"),
                     "thread_ts": msg.get("thread_ts"),
                     "is_thread_reply": bool(msg.get("thread_ts") and msg.get("thread_ts") != msg.get("ts")),
@@ -508,7 +523,11 @@ async def internal_slack_add_reaction(
 
 
 async def internal_slack_send_dm(
-    user_id: str, text: str, runtime_context: dict[str, Any] | None = None, config: dict[str, Any] | None = None
+    user_id: str,
+    text: str,
+    report_back_channel_id: str | None = None,
+    runtime_context: dict[str, Any] | None = None,
+    config: dict[str, Any] | None = None,
 ) -> dict[str, Any]:
     """
     Send a direct message to a Slack user.
@@ -518,6 +537,8 @@ async def internal_slack_send_dm(
     Args:
         user_id: Slack user ID (e.g., "U1234567890")
         text: Message text to send (supports markdown - will be converted to Slack format)
+        report_back_channel_id: Channel ID to notify when the DM recipient replies (pass the
+            channel from the [Slack Context] header when sending on behalf of another user)
         runtime_context: Runtime context from agent execution
         config: Config dict with _tool_name
 
@@ -543,6 +564,44 @@ async def internal_slack_send_dm(
 
         # Send the message
         response = await client.chat_postMessage(channel=dm_channel_id, text=formatted_text)
+
+        # Store report-back callback in Redis so handle_message can notify the
+        # requester automatically when the DM recipient replies.
+        if report_back_channel_id:
+            agent_id = None
+            if isinstance(runtime_context, dict):
+                agent_id = runtime_context.get("agent_id")
+            else:
+                agent_id = getattr(runtime_context, "agent_id", None)
+
+            if agent_id:
+                try:
+                    import json
+
+                    from src.config.redis import get_redis_async
+
+                    # Include the current message_ts so the callback check can skip
+                    # the same turn that stored this callback (prevents spurious fire
+                    # when requester_channel == dm_channel, e.g. self-DM test cases).
+                    request_message_ts = None
+                    if isinstance(runtime_context, dict):
+                        request_message_ts = (runtime_context.get("shared_state") or {}).get("slack_message_ts")
+                    elif runtime_context is not None:
+                        request_message_ts = (runtime_context.shared_state or {}).get("slack_message_ts")
+
+                    redis = get_redis_async()
+                    key = f"slack:dm_callback:{agent_id}:{dm_channel_id}"
+                    await redis.set(
+                        key,
+                        json.dumps({
+                            "requester_channel_id": report_back_channel_id,
+                            "request_message_ts": request_message_ts,
+                        }),
+                        ex=604800,  # 7 days
+                    )
+                    logger.info(f"Stored DM callback: {dm_channel_id} → {report_back_channel_id} (request_ts={request_message_ts})")
+                except Exception as e:
+                    logger.warning(f"Failed to store DM callback: {e}")
 
         return {
             "success": True,

@@ -501,8 +501,8 @@ async def forgot_password(data: ForgotPasswordRequest, db: AsyncSession = Depend
 
         account, reset_token = result
 
-        # Get base URL
-        base_url = await get_app_base_url(db, account.tenant_id)
+        # Get base URL (tenant_id not needed; falls back to APP_BASE_URL env var)
+        base_url = await get_app_base_url(db)
 
         # Queue password reset email asynchronously
         try:
@@ -595,8 +595,8 @@ async def resend_verification(data: ResendVerificationRequest, db: AsyncSession 
     if account and account.id:
         from src.tasks.email_tasks import send_verification_email_task
 
-        # Get base URL
-        base_url = await get_app_base_url(db, account.tenant_id)
+        # Get base URL (tenant_id not needed; falls back to APP_BASE_URL env var)
+        base_url = await get_app_base_url(db)
 
         # Queue verification email asynchronously
         try:

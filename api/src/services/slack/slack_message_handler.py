@@ -1,8 +1,35 @@
 """Shared Slack message handler for Socket Mode and Event Mode."""
 
 import asyncio
+import json
 import logging
+import re
 from typing import Any, Callable
+
+_EMOJI_RE = re.compile(r"[^\x00-\x7F]+")
+
+
+def _to_slack_status(content: str) -> str:
+    """
+    Convert a stream status string to Slack assistant thread status text.
+
+    Strips emojis and normalises to 'is doing X...' so it reads naturally
+    as '<BotName> is searching the web...' in Slack.
+    Returns empty string for events that shouldn't surface as a status.
+    """
+    text = _EMOJI_RE.sub("", content).strip(" .")
+    if not text:
+        return ""
+    text_lower = text.lower()
+    # Skip sub-agent lifecycle noise
+    if text_lower.startswith(("starting:", "completed:", "starting ", "completed ")):
+        return ""
+    if not text_lower.endswith("..."):
+        text_lower += "..."
+    if not text_lower.startswith("is "):
+        text_lower = "is " + text_lower
+    return text_lower
+
 
 from slack_sdk.web.async_client import AsyncWebClient
 from sqlalchemy import select
@@ -189,16 +216,36 @@ class SlackMessageHandler:
                 attachments=None,
                 llm_config_id=None,
                 db=self.db_session,
+                shared_state={"slack_message_ts": message_ts, "slack_channel_id": channel_id},
             ):
-                if event_data.startswith("data: "):
-                    try:
-                        import json
+                if not event_data.startswith("data: "):
+                    continue
+                try:
+                    event_json = json.loads(event_data[6:])
+                    event_type = event_json.get("type")
 
-                        event_json = json.loads(event_data[6:])
-                        if event_json.get("type") == "chunk":
-                            response_chunks.append(event_json.get("content", ""))
-                    except:
-                        pass
+                    if event_type == "chunk":
+                        response_chunks.append(event_json.get("content", ""))
+
+                    elif event_type == "status":
+                        # e.g. "💭 Thinking...", "📚 Searching knowledge bases..."
+                        raw = event_json.get("content", "")
+                        slack_status = _to_slack_status(raw)
+                        if slack_status:
+                            asyncio.ensure_future(
+                                status_service.set_status(channel_id, effective_thread_ts, slack_status)
+                            )
+
+                    elif event_type == "tool_call" and event_json.get("status") == "started":
+                        # e.g. description="Searching the web: AI trends"
+                        desc = event_json.get("description", "")
+                        if desc:
+                            slack_status = f"is {desc.lower()}..."
+                            asyncio.ensure_future(
+                                status_service.set_status(channel_id, effective_thread_ts, slack_status)
+                            )
+                except Exception:
+                    pass
 
             agent_response = "".join(response_chunks)
 
@@ -225,6 +272,18 @@ class SlackMessageHandler:
             self.db_session.add(assistant_message)
             conversation.increment_message_count()
             await self.db_session.commit()
+
+            # If this is a DM reply, check whether the bot previously sent this DM
+            # on behalf of someone else and notify them immediately.
+            if channel_id.startswith("D"):
+                await self._notify_requester_if_callback(
+                    client=client,
+                    slack_bot=slack_bot,
+                    dm_channel_id=channel_id,
+                    replier_name=user_name,
+                    reply_text=clean_text,
+                    current_message_ts=message_ts,
+                )
 
             return agent_response
 
@@ -315,6 +374,26 @@ class SlackMessageHandler:
             List of messages in thread context format
         """
         thread_context = []
+
+        # For DM channels: fetch channel history instead of thread replies
+        if channel_id.startswith("D"):
+            try:
+                history = await client.conversations_history(channel=channel_id, limit=50)
+                for msg in reversed(history.get("messages", [])):
+                    if msg.get("ts") == message_ts:
+                        continue
+                    msg_text = msg.get("text", "").strip()
+                    if not msg_text:
+                        continue
+                    if msg.get("bot_id") or msg.get("subtype") == "bot_message":
+                        thread_context.append({"role": "assistant", "content": msg_text})
+                    else:
+                        thread_context.append({"role": "user", "content": msg_text})
+                logger.info(f"Built DM history context with {len(thread_context)} messages")
+            except Exception as e:
+                logger.warning(f"Failed to fetch DM history: {e}")
+            return thread_context
+
         effective_thread_ts = thread_ts if thread_ts and thread_ts != message_ts else None
 
         if not effective_thread_ts:
@@ -385,15 +464,25 @@ class SlackMessageHandler:
         self, slack_bot: SlackBot, channel_id: str, user_id: str, thread_ts: str | None
     ) -> Conversation:
         """Get existing conversation or create new one."""
-        # Try to find existing conversation
-        stmt = select(SlackConversation).where(
-            SlackConversation.slack_bot_id == slack_bot.id,
-            SlackConversation.slack_channel_id == channel_id,
-            SlackConversation.slack_user_id == user_id,
-            SlackConversation.slack_thread_ts == thread_ts,
-        )
+        is_dm = channel_id.startswith("D")
+
+        if is_dm:
+            # One conversation per user per DM channel — ignore thread_ts
+            stmt = select(SlackConversation).where(
+                SlackConversation.slack_bot_id == slack_bot.id,
+                SlackConversation.slack_channel_id == channel_id,
+                SlackConversation.slack_user_id == user_id,
+            )
+        else:
+            # Channel messages: separate conversation per thread
+            stmt = select(SlackConversation).where(
+                SlackConversation.slack_bot_id == slack_bot.id,
+                SlackConversation.slack_channel_id == channel_id,
+                SlackConversation.slack_user_id == user_id,
+                SlackConversation.slack_thread_ts == thread_ts,
+            )
         result = await self.db_session.execute(stmt)
-        slack_conv = result.scalar_one_or_none()
+        slack_conv = result.scalars().first()
 
         if slack_conv:
             return await self.db_session.get(Conversation, slack_conv.conversation_id)
@@ -418,6 +507,55 @@ class SlackMessageHandler:
         await self.db_session.commit()
 
         return conversation
+
+    async def _notify_requester_if_callback(
+        self,
+        client: AsyncWebClient,
+        slack_bot: SlackBot,
+        dm_channel_id: str,
+        replier_name: str,
+        reply_text: str,
+        current_message_ts: str | None = None,
+    ) -> None:
+        """Check Redis for a report-back callback and notify the requester if one exists.
+
+        When the agent previously sent a DM on behalf of a user (e.g., Raju asked the
+        bot to reach out to Goldius), it stores a callback in Redis. This method checks
+        for that callback and immediately posts an update to the requester's channel
+        so they don't have to ask 'did they reply?'.
+        """
+        try:
+            import json
+
+            from ...config.redis import get_redis_async
+
+            redis = get_redis_async()
+            key = f"slack:dm_callback:{slack_bot.agent_id}:{dm_channel_id}"
+            data = await redis.get(key)
+            if not data:
+                return
+
+            callback = json.loads(data)
+            requester_channel_id = callback.get("requester_channel_id")
+            if not requester_channel_id:
+                return
+
+            # Skip if this is the same message turn that stored the callback (e.g. self-DM
+            # where requester and DM target are the same person/channel).
+            request_message_ts = callback.get("request_message_ts")
+            if request_message_ts and current_message_ts and request_message_ts == current_message_ts:
+                logger.info(f"Skipping report-back: callback was stored this turn (ts={current_message_ts})")
+                return
+
+            # One-time notification — delete the callback so repeat messages
+            # in the same DM don't keep pinging the requester.
+            await redis.delete(key)
+
+            notification = f"*[Update]* *{replier_name} replied:* {reply_text}"
+            await client.chat_postMessage(channel=requester_channel_id, text=notification)
+            logger.info(f"Notified {requester_channel_id}: {replier_name} replied in {dm_channel_id}")
+        except Exception as e:
+            logger.warning(f"Failed to send report-back notification: {e}")
 
     def _remove_bot_mention(self, text: str, app_id: str) -> str:
         """Remove bot mention from message text."""

@@ -1140,6 +1140,17 @@ async def list_documents(
         result = await db.execute(query.offset(offset).limit(page_size))
         documents = result.scalars().all()
 
+        # Batch-fetch segment counts — avoids lazy-loading segments relationship per doc
+        doc_ids = [doc.id for doc in documents]
+        segment_counts: dict = {}
+        if doc_ids:
+            seg_result = await db.execute(
+                select(DocumentSegment.document_id, func.count(DocumentSegment.id))
+                .filter(DocumentSegment.document_id.in_(doc_ids))
+                .group_by(DocumentSegment.document_id)
+            )
+            segment_counts = dict(seg_result.all())
+
         # Calculate total pages
         total_pages = (total + page_size - 1) // page_size
 
@@ -1151,7 +1162,7 @@ async def list_documents(
                     source_type=doc.source_type,
                     source_url=doc.external_url,
                     file_size=doc.file_size,
-                    chunk_count=doc.segment_count,
+                    chunk_count=segment_counts.get(doc.id, 0),
                     has_images=doc.has_images,
                     image_count=doc.image_count,
                     created_at=doc.created_at.isoformat(),
@@ -1249,7 +1260,7 @@ async def get_document_details(
             s3_url=presigned_url,  # Always use presigned URL
             mime_type=doc.mime_type,
             file_size=doc.file_size,
-            chunk_count=doc.segment_count,
+            chunk_count=len(segments),
             has_images=doc.has_images,
             image_count=doc.image_count,
             images=doc.images or [],
