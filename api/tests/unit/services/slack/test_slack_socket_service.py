@@ -301,9 +301,9 @@ class TestSlackSocketService:
 
     @pytest.mark.asyncio
     async def test_get_or_create_conversation_new(self, service, mock_slack_bot, mock_db_session):
-        # Mock DB execute result as None
+        # Mock DB execute result — implementation uses scalars().first(), not scalar_one_or_none()
         mock_result = MagicMock()
-        mock_result.scalar_one_or_none.return_value = None
+        mock_result.scalars.return_value.first.return_value = None
         mock_db_session.execute.return_value = mock_result
 
         result = await service._get_or_create_conversation(mock_slack_bot, "C1", "U1", "ts1")

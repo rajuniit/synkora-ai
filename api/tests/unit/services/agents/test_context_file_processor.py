@@ -14,6 +14,12 @@ class TestAgentContextFileProcessor:
     @pytest.fixture
     def mock_db(self):
         session = AsyncMock(spec=AsyncSession)
+        # Setup execute to return a result with sensible defaults for validate_agent_limits
+        # and process_file queries (0 files, 0 total size, 0 display_order count)
+        mock_execute_result = MagicMock()
+        mock_execute_result.one.return_value = (0, 0)
+        mock_execute_result.scalar.return_value = 0
+        session.execute = AsyncMock(return_value=mock_execute_result)
         return session
 
     @pytest.fixture
@@ -48,24 +54,24 @@ class TestAgentContextFileProcessor:
         assert valid is False
         assert "File size exceeds maximum" in error
 
-    def test_validate_agent_limits_success(self, processor, mock_agent):
-        valid, error = processor.validate_agent_limits(mock_agent, 100)
+    @pytest.mark.asyncio
+    async def test_validate_agent_limits_success(self, processor, mock_agent):
+        valid, error = await processor.validate_agent_limits(mock_agent, 100)
         assert valid is True
         assert error is None
 
-    def test_validate_agent_limits_too_many_files(self, processor, mock_agent):
-        mock_agent.context_files = [MagicMock()] * 100
-        valid, error = processor.validate_agent_limits(mock_agent, 100)
+    @pytest.mark.asyncio
+    async def test_validate_agent_limits_too_many_files(self, processor, mock_agent, mock_db):
+        mock_db.execute.return_value.one.return_value = (100, 0)
+        valid, error = await processor.validate_agent_limits(mock_agent, 100)
         assert valid is False
         assert "Maximum of 100 files" in error
 
-    def test_validate_agent_limits_total_size_exceeded(self, processor, mock_agent):
-        mock_file = MagicMock()
-        mock_file.file_size = 150 * 1024 * 1024
-        mock_agent.context_files = [mock_file]
-
+    @pytest.mark.asyncio
+    async def test_validate_agent_limits_total_size_exceeded(self, processor, mock_agent, mock_db):
+        mock_db.execute.return_value.one.return_value = (1, 150 * 1024 * 1024)
         new_size = 60 * 1024 * 1024
-        valid, error = processor.validate_agent_limits(mock_agent, new_size)
+        valid, error = await processor.validate_agent_limits(mock_agent, new_size)
         assert valid is False
         assert "Total file size would exceed" in error
 
