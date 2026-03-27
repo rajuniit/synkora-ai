@@ -9,6 +9,8 @@ metadata:
     component: ml
 spec:
   replicas: 1
+  strategy:
+    type: Recreate
   selector:
     matchLabels:
       app: synkora
