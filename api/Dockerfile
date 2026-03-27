@@ -26,10 +26,10 @@ RUN apt-get update \
         pkg-config \
     && rm -rf /var/lib/apt/lists/*
 
-# Install Python dependencies using the lock file for reproducible builds
+# Install Python dependencies system-wide using the lock file
 COPY pyproject.toml uv.lock ./
 ENV UV_SYSTEM_PYTHON=1
-RUN uv sync --frozen --no-dev
+RUN uv pip install --system --no-cache -r pyproject.toml
 
 
 # production stage
