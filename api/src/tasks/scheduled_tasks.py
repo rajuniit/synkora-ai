@@ -593,7 +593,8 @@ async def _run_autonomous_agent(
         memory_block = "\n\n".join(memory_parts) if memory_parts else "(no prior memory)"
 
         # Count prior executions for display
-        from sqlalchemy import func, select as aselect2
+        from sqlalchemy import func
+        from sqlalchemy import select as aselect2
 
         from src.models.scheduled_task import TaskExecution as TE
 
@@ -623,12 +624,12 @@ async def _run_autonomous_agent(
             )
         elif cfg.get("require_approval"):
             approval_prefix = (
-                f"[HUMAN APPROVAL MODE]\n"
-                f"Before calling any action tool (post, send, create, write, commit, etc.), "
-                f"you MUST stop and let the system handle the approval. "
-                f"The system will automatically request human approval before executing the action. "
-                f"You do not need to include any special markers — simply call the tool as normal "
-                f"and the approval gate will intercept it.\n\n"
+                "[HUMAN APPROVAL MODE]\n"
+                "Before calling any action tool (post, send, create, write, commit, etc.), "
+                "you MUST stop and let the system handle the approval. "
+                "The system will automatically request human approval before executing the action. "
+                "You do not need to include any special markers — simply call the tool as normal "
+                "and the approval gate will intercept it.\n\n"
             )
         else:
             approval_prefix = ""

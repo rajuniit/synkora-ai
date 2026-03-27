@@ -1,10 +1,10 @@
 """Database models package."""
 
 from .activity_log import ActivityLog, ActivityType
-from .agent_approval import AgentApprovalRequest, ApprovalStatus
 from .agent import Agent
 from .agent_api_key import AgentApiKey
 from .agent_api_usage import AgentApiUsage
+from .agent_approval import AgentApprovalRequest, ApprovalStatus
 from .agent_context_file import AgentContextFile
 from .agent_domain import AgentDomain
 from .agent_knowledge_base import AgentKnowledgeBase

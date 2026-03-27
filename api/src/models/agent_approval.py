@@ -10,7 +10,7 @@ from sqlalchemy.dialects.postgresql import JSONB, UUID
 from src.core.database import Base
 
 
-class ApprovalStatus(str, enum.Enum):
+class ApprovalStatus(enum.StrEnum):
     PENDING = "pending"
     APPROVED = "approved"
     REJECTED = "rejected"
