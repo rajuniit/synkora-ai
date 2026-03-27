@@ -219,20 +219,20 @@ export default function DashboardPage() {
   }
 
   return (
-    <div className="min-h-screen bg-gradient-to-br from-gray-50 via-white to-gray-50 p-8">
-      <div className="max-w-7xl mx-auto py-6">
+    <div className="min-h-screen bg-gradient-to-br from-gray-50 via-white to-gray-50 p-4 md:p-8">
+      <div className="max-w-7xl mx-auto py-4 md:py-6">
         {/* Header */}
-        <div className="mb-8">
-          <h1 className="text-4xl font-extrabold text-gray-900 tracking-tight">
+        <div className="mb-6 md:mb-8">
+          <h1 className="text-2xl md:text-4xl font-extrabold text-gray-900 tracking-tight">
             Welcome back, {user?.name || 'User'}
           </h1>
-          <p className="text-lg text-gray-600 mt-2">
+          <p className="text-sm md:text-lg text-gray-600 mt-2">
             Here's what's happening with your AI platform today.
           </p>
         </div>
 
         {/* Stats Grid */}
-        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6 mb-8">
+        <div className="grid grid-cols-2 lg:grid-cols-4 gap-4 md:gap-6 mb-6 md:mb-8">
           {statsData.map((stat) => (
             <Link
               key={stat.name}
@@ -254,9 +254,9 @@ export default function DashboardPage() {
         </div>
 
         {/* Quick Actions */}
-        <div className="mb-8">
-          <h2 className="text-2xl font-semibold text-gray-900 mb-4">Quick Actions</h2>
-          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
+        <div className="mb-6 md:mb-8">
+          <h2 className="text-xl md:text-2xl font-semibold text-gray-900 mb-4">Quick Actions</h2>
+          <div className="grid grid-cols-2 lg:grid-cols-4 gap-4 md:gap-6">
             {quickActions.map((action) => (
               <Link
                 key={action.name}
@@ -277,8 +277,8 @@ export default function DashboardPage() {
 
         {/* Recent Activity */}
         <div className="bg-white rounded-xl shadow-lg border border-gray-100">
-          <div className="px-6 py-4 border-b border-gray-100">
-            <h2 className="text-2xl font-semibold text-gray-900">Recent Activity</h2>
+          <div className="px-4 md:px-6 py-4 border-b border-gray-100">
+            <h2 className="text-xl md:text-2xl font-semibold text-gray-900">Recent Activity</h2>
           </div>
           <div className="divide-y divide-gray-100">
             {loading ? (
@@ -293,8 +293,8 @@ export default function DashboardPage() {
                 const Icon = activity.icon
                 
                 return (
-                  <div key={index} className="p-6 hover:bg-gray-50 transition-colors duration-200">
-                    <div className="flex items-center gap-4">
+                  <div key={index} className="p-4 md:p-6 hover:bg-gray-50 transition-colors duration-200">
+                    <div className="flex items-center gap-3 md:gap-4">
                       <div className={`w-10 h-10 ${colors.bg} rounded-full flex items-center justify-center flex-shrink-0`}>
                         <Icon className={`w-5 h-5 ${colors.text}`} />
                       </div>

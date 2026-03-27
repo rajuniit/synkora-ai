@@ -119,7 +119,7 @@ export default function AppStoreSourceDetailsPage() {
   }
 
   return (
-    <div className="min-h-screen bg-gray-50 p-8">
+    <div className="min-h-screen bg-gray-50 p-4 md:p-8">
       <div className="max-w-7xl mx-auto">
         {/* Header */}
         <div className="mb-8">
@@ -137,7 +137,7 @@ export default function AppStoreSourceDetailsPage() {
                 <Smartphone className="w-8 h-8 text-white" />
               </div>
               <div>
-                <h1 className="text-3xl font-bold text-gray-900">{source.app_name}</h1>
+                <h1 className="text-xl sm:text-3xl font-bold text-gray-900">{source.app_name}</h1>
                 <div className="flex items-center gap-4 mt-2 text-sm text-gray-600">
                   <span className="flex items-center gap-1">
                     {source.store_type === 'google_play' ? '🤖' : '🍎'}
@@ -178,7 +178,7 @@ export default function AppStoreSourceDetailsPage() {
               <span className="text-sm font-medium text-gray-600">Total Reviews</span>
               <MessageSquare className="w-5 h-5 text-blue-600" />
             </div>
-            <div className="text-3xl font-bold text-gray-900">
+            <div className="text-xl sm:text-3xl font-bold text-gray-900">
               {source.total_reviews_collected?.toLocaleString() || 0}
             </div>
             {analytics?.review_volume_change !== undefined && (
@@ -205,7 +205,7 @@ export default function AppStoreSourceDetailsPage() {
               <span className="text-sm font-medium text-gray-600">Average Rating</span>
               <Star className="w-5 h-5 text-yellow-500" />
             </div>
-            <div className={`text-3xl font-bold ${getRatingColor(analytics?.average_rating || 0)}`}>
+            <div className={`text-xl sm:text-3xl font-bold ${getRatingColor(analytics?.average_rating || 0)}`}>
               {analytics?.average_rating?.toFixed(1) || 'N/A'}
             </div>
             {analytics?.rating_change !== undefined && (
@@ -229,7 +229,7 @@ export default function AppStoreSourceDetailsPage() {
               <span className="text-sm font-medium text-gray-600">Sentiment</span>
               <BarChart3 className="w-5 h-5 text-purple-600" />
             </div>
-            <div className="text-3xl font-bold text-gray-900 capitalize">
+            <div className="text-xl sm:text-3xl font-bold text-gray-900 capitalize">
               {analytics?.sentiment_trend || 'N/A'}
             </div>
             {analytics?.sentiment_distribution && (

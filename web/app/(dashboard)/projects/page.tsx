@@ -262,11 +262,11 @@ export default function ProjectsPage() {
   }
 
   return (
-    <div className="min-h-screen bg-gradient-to-br from-red-50 via-white to-red-50/30 p-6">
+    <div className="min-h-screen bg-gradient-to-br from-red-50 via-white to-red-50/30 p-4 md:p-6">
       <div className="max-w-6xl mx-auto">
         {/* Header */}
         <div className="mb-8">
-          <div className="flex items-center justify-between mb-6">
+          <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4 mb-6">
             <div>
               <h1 className="text-2xl font-bold text-gray-900">Projects</h1>
               <p className="text-gray-600 mt-1">
@@ -278,7 +278,8 @@ export default function ProjectsPage() {
               className="inline-flex items-center gap-2 px-5 py-2.5 bg-gradient-to-r from-red-500 to-red-600 hover:from-red-600 hover:to-red-700 text-white rounded-xl transition-all shadow-sm hover:shadow-md font-medium"
             >
               <Plus className="w-5 h-5" />
-              Create Project
+              <span className="hidden sm:inline">Create Project</span>
+              <span className="sm:hidden">Create</span>
             </button>
           </div>
 

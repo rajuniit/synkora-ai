@@ -163,7 +163,7 @@ export default function LoadTestDetailPage({ params }: { params: Promise<{ id: s
 
   if (!loadTest) {
     return (
-      <div className="min-h-screen bg-gradient-to-br from-primary-50 via-white to-primary-50/30 p-6">
+      <div className="min-h-screen bg-gradient-to-br from-primary-50 via-white to-primary-50/30 p-4 md:p-6">
         <div className="max-w-4xl mx-auto text-center py-12">
           <AlertCircle className="w-16 h-16 text-gray-300 mx-auto mb-4" />
           <h2 className="text-xl font-semibold text-gray-900 mb-2">Test Not Found</h2>
@@ -176,7 +176,7 @@ export default function LoadTestDetailPage({ params }: { params: Promise<{ id: s
   }
 
   return (
-    <div className="min-h-screen bg-gradient-to-br from-primary-50 via-white to-primary-50/30 p-6">
+    <div className="min-h-screen bg-gradient-to-br from-primary-50 via-white to-primary-50/30 p-4 md:p-6">
       <div className="max-w-6xl mx-auto">
         {/* Header */}
         <div className="mb-8">
@@ -188,7 +188,7 @@ export default function LoadTestDetailPage({ params }: { params: Promise<{ id: s
             Back to Load Tests
           </Link>
 
-          <div className="flex items-start justify-between">
+          <div className="flex flex-col sm:flex-row sm:items-start sm:justify-between gap-4">
             <div>
               <div className="flex items-center gap-3 mb-2">
                 <h1 className="text-2xl font-bold text-gray-900">{loadTest.name}</h1>
@@ -199,7 +199,7 @@ export default function LoadTestDetailPage({ params }: { params: Promise<{ id: s
               <p className="text-gray-600">{loadTest.description || 'No description'}</p>
             </div>
 
-            <div className="flex gap-3">
+            <div className="flex gap-3 flex-wrap">
               {loadTest.status === 'draft' && (
                 <button
                   onClick={handleMarkReady}

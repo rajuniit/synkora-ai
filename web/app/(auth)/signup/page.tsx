@@ -120,14 +120,14 @@ export default function SignUpPage() {
 
           {/* Header */}
           <div className="text-center lg:text-left mb-10">
-            <h1 className="text-4xl font-bold text-gray-900 mb-3">Build your AI team</h1>
+            <h1 className="text-2xl sm:text-4xl font-bold text-gray-900 mb-3">Build your AI team</h1>
             <p className="text-gray-600 text-lg">
               Deploy AI teammates for product, engineering, marketing & more. Free to start.
             </p>
           </div>
 
           {/* Form Card */}
-          <div className="bg-gray-50 rounded-3xl border border-gray-100 p-8">
+          <div className="bg-gray-50 rounded-3xl border border-gray-100 p-5 sm:p-8">
             {/* Social Login */}
             <div className="mb-8">
               <SocialLoginButton

@@ -10,7 +10,7 @@ export default function AboutPage() {
   return (
     <div className="min-h-screen bg-gradient-to-br from-red-50 via-white to-pink-50">
       {/* Navigation */}
-      <nav className="py-4 px-6 border-b border-gray-100 bg-white/80 backdrop-blur-sm">
+      <nav className="py-4 px-4 sm:px-6 border-b border-gray-100 bg-white/80 backdrop-blur-sm">
         <div className="max-w-6xl mx-auto flex items-center justify-between">
           <Link href="/" className="flex items-center gap-2">
             <div className="w-9 h-9 bg-red-500 rounded-lg flex items-center justify-center">
@@ -28,26 +28,26 @@ export default function AboutPage() {
       </nav>
 
       {/* Hero Section */}
-      <section className="py-20 px-6">
+      <section className="py-12 sm:py-20 px-4 sm:px-6">
         <div className="max-w-4xl mx-auto text-center">
           <div className="inline-flex items-center gap-2 px-4 py-2 bg-red-100 text-red-700 rounded-full text-sm font-semibold mb-6">
             <Heart className="w-4 h-4" />
             About Us
           </div>
-          <h1 className="text-5xl font-bold text-gray-900 mb-6">
+          <h1 className="text-3xl sm:text-5xl font-bold text-gray-900 mb-6">
             Build AI Agents for
             <span className="block text-transparent bg-clip-text bg-gradient-to-r from-red-600 to-rose-600">
               Every Role in Your Company
             </span>
           </h1>
-          <p className="text-xl text-gray-600 max-w-3xl mx-auto leading-relaxed">
+          <p className="text-base sm:text-xl text-gray-600 max-w-3xl mx-auto leading-relaxed">
             Synkora is an open-source platform that lets you build AI-powered teammates—from product managers to engineers to marketers—that handle real work, not just chat.
           </p>
         </div>
       </section>
 
       {/* Mission Section */}
-      <section className="py-16 px-6 bg-white">
+      <section className="py-12 sm:py-16 px-4 sm:px-6 bg-white">
         <div className="max-w-6xl mx-auto">
           <div className="grid lg:grid-cols-2 gap-12 items-center">
             <div>
@@ -86,7 +86,7 @@ export default function AboutPage() {
       </section>
 
       {/* What We Do Section */}
-      <section className="py-16 px-6">
+      <section className="py-12 sm:py-16 px-4 sm:px-6">
         <div className="max-w-6xl mx-auto">
           <h2 className="text-3xl font-bold text-gray-900 mb-12 text-center">AI Teammates for Every Role</h2>
           <div className="grid md:grid-cols-3 gap-8">
@@ -122,7 +122,7 @@ export default function AboutPage() {
       </section>
 
       {/* Team Section */}
-      <section className="py-16 px-6 bg-white">
+      <section className="py-12 sm:py-16 px-4 sm:px-6 bg-white">
         <div className="max-w-4xl mx-auto text-center">
           <h2 className="text-3xl font-bold text-gray-900 mb-6">Built by Raju Mazumder</h2>
           <p className="text-lg text-gray-600 mb-8 leading-relaxed">
@@ -151,7 +151,7 @@ export default function AboutPage() {
       </section>
 
       {/* CTA Section */}
-      <section className="py-16 px-6">
+      <section className="py-12 sm:py-16 px-4 sm:px-6">
         <div className="max-w-4xl mx-auto">
           <div className="bg-gradient-to-br from-red-600 via-red-500 to-rose-600 rounded-3xl p-12 text-center shadow-xl">
             <h2 className="text-3xl font-bold text-white mb-4">Ready to Build Your AI Team?</h2>

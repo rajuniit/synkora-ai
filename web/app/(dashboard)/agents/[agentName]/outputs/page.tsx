@@ -81,7 +81,7 @@ export default function AgentOutputsPage() {
   }
 
   return (
-    <div className="min-h-screen bg-gray-50 p-6">
+    <div className="min-h-screen bg-gray-50 p-4 md:p-6">
       <div className="max-w-7xl mx-auto">
         {/* Header */}
         <div className="mb-6">
@@ -92,9 +92,9 @@ export default function AgentOutputsPage() {
             <ArrowLeft className="w-5 h-5" />
             Back to Agent
           </Link>
-          <div className="flex items-center justify-between">
+          <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
             <div>
-              <h1 className="text-3xl font-bold text-gray-900">Output Configurations</h1>
+              <h1 className="text-xl sm:text-3xl font-bold text-gray-900">Output Configurations</h1>
               <p className="text-gray-600 mt-1">
                 Route agent responses to Slack, Email, or Webhooks for {agentName}
               </p>

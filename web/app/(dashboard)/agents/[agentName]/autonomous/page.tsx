@@ -156,7 +156,7 @@ export default function AutonomousPage() {
   ]
 
   return (
-    <div className="min-h-screen bg-gradient-to-br from-gray-50 via-red-50/30 to-gray-50 p-6">
+    <div className="min-h-screen bg-gradient-to-br from-gray-50 via-red-50/30 to-gray-50 p-4 md:p-6">
       <div className="max-w-4xl mx-auto">
         {/* Header */}
         <div className="mb-6">
@@ -168,7 +168,7 @@ export default function AutonomousPage() {
             Back to Agent
           </Link>
 
-          <div className="flex items-center justify-between">
+          <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
             <div className="flex items-center gap-3">
               <div className="p-2.5 bg-red-100 rounded-lg">
                 <Bot className="w-6 h-6 text-red-600" />
@@ -182,7 +182,7 @@ export default function AutonomousPage() {
             </div>
 
             {status?.task_id && (
-              <div className="flex items-center gap-2">
+              <div className="flex items-center gap-2 flex-wrap">
                 <button
                   onClick={handleToggleActive}
                   title={status.is_active ? 'Pause' : 'Resume'}

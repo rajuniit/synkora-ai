@@ -217,7 +217,7 @@ export default function AgentDetailPage() {
             </div>
             <div className="flex-1">
               <div className="flex items-center gap-3 mb-2">
-                <h1 className="text-3xl font-bold text-gray-900">{agent.agent_name}</h1>
+                <h1 className="text-xl sm:text-3xl font-bold text-gray-900">{agent.agent_name}</h1>
                 <span className="px-3 py-1 bg-gray-100 text-gray-700 text-xs font-semibold rounded-full border border-gray-200">
                   {agent.category}
                 </span>

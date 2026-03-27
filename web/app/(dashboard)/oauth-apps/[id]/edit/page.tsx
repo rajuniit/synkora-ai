@@ -141,7 +141,7 @@ export default function EditOAuthAppPage() {
 
   if (!app) {
     return (
-      <div className="min-h-screen bg-gray-50 p-8">
+      <div className="min-h-screen bg-gray-50 p-4 md:p-8">
         <div className="max-w-4xl mx-auto">
           <ErrorAlert message="OAuth app not found" />
         </div>
@@ -153,7 +153,7 @@ export default function EditOAuthAppPage() {
   const availableScopes = DEFAULT_SCOPES[app.provider] || []
 
   return (
-    <div className="min-h-screen bg-gray-50 p-8">
+    <div className="min-h-screen bg-gray-50 p-4 md:p-8">
       <div className="max-w-4xl mx-auto">
         {/* Header */}
         <div className="mb-8">
@@ -169,7 +169,7 @@ export default function EditOAuthAppPage() {
           <div className="flex items-center gap-3">
             <span className="text-3xl">{providerInfo.icon}</span>
             <div>
-              <h1 className="text-3xl font-bold text-gray-900">Edit {providerInfo.name} OAuth App</h1>
+              <h1 className="text-xl sm:text-3xl font-bold text-gray-900">Edit {providerInfo.name} OAuth App</h1>
               <p className="text-gray-600 mt-2">
                 Update OAuth credentials and settings
               </p>

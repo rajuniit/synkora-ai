@@ -130,7 +130,7 @@ export default function UseCasesPage() {
   return (
     <div className="min-h-screen bg-gradient-to-br from-gray-50 via-white to-red-50">
       {/* Navigation */}
-      <nav className="py-4 px-6 border-b border-gray-100 bg-white/80 backdrop-blur-sm sticky top-0 z-50">
+      <nav className="py-4 px-4 sm:px-6 border-b border-gray-100 bg-white/80 backdrop-blur-sm sticky top-0 z-50">
         <div className="max-w-6xl mx-auto flex items-center justify-between">
           <Link href="/" className="flex items-center gap-2">
             <div className="w-9 h-9 bg-red-500 rounded-lg flex items-center justify-center">
@@ -138,8 +138,8 @@ export default function UseCasesPage() {
             </div>
             <span className="text-xl font-bold text-gray-900">Synkora</span>
           </Link>
-          <div className="flex items-center gap-4">
-            <Link href="/pricing" className="text-sm font-medium text-gray-600 hover:text-gray-900 transition-colors">
+          <div className="flex items-center gap-2 sm:gap-4">
+            <Link href="/pricing" className="hidden sm:block text-sm font-medium text-gray-600 hover:text-gray-900 transition-colors">
               Pricing
             </Link>
             <Link
@@ -153,26 +153,26 @@ export default function UseCasesPage() {
       </nav>
 
       {/* Hero Section */}
-      <section className="py-20 px-6">
+      <section className="py-12 sm:py-20 px-4 sm:px-6">
         <div className="max-w-4xl mx-auto text-center">
           <div className="inline-flex items-center gap-2 px-4 py-2 bg-red-100 text-red-700 rounded-full text-sm font-semibold mb-6">
             <Users className="w-4 h-4" />
             Use Cases
           </div>
-          <h1 className="text-5xl font-bold text-gray-900 mb-6">
+          <h1 className="text-3xl sm:text-5xl font-bold text-gray-900 mb-6">
             Build AI Agents for
             <span className="block text-transparent bg-clip-text bg-gradient-to-r from-red-600 to-rose-600">
               Every Role in Your Company
             </span>
           </h1>
-          <p className="text-xl text-gray-600 max-w-3xl mx-auto leading-relaxed">
+          <p className="text-base sm:text-xl text-gray-600 max-w-3xl mx-auto leading-relaxed">
             From product management to engineering to customer support—deploy AI teammates that handle real work around the clock. Use your own LLM keys for full control and transparency.
           </p>
         </div>
       </section>
 
       {/* Use Cases Grid */}
-      <section className="py-16 px-6">
+      <section className="py-12 sm:py-16 px-4 sm:px-6">
         <div className="max-w-6xl mx-auto">
           <div className="space-y-24">
             {useCases.map((useCase, index) => {
@@ -293,7 +293,7 @@ export default function UseCasesPage() {
       </section>
 
       {/* CTA Section */}
-      <section className="py-16 px-6">
+      <section className="py-12 sm:py-16 px-4 sm:px-6">
         <div className="max-w-4xl mx-auto">
           <div className="bg-gradient-to-br from-red-600 via-red-500 to-rose-600 rounded-3xl p-12 text-center shadow-xl">
             <h2 className="text-3xl font-bold text-white mb-4">Ready to Build Your AI Team?</h2>

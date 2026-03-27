@@ -84,7 +84,7 @@ function VerifyEmailContent() {
           )}
         </div>
 
-        <div className="bg-white rounded-2xl shadow-xl border border-red-100 p-8">
+        <div className="bg-white rounded-2xl shadow-xl border border-red-100 p-5 sm:p-8">
           {isVerifying ? (
             <div className="text-center py-8">
               <div className="inline-block animate-pulse">

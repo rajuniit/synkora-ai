@@ -152,7 +152,7 @@ export default function CreateAppStoreSourcePage() {
   }
 
   return (
-    <div className="min-h-screen bg-gray-50 p-8">
+    <div className="min-h-screen bg-gray-50 p-4 md:p-8">
       <div className="max-w-5xl mx-auto">
         {/* Header */}
         <div className="mb-8">
@@ -169,7 +169,7 @@ export default function CreateAppStoreSourcePage() {
               <Smartphone className="w-8 h-8 text-white" />
             </div>
             <div>
-              <h1 className="text-3xl font-bold text-gray-900">
+              <h1 className="text-xl sm:text-3xl font-bold text-gray-900">
                 Add App Source
               </h1>
               <p className="text-gray-600 mt-1">

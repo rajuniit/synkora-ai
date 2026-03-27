@@ -178,7 +178,7 @@ export default function EditDatabaseConnectionPage() {
   }
 
   return (
-    <div className="min-h-screen bg-gray-50 p-8">
+    <div className="min-h-screen bg-gray-50 p-4 md:p-8">
       <div className="max-w-4xl mx-auto">
         <div className="mb-6">
           <Link
@@ -193,7 +193,7 @@ export default function EditDatabaseConnectionPage() {
               <Database className="w-6 h-6 text-blue-600" />
             </div>
             <div>
-              <h1 className="text-3xl font-bold text-gray-900">Edit Database Connection</h1>
+              <h1 className="text-xl sm:text-3xl font-bold text-gray-900">Edit Database Connection</h1>
               <p className="text-gray-600 mt-1">Update connection settings</p>
             </div>
           </div>

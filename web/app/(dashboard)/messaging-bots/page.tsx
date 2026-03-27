@@ -55,12 +55,12 @@ export default function MessagingBotsPage() {
   }
 
   return (
-    <div className="min-h-screen bg-gray-50 p-8">
+    <div className="min-h-screen bg-gray-50 p-4 md:p-8">
       <div className="max-w-7xl mx-auto">
         {/* Header */}
         <div className="flex justify-between items-center mb-8">
           <div>
-            <h1 className="text-3xl font-bold text-gray-900">Messaging Bots</h1>
+            <h1 className="text-xl sm:text-3xl font-bold text-gray-900">Messaging Bots</h1>
             <p className="text-gray-600 mt-2">
               Connect your agents to WhatsApp and Microsoft Teams
             </p>
@@ -96,19 +96,19 @@ export default function MessagingBotsPage() {
         <div className="grid grid-cols-1 md:grid-cols-4 gap-6 mb-8">
           <div className="bg-white p-6 rounded-lg shadow-sm">
             <div className="text-gray-600 text-sm">Total Bots</div>
-            <div className="text-3xl font-bold text-gray-900 mt-2">{totalBots}</div>
+            <div className="text-xl sm:text-3xl font-bold text-gray-900 mt-2">{totalBots}</div>
           </div>
           <div className="bg-white p-6 rounded-lg shadow-sm">
             <div className="text-gray-600 text-sm">Active Bots</div>
-            <div className="text-3xl font-bold text-green-600 mt-2">{activeBots}</div>
+            <div className="text-xl sm:text-3xl font-bold text-green-600 mt-2">{activeBots}</div>
           </div>
           <div className="bg-white p-6 rounded-lg shadow-sm">
             <div className="text-gray-600 text-sm">WhatsApp Bots</div>
-            <div className="text-3xl font-bold text-green-600 mt-2">{whatsappBots.length}</div>
+            <div className="text-xl sm:text-3xl font-bold text-green-600 mt-2">{whatsappBots.length}</div>
           </div>
           <div className="bg-white p-6 rounded-lg shadow-sm">
             <div className="text-gray-600 text-sm">Teams Bots</div>
-            <div className="text-3xl font-bold text-blue-600 mt-2">{teamsBots.length}</div>
+            <div className="text-xl sm:text-3xl font-bold text-blue-600 mt-2">{teamsBots.length}</div>
           </div>
         </div>
 

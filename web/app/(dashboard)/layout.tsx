@@ -1,6 +1,6 @@
 'use client'
 
-import { useEffect } from 'react'
+import { useEffect, useState } from 'react'
 import { useRouter, usePathname } from 'next/navigation'
 import { Sidebar } from '@/components/layout/Sidebar'
 import { Header } from '@/components/layout/Header'
@@ -14,6 +14,7 @@ export default function DashboardLayout({
   const { user, isLoading } = useAuth()
   const router = useRouter()
   const pathname = usePathname()
+  const [mobileMenuOpen, setMobileMenuOpen] = useState(false)
 
   useEffect(() => {
     if (!isLoading && !user) {
@@ -39,10 +40,13 @@ export default function DashboardLayout({
   }
 
   return (
-    <div className="flex h-screen bg-gray-50">
-      <Sidebar />
-      <div className="flex-1 flex flex-col overflow-hidden">
-        <Header />
+    <div className="flex h-screen bg-gray-50 overflow-hidden">
+      <Sidebar
+        mobileOpen={mobileMenuOpen}
+        onMobileClose={() => setMobileMenuOpen(false)}
+      />
+      <div className="flex-1 flex flex-col overflow-hidden min-w-0">
+        <Header onMobileMenuToggle={() => setMobileMenuOpen(true)} />
         <main className="flex-1 overflow-y-auto">
           {children}
         </main>

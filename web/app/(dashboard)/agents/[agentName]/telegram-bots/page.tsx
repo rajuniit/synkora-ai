@@ -137,7 +137,7 @@ export default function TelegramBotsPage() {
   }
 
   return (
-    <div className="min-h-screen bg-gradient-to-br from-gray-50 via-primary-50/30 to-gray-50 p-6">
+    <div className="min-h-screen bg-gradient-to-br from-gray-50 via-primary-50/30 to-gray-50 p-4 md:p-6">
       <div className="max-w-7xl mx-auto">
         {/* Breadcrumb */}
         <div className="flex items-center gap-1.5 text-sm mb-4">

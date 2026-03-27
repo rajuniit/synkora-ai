@@ -314,16 +314,16 @@ export default function EditAgentPage() {
             <ArrowLeft size={18} className="group-hover:-translate-x-1 transition-transform" />
             <span className="text-sm font-medium">Back to Agent Details</span>
           </button>
-          <div className="flex items-center justify-between">
+          <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
             <div>
-              <h1 className="text-4xl font-extrabold text-gray-900 tracking-tight">
+              <h1 className="text-2xl md:text-4xl font-extrabold text-gray-900 tracking-tight">
                 Edit Agent
               </h1>
-              <p className="text-lg text-gray-600 mt-2">
-                Configure <span className="font-semibold text-gray-900">{formData.name}</span> settings and capabilities
+              <p className="text-sm md:text-lg text-gray-600 mt-1 md:mt-2">
+                Configure <span className="font-semibold text-gray-900">{formData.name}</span> settings
               </p>
             </div>
-            <div className="hidden sm:flex items-center gap-3">
+            <div className="flex items-center gap-3">
               <button
                 onClick={() => router.push(`/agents/${agentName}/view`)}
                 className="px-5 py-2.5 border-2 border-gray-300 text-gray-700 rounded-lg hover:bg-gray-50 transition-all font-medium"
@@ -374,7 +374,7 @@ export default function EditAgentPage() {
           </div>
 
           {/* Tab Content */}
-          <div className="p-8">
+          <div className="p-4 md:p-8">
             {activeTab === 'general' && (
               <GeneralTab
                 formData={formData}

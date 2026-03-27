@@ -219,7 +219,7 @@ export default function EditIntegrationPage() {
           <ArrowLeft size={20} />
           Back
         </button>
-        <h1 className="text-3xl font-bold text-gray-900">Edit Integration</h1>
+        <h1 className="text-xl sm:text-3xl font-bold text-gray-900">Edit Integration</h1>
         <p className="text-gray-600 mt-1">
           Update your {provider} configuration
         </p>

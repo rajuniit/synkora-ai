@@ -52,9 +52,9 @@ export function ChatContainerSection({
   onMouseLeave,
 }: ChatContainerSectionProps) {
   const sideStyles = {
-    left: 'w-56 border-r border-gray-200/60 bg-gray-50/50 flex-shrink-0',
+    left: 'hidden md:flex md:w-56 border-r border-gray-200/60 bg-gray-50/50 flex-shrink-0 flex-col',
     center: 'flex-1 flex flex-col min-w-0 bg-white',
-    right: 'w-72 border-l border-gray-200/60 bg-gray-50/30 flex-shrink-0',
+    right: 'hidden lg:flex lg:w-72 border-l border-gray-200/60 bg-gray-50/30 flex-shrink-0 flex-col',
   }
 
   return (

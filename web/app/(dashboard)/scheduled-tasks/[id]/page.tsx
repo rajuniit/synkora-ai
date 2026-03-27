@@ -190,7 +190,7 @@ export default function ScheduledTaskDetailsPage() {
   }
 
   return (
-    <div className="min-h-screen bg-gray-50 p-8">
+    <div className="min-h-screen bg-gray-50 p-4 md:p-8">
       <div className="max-w-5xl mx-auto">
         <div className="mb-6">
           <Link
@@ -201,18 +201,18 @@ export default function ScheduledTaskDetailsPage() {
             Back to Tasks
           </Link>
           
-          <div className="flex items-center justify-between">
+          <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
             <div className="flex items-center gap-3">
               <div className={`p-3 rounded-lg ${getTypeColor(task.task_type)}`}>
                 {getTypeIcon(task.task_type)}
               </div>
               <div>
-                <h1 className="text-3xl font-bold text-gray-900">{task.name}</h1>
+                <h1 className="text-xl sm:text-3xl font-bold text-gray-900">{task.name}</h1>
                 <p className="text-gray-600 mt-1">{task.task_type}</p>
               </div>
             </div>
-            
-            <div className="flex gap-3">
+
+            <div className="flex gap-3 flex-wrap">
               <button
                 onClick={toggleTask}
                 className={`inline-flex items-center gap-2 px-4 py-2 text-sm font-medium rounded-lg transition-colors ${

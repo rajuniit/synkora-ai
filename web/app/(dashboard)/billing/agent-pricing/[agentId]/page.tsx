@@ -41,7 +41,7 @@ export default function AgentPricingPage() {
           <ArrowLeft className="mr-2 h-4 w-4" />
           Back to Billing
         </Link>
-        <h1 className="text-3xl font-bold text-gray-900">Agent Monetization</h1>
+        <h1 className="text-xl sm:text-3xl font-bold text-gray-900">Agent Monetization</h1>
         <p className="mt-2 text-gray-600">
           Configure pricing and view revenue for your agent
         </p>
@@ -60,7 +60,7 @@ export default function AgentPricingPage() {
             <div className="flex items-center justify-between">
               <div>
                 <p className="text-sm font-medium text-gray-600">Total Earnings</p>
-                <p className="mt-2 text-3xl font-bold text-gray-900">
+                <p className="mt-2 text-xl sm:text-3xl font-bold text-gray-900">
                   ${(earnings.total_earnings || 0).toFixed(2)}
                 </p>
               </div>
@@ -74,7 +74,7 @@ export default function AgentPricingPage() {
             <div className="flex items-center justify-between">
               <div>
                 <p className="text-sm font-medium text-gray-600">This Month</p>
-                <p className="mt-2 text-3xl font-bold text-gray-900">
+                <p className="mt-2 text-xl sm:text-3xl font-bold text-gray-900">
                   ${(earnings.current_period || 0).toFixed(2)}
                 </p>
               </div>
@@ -88,7 +88,7 @@ export default function AgentPricingPage() {
             <div className="flex items-center justify-between">
               <div>
                 <p className="text-sm font-medium text-gray-600">Total Uses</p>
-                <p className="mt-2 text-3xl font-bold text-gray-900">
+                <p className="mt-2 text-xl sm:text-3xl font-bold text-gray-900">
                   {earnings.total_uses || 0}
                 </p>
               </div>
@@ -130,7 +130,7 @@ export default function AgentPricingPage() {
           <h2 className="mb-4 text-xl font-semibold text-gray-900">
             Revenue History
           </h2>
-          <div className="overflow-hidden rounded-lg border border-gray-200 bg-white">
+          <div className="overflow-x-auto rounded-lg border border-gray-200 bg-white">
             <table className="min-w-full divide-y divide-gray-200">
               <thead className="bg-gray-50">
                 <tr>

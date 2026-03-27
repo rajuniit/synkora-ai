@@ -217,7 +217,7 @@ export default function KnowledgeBaseDetailsPage() {
 
   if (error || !kb) {
     return (
-      <div className="min-h-screen bg-gradient-to-br from-red-50 via-red-50/30 to-red-50 p-6">
+      <div className="min-h-screen bg-gradient-to-br from-red-50 via-red-50/30 to-red-50 p-4 md:p-6">
         <div className="max-w-5xl mx-auto">
           <div className="bg-red-50 border-l-4 border-red-500 rounded-lg p-5">
             <div className="flex items-center gap-3">
@@ -241,7 +241,7 @@ export default function KnowledgeBaseDetailsPage() {
   }
 
   return (
-    <div className="min-h-screen bg-gradient-to-br from-red-50 via-red-50/30 to-red-50 p-6">
+    <div className="min-h-screen bg-gradient-to-br from-red-50 via-red-50/30 to-red-50 p-4 md:p-6">
       <div className="max-w-7xl mx-auto">
         {/* Header */}
         <div className="mb-6">

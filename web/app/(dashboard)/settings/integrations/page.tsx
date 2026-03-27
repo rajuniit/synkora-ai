@@ -111,10 +111,10 @@ export default function IntegrationsPage() {
   }
 
   return (
-    <div className="min-h-screen bg-gradient-to-br from-primary-50 via-primary-50/30 to-white p-6">
+    <div className="min-h-screen bg-gradient-to-br from-primary-50 via-primary-50/30 to-white p-4 md:p-6">
       <div className="max-w-7xl mx-auto">
         <div className="mb-6">
-          <div className="flex items-center justify-between mb-4">
+          <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4 mb-4">
             <div>
               <h1 className="text-2xl font-bold text-gray-900">Integrations</h1>
               <p className="text-gray-600 mt-1 text-sm">

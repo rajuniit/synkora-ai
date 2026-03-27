@@ -105,7 +105,7 @@ export default function MessagingBotsPage() {
   const activeBots = whatsappBots.filter((b: WhatsAppBot) => b.is_active).length + teamsBots.filter((b: TeamsBot) => b.is_active).length;
 
   return (
-    <div className="min-h-screen bg-gray-50 p-6">
+    <div className="min-h-screen bg-gray-50 p-4 md:p-6">
       <div className="max-w-7xl mx-auto">
         {/* Breadcrumb */}
         <div className="flex items-center gap-1.5 text-sm mb-4">
@@ -129,7 +129,7 @@ export default function MessagingBotsPage() {
         {/* Header */}
         <div className="flex justify-between items-center mb-6">
           <div>
-            <h1 className="text-3xl font-bold text-gray-900">Messaging Bots</h1>
+            <h1 className="text-xl sm:text-3xl font-bold text-gray-900">Messaging Bots</h1>
             <p className="text-gray-600 mt-1">Connect your agent to WhatsApp and Microsoft Teams</p>
           </div>
           <div className="flex gap-2">

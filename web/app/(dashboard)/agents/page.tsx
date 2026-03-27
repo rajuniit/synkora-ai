@@ -331,43 +331,45 @@ export default function AgentsPage() {
 
   return (
     <div className="min-h-screen bg-gray-50">
-      <div className="max-w-7xl mx-auto px-6 py-8">
+      <div className="max-w-7xl mx-auto px-4 md:px-6 py-6 md:py-8">
         {/* Header */}
-        <div className="flex flex-col lg:flex-row lg:items-center lg:justify-between gap-4 mb-8">
-          <div>
-            <h1 className="text-2xl font-bold text-gray-900">Agents</h1>
-            <p className="text-gray-500 mt-1">
-              {parentAgentCount} agents · {activeCount} active · {publicCount} public · {workflowCount} workflows
-            </p>
+        <div className="flex flex-col gap-4 mb-6 md:mb-8">
+          <div className="flex items-center justify-between gap-3">
+            <div>
+              <h1 className="text-2xl font-bold text-gray-900">Agents</h1>
+              <p className="text-gray-500 mt-0.5 text-sm">
+                {parentAgentCount} agents · {activeCount} active · {publicCount} public
+              </p>
+            </div>
+            <button
+              onClick={() => router.push('/agents/create')}
+              className="inline-flex items-center gap-2 px-4 py-2 bg-primary-600 text-white text-sm font-medium rounded-lg hover:bg-primary-700 transition-colors flex-shrink-0"
+            >
+              <Plus size={18} />
+              <span className="hidden sm:inline">New Agent</span>
+              <span className="sm:hidden">New</span>
+            </button>
           </div>
 
-          <div className="flex items-center gap-3">
+          <div className="flex flex-wrap items-center gap-2">
             <input
               type="text"
-              placeholder="Search agents, tags..."
+              placeholder="Search agents..."
               value={searchQuery}
               onChange={(e) => setSearchQuery(e.target.value)}
-              className="w-56 px-4 py-2 text-sm border border-gray-200 rounded-lg bg-white focus:outline-none focus:ring-2 focus:ring-primary-500 focus:border-transparent"
+              className="flex-1 min-w-[140px] px-4 py-2 text-sm border border-gray-200 rounded-lg bg-white focus:outline-none focus:ring-2 focus:ring-primary-500 focus:border-transparent"
             />
 
             <select
               value={filterType}
               onChange={(e) => setFilterType(e.target.value as any)}
-              className="px-4 py-2 text-sm border border-gray-200 rounded-lg bg-white focus:outline-none focus:ring-2 focus:ring-primary-500"
+              className="px-3 py-2 text-sm border border-gray-200 rounded-lg bg-white focus:outline-none focus:ring-2 focus:ring-primary-500"
             >
-              <option value="all">All Agents</option>
-              <option value="active">Active Only</option>
-              <option value="public">Public Only</option>
+              <option value="all">All</option>
+              <option value="active">Active</option>
+              <option value="public">Public</option>
               <option value="workflow">Workflows</option>
             </select>
-
-            <button
-              onClick={() => router.push('/agents/create')}
-              className="inline-flex items-center gap-2 px-5 py-2 bg-primary-600 text-white text-sm font-medium rounded-lg hover:bg-primary-700 transition-colors"
-            >
-              <Plus size={18} />
-              New Agent
-            </button>
           </div>
         </div>
 

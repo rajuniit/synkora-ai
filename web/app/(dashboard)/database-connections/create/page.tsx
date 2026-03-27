@@ -137,7 +137,7 @@ export default function CreateDatabaseConnectionPage() {
   }
 
   return (
-    <div className="min-h-screen bg-gradient-to-br from-red-50 via-red-50/30 to-red-50 p-6">
+    <div className="min-h-screen bg-gradient-to-br from-red-50 via-red-50/30 to-red-50 p-4 md:p-6">
       <div className="max-w-4xl mx-auto">
         {/* Header - More Compact */}
         <div className="mb-6">

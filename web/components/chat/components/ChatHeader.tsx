@@ -154,7 +154,7 @@ export function ChatHeader({
       </div>
 
       {/* Action Buttons - More Compact */}
-      <div className="flex items-center gap-1.5">
+      <div className="flex items-center gap-1.5 min-w-0">
         {/* LLM Config Dropdown - Compact */}
         {enabledConfigs.length > 0 && (
           <select
@@ -164,10 +164,7 @@ export function ChatHeader({
                 onLLMConfigChange(e.target.value)
               }
             }}
-            className="px-2.5 py-1.5 rounded-lg bg-gray-50 border border-gray-200 text-xs font-medium text-gray-700 hover:bg-gray-100 focus:outline-none focus:ring-2 focus:ring-amber-500 focus:border-transparent cursor-pointer"
-            style={{
-              minWidth: '160px',
-            }}
+            className="hidden sm:block max-w-[160px] px-2.5 py-1.5 rounded-lg bg-gray-50 border border-gray-200 text-xs font-medium text-gray-700 hover:bg-gray-100 focus:outline-none focus:ring-2 focus:ring-amber-500 focus:border-transparent cursor-pointer"
           >
             {enabledConfigs.map((config) => (
               <option key={config.id} value={config.id}>

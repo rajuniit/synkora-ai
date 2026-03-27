@@ -123,7 +123,7 @@ export default function AgentWidgetsPage() {
   }
 
   return (
-    <div className="min-h-screen bg-gray-50 p-6">
+    <div className="min-h-screen bg-gray-50 p-4 md:p-6">
       <div className="max-w-7xl mx-auto">
       {/* Breadcrumb */}
       <div className="flex items-center gap-1.5 text-sm mb-4">
@@ -145,7 +145,7 @@ export default function AgentWidgetsPage() {
       </div>
 
       {/* Header */}
-      <div className="flex items-center justify-between mb-6">
+      <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4 mb-6">
         <div>
           <button
             onClick={() => router.push(`/agents/${encodeURIComponent(agentName)}/view`)}

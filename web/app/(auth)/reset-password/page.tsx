@@ -69,7 +69,7 @@ function ResetPasswordForm() {
           <p className="text-gray-600">Enter your new password below</p>
         </div>
 
-        <div className="bg-white rounded-2xl shadow-xl border border-gray-100 p-8">
+        <div className="bg-white rounded-2xl shadow-xl border border-gray-100 p-5 sm:p-8">
           <form onSubmit={handleSubmit} className="space-y-6">
             <div>
               <label htmlFor="password" className="block text-sm font-medium text-gray-700 mb-2">

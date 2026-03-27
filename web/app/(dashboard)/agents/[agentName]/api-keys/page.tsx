@@ -160,7 +160,7 @@ export default function AgentApiKeysPage() {
   }
 
   return (
-    <div className="min-h-screen bg-gradient-to-br from-gray-50 via-red-50/30 to-gray-50 p-6">
+    <div className="min-h-screen bg-gradient-to-br from-gray-50 via-red-50/30 to-gray-50 p-4 md:p-6">
       <div className="max-w-7xl mx-auto">
         {/* Breadcrumb */}
         <div className="flex items-center gap-1.5 text-sm mb-4">
@@ -183,7 +183,7 @@ export default function AgentApiKeysPage() {
 
         {/* Header */}
         <div className="mb-6">
-          <div className="flex items-center justify-between">
+          <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
             <div>
               <h1 className="text-2xl font-bold text-gray-900 mb-1">API Keys</h1>
               <p className="text-sm text-gray-600">

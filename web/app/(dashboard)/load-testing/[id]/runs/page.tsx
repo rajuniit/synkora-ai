@@ -135,7 +135,7 @@ export default function TestRunsPage({ params }: { params: Promise<{ id: string 
 
   if (!loadTest) {
     return (
-      <div className="min-h-screen bg-gradient-to-br from-primary-50 via-white to-primary-50/30 p-6">
+      <div className="min-h-screen bg-gradient-to-br from-primary-50 via-white to-primary-50/30 p-4 md:p-6">
         <div className="max-w-4xl mx-auto text-center py-12">
           <AlertCircle className="w-16 h-16 text-gray-300 mx-auto mb-4" />
           <h2 className="text-xl font-semibold text-gray-900 mb-2">Test Not Found</h2>
@@ -148,7 +148,7 @@ export default function TestRunsPage({ params }: { params: Promise<{ id: string 
   }
 
   return (
-    <div className="min-h-screen bg-gradient-to-br from-primary-50 via-white to-primary-50/30 p-6">
+    <div className="min-h-screen bg-gradient-to-br from-primary-50 via-white to-primary-50/30 p-4 md:p-6">
       <div className="max-w-6xl mx-auto">
         {/* Header */}
         <div className="mb-8">
@@ -257,8 +257,8 @@ export default function TestRunsPage({ params }: { params: Promise<{ id: string 
           </div>
         ) : (
           <>
-            <div className="bg-white rounded-xl shadow-sm border border-gray-100 overflow-hidden">
-              <table className="w-full">
+            <div className="bg-white rounded-xl shadow-sm border border-gray-100 overflow-hidden overflow-x-auto">
+              <table className="w-full min-w-[600px]">
                 <thead>
                   <tr className="bg-gray-50 border-b border-gray-100">
                     <th className="text-left px-6 py-4 text-sm font-semibold text-gray-700">Status</th>

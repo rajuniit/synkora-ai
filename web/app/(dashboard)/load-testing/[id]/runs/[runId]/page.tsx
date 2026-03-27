@@ -234,7 +234,7 @@ export default function TestRunDashboardPage({ params }: { params: Promise<{ id:
 
   if (!testRun) {
     return (
-      <div className="min-h-screen bg-gradient-to-br from-primary-50 via-white to-primary-50/30 p-6">
+      <div className="min-h-screen bg-gradient-to-br from-primary-50 via-white to-primary-50/30 p-4 md:p-6">
         <div className="max-w-4xl mx-auto text-center py-12">
           <AlertCircle className="w-16 h-16 text-gray-300 mx-auto mb-4" />
           <h2 className="text-xl font-semibold text-gray-900 mb-2">Test Run Not Found</h2>
@@ -249,7 +249,7 @@ export default function TestRunDashboardPage({ params }: { params: Promise<{ id:
   const isActive = ['pending', 'initializing', 'running', 'stopping'].includes(testRun.status)
 
   return (
-    <div className="min-h-screen bg-gradient-to-br from-primary-50 via-white to-primary-50/30 p-6">
+    <div className="min-h-screen bg-gradient-to-br from-primary-50 via-white to-primary-50/30 p-4 md:p-6">
       <div className="max-w-7xl mx-auto">
         {/* Header */}
         <div className="mb-8">

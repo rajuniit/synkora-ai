@@ -182,11 +182,11 @@ export default function DataSourcesPage() {
   }
 
   return (
-    <div className="min-h-screen bg-gradient-to-br from-red-50 via-red-50/30 to-red-50 p-6">
+    <div className="min-h-screen bg-gradient-to-br from-red-50 via-red-50/30 to-red-50 p-4 md:p-6">
       <div className="max-w-7xl mx-auto">
         {/* Header - More Compact */}
         <div className="mb-6">
-          <div className="flex items-center justify-between mb-5">
+          <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4 mb-5">
             <div className="flex items-center gap-3">
               <div className="p-2.5 bg-gradient-to-r from-red-500 to-red-600 rounded-lg shadow-sm">
                 <Database className="w-6 h-6 text-white" />

@@ -416,24 +416,24 @@ export default function HowItWorksPage() {
     <div className="min-h-screen bg-white">
       {/* Navigation */}
       <nav className="fixed top-0 w-full z-50 bg-white/80 backdrop-blur-lg border-b border-gray-100">
-        <div className="max-w-7xl mx-auto px-6 py-4">
+        <div className="max-w-7xl mx-auto px-4 sm:px-6 py-4">
           <div className="flex items-center justify-between">
-            <Link href="/" className="flex items-center gap-3">
-              <div className="w-10 h-10 bg-red-500 rounded-xl flex items-center justify-center">
-                <Zap className="w-6 h-6 text-white" />
+            <Link href="/" className="flex items-center gap-2 sm:gap-3">
+              <div className="w-9 h-9 sm:w-10 sm:h-10 bg-red-500 rounded-xl flex items-center justify-center">
+                <Zap className="w-5 h-5 sm:w-6 sm:h-6 text-white" />
               </div>
-              <span className="text-2xl font-bold text-gray-900">Synkora</span>
+              <span className="text-xl sm:text-2xl font-bold text-gray-900">Synkora</span>
             </Link>
-            <div className="flex items-center gap-4">
-              <Link href="/" className="text-gray-600 hover:text-gray-900 font-medium">
+            <div className="flex items-center gap-2 sm:gap-4">
+              <Link href="/" className="hidden sm:block text-gray-600 hover:text-gray-900 font-medium">
                 Home
               </Link>
-              <Link href="/pricing" className="text-gray-600 hover:text-gray-900 font-medium">
+              <Link href="/pricing" className="hidden sm:block text-gray-600 hover:text-gray-900 font-medium">
                 Pricing
               </Link>
               <Link
                 href="/signup"
-                className="px-5 py-2 bg-red-500 hover:bg-red-600 text-white font-medium rounded-lg transition-colors"
+                className="px-4 py-2 bg-red-500 hover:bg-red-600 text-white font-medium rounded-lg transition-colors text-sm sm:text-base"
               >
                 Get Started
               </Link>
@@ -443,30 +443,30 @@ export default function HowItWorksPage() {
       </nav>
 
       {/* Hero */}
-      <section className="pt-32 pb-20 px-6 bg-gradient-to-b from-red-50 to-white">
+      <section className="pt-28 sm:pt-32 pb-16 sm:pb-20 px-4 sm:px-6 bg-gradient-to-b from-red-50 to-white">
         <div className="max-w-4xl mx-auto text-center">
           <div className="inline-flex items-center gap-2 px-4 py-2 bg-red-100 text-red-700 rounded-full text-sm font-semibold mb-6">
             <Play className="w-4 h-4" />
             How It Works
           </div>
-          <h1 className="text-5xl font-bold text-gray-900 mb-6">
+          <h1 className="text-3xl sm:text-5xl font-bold text-gray-900 mb-6">
             Build AI Agents in
             <span className="text-transparent bg-clip-text bg-gradient-to-r from-red-500 to-rose-600"> Minutes</span>
           </h1>
-          <p className="text-xl text-gray-600 mb-10 max-w-2xl mx-auto">
+          <p className="text-base sm:text-xl text-gray-600 mb-8 sm:mb-10 max-w-2xl mx-auto">
             From idea to deployment in four simple steps. No coding required, just your imagination.
           </p>
-          <div className="flex items-center justify-center gap-4">
+          <div className="flex flex-col sm:flex-row items-center justify-center gap-3 sm:gap-4">
             <Link
               href="/signup"
-              className="inline-flex items-center gap-2 px-8 py-4 bg-red-500 hover:bg-red-600 text-white font-semibold rounded-xl transition-all shadow-lg shadow-red-500/30"
+              className="inline-flex items-center gap-2 px-6 sm:px-8 py-3 sm:py-4 bg-red-500 hover:bg-red-600 text-white font-semibold rounded-xl transition-all shadow-lg shadow-red-500/30 w-full sm:w-auto justify-center"
             >
               Start Building
               <ArrowRight className="w-5 h-5" />
             </Link>
             <Link
               href="/pricing"
-              className="px-8 py-4 border-2 border-gray-200 hover:border-gray-300 text-gray-700 font-semibold rounded-xl transition-all"
+              className="px-6 sm:px-8 py-3 sm:py-4 border-2 border-gray-200 hover:border-gray-300 text-gray-700 font-semibold rounded-xl transition-all w-full sm:w-auto text-center"
             >
               View Pricing
             </Link>
@@ -475,51 +475,51 @@ export default function HowItWorksPage() {
       </section>
 
       {/* Steps Section */}
-      <section className="py-24 px-6" ref={stepsRef}>
+      <section className="py-16 sm:py-24 px-4 sm:px-6" ref={stepsRef}>
         <div className="max-w-6xl mx-auto">
-          <div className="text-center mb-16">
-            <h2 className="text-4xl font-bold text-gray-900 mb-4">Four Simple Steps</h2>
-            <p className="text-xl text-gray-600">From zero to deployed agent in record time</p>
+          <div className="text-center mb-10 sm:mb-16">
+            <h2 className="text-2xl sm:text-4xl font-bold text-gray-900 mb-4">Four Simple Steps</h2>
+            <p className="text-base sm:text-xl text-gray-600">From zero to deployed agent in record time</p>
           </div>
 
-          <div className="space-y-8">
+          <div className="space-y-6 sm:space-y-8">
             {steps.map((step, index) => {
               const IllustrationComponent = stepIllustrations[step.number]
               return (
                 <div
                   key={step.number}
-                  className={`step-card flex items-stretch gap-8 ${
-                    index % 2 === 1 ? 'flex-row-reverse' : ''
+                  className={`step-card flex flex-col lg:flex-row items-stretch gap-5 sm:gap-8 ${
+                    index % 2 === 1 ? 'lg:flex-row-reverse' : ''
                   }`}
                 >
                   {/* Content */}
-                  <div className="flex-1 bg-white rounded-2xl p-8 border border-gray-100 shadow-lg hover:shadow-xl transition-shadow">
-                    <div className="flex items-start gap-6">
+                  <div className="flex-1 bg-white rounded-2xl p-5 sm:p-8 border border-gray-100 shadow-lg hover:shadow-xl transition-shadow">
+                    <div className="flex items-start gap-4 sm:gap-6">
                       <div
-                        className={`w-16 h-16 rounded-2xl flex items-center justify-center flex-shrink-0 ${
+                        className={`w-12 h-12 sm:w-16 sm:h-16 rounded-2xl flex items-center justify-center flex-shrink-0 ${
                           step.color === 'red' ? 'bg-red-100' :
                           step.color === 'orange' ? 'bg-orange-100' :
                           step.color === 'blue' ? 'bg-blue-100' : 'bg-green-100'
                         }`}
                       >
                         <step.icon
-                          className={`w-8 h-8 ${
+                          className={`w-6 h-6 sm:w-8 sm:h-8 ${
                             step.color === 'red' ? 'text-red-600' :
                             step.color === 'orange' ? 'text-orange-600' :
                             step.color === 'blue' ? 'text-blue-600' : 'text-green-600'
                           }`}
                         />
                       </div>
-                      <div className="flex-1">
-                        <div className="flex items-center gap-3 mb-3">
-                          <span className="text-5xl font-bold text-gray-200">{step.number}</span>
-                          <h3 className="text-2xl font-bold text-gray-900">{step.title}</h3>
+                      <div className="flex-1 min-w-0">
+                        <div className="flex items-center gap-2 sm:gap-3 mb-3">
+                          <span className="text-3xl sm:text-5xl font-bold text-gray-200">{step.number}</span>
+                          <h3 className="text-lg sm:text-2xl font-bold text-gray-900">{step.title}</h3>
                         </div>
-                        <p className="text-gray-600 mb-6 text-lg">{step.description}</p>
+                        <p className="text-gray-600 mb-4 sm:mb-6 text-sm sm:text-lg">{step.description}</p>
                         <ul className="space-y-2">
                           {step.features.map((feature, idx) => (
-                            <li key={idx} className="flex items-center gap-2 text-gray-700">
-                              <div className={`w-1.5 h-1.5 rounded-full ${
+                            <li key={idx} className="flex items-center gap-2 text-gray-700 text-sm sm:text-base">
+                              <div className={`w-1.5 h-1.5 rounded-full flex-shrink-0 ${
                                 step.color === 'red' ? 'bg-red-500' :
                                 step.color === 'orange' ? 'bg-orange-500' :
                                 step.color === 'blue' ? 'bg-blue-500' : 'bg-green-500'
@@ -533,7 +533,7 @@ export default function HowItWorksPage() {
                   </div>
 
                   {/* Illustration */}
-                  <div className={`flex-1 rounded-2xl min-h-[350px] relative overflow-hidden ${
+                  <div className={`flex-1 rounded-2xl min-h-[280px] sm:min-h-[350px] relative overflow-hidden ${
                     step.color === 'red' ? 'bg-gradient-to-br from-red-50 via-pink-50 to-rose-50' :
                     step.color === 'orange' ? 'bg-gradient-to-br from-orange-50 via-amber-50 to-yellow-50' :
                     step.color === 'blue' ? 'bg-gradient-to-br from-blue-50 via-indigo-50 to-violet-50' :
@@ -549,14 +549,14 @@ export default function HowItWorksPage() {
       </section>
 
       {/* Features Grid */}
-      <section className="py-24 px-6 bg-gray-50" ref={featuresRef}>
+      <section className="py-16 sm:py-24 px-4 sm:px-6 bg-gray-50" ref={featuresRef}>
         <div className="max-w-6xl mx-auto">
-          <div className="text-center mb-16">
-            <h2 className="text-4xl font-bold text-gray-900 mb-4">Powerful Features</h2>
-            <p className="text-xl text-gray-600">Everything you need to build production-ready AI agents</p>
+          <div className="text-center mb-10 sm:mb-16">
+            <h2 className="text-2xl sm:text-4xl font-bold text-gray-900 mb-4">Powerful Features</h2>
+            <p className="text-base sm:text-xl text-gray-600">Everything you need to build production-ready AI agents</p>
           </div>
 
-          <div className="grid md:grid-cols-2 lg:grid-cols-3 gap-6">
+          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4 sm:gap-6">
             {features.map((feature, idx) => (
               <div
                 key={idx}
@@ -574,14 +574,14 @@ export default function HowItWorksPage() {
       </section>
 
       {/* Use Cases */}
-      <section className="py-24 px-6">
+      <section className="py-16 sm:py-24 px-4 sm:px-6">
         <div className="max-w-6xl mx-auto">
-          <div className="text-center mb-16">
-            <h2 className="text-4xl font-bold text-gray-900 mb-4">Built for Every Use Case</h2>
-            <p className="text-xl text-gray-600">See what you can build with Synkora</p>
+          <div className="text-center mb-10 sm:mb-16">
+            <h2 className="text-2xl sm:text-4xl font-bold text-gray-900 mb-4">Built for Every Use Case</h2>
+            <p className="text-base sm:text-xl text-gray-600">See what you can build with Synkora</p>
           </div>
 
-          <div className="grid md:grid-cols-2 lg:grid-cols-4 gap-6">
+          <div className="grid grid-cols-2 lg:grid-cols-4 gap-4 sm:gap-6">
             {[
               { title: 'Customer Support', desc: '24/7 intelligent support agents' },
               { title: 'Sales Assistant', desc: 'Qualify leads and book meetings' },
@@ -601,17 +601,17 @@ export default function HowItWorksPage() {
       </section>
 
       {/* CTA Section */}
-      <section className="py-24 px-6 bg-gradient-to-br from-red-500 to-rose-600">
+      <section className="py-16 sm:py-24 px-4 sm:px-6 bg-gradient-to-br from-red-500 to-rose-600">
         <div className="max-w-4xl mx-auto text-center">
-          <h2 className="text-4xl font-bold text-white mb-6">
+          <h2 className="text-2xl sm:text-4xl font-bold text-white mb-4 sm:mb-6">
             Ready to Build Your First Agent?
           </h2>
-          <p className="text-xl text-white/90 mb-10">
+          <p className="text-base sm:text-xl text-white/90 mb-8 sm:mb-10">
             Join thousands of teams already using Synkora to automate their workflows.
           </p>
           <Link
             href="/signup"
-            className="inline-flex items-center gap-2 px-10 py-5 bg-white hover:bg-gray-50 text-red-600 text-lg font-semibold rounded-xl transition-all shadow-xl"
+            className="inline-flex items-center gap-2 px-8 sm:px-10 py-4 sm:py-5 bg-white hover:bg-gray-50 text-red-600 text-base sm:text-lg font-semibold rounded-xl transition-all shadow-xl"
           >
             Get Started Free
             <ArrowRight className="w-5 h-5" />

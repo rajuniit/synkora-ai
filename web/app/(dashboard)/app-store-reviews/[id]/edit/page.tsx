@@ -186,7 +186,7 @@ export default function EditAppStoreSourcePage() {
   }
 
   return (
-    <div className="min-h-screen bg-gray-50 p-8">
+    <div className="min-h-screen bg-gray-50 p-4 md:p-8">
       <div className="max-w-4xl mx-auto">
         {/* Header */}
         <div className="mb-8">
@@ -203,7 +203,7 @@ export default function EditAppStoreSourcePage() {
               <Smartphone className="w-8 h-8 text-white" />
             </div>
             <div>
-              <h1 className="text-3xl font-bold text-gray-900">
+              <h1 className="text-xl sm:text-3xl font-bold text-gray-900">
                 Edit App Source
               </h1>
               <p className="text-gray-600 mt-1">

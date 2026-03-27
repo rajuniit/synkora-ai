@@ -95,6 +95,7 @@ export default function AdvancedChatPage() {
   const [agentLoadError, setAgentLoadError] = useState<string | null>(null)
   const [chatConfig, setChatConfig] = useState<ChatConfig | null>(null)
   const [isSidebarExpanded, setIsSidebarExpanded] = useState(false) // Default to collapsed
+  const [isMobileSidebarOpen, setIsMobileSidebarOpen] = useState(false)
   const [totalMessages, setTotalMessages] = useState<number>(0)
   const [inputResetKey, setInputResetKey] = useState(0) // Key to force ChatInput remount
   const [streamStartTime, setStreamStartTime] = useState<number | null>(null)
@@ -738,7 +739,7 @@ export default function AdvancedChatPage() {
           <div className="bg-white rounded-2xl p-6 shadow-lg border border-gray-100">
             <div className="flex flex-col items-center text-center">
               <div 
-                className="w-24 h-24 rounded-full mb-4 flex items-center justify-center text-white text-3xl font-bold shadow-lg"
+                className="w-24 h-24 rounded-full mb-4 flex items-center justify-center text-white text-xl sm:text-3xl font-bold shadow-lg"
                 style={{ background: `linear-gradient(135deg, ${primaryColor}, ${primaryColor}dd)` }}
               >
                 {agent?.avatar ? (
@@ -999,17 +1000,33 @@ export default function AdvancedChatPage() {
 
       {/* Layout with Chat Left Sidebar + Chat + Right Widgets */}
       <div className="flex h-screen">
-        {/* Left Sidebar - Chat History (Auto-collapse, hover to expand) */}
-        <div 
-          className="relative"
+        {/* Mobile backdrop for left sidebar */}
+        {isMobileSidebarOpen && (
+          <div
+            className="fixed inset-0 bg-black/50 z-40 md:hidden"
+            onClick={() => setIsMobileSidebarOpen(false)}
+            aria-hidden="true"
+          />
+        )}
+
+        {/* Left Sidebar - Chat History */}
+        {/* Mobile: fixed overlay drawer; Desktop: hover-expand inline */}
+        <div
+          className={[
+            // Mobile: fixed overlay
+            'fixed inset-y-0 left-0 z-50 md:relative md:inset-y-auto md:left-auto md:z-auto',
+            // Mobile slide
+            isMobileSidebarOpen ? 'translate-x-0' : '-translate-x-full md:translate-x-0',
+            'transition-all duration-300 ease-in-out',
+          ].join(' ')}
           onMouseEnter={() => setIsSidebarExpanded(true)}
           onMouseLeave={() => setIsSidebarExpanded(false)}
         >
-          <div 
-            className={`transition-all duration-300 ease-in-out ${isSidebarExpanded ? 'w-56' : 'w-14'} h-full bg-white border-r border-gray-200/80 shadow-sm relative overflow-hidden`}
+          <div
+            className={`transition-all duration-300 ease-in-out ${isSidebarExpanded || isMobileSidebarOpen ? 'w-56' : 'w-14'} h-full bg-white border-r border-gray-200/80 shadow-sm relative overflow-hidden`}
           >
             {/* Collapsed State - Show Icons */}
-            {!isSidebarExpanded && (
+            {!isSidebarExpanded && !isMobileSidebarOpen && (
               <div className="flex flex-col h-full pt-3 bg-gray-50/50">
                 {/* Synkora Logo */}
                 <div className="flex justify-center mb-4">
@@ -1089,7 +1106,7 @@ export default function AdvancedChatPage() {
             )}
             
             {/* Expanded State - Show Full Sidebar */}
-            {isSidebarExpanded && (
+            {(isSidebarExpanded || isMobileSidebarOpen) && (
               <ChatSidebar
                 sessions={conversations.map(conv => ({
                   id: conv.id,
@@ -1135,11 +1152,21 @@ export default function AdvancedChatPage() {
               )}
 
               {/* Compact Chat Header */}
-              <div className="flex-shrink-0 px-5 py-3 border-b border-gray-100 bg-gradient-to-r" style={{ 
-                background: `linear-gradient(135deg, ${chatConfig?.chat_primary_color || '#ff444f'}15, ${chatConfig?.chat_primary_color || '#ff444f'}05)` 
+              <div className="flex-shrink-0 px-4 py-3 border-b border-gray-100" style={{
+                background: `linear-gradient(135deg, ${chatConfig?.chat_primary_color || '#ff444f'}15, ${chatConfig?.chat_primary_color || '#ff444f'}05)`
               }}>
-                <div className="flex items-center justify-between">
+                <div className="flex items-center justify-between gap-2">
                   <div className="flex items-center gap-3">
+                    {/* Mobile sidebar toggle */}
+                    <button
+                      className="md:hidden p-1.5 rounded-lg hover:bg-black/5 transition-colors text-gray-600"
+                      onClick={() => setIsMobileSidebarOpen(true)}
+                      aria-label="Open chat history"
+                    >
+                      <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 6h16M4 12h16M4 18h16" />
+                      </svg>
+                    </button>
                     <div 
                       className="w-10 h-10 rounded-full flex items-center justify-center text-white text-sm font-bold shadow-md"
                       style={{ background: `linear-gradient(135deg, ${chatConfig?.chat_primary_color || '#ff444f'}, ${chatConfig?.chat_primary_color || '#ff444f'}dd)` }}
@@ -1155,12 +1182,12 @@ export default function AdvancedChatPage() {
                       <p className="text-xs font-medium text-gray-500">Online • Ready to help</p>
                     </div>
                   </div>
-                  <div className="flex items-center gap-2">
+                  <div className="flex items-center gap-2 flex-shrink-0">
                     {llmConfigs && llmConfigs.length > 0 && (
                       <select
                         value={selectedModelId || ''}
                         onChange={(e) => setSelectedModelId(e.target.value)}
-                        className="text-xs px-2 py-1 border border-gray-200 rounded-lg focus:outline-none focus:ring-2"
+                        className="hidden sm:block text-xs px-2 py-1 border border-gray-200 rounded-lg focus:outline-none focus:ring-2 max-w-[140px]"
                         style={{
                           '--tw-ring-color': chatConfig?.chat_primary_color || '#ff444f'
                         } as React.CSSProperties}
@@ -1223,9 +1250,9 @@ export default function AdvancedChatPage() {
               />
           </div>
 
-          {/* Right Sidebar - Widgets */}
+          {/* Right Sidebar - Widgets (hidden on mobile) */}
           {showSidebar && rightWidgets.length > 0 && (
-            <div className="w-72 bg-white border-l border-gray-200/80 shadow-sm overflow-y-auto p-3 space-y-3">
+            <div className="hidden lg:block w-72 bg-white border-l border-gray-200/80 shadow-sm overflow-y-auto p-3 space-y-3">
               {rightWidgets.map((widget, idx) => (
                 <div key={idx}>{renderWidget(widget)}</div>
               ))}

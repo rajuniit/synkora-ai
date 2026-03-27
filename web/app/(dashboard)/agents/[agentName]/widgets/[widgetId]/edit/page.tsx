@@ -116,7 +116,7 @@ export default function EditWidgetPage() {
   }
 
   return (
-    <div className="min-h-screen bg-gray-50 p-6">
+    <div className="min-h-screen bg-gray-50 p-4 md:p-6">
       <div className="max-w-4xl mx-auto">
       <button
         onClick={() => router.push(`/agents/${agentName}/widgets`)}
@@ -126,7 +126,7 @@ export default function EditWidgetPage() {
         Back to Widgets
       </button>
 
-      <h1 className="text-3xl font-bold mb-8">Edit Widget</h1>
+      <h1 className="text-xl sm:text-3xl font-bold mb-8">Edit Widget</h1>
 
       <form onSubmit={handleSubmit} className="space-y-6">
         {/* Widget Name */}

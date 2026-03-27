@@ -30,7 +30,7 @@ export default function AgentWebhooksPage() {
   }
 
   return (
-    <div className="min-h-screen bg-gradient-to-br from-gray-50 via-red-50/30 to-gray-50 p-6">
+    <div className="min-h-screen bg-gradient-to-br from-gray-50 via-red-50/30 to-gray-50 p-4 md:p-6">
       <div className="max-w-7xl mx-auto">
         {/* Header */}
         <div className="mb-6">
@@ -41,7 +41,7 @@ export default function AgentWebhooksPage() {
             <ArrowLeft className="w-4 h-4" />
             Back to Agent
           </Link>
-          <div className="flex items-center justify-between">
+          <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
             <div className="flex items-center gap-3">
               <div className="p-2.5 bg-red-100 rounded-lg">
                 <Webhook className="w-6 h-6 text-red-600" />

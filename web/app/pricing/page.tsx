@@ -152,27 +152,27 @@ export default function PricingPage() {
     <div className="min-h-screen bg-gradient-to-b from-gray-50 to-white">
       {/* Navigation */}
       <nav className="fixed top-0 w-full z-50 bg-white/80 backdrop-blur-lg border-b border-gray-100">
-        <div className="max-w-7xl mx-auto px-6 py-4">
+        <div className="max-w-7xl mx-auto px-4 sm:px-6 py-4">
           <div className="flex items-center justify-between">
-            <Link href="/" className="flex items-center gap-3">
-              <div className="w-10 h-10 bg-red-500 rounded-xl flex items-center justify-center">
-                <Zap className="w-6 h-6 text-white" />
+            <Link href="/" className="flex items-center gap-2 sm:gap-3">
+              <div className="w-9 h-9 sm:w-10 sm:h-10 bg-red-500 rounded-xl flex items-center justify-center">
+                <Zap className="w-5 h-5 sm:w-6 sm:h-6 text-white" />
               </div>
-              <span className="text-2xl font-bold text-gray-900">Synkora</span>
+              <span className="text-xl sm:text-2xl font-bold text-gray-900">Synkora</span>
             </Link>
-            <div className="flex items-center gap-4">
-              <Link href="/" className="text-gray-600 hover:text-gray-900 font-medium">
+            <div className="flex items-center gap-2 sm:gap-4">
+              <Link href="/" className="hidden sm:block text-gray-600 hover:text-gray-900 font-medium">
                 Home
               </Link>
-              <Link href="/how-it-works" className="text-gray-600 hover:text-gray-900 font-medium">
+              <Link href="/how-it-works" className="hidden sm:block text-gray-600 hover:text-gray-900 font-medium">
                 How It Works
               </Link>
-              <Link href="/signin" className="text-gray-600 hover:text-gray-900 font-medium">
+              <Link href="/signin" className="hidden sm:block text-gray-600 hover:text-gray-900 font-medium">
                 Sign in
               </Link>
               <Link
                 href="/signup"
-                className="px-5 py-2 bg-red-500 hover:bg-red-600 text-white font-medium rounded-lg transition-colors"
+                className="px-4 py-2 bg-red-500 hover:bg-red-600 text-white font-medium rounded-lg transition-colors text-sm sm:text-base"
               >
                 Get Started
               </Link>
@@ -182,16 +182,16 @@ export default function PricingPage() {
       </nav>
 
       {/* Hero */}
-      <section className="pt-32 pb-16 px-6">
+      <section className="pt-28 sm:pt-32 pb-12 sm:pb-16 px-4 sm:px-6">
         <div className="max-w-4xl mx-auto text-center">
           <div className="inline-flex items-center gap-2 px-4 py-2 bg-red-100 text-red-700 rounded-full text-sm font-semibold mb-6">
             <Sparkles className="w-4 h-4" />
             Simple, Transparent Pricing
           </div>
-          <h1 className="text-5xl font-bold text-gray-900 mb-6">
+          <h1 className="text-3xl sm:text-5xl font-bold text-gray-900 mb-4 sm:mb-6">
             Choose the plan that fits your needs
           </h1>
-          <p className="text-xl text-gray-600 mb-10">
+          <p className="text-base sm:text-xl text-gray-600 mb-8 sm:mb-10">
             Start free, scale as you grow. All plans include our core features.
           </p>
 
@@ -221,7 +221,7 @@ export default function PricingPage() {
       </section>
 
       {/* Pricing Cards */}
-      <section className="pb-24 px-6" ref={containerRef}>
+      <section className="pb-16 sm:pb-24 px-4 sm:px-6" ref={containerRef}>
         <div className="max-w-6xl mx-auto">
           {loading ? (
             <div className="flex items-center justify-center py-20">
@@ -308,9 +308,9 @@ export default function PricingPage() {
       </section>
 
       {/* FAQ Section */}
-      <section className="py-20 px-6 bg-gray-50">
+      <section className="py-14 sm:py-20 px-4 sm:px-6 bg-gray-50">
         <div className="max-w-3xl mx-auto">
-          <h2 className="text-3xl font-bold text-gray-900 text-center mb-12">
+          <h2 className="text-2xl sm:text-3xl font-bold text-gray-900 text-center mb-8 sm:mb-12">
             Frequently Asked Questions
           </h2>
 
@@ -351,13 +351,13 @@ export default function PricingPage() {
       </section>
 
       {/* CTA Section */}
-      <section className="py-20 px-6">
+      <section className="py-14 sm:py-20 px-4 sm:px-6">
         <div className="max-w-4xl mx-auto text-center">
-          <div className="bg-gradient-to-br from-red-500 to-rose-600 rounded-3xl p-12 shadow-2xl">
-            <h2 className="text-3xl font-bold text-white mb-4">
+          <div className="bg-gradient-to-br from-red-500 to-rose-600 rounded-3xl p-8 sm:p-12 shadow-2xl">
+            <h2 className="text-2xl sm:text-3xl font-bold text-white mb-4">
               Ready to supercharge your workflows?
             </h2>
-            <p className="text-white/90 mb-8 text-lg">
+            <p className="text-white/90 mb-6 sm:mb-8 text-base sm:text-lg">
               Start building AI agents today. No credit card required.
             </p>
             <Link

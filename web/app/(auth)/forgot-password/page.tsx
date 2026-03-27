@@ -46,7 +46,7 @@ export default function ForgotPasswordPage() {
             </p>
           </div>
 
-          <div className="bg-white rounded-2xl shadow-xl border-2 border-red-100 p-8">
+          <div className="bg-white rounded-2xl shadow-xl border-2 border-red-100 p-5 sm:p-8">
             <div className="text-center space-y-4">
               <p className="text-sm text-gray-600">
                 Didn't receive the email? Check your spam folder or try again.
@@ -83,7 +83,7 @@ export default function ForgotPasswordPage() {
           <p className="text-gray-600">No worries, we'll send you reset instructions</p>
         </div>
 
-        <div className="bg-white rounded-2xl shadow-xl border-2 border-red-100 p-8">
+        <div className="bg-white rounded-2xl shadow-xl border-2 border-red-100 p-5 sm:p-8">
           <form onSubmit={handleSubmit} className="space-y-6">
             <div>
               <label htmlFor="email" className="block text-sm font-medium text-gray-700 mb-2">

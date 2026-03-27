@@ -61,7 +61,7 @@ export default function CreateDomainPage() {
     const platformDomain = dnsRecords.platform_domain;
 
     return (
-      <div className="min-h-screen bg-gradient-to-br from-amber-50 via-yellow-50/30 to-amber-50 p-6">
+      <div className="min-h-screen bg-gradient-to-br from-amber-50 via-yellow-50/30 to-amber-50 p-4 md:p-6">
         <div className="max-w-4xl mx-auto">
           {/* Header */}
           <div className="mb-6">
@@ -225,7 +225,7 @@ export default function CreateDomainPage() {
   }
 
   return (
-    <div className="min-h-screen bg-gradient-to-br from-amber-50 via-yellow-50/30 to-amber-50 p-6">
+    <div className="min-h-screen bg-gradient-to-br from-amber-50 via-yellow-50/30 to-amber-50 p-4 md:p-6">
       <div className="max-w-3xl mx-auto">
         {/* Header */}
         <div className="mb-6">

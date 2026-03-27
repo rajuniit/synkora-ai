@@ -1,6 +1,6 @@
 'use client'
 
-import { useState } from 'react'
+import { useState, useEffect } from 'react'
 import Link from 'next/link'
 import { usePathname } from 'next/navigation'
 import { useAuth } from '@/lib/hooks/useAuth'
@@ -205,12 +205,23 @@ const settingsNavigation = [
   },
 ]
 
-export function Sidebar() {
+interface SidebarProps {
+  mobileOpen?: boolean
+  onMobileClose?: () => void
+}
+
+export function Sidebar({ mobileOpen = false, onMobileClose }: SidebarProps) {
   const [isExpanded, setIsExpanded] = useState(false)
   const [isPinned, setIsPinned] = useState(false)
   const pathname = usePathname()
   const { user } = useAuth()
   const { hasPermission } = usePermissions()
+
+  // Close mobile sidebar on route change
+  useEffect(() => {
+    onMobileClose?.()
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [pathname])
 
   const handleMouseEnter = () => {
     if (!isPinned) {
@@ -229,102 +240,93 @@ export function Sidebar() {
     setIsExpanded(!isPinned)
   }
 
+  // Labels are visible when desktop-expanded/pinned OR when mobile drawer is open
+  const showLabels = isExpanded || isPinned || mobileOpen
+
   return (
-    <div 
-      className={cn(
-        'bg-gray-900 h-screen flex flex-col py-6 transition-all duration-300 relative',
-        isExpanded || isPinned ? 'w-64' : 'w-20'
+    <>
+      {/* Mobile backdrop overlay */}
+      {mobileOpen && (
+        <div
+          className="fixed inset-0 bg-black/50 z-40 md:hidden"
+          onClick={onMobileClose}
+          aria-hidden="true"
+        />
       )}
-      onMouseEnter={handleMouseEnter}
-      onMouseLeave={handleMouseLeave}
-    >
-      {/* Logo and Pin Button */}
-      <div className="mb-8 px-5">
-        <div className={cn('flex items-center', isExpanded || isPinned ? 'justify-between' : 'justify-center')}>
-          <div className="flex items-center gap-3">
-            {/* Modern Logo with Gradient */}
-            <div className="relative w-10 h-10 flex-shrink-0">
-              <div className="absolute inset-0 bg-gradient-to-br from-primary-400 to-primary-600 rounded-lg rotate-45"></div>
-              <div className="absolute inset-0 flex items-center justify-center">
-                <svg className="w-6 h-6 text-white relative z-10" fill="currentColor" viewBox="0 0 24 24">
-                  <path d="M13 10V3L4 14h7v7l9-11h-7z" />
-                </svg>
+
+      {/* Sidebar panel */}
+      <div
+        className={cn(
+          'bg-gray-900 h-screen flex flex-col py-6 transition-all duration-300 flex-shrink-0',
+          // Mobile: fixed overlay; desktop: static in flex flow
+          'fixed inset-y-0 left-0 z-50 md:relative md:inset-y-auto md:left-auto md:z-auto',
+          // Mobile slide animation; desktop always visible
+          mobileOpen ? 'translate-x-0' : '-translate-x-full md:translate-x-0',
+          // Width: mobile always w-64; desktop responsive
+          'w-64',
+          isExpanded || isPinned ? 'md:w-64' : 'md:w-20',
+        )}
+        onMouseEnter={handleMouseEnter}
+        onMouseLeave={handleMouseLeave}
+      >
+        {/* Logo and Pin Button */}
+        <div className="mb-8 px-5">
+          <div className={cn('flex items-center', showLabels ? 'justify-between' : 'justify-center')}>
+            <div className="flex items-center gap-3">
+              {/* Logo */}
+              <div className="relative w-10 h-10 flex-shrink-0">
+                <div className="absolute inset-0 bg-gradient-to-br from-primary-400 to-primary-600 rounded-lg rotate-45"></div>
+                <div className="absolute inset-0 flex items-center justify-center">
+                  <svg className="w-6 h-6 text-white relative z-10" fill="currentColor" viewBox="0 0 24 24">
+                    <path d="M13 10V3L4 14h7v7l9-11h-7z" />
+                  </svg>
+                </div>
               </div>
+              {showLabels && (
+                <div className="flex flex-col">
+                  <span className="text-lg font-bold text-white whitespace-nowrap">
+                    synkora <span className="text-primary-400">ai</span>
+                  </span>
+                  <span className="text-[10px] text-gray-400 -mt-1">Enterprise Platform</span>
+                </div>
+              )}
             </div>
-            {(isExpanded || isPinned) && (
-              <div className="flex flex-col">
-                <span className="text-lg font-bold text-white whitespace-nowrap">
-                  synkora <span className="text-primary-400">ai</span>
-                </span>
-                <span className="text-[10px] text-gray-400 -mt-1">Enterprise Platform</span>
-              </div>
+            {/* Pin toggle — hidden on mobile (close via backdrop instead) */}
+            {showLabels && !mobileOpen && (
+              <button
+                onClick={togglePin}
+                className="flex items-center gap-2 p-1 rounded-lg hover:bg-gray-800 transition-colors"
+                title={isPinned ? 'Unlock sidebar' : 'Lock sidebar'}
+              >
+                <div className={cn(
+                  'relative w-10 h-5 rounded-full transition-colors',
+                  isPinned ? 'bg-gradient-to-r from-primary-500 to-primary-600' : 'bg-gray-600'
+                )}>
+                  <div className={cn(
+                    'absolute top-0.5 left-0.5 w-4 h-4 bg-white rounded-full transition-transform',
+                    isPinned ? 'translate-x-5' : 'translate-x-0'
+                  )} />
+                </div>
+              </button>
+            )}
+            {/* Close button on mobile */}
+            {mobileOpen && (
+              <button
+                onClick={onMobileClose}
+                className="p-1.5 rounded-lg hover:bg-gray-800 transition-colors text-gray-400 hover:text-gray-200"
+                aria-label="Close menu"
+              >
+                <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+                </svg>
+              </button>
             )}
           </div>
-          {(isExpanded || isPinned) && (
-            <button
-              onClick={togglePin}
-              className="flex items-center gap-2 p-1 rounded-lg hover:bg-gray-800 transition-colors"
-              title={isPinned ? 'Unlock sidebar' : 'Lock sidebar'}
-            >
-              <div className={cn(
-                'relative w-10 h-5 rounded-full transition-colors',
-                isPinned ? 'bg-gradient-to-r from-primary-500 to-primary-600' : 'bg-gray-600'
-              )}>
-                <div className={cn(
-                  'absolute top-0.5 left-0.5 w-4 h-4 bg-white rounded-full transition-transform',
-                  isPinned ? 'translate-x-5' : 'translate-x-0'
-                )} />
-              </div>
-            </button>
-          )}
         </div>
-      </div>
 
-      {/* Navigation */}
-      <nav className="flex-1 flex flex-col space-y-2 px-3 overflow-y-auto">
-        {navigation.map((item) => {
-          const isActive = pathname?.startsWith(item.href)
-          return (
-            <Link
-              key={item.name}
-              href={item.href}
-              className={cn(
-                'flex items-center gap-3 px-3 py-3 rounded-lg transition-all',
-                isActive
-                  ? 'bg-gradient-to-r from-primary-500/10 to-primary-600/10 text-primary-400 border-l-2 border-primary-500'
-                  : 'text-gray-400 hover:bg-gray-800 hover:text-gray-200'
-              )}
-            >
-              <div className="flex-shrink-0">
-                {item.icon}
-              </div>
-              {(isExpanded || isPinned) && (
-                <span className="text-sm font-medium whitespace-nowrap">{item.name}</span>
-              )}
-            </Link>
-          )
-        })}
-
-        {/* Settings Section */}
-        <div className="pt-4 mt-4 border-t border-gray-700">
-          {(isExpanded || isPinned) && (
-            <div className="px-3 mb-2">
-              <span className="text-xs font-semibold text-gray-500 uppercase tracking-wider">
-                Settings
-              </span>
-            </div>
-          )}
-          {settingsNavigation.map((item) => {
-            // Check permission if item has permission requirement
-            if (item.permission && !hasPermission(item.permission.resource, item.permission.action)) {
-              return null
-            }
-            
-            // Check if item is platform-only and user is not platform owner
-            if (item.platformOnly && !hasPermission('platform', 'read')) {
-              return null
-            }
-            
+        {/* Navigation */}
+        <nav className="flex-1 flex flex-col space-y-2 px-3 overflow-y-auto">
+          {navigation.map((item) => {
             const isActive = pathname?.startsWith(item.href)
             return (
               <Link
@@ -340,27 +342,66 @@ export function Sidebar() {
                 <div className="flex-shrink-0">
                   {item.icon}
                 </div>
-                {(isExpanded || isPinned) && (
+                {showLabels && (
                   <span className="text-sm font-medium whitespace-nowrap">{item.name}</span>
                 )}
               </Link>
             )
           })}
-        </div>
-      </nav>
 
-      {/* User Section */}
-      <div className={cn('mt-auto px-3', isExpanded ? 'flex items-center gap-3 p-3 rounded-lg hover:bg-gray-800 transition-colors' : 'flex justify-center')}>
-        <div className="w-10 h-10 bg-gradient-to-br from-primary-500 to-primary-600 rounded-full flex items-center justify-center text-white font-semibold text-sm flex-shrink-0">
-          {user?.name?.charAt(0).toUpperCase() || 'U'}
-        </div>
-        {isExpanded && (
-          <div className="flex-1 min-w-0">
-            <p className="text-sm font-medium text-white truncate">{user?.name || 'User'}</p>
-            <p className="text-xs text-gray-400 truncate">{user?.email || ''}</p>
+          {/* Settings Section */}
+          <div className="pt-4 mt-4 border-t border-gray-700">
+            {showLabels && (
+              <div className="px-3 mb-2">
+                <span className="text-xs font-semibold text-gray-500 uppercase tracking-wider">
+                  Settings
+                </span>
+              </div>
+            )}
+            {settingsNavigation.map((item) => {
+              if (item.permission && !hasPermission(item.permission.resource, item.permission.action)) {
+                return null
+              }
+              if (item.platformOnly && !hasPermission('platform', 'read')) {
+                return null
+              }
+              const isActive = pathname?.startsWith(item.href)
+              return (
+                <Link
+                  key={item.name}
+                  href={item.href}
+                  className={cn(
+                    'flex items-center gap-3 px-3 py-3 rounded-lg transition-all',
+                    isActive
+                      ? 'bg-gradient-to-r from-primary-500/10 to-primary-600/10 text-primary-400 border-l-2 border-primary-500'
+                      : 'text-gray-400 hover:bg-gray-800 hover:text-gray-200'
+                  )}
+                >
+                  <div className="flex-shrink-0">
+                    {item.icon}
+                  </div>
+                  {showLabels && (
+                    <span className="text-sm font-medium whitespace-nowrap">{item.name}</span>
+                  )}
+                </Link>
+              )
+            })}
           </div>
-        )}
+        </nav>
+
+        {/* User Section */}
+        <div className={cn('mt-auto px-3', showLabels ? 'flex items-center gap-3 p-3 rounded-lg hover:bg-gray-800 transition-colors' : 'flex justify-center')}>
+          <div className="w-10 h-10 bg-gradient-to-br from-primary-500 to-primary-600 rounded-full flex items-center justify-center text-white font-semibold text-sm flex-shrink-0">
+            {user?.name?.charAt(0).toUpperCase() || 'U'}
+          </div>
+          {showLabels && (
+            <div className="flex-1 min-w-0">
+              <p className="text-sm font-medium text-white truncate">{user?.name || 'User'}</p>
+              <p className="text-xs text-gray-400 truncate">{user?.email || ''}</p>
+            </div>
+          )}
+        </div>
       </div>
-    </div>
+    </>
   )
 }

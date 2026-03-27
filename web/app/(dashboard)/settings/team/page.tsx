@@ -108,7 +108,7 @@ export default function TeamSettingsPage() {
 
   return (
     <div className="min-h-screen bg-gradient-to-br from-red-50 via-red-50/30 to-red-50">
-      <div className="max-w-7xl mx-auto px-6 py-6">
+      <div className="max-w-7xl mx-auto px-4 md:px-6 py-4 md:py-6">
         <div className="mb-6">
           <div className="flex items-center justify-between">
             <div>

@@ -91,7 +91,7 @@ export default function ProfilePage() {
 
   return (
     <div className="min-h-screen bg-gradient-to-br from-red-50 via-red-50/30 to-red-50">
-      <div className="max-w-5xl mx-auto px-6 py-6">
+      <div className="max-w-5xl mx-auto px-4 md:px-6 py-4 md:py-6">
         {/* Header */}
         <div className="mb-6">
           <h1 className="text-2xl font-bold text-gray-900">Profile Settings</h1>

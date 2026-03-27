@@ -241,7 +241,7 @@ export default function SocialAuthConfigPage() {
   }
 
   return (
-    <div className="min-h-screen bg-gradient-to-br from-primary-50 via-primary-50/30 to-white p-6">
+    <div className="min-h-screen bg-gradient-to-br from-primary-50 via-primary-50/30 to-white p-4 md:p-6">
       <div className="max-w-6xl mx-auto">
         {/* Header */}
         <div className="mb-5">

@@ -377,7 +377,7 @@ export default function CreateAgentPage() {
         </div>
       </div>
 
-      <div className="max-w-4xl mx-auto px-6 py-8">
+      <div className="max-w-4xl mx-auto px-4 md:px-6 py-4 md:py-8">
         {/* Progress Section */}
         <div className="bg-white rounded-2xl shadow-sm border border-gray-200 p-6 mb-8">
           <div className="flex items-center justify-between mb-2">
@@ -425,7 +425,7 @@ export default function CreateAgentPage() {
 
         {/* Step Content */}
         <div className="bg-white rounded-2xl shadow-sm border border-gray-200 overflow-hidden">
-          <div className="p-8">
+          <div className="p-4 md:p-8">
             {currentStep === 1 && (
               <Step1Basics
                 formData={formData}
@@ -540,7 +540,7 @@ function Step1Basics({ formData, setFormData, onAvatarUpload, onAvatarRemove, na
       </div>
 
       {/* Avatar and Name Row */}
-      <div className="flex items-start gap-8">
+      <div className="flex flex-col sm:flex-row items-start gap-6 sm:gap-8">
         <div className="flex-shrink-0">
           <label className="block text-sm font-bold text-gray-900 mb-3">
             Avatar

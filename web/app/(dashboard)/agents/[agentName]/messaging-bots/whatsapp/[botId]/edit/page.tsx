@@ -142,7 +142,7 @@ export default function EditWhatsAppBotPage() {
   const isDeviceLink = bot.connection_type === "device_link";
 
   return (
-    <div className="min-h-screen bg-gray-50 p-8">
+    <div className="min-h-screen bg-gray-50 p-4 md:p-8">
       <div className="max-w-3xl mx-auto">
         <div className="mb-8">
           <button
@@ -157,7 +157,7 @@ export default function EditWhatsAppBotPage() {
               <MessageCircle className="text-green-600" size={24} />
             </div>
             <div>
-              <h1 className="text-3xl font-bold text-gray-900">Edit WhatsApp Bot</h1>
+              <h1 className="text-xl sm:text-3xl font-bold text-gray-900">Edit WhatsApp Bot</h1>
               <p className="text-gray-600 mt-1">
                 {isDeviceLink ? "Device Link (QR)" : "Cloud API"} connection
               </p>

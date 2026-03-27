@@ -184,28 +184,29 @@ export default function AppStoreReviewsPage() {
   }
 
   return (
-    <div className="min-h-screen bg-gray-50 p-8">
+    <div className="min-h-screen bg-gray-50 p-4 md:p-8">
       <div className="max-w-7xl mx-auto">
         {/* Header */}
         <div className="mb-8">
-          <div className="flex items-center justify-between mb-6">
+          <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4 mb-6">
             <div>
-              <h1 className="text-3xl font-bold text-gray-900">App Store Reviews</h1>
+              <h1 className="text-xl sm:text-3xl font-bold text-gray-900">App Store Reviews</h1>
               <p className="text-gray-600 mt-2">
                 Monitor and analyze reviews from Google Play and Apple App Store
               </p>
             </div>
             <Link
               href="/app-store-reviews/create"
-              className="inline-flex items-center gap-2 px-6 py-3 bg-teal-600 text-white rounded-lg hover:bg-teal-700 transition-colors shadow-sm"
+              className="inline-flex items-center gap-2 px-4 py-2.5 bg-teal-600 text-white rounded-lg hover:bg-teal-700 transition-colors shadow-sm whitespace-nowrap"
             >
               <Plus className="w-5 h-5" />
-              Add App Source
+              <span className="hidden sm:inline">Add App Source</span>
+              <span className="sm:hidden">Add</span>
             </Link>
           </div>
 
           {/* Stats Bar */}
-          <div className="grid grid-cols-1 md:grid-cols-4 gap-6 mb-6">
+          <div className="grid grid-cols-2 md:grid-cols-4 gap-4 md:gap-6 mb-6">
             <div className="bg-white rounded-lg shadow-sm border border-gray-200 p-6">
               <div className="flex items-center gap-3 mb-2">
                 <div className="p-2 bg-teal-100 rounded-lg">
@@ -213,7 +214,7 @@ export default function AppStoreReviewsPage() {
                 </div>
                 <p className="text-sm font-medium text-gray-600">Total Apps</p>
               </div>
-              <p className="text-3xl font-bold text-gray-900">{sources.length}</p>
+              <p className="text-xl sm:text-3xl font-bold text-gray-900">{sources.length}</p>
             </div>
             
             <div className="bg-white rounded-lg shadow-sm border border-gray-200 p-6">
@@ -223,7 +224,7 @@ export default function AppStoreReviewsPage() {
                 </div>
                 <p className="text-sm font-medium text-gray-600">Active</p>
               </div>
-              <p className="text-3xl font-bold text-gray-900">
+              <p className="text-xl sm:text-3xl font-bold text-gray-900">
                 {sources.filter(s => s.status === 'active').length}
               </p>
             </div>
@@ -235,7 +236,7 @@ export default function AppStoreReviewsPage() {
                 </div>
                 <p className="text-sm font-medium text-gray-600">Total Reviews</p>
               </div>
-              <p className="text-3xl font-bold text-gray-900">
+              <p className="text-xl sm:text-3xl font-bold text-gray-900">
                 {sources.reduce((sum, s) => sum + (s.total_reviews_collected || 0), 0).toLocaleString()}
               </p>
             </div>
@@ -247,7 +248,7 @@ export default function AppStoreReviewsPage() {
                 </div>
                 <p className="text-sm font-medium text-gray-600">Syncing</p>
               </div>
-              <p className="text-3xl font-bold text-gray-900">
+              <p className="text-xl sm:text-3xl font-bold text-gray-900">
                 {sources.filter(s => s.status === 'syncing').length}
               </p>
             </div>

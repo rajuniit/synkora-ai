@@ -134,18 +134,18 @@ export default function LoadTestingPage() {
   }
 
   return (
-    <div className="min-h-screen bg-gradient-to-br from-primary-50 via-white to-primary-50/30 p-6">
+    <div className="min-h-screen bg-gradient-to-br from-primary-50 via-white to-primary-50/30 p-4 md:p-6">
       <div className="max-w-6xl mx-auto">
         {/* Header */}
         <div className="mb-8">
-          <div className="flex items-center justify-between mb-6">
+          <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4 mb-6">
             <div>
               <h1 className="text-2xl font-bold text-gray-900">Load Testing</h1>
               <p className="text-gray-600 mt-1">
                 Test your AI agents at scale with K6-powered load tests
               </p>
             </div>
-            <div className="flex gap-3">
+            <div className="flex gap-3 flex-wrap">
               <Link
                 href="/load-testing/proxy"
                 className="inline-flex items-center gap-2 px-4 py-2.5 border border-gray-200 bg-white hover:bg-gray-50 text-gray-700 rounded-xl transition-all shadow-sm font-medium"

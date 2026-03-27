@@ -65,7 +65,7 @@ export default function EditDomainPage() {
 
   if (error) {
     return (
-      <div className="min-h-screen bg-gradient-to-br from-amber-50 via-yellow-50/30 to-amber-50 p-8">
+      <div className="min-h-screen bg-gradient-to-br from-amber-50 via-yellow-50/30 to-amber-50 p-4 md:p-8">
         <div className="max-w-3xl mx-auto">
           <div className="bg-red-50 border border-red-200 rounded-lg p-4 text-red-800">
             {error}
@@ -77,7 +77,7 @@ export default function EditDomainPage() {
 
   if (!domain) {
     return (
-      <div className="min-h-screen bg-gradient-to-br from-amber-50 via-yellow-50/30 to-amber-50 p-8">
+      <div className="min-h-screen bg-gradient-to-br from-amber-50 via-yellow-50/30 to-amber-50 p-4 md:p-8">
         <div className="max-w-3xl mx-auto">
           <div className="bg-amber-50 border border-amber-200 rounded-lg p-4 text-amber-800">
             Domain not found
@@ -88,7 +88,7 @@ export default function EditDomainPage() {
   }
 
   return (
-    <div className="min-h-screen bg-gradient-to-br from-amber-50 via-yellow-50/30 to-amber-50 p-6">
+    <div className="min-h-screen bg-gradient-to-br from-amber-50 via-yellow-50/30 to-amber-50 p-4 md:p-6">
       <div className="max-w-4xl mx-auto">
         <button
           onClick={() => router.push(`/agents/${agentName}/domains`)}

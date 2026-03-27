@@ -107,7 +107,7 @@ export default function EditTelegramBotPage() {
 
   if (!bot) {
     return (
-      <div className="min-h-screen bg-gradient-to-br from-gray-50 via-primary-50/30 to-gray-50 p-6">
+      <div className="min-h-screen bg-gradient-to-br from-gray-50 via-primary-50/30 to-gray-50 p-4 md:p-6">
         <div className="max-w-2xl mx-auto">
           <div className="bg-red-50 border border-red-200 rounded-lg p-4">
             <p className="text-red-800">Bot not found</p>
@@ -118,7 +118,7 @@ export default function EditTelegramBotPage() {
   }
 
   return (
-    <div className="min-h-screen bg-gradient-to-br from-gray-50 via-primary-50/30 to-gray-50 p-6">
+    <div className="min-h-screen bg-gradient-to-br from-gray-50 via-primary-50/30 to-gray-50 p-4 md:p-6">
       <div className="max-w-2xl mx-auto">
         {/* Header */}
         <div className="mb-6">

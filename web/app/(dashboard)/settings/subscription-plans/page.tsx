@@ -67,7 +67,7 @@ export default function SubscriptionPlansPage() {
   }
 
   return (
-    <div className="min-h-screen bg-gradient-to-br from-primary-50 via-primary-50/30 to-white p-6">
+    <div className="min-h-screen bg-gradient-to-br from-primary-50 via-primary-50/30 to-white p-4 md:p-6">
       <div className="max-w-6xl mx-auto">
         <div className="mb-6">
           <h1 className="text-2xl font-bold text-gray-900">Subscription Plans</h1>
@@ -84,7 +84,7 @@ export default function SubscriptionPlansPage() {
 
               <div className="mb-5">
                 <div className="flex items-baseline">
-                  <span className="text-3xl font-bold text-gray-900">${plan.price_monthly}</span>
+                  <span className="text-xl sm:text-3xl font-bold text-gray-900">${plan.price_monthly}</span>
                   <span className="text-gray-600 ml-2 text-sm">/month</span>
                 </div>
                 {plan.price_yearly > 0 && (

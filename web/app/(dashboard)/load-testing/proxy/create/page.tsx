@@ -94,7 +94,7 @@ export default function CreateProxyConfigPage() {
 
   if (showApiKey && createdApiKey) {
     return (
-      <div className="min-h-screen bg-gradient-to-br from-primary-50 via-white to-primary-50/30 p-6">
+      <div className="min-h-screen bg-gradient-to-br from-primary-50 via-white to-primary-50/30 p-4 md:p-6">
         <div className="max-w-2xl mx-auto">
           <div className="bg-white rounded-2xl shadow-sm border border-gray-100 p-8 text-center">
             <div className="w-16 h-16 bg-green-100 rounded-full flex items-center justify-center mx-auto mb-6">
@@ -191,7 +191,7 @@ export default function CreateProxyConfigPage() {
   }
 
   return (
-    <div className="min-h-screen bg-gradient-to-br from-primary-50 via-white to-primary-50/30 p-6">
+    <div className="min-h-screen bg-gradient-to-br from-primary-50 via-white to-primary-50/30 p-4 md:p-6">
       <div className="max-w-3xl mx-auto">
         {/* Header */}
         <div className="mb-8">

@@ -132,7 +132,7 @@ export default function DatabaseConnectionDetailsPage() {
   }
 
   return (
-    <div className="min-h-screen bg-gray-50 p-8">
+    <div className="min-h-screen bg-gray-50 p-4 md:p-8">
       <div className="max-w-5xl mx-auto">
         <div className="mb-6">
           <Link
@@ -143,18 +143,18 @@ export default function DatabaseConnectionDetailsPage() {
             Back to Connections
           </Link>
           
-          <div className="flex items-center justify-between">
+          <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
             <div className="flex items-center gap-3">
               <div className="p-3 bg-teal-100 rounded-lg">
                 <Database className="w-6 h-6 text-teal-600" />
               </div>
               <div>
-                <h1 className="text-3xl font-bold text-gray-900">{connection.name}</h1>
+                <h1 className="text-xl sm:text-3xl font-bold text-gray-900">{connection.name}</h1>
                 <p className="text-gray-600 mt-1">{connection.type}</p>
               </div>
             </div>
-            
-            <div className="flex gap-3">
+
+            <div className="flex gap-3 flex-wrap">
               <button
                 onClick={testConnection}
                 disabled={testing}

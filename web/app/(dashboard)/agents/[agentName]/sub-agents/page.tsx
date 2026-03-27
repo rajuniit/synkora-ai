@@ -267,8 +267,8 @@ export default function SubAgentsPage() {
   return (
     <div className="min-h-screen bg-gray-50">
       {/* Header */}
-      <div className="max-w-7xl mx-auto px-6 py-6">
-        <div className="flex items-center justify-between mb-6">
+      <div className="max-w-7xl mx-auto px-4 md:px-6 py-4 md:py-6">
+        <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4 mb-6">
           <div className="flex items-center gap-3">
             <button
               onClick={() => router.push(`/agents/${agentName}/view`)}
@@ -277,7 +277,7 @@ export default function SubAgentsPage() {
               <ArrowLeft className="w-5 h-5" />
             </button>
             <div>
-              <h1 className="text-3xl font-bold text-gray-900">Sub-Agents Configuration</h1>
+              <h1 className="text-xl sm:text-3xl font-bold text-gray-900">Sub-Agents Configuration</h1>
               <p className="text-sm text-gray-600 mt-1">
                 Configure sub-agents for <span className="font-semibold">{agent?.agent_name || agentName}</span>
               </p>
@@ -293,7 +293,7 @@ export default function SubAgentsPage() {
         </div>
       </div>
 
-      <div className="max-w-7xl mx-auto px-6 py-6">
+      <div className="max-w-7xl mx-auto px-4 md:px-6 py-4 md:py-6">
         {/* Workflow Configuration Card */}
         <div className="bg-white rounded-xl shadow-sm border border-gray-200 overflow-hidden mb-6">
           <div className="px-5 py-3 border-b border-gray-200 bg-gradient-to-r from-red-50 to-red-100/50">

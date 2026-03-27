@@ -228,7 +228,7 @@ export default function BrowsePage() {
         <div className="max-w-7xl mx-auto px-6 py-8">
           <div className="flex items-start justify-between">
             <div>
-              <h1 className="text-3xl font-bold text-gray-900">
+              <h1 className="text-xl sm:text-3xl font-bold text-gray-900">
                 {selectedCategory ? `${selectedCategory} AI Agents` : 'AI Agents Marketplace'}
               </h1>
               <p className="mt-2 text-gray-600 max-w-2xl">
@@ -248,10 +248,10 @@ export default function BrowsePage() {
       </div>
 
       {/* Main Content */}
-      <div className="max-w-7xl mx-auto px-6 py-8">
-        <div className="flex gap-8">
-          {/* Left Sidebar */}
-          <div className="w-64 flex-shrink-0">
+      <div className="max-w-7xl mx-auto px-4 md:px-6 py-4 md:py-8">
+        <div className="flex flex-col md:flex-row gap-6 md:gap-8">
+          {/* Left Sidebar - hidden on mobile by default, shown on md+ */}
+          <div className="w-full md:w-64 md:flex-shrink-0">
             <div className="bg-white rounded-xl border border-gray-200 p-5">
               {/* Categories */}
               <div className="mb-6">

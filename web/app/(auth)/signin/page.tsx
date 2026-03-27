@@ -192,14 +192,14 @@ function SignInContent() {
 
           {/* Header */}
           <div className="text-center lg:text-left mb-10">
-            <h1 className="text-4xl font-bold text-gray-900 mb-3">Sign in</h1>
+            <h1 className="text-2xl sm:text-4xl font-bold text-gray-900 mb-3">Sign in</h1>
             <p className="text-gray-600 text-lg">
               Welcome back! Please enter your details.
             </p>
           </div>
 
           {/* Form Card */}
-          <div className="bg-white rounded-3xl shadow-xl border border-gray-100 p-8">
+          <div className="bg-white rounded-3xl shadow-xl border border-gray-100 p-5 sm:p-8">
             {/* Social Login */}
             <div className="mb-8">
               <SocialLoginButton

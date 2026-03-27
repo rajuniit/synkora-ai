@@ -215,28 +215,29 @@ export default function ScheduledTasksPage() {
   }
 
   return (
-    <div className="min-h-screen bg-gradient-to-br from-red-50 via-red-50/30 to-red-50 p-6">
+    <div className="min-h-screen bg-gradient-to-br from-red-50 via-red-50/30 to-red-50 p-4 md:p-6">
       <div className="max-w-7xl mx-auto">
-        {/* Header - More Compact */}
+        {/* Header */}
         <div className="mb-6">
-          <div className="flex items-center justify-between mb-4">
+          <div className="flex items-center justify-between gap-3 mb-4">
             <div>
-              <h1 className="text-2xl font-bold text-gray-900">Scheduled Tasks</h1>
-              <p className="text-gray-600 mt-1 text-sm">
+              <h1 className="text-xl md:text-2xl font-bold text-gray-900">Scheduled Tasks</h1>
+              <p className="text-gray-600 mt-1 text-sm hidden sm:block">
                 Schedule and automate recurring tasks
               </p>
             </div>
             <Link
               href="/scheduled-tasks/create"
-              className="inline-flex items-center gap-2 px-5 py-2.5 bg-gradient-to-r from-red-500 to-red-600 hover:from-red-600 hover:to-red-700 text-white rounded-lg transition-all shadow-sm hover:shadow-md text-sm font-medium"
+              className="inline-flex items-center gap-2 px-4 py-2 md:px-5 md:py-2.5 bg-gradient-to-r from-red-500 to-red-600 hover:from-red-600 hover:to-red-700 text-white rounded-lg transition-all shadow-sm hover:shadow-md text-sm font-medium flex-shrink-0"
             >
               <Plus className="w-4 h-4" />
-              Create Task
+              <span className="hidden sm:inline">Create Task</span>
+              <span className="sm:hidden">New</span>
             </Link>
           </div>
 
-          {/* Stats Bar - More Compact */}
-          <div className="grid grid-cols-1 md:grid-cols-5 gap-4 mb-5">
+          {/* Stats Bar */}
+          <div className="grid grid-cols-2 md:grid-cols-5 gap-3 md:gap-4 mb-4 md:mb-5">
             <div className="bg-white rounded-lg shadow-sm border border-gray-200 p-4">
               <div className="flex items-center gap-2 mb-1">
                 <div className="p-1.5 bg-red-100 rounded-lg">
