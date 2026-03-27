@@ -188,6 +188,52 @@ async def chat_stream(
 
     # Message is safe - proceed with normal chat flow
 
+    # HITL: Check if this chat message is an approval reply for a pending action
+    try:
+        import json as _json_mod
+
+        from src.config.redis import get_redis_async
+        from src.services.human_approval_service import HumanApprovalService
+
+        _redis = get_redis_async()
+        _conv_id = request.conversation_id or ""
+        _hitl_key = f"hitl:chat:{request.agent_name}:{_conv_id}"
+        _approval_id_str = await _redis.get(_hitl_key)
+        if _approval_id_str:
+            _approval_svc = HumanApprovalService(db)
+            _decision = _approval_svc.parse_reply(request.message)
+            if _decision != "unclear":
+                _result = await _approval_svc.handle_reply(
+                    uuid.UUID(_approval_id_str), request.message, db
+                )
+                if _result == "approved":
+                    _reply = "Great! Proceeding with the action now."
+                elif _result in ("rejected", "feedback"):
+                    _reply = "Understood. Action cancelled." if _result == "rejected" else "Got it! I'll revise and ask again shortly."
+                elif _result == "expired":
+                    _reply = "This approval request has expired. The next scheduled run will ask again."
+                else:
+                    _reply = "Action status updated."
+
+                await _redis.delete(_hitl_key)
+
+                async def _approval_stream():
+                    yield f'data: {_json_mod.dumps({"type": "chunk", "content": _reply})}\n\n'
+                    yield 'data: {"type":"done"}\n\n'
+
+                return StreamingResponse(
+                    _approval_stream(),
+                    media_type="text/event-stream",
+                    headers={
+                        "Cache-Control": "no-cache",
+                        "Connection": "keep-alive",
+                        "X-Accel-Buffering": "no",
+                    },
+                )
+            # else: unclear — fall through to normal agent handling
+    except Exception as _hitl_err:
+        logger.warning(f"HITL chat intercept error: {_hitl_err}")
+
     # BILLING: Validate billing requirements before processing chat
     try:
         from sqlalchemy import or_

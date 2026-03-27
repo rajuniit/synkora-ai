@@ -29,7 +29,8 @@ import {
   ChevronDown,
   Globe,
   Cpu,
-  Bell
+  Bell,
+  Bot
 } from 'lucide-react'
 import { apiClient } from '@/lib/api/client'
 import { getLLMConfigs } from '@/lib/api/agent-llm-configs'
@@ -269,6 +270,14 @@ export default function AgentViewPage() {
               AI Model
             </button>
 
+            <button
+              onClick={() => router.push(`/agents/${agentName}/autonomous`)}
+              className="flex items-center gap-2 px-3 py-2 bg-white border border-gray-200 text-gray-700 rounded-lg hover:bg-gray-50 hover:border-gray-300 transition-all text-sm font-medium"
+            >
+              <Bot className="w-4 h-4 text-red-600" />
+              Autonomous
+            </button>
+
             <div className="h-6 w-px bg-gray-200 mx-1" />
 
             <button
@@ -376,6 +385,13 @@ export default function AgentViewPage() {
                 <div>
                   <p className="text-xs font-semibold text-gray-400 uppercase tracking-wider mb-2">Advanced</p>
                   <div className="space-y-1">
+                    <button
+                      onClick={() => router.push(`/agents/${agentName}/autonomous`)}
+                      className="w-full flex items-center gap-2 px-3 py-2 text-gray-700 rounded-lg hover:bg-gray-50 transition-all text-sm"
+                    >
+                      <Bot className="w-4 h-4 text-red-600" />
+                      Autonomous Mode
+                    </button>
                     <button
                       onClick={() => router.push(`/agents/${agentName}/sub-agents`)}
                       className="w-full flex items-center gap-2 px-3 py-2 text-gray-700 rounded-lg hover:bg-gray-50 transition-all text-sm"

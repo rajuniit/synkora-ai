@@ -21,7 +21,12 @@ logger = logging.getLogger(__name__)
 
 
 @celery_app.task(bind=True, name="tasks.execute_scheduled_task")
-def execute_scheduled_task(self, task_id: str) -> dict[str, Any]:
+def execute_scheduled_task(
+    self,
+    task_id: str,
+    approval_id: str | None = None,
+    feedback_text: str | None = None,
+) -> dict[str, Any]:
     """
     Execute a scheduled task
 
@@ -330,6 +335,34 @@ This is an automated scheduled task. Complete it thoroughly and provide your fin
 
                 return result
 
+            # Handle autonomous agent tasks
+            if task.task_type == "autonomous_agent":
+                loop = asyncio.new_event_loop()
+                asyncio.set_event_loop(loop)
+                result = loop.run_until_complete(
+                    _run_autonomous_agent(task, db, approval_id=approval_id, feedback_text=feedback_text)
+                )
+                loop.close()
+
+                raw_status = result.get("status")
+                if raw_status == "awaiting_approval":
+                    execution.status = TaskStatus.AWAITING_APPROVAL
+                elif raw_status == "success":
+                    execution.status = TaskStatus.SUCCESS
+                else:
+                    execution.status = TaskStatus.FAILED
+
+                execution.result = result
+                execution.error_message = result.get("error") if raw_status not in ("success", "awaiting_approval") else None
+                execution.completed_at = datetime.now(UTC)
+                execution.execution_time_seconds = (execution.completed_at - execution.started_at).total_seconds()
+                task.last_run_at = datetime.now(UTC)
+
+                db.commit()
+
+                logger.info(f"Autonomous agent task {task_id} finished with status={raw_status}")
+                return result
+
             # Handle database query tasks
             # Ensure we have a database connection for non-followup tasks
             if not task.database_connection_id:
@@ -420,6 +453,291 @@ This is an automated scheduled task. Complete it thoroughly and provide your fin
         raise
     finally:
         db.close()
+
+
+async def _run_autonomous_agent(
+    task: ScheduledTask,
+    db: Any,
+    approval_id: str | None = None,
+    feedback_text: str | None = None,
+) -> dict[str, Any]:
+    """
+    Execute one autonomous agent run.
+
+    1. Resolve agent (tenant-scoped).
+    2. Get or create a persistent memory conversation.
+    3. Build a prompt that injects previous run memory.
+    4. Stream the agent response via ChatStreamService (saves messages automatically).
+    5. Parse [REMEMBER]{...}[/REMEMBER] blocks and persist them as SYSTEM messages.
+    6. Deliver outputs via AgentOutputService.
+
+    Returns a result dict compatible with TaskExecution.result.
+    """
+    import json as json_module
+    import re
+    import uuid as uuid_module
+
+    from src.core.database import create_celery_async_session, reset_async_engine
+    from src.models.agent import Agent
+    from src.models.conversation import Conversation, ConversationStatus
+    from src.models.message import Message, MessageRole
+    from src.services.agents.agent_loader_service import AgentLoaderService
+    from src.services.agents.agent_manager import AgentManager
+    from src.services.agents.chat_service import ChatService
+    from src.services.agents.chat_stream_service import ChatStreamService
+    from src.services.agents.conversation_memory_service import ConversationMemoryService
+
+    cfg = task.config or {}
+    agent_id = cfg.get("agent_id")
+    goal = cfg.get("goal", "Complete your assigned goal.")
+    max_steps = cfg.get("max_steps", 20)
+
+    # Build approval_config for shared_state (used by the HITL gate in adk_tools)
+    approval_config: dict = {}
+    approval_context: dict = {}  # injected at the top of the prompt when approved
+    if cfg.get("require_approval"):
+        approval_config = {
+            "require_approval": True,
+            "approval_mode": cfg.get("approval_mode", "smart"),
+            "require_approval_tools": cfg.get("require_approval_tools", []),
+            "approval_channel": cfg.get("approval_channel", "chat"),
+            "approval_channel_config": cfg.get("approval_channel_config", {}),
+            "approval_timeout_minutes": cfg.get("approval_timeout_minutes", 60),
+            "task_id": str(task.id),
+            "agent_id": str(agent_id),
+            "tenant_id": str(task.tenant_id),
+            "agent_name": "",  # will be filled after agent is loaded
+        }
+
+    # If this run was triggered by an approval, load the approval context
+    if approval_id:
+        from src.models.agent_approval import AgentApprovalRequest
+
+        _approval = db.query(AgentApprovalRequest).filter(AgentApprovalRequest.id == approval_id).first()
+        if _approval:
+            approval_context = {
+                "approved": True,
+                "tool_name": _approval.tool_name,
+                "tool_args": _approval.tool_args,
+                "channel": _approval.notification_channel,
+                "approval_id": str(_approval.id),
+            }
+            logger.info(f"Autonomous task {task.id}: resuming with approval {approval_id} for {_approval.tool_name}")
+
+    # --- 1. Resolve agent ---
+    agent = db.query(Agent).filter(Agent.id == agent_id, Agent.tenant_id == task.tenant_id).first()
+    if not agent:
+        logger.error(f"Autonomous task {task.id}: agent {agent_id} not found — deactivating")
+        task.is_active = False
+        db.commit()
+        return {"status": "failed", "error": f"Agent {agent_id} not found — task deactivated"}
+
+    # Fill agent_name now that we have the agent
+    if approval_config:
+        approval_config["agent_name"] = agent.agent_name
+
+    # --- 2. Get or create memory conversation ---
+    conv_id: str | None = cfg.get("autonomous_conversation_id")
+
+    reset_async_engine()
+    async_session_factory = create_celery_async_session()
+
+    async with async_session_factory() as async_db:
+        # Verify conversation still exists; create if missing
+        if conv_id:
+            from sqlalchemy import select as aselect
+
+            result = await async_db.execute(
+                aselect(Conversation).filter(Conversation.id == conv_id)
+            )
+            if result.scalar_one_or_none() is None:
+                conv_id = None  # will be recreated below
+
+        if not conv_id:
+            new_conv = Conversation(
+                id=uuid_module.uuid4(),
+                agent_id=agent.id,
+                name=f"[Autonomous] {agent.agent_name}",
+                status=ConversationStatus.ACTIVE,
+            )
+            async_db.add(new_conv)
+            await async_db.commit()
+            conv_id = str(new_conv.id)
+
+            # Persist conversation ID back into task config (sync db)
+            updated_cfg = dict(task.config)
+            updated_cfg["autonomous_conversation_id"] = conv_id
+            task.config = updated_cfg
+            db.commit()
+
+        # --- 3. Build memory context ---
+        memory_service = ConversationMemoryService(async_db)
+        memory_ctx = await memory_service.get_conversation_context(
+            conversation_id=conv_id,
+            include_summary=True,
+            max_messages=20,
+        )
+
+        memory_parts: list[str] = []
+        if memory_ctx.get("summary"):
+            memory_parts.append(f"[Summary of previous runs]\n{memory_ctx['summary']}")
+        recent = memory_ctx.get("messages", [])
+        if recent:
+            lines = []
+            for m in recent[-10:]:
+                role_label = m.get("role", "unknown").upper()
+                content_snippet = str(m.get("content", ""))[:500]
+                lines.append(f"{role_label}: {content_snippet}")
+            memory_parts.append("[Recent messages]\n" + "\n".join(lines))
+
+        memory_block = "\n\n".join(memory_parts) if memory_parts else "(no prior memory)"
+
+        # Count prior executions for display
+        from sqlalchemy import func, select as aselect2
+
+        from src.models.scheduled_task import TaskExecution as TE
+
+        count_result = await async_db.execute(
+            aselect2(func.count()).select_from(TE).filter(TE.task_id == task.id)
+        )
+        run_number = (count_result.scalar() or 0) + 1
+
+        # Build approval prefix / HITL instruction
+        if approval_context.get("approved"):
+            _tool = approval_context["tool_name"]
+            _args = json_module.dumps(approval_context["tool_args"], ensure_ascii=False)
+            _channel = approval_context["channel"]
+            approval_prefix = (
+                f"[APPROVED ACTION]\n"
+                f"A human approved the following action via {_channel}.\n"
+                f"Tool: {_tool}\n"
+                f"Arguments: {_args}\n"
+                f"Execute this exact action now. Do not ask for confirmation again.\n\n"
+            )
+        elif feedback_text:
+            approval_prefix = (
+                f"[USER FEEDBACK ON PREVIOUS DRAFT]\n"
+                f"The user reviewed your last proposed action and provided feedback:\n"
+                f"\"{feedback_text}\"\n"
+                f"Revise your approach based on this feedback, then propose the updated action.\n\n"
+            )
+        elif cfg.get("require_approval"):
+            approval_prefix = (
+                f"[HUMAN APPROVAL MODE]\n"
+                f"Before calling any action tool (post, send, create, write, commit, etc.), "
+                f"you MUST stop and let the system handle the approval. "
+                f"The system will automatically request human approval before executing the action. "
+                f"You do not need to include any special markers — simply call the tool as normal "
+                f"and the approval gate will intercept it.\n\n"
+            )
+        else:
+            approval_prefix = ""
+
+        full_prompt = (
+            f"{approval_prefix}"
+            f"[AUTONOMOUS MODE]\n"
+            f"Goal: {goal}\n"
+            f"Run #{run_number} | {datetime.now(UTC).isoformat()}\n"
+            f"Max tool-call budget: {max_steps}\n\n"
+            f"[Memory from previous runs]\n{memory_block}\n\n"
+            f"Complete your goal. To persist facts for next run, include:\n"
+            f"[REMEMBER]{{\"key\": \"value\"}}[/REMEMBER]"
+        )
+
+        # --- 4. Execute agent ---
+        agent_manager = AgentManager()
+        agent_loader = AgentLoaderService(agent_manager)
+        chat_stream_service = ChatStreamService(
+            agent_loader=agent_loader,
+            chat_service=ChatService(),
+        )
+
+        response_chunks: list[str] = []
+
+        task_shared_state: dict = {}
+        if approval_config:
+            # Update channel_config for chat channel to include the memory conversation_id
+            if approval_config.get("approval_channel") == "chat" and conv_id:
+                channel_cfg = dict(approval_config.get("approval_channel_config", {}))
+                channel_cfg.setdefault("conversation_id", conv_id)
+                approval_config["approval_channel_config"] = channel_cfg
+            task_shared_state["approval_config"] = approval_config
+
+        async for sse_event in chat_stream_service.stream_agent_response(
+            agent_name=agent.agent_name,
+            message=full_prompt,
+            conversation_history=None,
+            conversation_id=conv_id,
+            attachments=None,
+            llm_config_id=None,
+            db=async_db,
+            shared_state=task_shared_state,
+        ):
+            if sse_event.startswith("data: "):
+                try:
+                    event_data = json_module.loads(sse_event[6:])
+                    if event_data.get("type") == "chunk":
+                        response_chunks.append(event_data.get("content", ""))
+                except json_module.JSONDecodeError:
+                    pass
+
+        response_text = "".join(response_chunks)
+
+        # --- 5. Parse [REMEMBER] blocks and persist as SYSTEM messages ---
+        remember_pattern = re.compile(r"\[REMEMBER\](.*?)\[/REMEMBER\]", re.DOTALL)
+        for match in remember_pattern.finditer(response_text):
+            raw_json = match.group(1).strip()
+            try:
+                memory_data = json_module.loads(raw_json)
+                content = json_module.dumps(memory_data, ensure_ascii=False)
+            except json_module.JSONDecodeError:
+                content = raw_json
+
+            system_msg = Message(
+                id=uuid_module.uuid4(),
+                conversation_id=conv_id,
+                role=MessageRole.SYSTEM,
+                content=f"[AUTONOMOUS MEMORY] {content}",
+                message_metadata={"source": "autonomous_remember", "run": run_number},
+            )
+            async_db.add(system_msg)
+
+        await async_db.commit()
+
+        # --- 6. Deliver outputs ---
+        try:
+            from src.services.agent_output_service import AgentOutputService
+
+            output_service = AgentOutputService(async_db)
+            await output_service.send_outputs(
+                agent_id=agent.id,
+                agent_response=response_text,
+                context={
+                    "agent_name": agent.agent_name,
+                    "trigger_type": "autonomous",
+                    "run_number": run_number,
+                    "task_name": task.name,
+                },
+                trigger_type="webhook",  # reuse webhook trigger configs
+            )
+        except Exception as output_err:
+            logger.warning(f"Autonomous task {task.id}: output delivery error: {output_err}")
+
+    # Check if the response indicates the agent is waiting for approval
+    # (agent outputs approval_required signal from the gate)
+    final_status = "success"
+    if response_text and "awaiting_approval" in response_text.lower():
+        final_status = "awaiting_approval"
+
+    return {
+        "status": final_status,
+        "task_id": str(task.id),
+        "agent_name": agent.agent_name,
+        "run_number": run_number,
+        "executed_at": datetime.now(UTC).isoformat(),
+        "response_preview": response_text[:500] if response_text else None,
+        "has_response": bool(response_text),
+    }
 
 
 # Number of scheduled tasks to load per batch during the due-check sweep.

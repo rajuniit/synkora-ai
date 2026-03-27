@@ -1,6 +1,7 @@
 """Database models package."""
 
 from .activity_log import ActivityLog, ActivityType
+from .agent_approval import AgentApprovalRequest, ApprovalStatus
 from .agent import Agent
 from .agent_api_key import AgentApiKey
 from .agent_api_usage import AgentApiUsage
@@ -202,6 +203,9 @@ __all__ = [
     "ScheduledTask",
     "TaskExecution",
     "TaskNotification",
+    # HITL Approval models
+    "AgentApprovalRequest",
+    "ApprovalStatus",
     # Profile and Role Management models
     "Permission",
     "Role",

@@ -116,6 +116,32 @@ class WhatsAppWebhookService:
                 logger.debug(f"No text content in WhatsApp message type {message_type}")
                 return
 
+            # HITL: Check if this message is a reply to a pending approval request
+            from src.config.redis import get_redis_async
+            from src.services.human_approval_service import HumanApprovalService
+
+            _redis = get_redis_async()
+            _hitl_key = f"hitl:whatsapp:{bot.id}:{from_number}"
+            _approval_id_str = await _redis.get(_hitl_key)
+            if _approval_id_str:
+                import uuid as _uuid_mod
+
+                _approval_svc = HumanApprovalService(self.db_session)
+                _decision = _approval_svc.parse_reply(text)
+                if _decision != "unclear":
+                    await _approval_svc.handle_reply(
+                        _uuid_mod.UUID(_approval_id_str), text, self.db_session
+                    )
+                    _reply = "Got it! Proceeding." if _decision == "approve" else "Got it! Action cancelled."
+                    await _redis.delete(_hitl_key)
+                    await self._send_message(bot, from_number, _reply)
+                    return
+                else:
+                    await self._send_message(
+                        bot, from_number, "Reply YES to proceed or NO to cancel."
+                    )
+                    return
+
             # Get or create conversation
             conversation = await self._get_or_create_conversation(bot, from_number)
 

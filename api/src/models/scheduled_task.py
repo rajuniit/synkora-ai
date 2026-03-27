@@ -19,6 +19,7 @@ class TaskStatus(StrEnum):
     RUNNING = "running"
     SUCCESS = "success"
     FAILED = "failed"
+    AWAITING_APPROVAL = "awaiting_approval"
 
 
 class ScheduledTask(Base):

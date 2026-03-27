@@ -88,6 +88,42 @@ class SlackMessageHandler:
             The agent's response text, or None on error
         """
         try:
+            # HITL: Check if this message is a reply to a pending approval request
+            from src.config.redis import get_redis_async
+            from src.services.human_approval_service import HumanApprovalService
+
+            _redis = get_redis_async()
+            _hitl_key = f"hitl:slack:{slack_bot.agent_id}:{channel_id}"
+            _approval_id_str = await _redis.get(_hitl_key)
+            if _approval_id_str:
+                import uuid as _uuid_mod
+
+                _approval_svc = HumanApprovalService(self.db_session)
+                _result = await _approval_svc.handle_reply(
+                    _uuid_mod.UUID(_approval_id_str), text, self.db_session
+                )
+                if _result == "approved":
+                    _reply = "Got it! Proceeding with the action."
+                elif _result == "rejected":
+                    _reply = "Got it! Action cancelled."
+                elif _result == "feedback":
+                    _reply = "Got it! I'll revise and ask again shortly."
+                elif _result == "unclear":
+                    _reply = "I didn't quite understand. Reply *yes* to proceed, *no* to cancel, or describe changes you want."
+                else:  # expired, not_found
+                    _reply = "This approval request has expired. The next scheduled run will ask again."
+
+                if _result != "unclear":
+                    # Clear the Redis key so subsequent messages are handled normally
+                    await _redis.delete(_hitl_key)
+
+                await client.chat_postMessage(
+                    channel=channel_id,
+                    text=_reply,
+                    thread_ts=thread_ts or message_ts,
+                )
+                return _reply
+
             # Get or create conversation mapping
             conversation = await self._get_or_create_conversation(
                 slack_bot=slack_bot, channel_id=channel_id, user_id=user_id, thread_ts=thread_ts

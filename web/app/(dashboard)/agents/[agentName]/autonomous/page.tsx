@@ -1,0 +1,307 @@
+'use client'
+
+import { useEffect, useState, useCallback } from 'react'
+import { useParams } from 'next/navigation'
+import Link from 'next/link'
+import { ArrowLeft, Bot, Settings, History, Brain, ToggleLeft, ToggleRight, ShieldCheck } from 'lucide-react'
+import { AutonomousConfig } from '@/components/agents/AutonomousConfig'
+import { AutonomousRunHistory } from '@/components/agents/AutonomousRunHistory'
+import { AutonomousMemoryViewer } from '@/components/agents/AutonomousMemoryViewer'
+import { AutonomousApprovals } from '@/components/agents/AutonomousApprovals'
+
+type Tab = 'config' | 'history' | 'memory' | 'approvals'
+
+interface AutonomousStatus {
+  enabled: boolean
+  task_id?: string
+  goal?: string
+  schedule?: string
+  schedule_type?: string
+  max_steps?: number
+  is_active?: boolean
+  last_run_at?: string
+  next_run_at?: string
+  recent_runs: RunRecord[]
+  // HITL
+  require_approval?: boolean
+  approval_mode?: string
+  require_approval_tools?: string[]
+  approval_channel?: string
+  approval_channel_config?: Record<string, string>
+  approval_timeout_minutes?: number
+}
+
+interface RunRecord {
+  id: string
+  status: string
+  started_at: string
+  completed_at?: string
+  execution_time_seconds?: number
+  error_message?: string
+  output_preview?: string
+}
+
+interface MemoryMessage {
+  id: string
+  role: string
+  content: string
+  created_at: string
+}
+
+export default function AutonomousPage() {
+  const params = useParams()
+  const agentName = decodeURIComponent((params?.agentName as string) || '')
+
+  const [activeTab, setActiveTab] = useState<Tab>('config')
+  const [status, setStatus] = useState<AutonomousStatus | null>(null)
+  const [memory, setMemory] = useState<MemoryMessage[]>([])
+  const [loading, setLoading] = useState(true)
+  const [error, setError] = useState<string | null>(null)
+  const [toastMsg, setToastMsg] = useState<string | null>(null)
+  const [pendingApprovals, setPendingApprovals] = useState(0)
+
+  function showToast(msg: string) {
+    setToastMsg(msg)
+    setTimeout(() => setToastMsg(null), 3000)
+  }
+
+  const fetchStatus = useCallback(async () => {
+    try {
+      const { apiClient } = await import('@/lib/api/client')
+      const data = await apiClient.request(
+        'GET',
+        `/api/v1/agents/${encodeURIComponent(agentName)}/autonomous`
+      )
+      setStatus(data)
+      setError(null)
+    } catch (err: any) {
+      setError(err?.response?.data?.detail ?? err?.message ?? 'Failed to load autonomous config')
+    } finally {
+      setLoading(false)
+    }
+  }, [agentName])
+
+  const fetchMemory = useCallback(async () => {
+    try {
+      const { apiClient } = await import('@/lib/api/client')
+      const data = await apiClient.request(
+        'GET',
+        `/api/v1/agents/${encodeURIComponent(agentName)}/autonomous/memory`
+      )
+      setMemory(Array.isArray(data) ? data : [])
+    } catch {
+      setMemory([])
+    }
+  }, [agentName])
+
+  useEffect(() => {
+    fetchStatus()
+  }, [fetchStatus])
+
+  useEffect(() => {
+    if (activeTab === 'memory') {
+      fetchMemory()
+    }
+  }, [activeTab, fetchMemory])
+
+  async function handleToggleActive() {
+    if (!status?.task_id) return
+    try {
+      const { apiClient } = await import('@/lib/api/client')
+      await apiClient.request(
+        'PATCH',
+        `/api/v1/agents/${encodeURIComponent(agentName)}/autonomous`,
+        { is_active: !status.is_active }
+      )
+      await fetchStatus()
+      showToast(status.is_active ? 'Autonomous mode paused' : 'Autonomous mode resumed')
+    } catch (err: any) {
+      setError(err?.response?.data?.detail ?? err?.message ?? 'Toggle failed')
+    }
+  }
+
+  async function handleDelete() {
+    if (!confirm('Delete autonomous schedule and all run history?')) return
+    try {
+      const { apiClient } = await import('@/lib/api/client')
+      await apiClient.request(
+        'DELETE',
+        `/api/v1/agents/${encodeURIComponent(agentName)}/autonomous`
+      )
+      await fetchStatus()
+      showToast('Autonomous mode disabled')
+    } catch (err: any) {
+      setError(err?.response?.data?.detail ?? err?.message ?? 'Delete failed')
+    }
+  }
+
+  const tabs: { id: Tab; label: React.ReactNode; icon: React.ReactNode }[] = [
+    { id: 'config', label: 'Configuration', icon: <Settings className="w-4 h-4" /> },
+    { id: 'history', label: `Recent Runs${status?.recent_runs?.length ? ` (${status.recent_runs.length})` : ''}`, icon: <History className="w-4 h-4" /> },
+    { id: 'memory', label: 'Memory', icon: <Brain className="w-4 h-4" /> },
+    {
+      id: 'approvals',
+      label: (
+        <span className="flex items-center gap-1.5">
+          Approvals
+          {pendingApprovals > 0 && (
+            <span className="inline-flex items-center justify-center w-4 h-4 rounded-full bg-amber-500 text-white text-[10px] font-bold">
+              {pendingApprovals}
+            </span>
+          )}
+        </span>
+      ),
+      icon: <ShieldCheck className="w-4 h-4" />,
+    },
+  ]
+
+  return (
+    <div className="min-h-screen bg-gradient-to-br from-gray-50 via-red-50/30 to-gray-50 p-6">
+      <div className="max-w-4xl mx-auto">
+        {/* Header */}
+        <div className="mb-6">
+          <Link
+            href={`/agents/${encodeURIComponent(agentName)}/view`}
+            className="inline-flex items-center gap-2 text-red-600 hover:text-red-700 font-medium mb-3 transition-colors text-sm"
+          >
+            <ArrowLeft className="w-4 h-4" />
+            Back to Agent
+          </Link>
+
+          <div className="flex items-center justify-between">
+            <div className="flex items-center gap-3">
+              <div className="p-2.5 bg-red-100 rounded-lg">
+                <Bot className="w-6 h-6 text-red-600" />
+              </div>
+              <div>
+                <h1 className="text-2xl font-bold text-gray-900">Autonomous Mode</h1>
+                <p className="text-gray-600 mt-0.5 text-sm">
+                  Always-on daemon agent that runs on a schedule and maintains memory across runs
+                </p>
+              </div>
+            </div>
+
+            {status?.task_id && (
+              <div className="flex items-center gap-2">
+                <button
+                  onClick={handleToggleActive}
+                  title={status.is_active ? 'Pause' : 'Resume'}
+                  className="flex items-center gap-2 px-3 py-1.5 text-sm rounded-md border border-gray-300 hover:bg-gray-50 transition-colors"
+                >
+                  {status.is_active ? (
+                    <ToggleRight className="w-5 h-5 text-green-500" />
+                  ) : (
+                    <ToggleLeft className="w-5 h-5 text-gray-400" />
+                  )}
+                  {status.is_active ? 'Active' : 'Paused'}
+                </button>
+                <button
+                  onClick={handleDelete}
+                  className="px-3 py-1.5 text-sm text-red-600 border border-red-200 rounded-md hover:bg-red-50 transition-colors"
+                >
+                  Disable
+                </button>
+              </div>
+            )}
+          </div>
+        </div>
+
+        {/* Pending approvals banner */}
+        {pendingApprovals > 0 && activeTab !== 'approvals' && (
+          <button
+            onClick={() => setActiveTab('approvals')}
+            className="mb-4 w-full flex items-center gap-2 rounded-md bg-amber-50 border border-amber-200 px-4 py-3 text-sm text-amber-800 hover:bg-amber-100 transition-colors text-left"
+          >
+            <ShieldCheck className="w-4 h-4 text-amber-500 flex-shrink-0" />
+            <span>
+              <strong>{pendingApprovals} action{pendingApprovals > 1 ? 's' : ''}</strong> waiting for your approval
+            </span>
+            <span className="ml-auto text-amber-600 font-medium text-xs">Review →</span>
+          </button>
+        )}
+
+        {/* Toast */}
+        {toastMsg && (
+          <div className="mb-4 rounded-md bg-green-50 border border-green-200 px-4 py-3 text-sm text-green-700">
+            {toastMsg}
+          </div>
+        )}
+
+        {/* Error */}
+        {error && (
+          <div className="mb-4 rounded-md bg-red-50 border border-red-200 px-4 py-3 text-sm text-red-700">
+            {error}
+          </div>
+        )}
+
+        {loading ? (
+          <div className="flex items-center justify-center py-16">
+            <div className="w-6 h-6 border-2 border-red-500 border-t-transparent rounded-full animate-spin" />
+          </div>
+        ) : (
+          <div className="bg-white rounded-lg shadow-sm border border-gray-200">
+            {/* Tabs */}
+            <div className="border-b border-gray-200">
+              <nav className="flex -mb-px">
+                {tabs.map(tab => (
+                  <button
+                    key={tab.id}
+                    onClick={() => setActiveTab(tab.id)}
+                    className={`flex items-center gap-2 px-6 py-3 text-sm font-medium border-b-2 transition-colors ${
+                      activeTab === tab.id
+                        ? 'border-red-500 text-red-600'
+                        : 'border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300'
+                    }`}
+                  >
+                    {tab.icon}
+                    {tab.label}
+                  </button>
+                ))}
+              </nav>
+            </div>
+
+            {/* Tab content */}
+            <div className="p-6">
+              {activeTab === 'config' && status && (
+                <AutonomousConfig
+                  agentName={agentName}
+                  status={status}
+                  onSaved={async () => {
+                    await fetchStatus()
+                    showToast('Saved')
+                  }}
+                  onTriggered={() => {
+                    showToast('Run queued — check Recent Runs shortly')
+                    setActiveTab('history')
+                  }}
+                />
+              )}
+
+              {activeTab === 'history' && status && (
+                <AutonomousRunHistory runs={status.recent_runs ?? []} />
+              )}
+
+              {activeTab === 'memory' && (
+                <AutonomousMemoryViewer
+                  agentName={agentName}
+                  messages={memory}
+                  onCleared={async () => {
+                    await fetchMemory()
+                    showToast('Memory cleared')
+                  }}
+                />
+              )}
+
+              {activeTab === 'approvals' && (
+                <AutonomousApprovals
+                  agentName={agentName}
+                  onCountChange={setPendingApprovals}
+                />
+              )}
+            </div>
+          </div>
+        )}
+      </div>
+    </div>
+  )
+}

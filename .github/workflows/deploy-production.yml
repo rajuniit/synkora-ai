@@ -42,6 +42,14 @@ jobs:
         id: meta
         run: echo "tag=${{ github.sha }}" >> "$GITHUB_OUTPUT"
 
+      - name: Validate required variables
+        run: |
+          if [ -z "${{ vars.AWS_ACCOUNT_ID }}" ]; then
+            echo "ERROR: AWS_ACCOUNT_ID repository variable is not set."
+            echo "Go to Settings → Secrets and variables → Actions → Variables and add AWS_ACCOUNT_ID."
+            exit 1
+          fi
+
       - name: Configure AWS credentials
         uses: aws-actions/configure-aws-credentials@v4
         with:
@@ -225,27 +233,52 @@ jobs:
       - name: Run database migrations
         run: |
           IMAGE_TAG="${{ github.sha }}"
-          kubectl delete pod alembic-migrate-${IMAGE_TAG:0:8} -n ${{ env.NAMESPACE }} --ignore-not-found=true
-          kubectl run alembic-migrate-${IMAGE_TAG:0:8} \
+          POD_NAME="alembic-migrate-${IMAGE_TAG:0:8}"
+          kubectl delete pod "${POD_NAME}" -n ${{ env.NAMESPACE }} --ignore-not-found=true
+
+          kubectl run "${POD_NAME}" \
             --image=${{ env.ECR_REGISTRY }}/synkora-api:${IMAGE_TAG} \
             --restart=Never \
             --namespace=${{ env.NAMESPACE }} \
-            --overrides='{"spec":{"imagePullSecrets":[{"name":"ecr-registry-secret"}],"containers":[{"name":"migrate","image":"${{ env.ECR_REGISTRY }}/synkora-api:'"${IMAGE_TAG}"'","command":["alembic","upgrade","head"],"envFrom":[{"secretRef":{"name":"synkora-secrets"}}]}]}}' \
-            --command -- alembic upgrade head
-          echo "Waiting for migration to complete..."
-          kubectl wait pod/alembic-migrate-${IMAGE_TAG:0:8} \
-            --for=condition=Ready \
+            --overrides='{"spec":{"imagePullSecrets":[{"name":"ecr-registry-secret"}],"containers":[{"name":"migrate","image":"${{ env.ECR_REGISTRY }}/synkora-api:'"${IMAGE_TAG}"'","command":["alembic","upgrade","head"],"envFrom":[{"secretRef":{"name":"synkora-secrets"}}]}]}}'
+
+          echo "Waiting for migration pod to start running (image pull + init)..."
+          # Wait up to 3 minutes for the pod to actually start running
+          kubectl wait pod/"${POD_NAME}" \
+            --for=condition=Initialized \
             --timeout=180s \
-            -n ${{ env.NAMESPACE }} || true
-          kubectl logs -f alembic-migrate-${IMAGE_TAG:0:8} -n ${{ env.NAMESPACE }} || true
-          kubectl wait pod/alembic-migrate-${IMAGE_TAG:0:8} \
+            -n ${{ env.NAMESPACE }} || {
+              echo "--- Pod describe (for debugging) ---"
+              kubectl describe pod "${POD_NAME}" -n ${{ env.NAMESPACE }} || true
+              kubectl delete pod "${POD_NAME}" -n ${{ env.NAMESPACE }} --ignore-not-found=true
+              echo "Migration pod failed to start. Check image pull and secret config above."
+              exit 1
+            }
+
+          echo "Waiting for migration to complete (up to 5 minutes)..."
+          kubectl wait pod/"${POD_NAME}" \
             --for=jsonpath='{.status.phase}'=Succeeded \
-            --timeout=60s \
-            -n ${{ env.NAMESPACE }} || true
-          EXIT_CODE=$(kubectl get pod alembic-migrate-${IMAGE_TAG:0:8} -n ${{ env.NAMESPACE }} -o jsonpath='{.status.containerStatuses[0].state.terminated.exitCode}')
-          kubectl delete pod alembic-migrate-${IMAGE_TAG:0:8} -n ${{ env.NAMESPACE }} --ignore-not-found=true
-          if [ "$EXIT_CODE" != "0" ]; then
-            echo "Migration failed with exit code $EXIT_CODE, aborting deploy."
+            --timeout=300s \
+            -n ${{ env.NAMESPACE }} || {
+              # Pod didn't succeed — print logs and describe before failing
+              echo "--- Migration logs ---"
+              kubectl logs "${POD_NAME}" -n ${{ env.NAMESPACE }} || true
+              echo "--- Pod describe ---"
+              kubectl describe pod "${POD_NAME}" -n ${{ env.NAMESPACE }} || true
+              kubectl delete pod "${POD_NAME}" -n ${{ env.NAMESPACE }} --ignore-not-found=true
+              echo "Migration timed out or failed."
+              exit 1
+            }
+
+          echo "--- Migration logs ---"
+          kubectl logs "${POD_NAME}" -n ${{ env.NAMESPACE }} || true
+
+          EXIT_CODE=$(kubectl get pod "${POD_NAME}" -n ${{ env.NAMESPACE }} \
+            -o jsonpath='{.status.containerStatuses[0].state.terminated.exitCode}')
+          kubectl delete pod "${POD_NAME}" -n ${{ env.NAMESPACE }} --ignore-not-found=true
+
+          if [ "${EXIT_CODE}" != "0" ]; then
+            echo "Migration failed with exit code ${EXIT_CODE}."
             exit 1
           fi
           echo "Migration completed successfully."

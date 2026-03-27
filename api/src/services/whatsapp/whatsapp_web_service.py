@@ -121,6 +121,36 @@ class WhatsAppWebService:
     _REDIS_PREFIX = "wa_qr_session:"
     _REDIS_TTL = 600  # 10 minutes
 
+    @classmethod
+    def send_text_message(cls, session_id: str, to_phone: str, text: str) -> bool:
+        """
+        Send a plain-text WhatsApp message via a device-linked session.
+
+        This is a synchronous call used from within async HITL service code.
+        Returns True on success, False if the session is not available or
+        if neonize is not installed.
+        """
+        local = cls._local.get(session_id)
+        if not local:
+            logger.warning(f"WhatsApp Web send_text_message: session {session_id} not found in pod-local store")
+            return False
+
+        try:
+            import neonize  # type: ignore[import]
+
+            client = local.get("client")
+            if client is None:
+                logger.warning(f"WhatsApp Web send_text_message: no neonize client for session {session_id}")
+                return False
+
+            # Normalise phone number to JID format expected by neonize
+            jid = to_phone.lstrip("+").replace(" ", "") + "@s.whatsapp.net"
+            client.send_message(jid, neonize.proto.Message(conversation=text))
+            return True
+        except Exception as exc:
+            logger.error(f"WhatsApp Web send_text_message failed for {to_phone}: {exc}", exc_info=True)
+            return False
+
     # ------------------------------------------------------------------
     # Redis helpers
     # ------------------------------------------------------------------

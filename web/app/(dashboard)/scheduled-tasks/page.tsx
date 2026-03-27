@@ -18,7 +18,8 @@ import {
   AlertCircle,
   Calendar,
   Database,
-  TrendingUp
+  TrendingUp,
+  Bot
 } from 'lucide-react'
 import { apiClient } from '@/lib/api/client'
 
@@ -143,6 +144,7 @@ export default function ScheduledTasksPage() {
     switch (type?.toUpperCase()) {
       case 'DATABASE_QUERY': return <Database className="w-4 h-4" />
       case 'DATA_ANALYSIS': return <TrendingUp className="w-4 h-4" />
+      case 'AUTONOMOUS_AGENT': return <Bot className="w-4 h-4" />
       default: return <Clock className="w-4 h-4" />
     }
   }
@@ -151,8 +153,16 @@ export default function ScheduledTasksPage() {
     switch (type?.toUpperCase()) {
       case 'DATABASE_QUERY': return 'bg-blue-100 text-blue-800'
       case 'DATA_ANALYSIS': return 'bg-purple-100 text-purple-800'
+      case 'AUTONOMOUS_AGENT': return 'bg-red-100 text-red-800'
       default: return 'bg-amber-100 text-amber-800'
     }
+  }
+
+  // Extract agent name from "[Autonomous] agent-name" task name format
+  const getAutonomousAgentName = (task: ScheduledTask): string | null => {
+    if (task.task_type !== 'autonomous_agent') return null
+    const match = task.name.match(/^\[Autonomous\]\s+(.+)$/)
+    return match ? match[1] : null
   }
 
   const getStatusColor = (isActive: boolean, lastRunStatus: string | null) => {
@@ -226,7 +236,7 @@ export default function ScheduledTasksPage() {
           </div>
 
           {/* Stats Bar - More Compact */}
-          <div className="grid grid-cols-1 md:grid-cols-4 gap-4 mb-5">
+          <div className="grid grid-cols-1 md:grid-cols-5 gap-4 mb-5">
             <div className="bg-white rounded-lg shadow-sm border border-gray-200 p-4">
               <div className="flex items-center gap-2 mb-1">
                 <div className="p-1.5 bg-red-100 rounded-lg">
@@ -270,6 +280,18 @@ export default function ScheduledTasksPage() {
               </div>
               <p className="text-2xl font-bold text-gray-900">
                 {tasks.filter(t => t.last_run_status === 'failed').length}
+              </p>
+            </div>
+
+            <div className="bg-white rounded-lg shadow-sm border border-gray-200 p-4">
+              <div className="flex items-center gap-2 mb-1">
+                <div className="p-1.5 bg-red-100 rounded-lg">
+                  <Bot className="w-4 h-4 text-red-600" />
+                </div>
+                <p className="text-xs font-medium text-gray-600">Autonomous</p>
+              </div>
+              <p className="text-2xl font-bold text-gray-900">
+                {tasks.filter(t => t.task_type === 'autonomous_agent').length}
               </p>
             </div>
           </div>
@@ -414,13 +436,23 @@ export default function ScheduledTasksPage() {
                     >
                       <Play className="w-3.5 h-3.5" />
                     </button>
-                    <Link
-                      href={`/scheduled-tasks/${task.id}`}
-                      className="flex-1 inline-flex items-center justify-center gap-1.5 px-3 py-1.5 text-xs font-medium text-red-700 bg-red-50 rounded-lg hover:bg-red-100 transition-colors"
-                    >
-                      <Eye className="w-3.5 h-3.5" />
-                      View
-                    </Link>
+                    {getAutonomousAgentName(task) ? (
+                      <Link
+                        href={`/agents/${encodeURIComponent(getAutonomousAgentName(task)!)}/autonomous`}
+                        className="flex-1 inline-flex items-center justify-center gap-1.5 px-3 py-1.5 text-xs font-medium text-red-700 bg-red-50 rounded-lg hover:bg-red-100 transition-colors"
+                      >
+                        <Bot className="w-3.5 h-3.5" />
+                        Open
+                      </Link>
+                    ) : (
+                      <Link
+                        href={`/scheduled-tasks/${task.id}`}
+                        className="flex-1 inline-flex items-center justify-center gap-1.5 px-3 py-1.5 text-xs font-medium text-red-700 bg-red-50 rounded-lg hover:bg-red-100 transition-colors"
+                      >
+                        <Eye className="w-3.5 h-3.5" />
+                        View
+                      </Link>
+                    )}
                     <Link
                       href={`/scheduled-tasks/${task.id}/edit`}
                       className="inline-flex items-center justify-center px-3 py-1.5 text-xs font-medium text-gray-700 bg-gray-100 rounded-lg hover:bg-gray-200 transition-colors"

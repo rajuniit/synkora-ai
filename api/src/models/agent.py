@@ -124,6 +124,13 @@ class Agent(BaseModel, StatusMixin, TenantMixin):
         String(255), nullable=True, comment="State key where this agent's output is automatically saved"
     )
 
+    autonomous_enabled = Column(
+        Boolean,
+        nullable=False,
+        default=False,
+        comment="Whether this agent has an active autonomous schedule",
+    )
+
     # ADK-style workflow agent fields
     workflow_type = Column(
         String(50),

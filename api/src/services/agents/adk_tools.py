@@ -1230,14 +1230,16 @@ Supports: Git, GitHub CLI, npm, pip, Docker, file operations (ls, cat, mkdir, et
         parameters: dict[str, Any],
         function: Callable,
         requires_auth: str | None = None,  # NEW PARAMETER
+        tool_category: str | None = None,  # "action" | "read" | None
     ):
-        """Register a new tool with optional auth requirement."""
+        """Register a new tool with optional auth requirement and category."""
         self.tools[name] = {
             "name": name,
             "description": description,
             "parameters": parameters,
             "function": function,
             "requires_auth": requires_auth,  # Store auth requirement
+            "tool_category": tool_category,  # Used by HITL approval gate
         }
         auth_info = f" (requires_auth: {requires_auth})" if requires_auth else ""
         logger.info(f"Registered tool: {name}{auth_info}")
@@ -1358,6 +1360,11 @@ Supports: Git, GitHub CLI, npm, pip, Docker, file operations (ls, cat, mkdir, et
                     else self.list_tools()
                 )
                 logger.info(f"🔧 [execute_tool] Added runtime_context and tool_name '{name}' to config")
+
+                # HITL: Check approval gate before executing action tools
+                gate_result = await _check_approval_gate(name, tool, arguments, runtime_context)
+                if gate_result is not None:
+                    return gate_result
 
                 # Execute tool with config that contains runtime_context
                 result = await tool["function"](config=config, **arguments)
@@ -1751,6 +1758,151 @@ Supports: Git, GitHub CLI, npm, pip, Docker, file operations (ls, cat, mkdir, et
         except Exception as e:
             logger.error(f"Failed to load agent MCP tools: {e}", exc_info=True)
             return []
+
+
+# ---------------------------------------------------------------------------
+# HITL: Approval gate helpers
+# ---------------------------------------------------------------------------
+
+# Tools whose category is "action" (write/post/send/create/modify operations).
+# Used in "smart" approval mode to automatically gate any of these.
+_ACTION_TOOL_NAMES: frozenset[str] = frozenset(
+    {
+        # Twitter / social
+        "internal_twitter_post_tweet",
+        "internal_twitter_reply_to_tweet",
+        "internal_twitter_retweet",
+        # Email
+        "internal_send_email",
+        "internal_send_bulk_emails",
+        "internal_gmail_send_email",
+        "internal_gmail_send_reply",
+        # Slack
+        "internal_slack_send_message",
+        "internal_slack_send_dm",
+        "internal_slack_post_message",
+        # GitHub
+        "internal_github_create_issue",
+        "internal_github_comment_on_issue",
+        "internal_github_create_pr",
+        "internal_github_merge_pr",
+        "internal_github_close_issue",
+        # Jira
+        "internal_jira_create_issue",
+        "internal_jira_update_issue",
+        "internal_jira_add_comment",
+        # Git
+        "internal_git_commit_and_push",
+        # WhatsApp
+        "internal_whatsapp_send_message",
+        # File writes
+        "internal_write_file",
+        "internal_edit_file",
+        "internal_move_file",
+        # Calendar
+        "internal_google_calendar_create_event",
+        "internal_google_calendar_update_event",
+        "internal_google_calendar_delete_event",
+        # Drive
+        "internal_google_drive_upload_file",
+        "internal_google_drive_delete_file",
+        # Database writes
+        "internal_query_database",  # can be write query
+        # Zoom
+        "internal_zoom_create_meeting",
+        "internal_zoom_update_meeting",
+        "internal_zoom_delete_meeting",
+    }
+)
+
+
+async def _check_approval_gate(
+    tool_name: str,
+    tool_def: dict[str, Any],
+    arguments: dict[str, Any],
+    runtime_context: Any,
+) -> dict[str, Any] | None:
+    """
+    HITL approval gate called before every tool execution.
+
+    Returns a non-None dict (to be used as the tool result) if the action
+    needs human approval and has NOT yet been approved.  Returns None to
+    allow normal execution.
+    """
+    import hashlib
+    import json as _json
+    from uuid import UUID
+
+    if runtime_context is None:
+        return None
+
+    approval_config: dict = runtime_context.shared_state.get("approval_config", {}) if runtime_context.shared_state else {}
+    if not approval_config.get("require_approval"):
+        return None
+
+    mode = approval_config.get("approval_mode", "smart")
+
+    # Determine whether this specific tool should be gated
+    needs_gate: bool
+    if mode == "smart":
+        needs_gate = (
+            tool_def.get("tool_category") == "action"
+            or tool_name in _ACTION_TOOL_NAMES
+        )
+    else:  # explicit
+        needs_gate = tool_name in approval_config.get("require_approval_tools", [])
+
+    if not needs_gate:
+        return None
+
+    # Check if this exact call was already pre-approved via Redis token
+    task_id = approval_config.get("task_id", "")
+    args_hash = hashlib.sha256(_json.dumps(arguments, sort_keys=True).encode()).hexdigest()
+    token_key = f"approval_token:{task_id}:{tool_name}:{args_hash}"
+
+    from src.config.redis import get_redis_async
+
+    redis = get_redis_async()
+    token = await redis.get(token_key)
+    if token:
+        # Consume the one-time token and allow execution
+        await redis.delete(token_key)
+        logger.info(f"HITL: approval token found for {tool_name} — proceeding")
+        return None
+
+    # No token → create approval request and block execution
+    logger.info(f"HITL: gating tool '{tool_name}' for task {task_id} — requesting approval")
+
+    try:
+        from src.core.database import create_celery_async_session, reset_async_engine
+
+        reset_async_engine()
+        async_session_factory = create_celery_async_session()
+
+        async with async_session_factory() as db:
+            from src.services.human_approval_service import HumanApprovalService
+
+            svc = HumanApprovalService(db)
+            result = await svc.create_and_notify(
+                task_id=UUID(str(task_id)),
+                agent_id=UUID(str(approval_config.get("agent_id", "00000000-0000-0000-0000-000000000000"))),
+                tenant_id=UUID(str(approval_config.get("tenant_id", "00000000-0000-0000-0000-000000000000"))),
+                agent_name=approval_config.get("agent_name", ""),
+                tool_name=tool_name,
+                tool_args=arguments,
+                channel=approval_config.get("approval_channel", "chat"),
+                channel_config=approval_config.get("approval_channel_config", {}),
+                timeout_minutes=approval_config.get("approval_timeout_minutes", 60),
+            )
+            return result
+    except Exception as exc:
+        logger.error(f"HITL gate error for tool '{tool_name}': {exc}", exc_info=True)
+        # Fail open with an informational message rather than crashing
+        return {
+            "approval_required": True,
+            "message": f"Could not reach approval service for '{tool_name}': {exc}",
+            "status": "awaiting_approval",
+        }
 
 
 # Tool implementations
