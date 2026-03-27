@@ -99,9 +99,7 @@ class SlackMessageHandler:
                 import uuid as _uuid_mod
 
                 _approval_svc = HumanApprovalService(self.db_session)
-                _result = await _approval_svc.handle_reply(
-                    _uuid_mod.UUID(_approval_id_str), text, self.db_session
-                )
+                _result = await _approval_svc.handle_reply(_uuid_mod.UUID(_approval_id_str), text, self.db_session)
                 if _result == "approved":
                     _reply = "Got it! Proceeding with the action."
                 elif _result == "rejected":

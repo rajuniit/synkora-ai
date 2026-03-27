@@ -1836,7 +1836,9 @@ async def _check_approval_gate(
     if runtime_context is None:
         return None
 
-    approval_config: dict = runtime_context.shared_state.get("approval_config", {}) if runtime_context.shared_state else {}
+    approval_config: dict = (
+        runtime_context.shared_state.get("approval_config", {}) if runtime_context.shared_state else {}
+    )
     if not approval_config.get("require_approval"):
         return None
 
@@ -1845,10 +1847,7 @@ async def _check_approval_gate(
     # Determine whether this specific tool should be gated
     needs_gate: bool
     if mode == "smart":
-        needs_gate = (
-            tool_def.get("tool_category") == "action"
-            or tool_name in _ACTION_TOOL_NAMES
-        )
+        needs_gate = tool_def.get("tool_category") == "action" or tool_name in _ACTION_TOOL_NAMES
     else:  # explicit
         needs_gate = tool_name in approval_config.get("require_approval_tools", [])
 

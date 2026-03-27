@@ -203,13 +203,15 @@ async def chat_stream(
             _approval_svc = HumanApprovalService(db)
             _decision = _approval_svc.parse_reply(request.message)
             if _decision != "unclear":
-                _result = await _approval_svc.handle_reply(
-                    uuid.UUID(_approval_id_str), request.message, db
-                )
+                _result = await _approval_svc.handle_reply(uuid.UUID(_approval_id_str), request.message, db)
                 if _result == "approved":
                     _reply = "Great! Proceeding with the action now."
                 elif _result in ("rejected", "feedback"):
-                    _reply = "Understood. Action cancelled." if _result == "rejected" else "Got it! I'll revise and ask again shortly."
+                    _reply = (
+                        "Understood. Action cancelled."
+                        if _result == "rejected"
+                        else "Got it! I'll revise and ask again shortly."
+                    )
                 elif _result == "expired":
                     _reply = "This approval request has expired. The next scheduled run will ask again."
                 else:
@@ -218,7 +220,7 @@ async def chat_stream(
                 await _redis.delete(_hitl_key)
 
                 async def _approval_stream():
-                    yield f'data: {_json_mod.dumps({"type": "chunk", "content": _reply})}\n\n'
+                    yield f"data: {_json_mod.dumps({'type': 'chunk', 'content': _reply})}\n\n"
                     yield 'data: {"type":"done"}\n\n'
 
                 return StreamingResponse(

@@ -353,7 +353,9 @@ This is an automated scheduled task. Complete it thoroughly and provide your fin
                     execution.status = TaskStatus.FAILED
 
                 execution.result = result
-                execution.error_message = result.get("error") if raw_status not in ("success", "awaiting_approval") else None
+                execution.error_message = (
+                    result.get("error") if raw_status not in ("success", "awaiting_approval") else None
+                )
                 execution.completed_at = datetime.now(UTC)
                 execution.execution_time_seconds = (execution.completed_at - execution.started_at).total_seconds()
                 task.last_run_at = datetime.now(UTC)
@@ -547,9 +549,7 @@ async def _run_autonomous_agent(
         if conv_id:
             from sqlalchemy import select as aselect
 
-            result = await async_db.execute(
-                aselect(Conversation).filter(Conversation.id == conv_id)
-            )
+            result = await async_db.execute(aselect(Conversation).filter(Conversation.id == conv_id))
             if result.scalar_one_or_none() is None:
                 conv_id = None  # will be recreated below
 
@@ -598,9 +598,7 @@ async def _run_autonomous_agent(
 
         from src.models.scheduled_task import TaskExecution as TE
 
-        count_result = await async_db.execute(
-            aselect2(func.count()).select_from(TE).filter(TE.task_id == task.id)
-        )
+        count_result = await async_db.execute(aselect2(func.count()).select_from(TE).filter(TE.task_id == task.id))
         run_number = (count_result.scalar() or 0) + 1
 
         # Build approval prefix / HITL instruction
@@ -619,7 +617,7 @@ async def _run_autonomous_agent(
             approval_prefix = (
                 f"[USER FEEDBACK ON PREVIOUS DRAFT]\n"
                 f"The user reviewed your last proposed action and provided feedback:\n"
-                f"\"{feedback_text}\"\n"
+                f'"{feedback_text}"\n'
                 f"Revise your approach based on this feedback, then propose the updated action.\n\n"
             )
         elif cfg.get("require_approval"):
@@ -642,7 +640,7 @@ async def _run_autonomous_agent(
             f"Max tool-call budget: {max_steps}\n\n"
             f"[Memory from previous runs]\n{memory_block}\n\n"
             f"Complete your goal. To persist facts for next run, include:\n"
-            f"[REMEMBER]{{\"key\": \"value\"}}[/REMEMBER]"
+            f'[REMEMBER]{{"key": "value"}}[/REMEMBER]'
         )
 
         # --- 4. Execute agent ---

@@ -129,17 +129,13 @@ class WhatsAppWebhookService:
                 _approval_svc = HumanApprovalService(self.db_session)
                 _decision = _approval_svc.parse_reply(text)
                 if _decision != "unclear":
-                    await _approval_svc.handle_reply(
-                        _uuid_mod.UUID(_approval_id_str), text, self.db_session
-                    )
+                    await _approval_svc.handle_reply(_uuid_mod.UUID(_approval_id_str), text, self.db_session)
                     _reply = "Got it! Proceeding." if _decision == "approve" else "Got it! Action cancelled."
                     await _redis.delete(_hitl_key)
                     await self._send_message(bot, from_number, _reply)
                     return
                 else:
-                    await self._send_message(
-                        bot, from_number, "Reply YES to proceed or NO to cancel."
-                    )
+                    await self._send_message(bot, from_number, "Reply YES to proceed or NO to cancel.")
                     return
 
             # Get or create conversation

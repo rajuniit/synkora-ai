@@ -43,9 +43,7 @@ _MAX_MEMORY_MESSAGES = 50
 
 
 async def _get_agent(agent_name: str, tenant_id: UUID, db: AsyncSession) -> Agent:
-    result = await db.execute(
-        select(Agent).filter(Agent.agent_name == agent_name, Agent.tenant_id == tenant_id)
-    )
+    result = await db.execute(select(Agent).filter(Agent.agent_name == agent_name, Agent.tenant_id == tenant_id))
     agent = result.scalar_one_or_none()
     if not agent:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Agent not found")

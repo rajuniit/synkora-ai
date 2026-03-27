@@ -25,15 +25,40 @@ class HumanApprovalService:
 
     AFFIRMATIVE: frozenset[str] = frozenset(
         {
-            "yes", "yeah", "yep", "sure", "ok", "okay", "go ahead",
-            "proceed", "approve", "approved", "do it", "post it",
-            "send it", "looks good", "lgtm", "go for it", "confirm",
+            "yes",
+            "yeah",
+            "yep",
+            "sure",
+            "ok",
+            "okay",
+            "go ahead",
+            "proceed",
+            "approve",
+            "approved",
+            "do it",
+            "post it",
+            "send it",
+            "looks good",
+            "lgtm",
+            "go for it",
+            "confirm",
         }
     )
     NEGATIVE: frozenset[str] = frozenset(
         {
-            "no", "nope", "nah", "cancel", "stop", "dont", "reject",
-            "not now", "skip", "wait", "hold", "abort", "deny",
+            "no",
+            "nope",
+            "nah",
+            "cancel",
+            "stop",
+            "dont",
+            "reject",
+            "not now",
+            "skip",
+            "wait",
+            "hold",
+            "abort",
+            "deny",
         }
     )
 
@@ -153,9 +178,7 @@ class HumanApprovalService:
         On feedback: marks REJECTED, fires a new run with feedback injected.
         Returns a string status for the caller to form a reply message.
         """
-        result = await db.execute(
-            select(AgentApprovalRequest).filter(AgentApprovalRequest.id == approval_id)
-        )
+        result = await db.execute(select(AgentApprovalRequest).filter(AgentApprovalRequest.id == approval_id))
         approval = result.scalar_one_or_none()
         if not approval:
             return "not_found"
@@ -205,9 +228,7 @@ class HumanApprovalService:
         db: AsyncSession,
     ) -> dict:
         """Handle a dashboard-originated respond action."""
-        result = await db.execute(
-            select(AgentApprovalRequest).filter(AgentApprovalRequest.id == approval_id)
-        )
+        result = await db.execute(select(AgentApprovalRequest).filter(AgentApprovalRequest.id == approval_id))
         approval = result.scalar_one_or_none()
         if not approval:
             raise ValueError(f"Approval {approval_id} not found")
@@ -269,9 +290,7 @@ class HumanApprovalService:
         from src.config.redis import get_redis_async
 
         redis = get_redis_async()
-        token_key = (
-            f"approval_token:{approval.task_id}:{approval.tool_name}:{approval.tool_args_hash}"
-        )
+        token_key = f"approval_token:{approval.task_id}:{approval.tool_name}:{approval.tool_args_hash}"
         await redis.set(token_key, "1", ex=600)  # 10 minute window to execute
 
     # ------------------------------------------------------------------
@@ -307,9 +326,7 @@ class HumanApprovalService:
         from src.services.agents.security import decrypt_value
 
         # Find the Slack bot linked to this agent
-        result = await self._db.execute(
-            sa_select(SlackBot).filter(SlackBot.agent_id == approval.agent_id)
-        )
+        result = await self._db.execute(sa_select(SlackBot).filter(SlackBot.agent_id == approval.agent_id))
         bot = result.scalar_one_or_none()
         if not bot:
             logger.warning(f"No Slack bot found for agent {approval.agent_id}")
