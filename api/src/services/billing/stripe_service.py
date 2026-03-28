@@ -355,6 +355,7 @@ class StripeService:
                 "billing_address_collection": "auto",
                 # Safe per-session branding — does not affect account-wide Stripe Dashboard settings
                 "custom_text": {"submit": {"message": "You'll be charged by Synkora"}},
+                "allow_promotion_codes": True,
             }
             if mode == "payment":
                 session_params["invoice_creation"] = {
