@@ -72,5 +72,5 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Elasticsearch integration
 - S3 storage integration
 
-[Unreleased]: https://github.com/rajuniit/synkora-ai/compare/v1.0.0...HEAD
-[1.0.0]: https://github.com/rajuniit/synkora-ai/releases/tag/v1.0.0
+[Unreleased]: https://github.com/getsynkora/synkora-ai/compare/v1.0.0...HEAD
+[1.0.0]: https://github.com/getsynkora/synkora-ai/releases/tag/v1.0.0

@@ -3,9 +3,9 @@
 # Synkora
 
 <!-- CI/CD Badges -->
-[![CI Pipeline](https://github.com/rajuniit/synkora-ai/actions/workflows/main-ci.yml/badge.svg)](https://github.com/rajuniit/synkora-ai/actions/workflows/main-ci.yml)
-[![API Tests](https://github.com/rajuniit/synkora-ai/actions/workflows/api-tests.yml/badge.svg)](https://github.com/rajuniit/synkora-ai/actions/workflows/api-tests.yml)
-[![Coverage](https://img.shields.io/endpoint?url=https://gist.githubusercontent.com/rajuniit/6adfe45792942ae62d18c5e89128498b/raw/coverage-badge.json)](https://github.com/rajuniit/synkora-ai/actions/workflows/api-tests.yml)
+[![CI Pipeline](https://github.com/getsynkora/synkora-ai/actions/workflows/main-ci.yml/badge.svg)](https://github.com/getsynkora/synkora-ai/actions/workflows/main-ci.yml)
+[![API Tests](https://github.com/getsynkora/synkora-ai/actions/workflows/api-tests.yml/badge.svg)](https://github.com/getsynkora/synkora-ai/actions/workflows/api-tests.yml)
+[![Coverage](https://img.shields.io/endpoint?url=https://gist.githubusercontent.com/rajuniit/6adfe45792942ae62d18c5e89128498b/raw/coverage-badge.json)](https://github.com/getsynkora/synkora-ai/actions/workflows/api-tests.yml)
 
 <!-- Tech Stack Badges -->
 [![Python](https://img.shields.io/badge/python-3.11+-blue.svg)](https://www.python.org/downloads/)
@@ -17,7 +17,7 @@
 [![License](https://img.shields.io/badge/License-MIT-blue.svg)](LICENSE)
 [![PRs Welcome](https://img.shields.io/badge/PRs-welcome-brightgreen.svg)](CONTRIBUTING.md)
 [![Code of Conduct](https://img.shields.io/badge/code%20of-conduct-ff69b4.svg)](CODE_OF_CONDUCT.md)
-[![Maintenance](https://img.shields.io/badge/Maintained%3F-yes-green.svg)](https://github.com/rajuniit/synkora-ai/graphs/commit-activity)
+[![Maintenance](https://img.shields.io/badge/Maintained%3F-yes-green.svg)](https://github.com/getsynkora/synkora-ai/graphs/commit-activity)
 
 **Build AI agents for every role in your company. From product management to engineering to marketing — deploy intelligent AI teammates that handle real work, not just chat. Open-source, use your own LLM keys, full control.**
 
@@ -201,7 +201,7 @@ synkora/
 
 1. **Clone the repository**
   ```bash
-  git clone https://github.com/rajuniit/synkora-ai.git
+  git clone https://github.com/getsynkora/synkora-ai.git
   cd synkora-ai
   ```
 
@@ -348,15 +348,15 @@ Our CI/CD pipeline runs on every push and pull request:
 
 | Workflow | Description | Status |
 |----------|-------------|--------|
-| **Main CI** | Orchestrates all tests | [![CI Pipeline](https://github.com/rajuniit/synkora-ai/actions/workflows/main-ci.yml/badge.svg)](https://github.com/rajuniit/synkora-ai/actions/workflows/main-ci.yml) |
-| **API Tests** | Python unit & integration tests | [![API Tests](https://github.com/rajuniit/synkora-ai/actions/workflows/api-tests.yml/badge.svg)](https://github.com/rajuniit/synkora-ai/actions/workflows/api-tests.yml) |
-| **Web Tests** | Frontend linting & type checks | [![Web Tests](https://github.com/rajuniit/synkora-ai/actions/workflows/web-tests.yml/badge.svg)](https://github.com/rajuniit/synkora-ai/actions/workflows/web-tests.yml) |
-| **Style Check** | Code formatting & linting | [![Style](https://github.com/rajuniit/synkora-ai/actions/workflows/style.yml/badge.svg)](https://github.com/rajuniit/synkora-ai/actions/workflows/style.yml) |
-| **Docker Build** | Container build validation | [![Docker](https://github.com/rajuniit/synkora-ai/actions/workflows/docker-build.yml/badge.svg)](https://github.com/rajuniit/synkora-ai/actions/workflows/docker-build.yml) |
+| **Main CI** | Orchestrates all tests | [![CI Pipeline](https://github.com/getsynkora/synkora-ai/actions/workflows/main-ci.yml/badge.svg)](https://github.com/getsynkora/synkora-ai/actions/workflows/main-ci.yml) |
+| **API Tests** | Python unit & integration tests | [![API Tests](https://github.com/getsynkora/synkora-ai/actions/workflows/api-tests.yml/badge.svg)](https://github.com/getsynkora/synkora-ai/actions/workflows/api-tests.yml) |
+| **Web Tests** | Frontend linting & type checks | [![Web Tests](https://github.com/getsynkora/synkora-ai/actions/workflows/web-tests.yml/badge.svg)](https://github.com/getsynkora/synkora-ai/actions/workflows/web-tests.yml) |
+| **Style Check** | Code formatting & linting | [![Style](https://github.com/getsynkora/synkora-ai/actions/workflows/style.yml/badge.svg)](https://github.com/getsynkora/synkora-ai/actions/workflows/style.yml) |
+| **Docker Build** | Container build validation | [![Docker](https://github.com/getsynkora/synkora-ai/actions/workflows/docker-build.yml/badge.svg)](https://github.com/getsynkora/synkora-ai/actions/workflows/docker-build.yml) |
 
 ### Code Coverage
 
-[![Coverage](https://img.shields.io/endpoint?url=https://gist.githubusercontent.com/rajuniit/6adfe45792942ae62d18c5e89128498b/raw/coverage-badge.json)](https://github.com/rajuniit/synkora-ai/actions/workflows/api-tests.yml)
+[![Coverage](https://img.shields.io/endpoint?url=https://gist.githubusercontent.com/rajuniit/6adfe45792942ae62d18c5e89128498b/raw/coverage-badge.json)](https://github.com/getsynkora/synkora-ai/actions/workflows/api-tests.yml)
 
 Coverage reports are generated for every pull request with inline annotations.
 
@@ -581,7 +581,7 @@ Built with amazing open source technologies:
 - **Documentation**: See [api/README.md](api/README.md) and [web/README.md](web/README.md) for detailed setup
 - **API Reference**: Interactive API docs at `/api/v1/docs` when running locally
 - **Discussions**: Join our GitHub Discussions for questions and community support
-- **Issues**: Report bugs via [GitHub Issues](https://github.com/rajuniit/synkora-ai/issues)
+- **Issues**: Report bugs via [GitHub Issues](https://github.com/getsynkora/synkora-ai/issues)
 - **Security**: Report vulnerabilities via our [Security Policy](SECURITY.md)
 
 ### Community

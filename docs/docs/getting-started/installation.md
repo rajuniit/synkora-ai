@@ -21,7 +21,7 @@ The easiest way to get started with all services configured.
 
 ```bash
 # Clone the repository
-git clone https://github.com/rajuniit/synkora-ai.git
+git clone https://github.com/getsynkora/synkora-ai.git
 cd synkora
 
 # Copy environment file

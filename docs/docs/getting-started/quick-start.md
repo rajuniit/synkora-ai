@@ -17,7 +17,7 @@ Get up and running with Synkora in 5 minutes. This guide will walk you through c
 Clone the repository and start the services:
 
 ```bash
-git clone https://github.com/rajuniit/synkora-ai.git
+git clone https://github.com/getsynkora/synkora-ai.git
 cd synkora
 cp .env.example .env
 ```

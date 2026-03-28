@@ -5,8 +5,8 @@ Production-ready API backend for the Synkora AI application platform.
 
 
 <!-- CI/CD Badges -->
-[![API Tests](https://github.com/rajuniit/synkora-ai/actions/workflows/api-tests.yml/badge.svg)](https://github.com/rajuniit/synkora-ai/actions/workflows/api-tests.yml)
-[![codecov](https://codecov.io/gh/rajuniit/synkora-ai/branch/main/graph/badge.svg?flag=api)](https://codecov.io/gh/rajuniit/synkora-ai)
+[![API Tests](https://github.com/getsynkora/synkora-ai/actions/workflows/api-tests.yml/badge.svg)](https://github.com/getsynkora/synkora-ai/actions/workflows/api-tests.yml)
+[![codecov](https://codecov.io/gh/getsynkora/synkora-ai/branch/main/graph/badge.svg?flag=api)](https://codecov.io/gh/getsynkora/synkora-ai)
 [![Python](https://img.shields.io/badge/python-3.11+-blue.svg)](https://www.python.org/downloads/)
 [![FastAPI](https://img.shields.io/badge/FastAPI-0.115+-009688.svg)](https://fastapi.tiangolo.com/)
 [![Code Style: Ruff](https://img.shields.io/badge/code%20style-ruff-000000.svg)](https://github.com/astral-sh/ruff)
@@ -633,7 +633,7 @@ See LICENSE file for details.
 
 
 For issues and questions:
-- GitHub Issues: [Project Issues](https://github.com/rajuniit/synkora-ai/issues)
+- GitHub Issues: [Project Issues](https://github.com/getsynkora/synkora-ai/issues)
 - Documentation: [Full Documentation](https://docs.synkora.ai)
 
 
