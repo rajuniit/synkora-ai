@@ -17,7 +17,7 @@ from src.config.redis import get_redis
 from src.core.database import get_async_db
 from src.middleware.auth_middleware import get_current_tenant_id
 from src.models.credit_topup import CreditTopup
-from src.models.tenant import Tenant
+from src.models.tenant import Account, AccountRole, Tenant, TenantAccountJoin
 from src.services.billing import (
     CreditService,
     PaddleService,
@@ -29,6 +29,17 @@ from src.services.integrations.integration_config_service import IntegrationConf
 from src.utils.config_helper import get_app_base_url
 
 router = APIRouter(prefix="/api/v1/billing", tags=["billing"])
+
+
+async def _get_tenant_owner_email(db: AsyncSession, tenant_id: UUID) -> str | None:
+    """Fetch the email of the tenant owner account."""
+    result = await db.execute(
+        select(Account.email)
+        .join(TenantAccountJoin, TenantAccountJoin.account_id == Account.id)
+        .where(TenantAccountJoin.tenant_id == tenant_id, TenantAccountJoin.role == AccountRole.OWNER)
+        .limit(1)
+    )
+    return result.scalar_one_or_none()
 
 
 # Pydantic Schemas
@@ -251,8 +262,8 @@ async def purchase_credit_topup(
         # Get or create Paddle customer
         customer_id = await paddle_service.get_or_create_customer(
             tenant_id=tenant_id,
-            email=tenant.email if hasattr(tenant, "email") else f"tenant_{tenant_id}@localhost",
-            name=tenant.name if hasattr(tenant, "name") else None,
+            email=await _get_tenant_owner_email(db, tenant_id) or f"tenant-{tenant_id}@placeholder.invalid",
+            name=tenant.name if tenant else None,
         )
 
         checkout_result = await paddle_service.create_topup_checkout(
@@ -283,8 +294,8 @@ async def purchase_credit_topup(
         # Get or create Stripe customer
         customer_id = await stripe_service.get_or_create_customer(
             tenant_id=tenant_id,
-            email=tenant.email if hasattr(tenant, "email") else f"tenant_{tenant_id}@localhost",
-            name=tenant.name if hasattr(tenant, "name") else None,
+            email=await _get_tenant_owner_email(db, tenant_id) or f"tenant-{tenant_id}@placeholder.invalid",
+            name=tenant.name if tenant else None,
         )
 
         checkout_session = await stripe_service.create_topup_checkout_session(
@@ -432,8 +443,8 @@ async def create_subscription(
         # Get or create Paddle customer
         customer_id = await paddle_service.get_or_create_customer(
             tenant_id=tenant_id,
-            email=tenant.email if hasattr(tenant, "email") else f"tenant_{tenant_id}@localhost",
-            name=tenant.name if hasattr(tenant, "name") else None,
+            email=await _get_tenant_owner_email(db, tenant_id) or f"tenant-{tenant_id}@placeholder.invalid",
+            name=tenant.name if tenant else None,
         )
 
         # Check for Paddle price ID
@@ -467,8 +478,8 @@ async def create_subscription(
         # Get or create Stripe customer
         customer_id = await stripe_service.get_or_create_customer(
             tenant_id=tenant_id,
-            email=tenant.email if hasattr(tenant, "email") else f"tenant_{tenant_id}@localhost",
-            name=tenant.name if hasattr(tenant, "name") else None,
+            email=await _get_tenant_owner_email(db, tenant_id) or f"tenant-{tenant_id}@placeholder.invalid",
+            name=tenant.name if tenant else None,
         )
 
         # Check for Stripe price ID
@@ -528,8 +539,8 @@ async def upgrade_subscription(
         # Get or create Paddle customer
         customer_id = await paddle_service.get_or_create_customer(
             tenant_id=tenant_id,
-            email=tenant.email if hasattr(tenant, "email") else f"tenant_{tenant_id}@localhost",
-            name=tenant.name if hasattr(tenant, "name") else None,
+            email=await _get_tenant_owner_email(db, tenant_id) or f"tenant-{tenant_id}@placeholder.invalid",
+            name=tenant.name if tenant else None,
         )
 
         # Check for Paddle price ID
@@ -569,8 +580,8 @@ async def upgrade_subscription(
         # Get or create Stripe customer
         customer_id = await stripe_service.get_or_create_customer(
             tenant_id=tenant_id,
-            email=tenant.email if hasattr(tenant, "email") else f"tenant_{tenant_id}@localhost",
-            name=tenant.name if hasattr(tenant, "name") else None,
+            email=await _get_tenant_owner_email(db, tenant_id) or f"tenant-{tenant_id}@placeholder.invalid",
+            name=tenant.name if tenant else None,
         )
 
         price_id = new_plan.stripe_price_id if hasattr(new_plan, "stripe_price_id") else None
@@ -817,8 +828,8 @@ async def create_setup_intent(
     # Get or create customer
     customer_id = await stripe_service.get_or_create_customer(
         tenant_id=tenant_id,
-        email=tenant.email if hasattr(tenant, "email") else f"tenant-{tenant_id}@example.com",
-        name=tenant.name if hasattr(tenant, "name") else None,
+        email=await _get_tenant_owner_email(db, tenant_id) or f"tenant-{tenant_id}@placeholder.invalid",
+        name=tenant.name if tenant else None,
     )
 
     # Create setup intent
