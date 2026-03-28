@@ -294,7 +294,7 @@ jobs:
             kubectl rollout undo deployment/synkora-ml -n ${{ env.NAMESPACE }}
             exit 1
           fi
-          if ! kubectl rollout status deployment/synkora-scraper -n ${{ env.NAMESPACE }} --timeout=300s; then
+          if ! kubectl rollout status deployment/synkora-scraper -n ${{ env.NAMESPACE }} --timeout=600s; then
             echo "Scraper service deployment failed, rolling back..."
             kubectl rollout undo deployment/synkora-scraper -n ${{ env.NAMESPACE }}
             exit 1
