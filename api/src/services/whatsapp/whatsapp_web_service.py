@@ -24,9 +24,13 @@ logger = logging.getLogger(__name__)
 _CONNECTED_EV_CANDIDATES = ["ConnectedEv", "ConnectedEvent", "PairSuccessEv"]
 _HISTORY_SYNC_EV_CANDIDATES = ["HistorySyncEv", "HistorySyncEvent"]
 _LOGGED_OUT_EV_CANDIDATES = ["LoggedOutEv", "LoggedOutEvent"]
+_QR_EV_CANDIDATES = ["QREv", "QRCodeEv", "QREvent"]
 
 # Log substrings that indicate a successful pairing (used as fallback connected detection)
 _CONNECTED_LOG_SIGNALS = ("Pair success", "pair success", "Successfully paired", "Logged in as")
+
+# Log substrings that indicate a QR code (fallback if native QREv is unavailable)
+_QR_LOG_SIGNALS = ("Emitting QR code", "QR code:", "qr code")
 
 # Log substrings that are high-volume / noisy and should be suppressed during a session
 _NOISE_PATTERNS = (
@@ -80,13 +84,16 @@ class _NeonizeQRLogCapture(logging.Handler):
         try:
             msg = record.getMessage()
 
-            if "Emitting QR code" in msg:
-                parts = msg.split("Emitting QR code ", 1)
-                if len(parts) > 1:
-                    qr_string = parts[1].strip()
-                    if qr_string and qr_string not in self._seen:
-                        self._seen.add(qr_string)
-                        self._on_qr_fn(qr_string)
+            # Try all known QR log signal formats
+            for signal in _QR_LOG_SIGNALS:
+                if signal in msg:
+                    parts = msg.split(signal, 1)
+                    if len(parts) > 1:
+                        qr_string = parts[1].strip()
+                        if qr_string and qr_string not in self._seen:
+                            self._seen.add(qr_string)
+                            self._on_qr_fn(qr_string)
+                    break
 
             # Fallback: detect pair success from Go-bridge log
             if self._on_connected_fn and not self._connected_fired:
@@ -243,6 +250,12 @@ class WhatsAppWebService:
         connected_ev, connected_ev_name = _find_ev(_CONNECTED_EV_CANDIDATES)
         history_sync_ev, _ = _find_ev(_HISTORY_SYNC_EV_CANDIDATES)
         logged_out_ev, _ = _find_ev(_LOGGED_OUT_EV_CANDIDATES)
+        qr_ev, qr_ev_name = _find_ev(_QR_EV_CANDIDATES)
+
+        if qr_ev_name:
+            logger.info(f"neonize QR event class resolved: {qr_ev_name}")
+        else:
+            logger.warning("No native QREv found — falling back to log capture for QR codes")
 
         if connected_ev_name:
             logger.info(f"neonize connected event class resolved: {connected_ev_name}")
@@ -376,6 +389,15 @@ class WhatsAppWebService:
                 client = NewClient(db_path)
                 if session_id in cls._local:
                     cls._local[session_id]["client"] = client
+
+                if qr_ev is not None:
+
+                    @client.event(qr_ev)
+                    def _on_qr(cli, evt) -> None:  # noqa: ARG001
+                        # QREv.code holds the raw QR string in neonize 0.3.x
+                        qr_string = getattr(evt, "code", None) or getattr(evt, "Code", None) or str(evt)
+                        logger.info(f"Native QREv fired for session {session_id}")
+                        _handle_qr(qr_string)
 
                 if connected_ev is not None:
 
