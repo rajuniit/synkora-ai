@@ -134,8 +134,8 @@ We thank all the maintainers and contributors of the above projects for their ex
 
 If you believe any dependency or license information is incorrect or missing, please:
 
-1. Open an issue on our [GitHub repository](https://github.com/rajuniit/synkora-ai/issues)
-2. Use [GitHub's private security advisory](https://github.com/rajuniit/synkora-ai/security/advisories/new) for security-related issues
+1. Open an issue on our [GitHub repository](https://github.com/getsynkora/synkora-ai/issues)
+2. Use [GitHub's private security advisory](https://github.com/getsynkora/synkora-ai/security/advisories/new) for security-related issues
 3. Submit a pull request with corrections
 
 ---

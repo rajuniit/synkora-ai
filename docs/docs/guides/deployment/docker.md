@@ -9,7 +9,7 @@ Deploy Synkora using Docker Compose.
 ## Quick Start
 
 ```bash
-git clone https://github.com/rajuniit/synkora-ai.git
+git clone https://github.com/getsynkora/synkora-ai.git
 cd synkora
 cp .env.example .env
 docker-compose up -d

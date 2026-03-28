@@ -417,7 +417,7 @@ await synkora.tenants.updateSettings({
 
 ### Vulnerability Reporting
 
-Report security vulnerabilities via [GitHub's private security advisory](https://github.com/rajuniit/synkora-ai/security/advisories/new). Do not open a public issue.
+Report security vulnerabilities via [GitHub's private security advisory](https://github.com/getsynkora/synkora-ai/security/advisories/new). Do not open a public issue.
 
 ## Related Concepts
 
