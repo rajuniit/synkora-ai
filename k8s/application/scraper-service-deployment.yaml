@@ -10,6 +10,8 @@ metadata:
 spec:
   # Single replica — browser sessions are stateful in-memory
   replicas: 1
+  strategy:
+    type: Recreate
   selector:
     matchLabels:
       app: synkora
