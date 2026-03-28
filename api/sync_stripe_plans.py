@@ -21,7 +21,6 @@ async def get_stripe_key(db: AsyncSession) -> str:
     """Get Stripe secret key from integration settings"""
     integration_service = IntegrationConfigService(db)
 
-    # Get active Stripe integration config (platform-wide, tenant_id=None)
     config = await integration_service.get_active_config(None, "payment", "stripe")
 
     if not config:
@@ -29,10 +28,7 @@ async def get_stripe_key(db: AsyncSession) -> str:
         print("   Please configure Stripe integration at: /settings/integrations/payment/create")
         sys.exit(1)
 
-    # Decrypt config data
     config_data = integration_service._decrypt_config(config.config_data)
-
-    # Extract secret key from credentials
     credentials = config_data.get("credentials", {})
     stripe_key = credentials.get("secret_key")
 
@@ -44,137 +40,126 @@ async def get_stripe_key(db: AsyncSession) -> str:
     return stripe_key
 
 
-async def sync_stripe_plans_async(force: bool = False) -> None:
-    """
-    Sync subscription plans with Stripe.
+async def sync_stripe_plans_async(db: AsyncSession, force: bool = False) -> None:
+    """Sync subscription plans with Stripe."""
+    stripe_key = await get_stripe_key(db)
+    stripe.api_key = stripe_key
 
-    Args:
-        force: If True, recreate Stripe products even if they already exist
-    """
-    factory = get_async_session_factory()
-    async with factory() as db:
-        # Get Stripe key from integration settings
-        stripe_key = await get_stripe_key(db)
-        stripe.api_key = stripe_key
+    print("🔄 Syncing subscription plans with Stripe...\n")
 
-        print("🔄 Syncing subscription plans with Stripe...\n")
+    result = await db.execute(
+        select(SubscriptionPlan).where(SubscriptionPlan.tier != PlanTier.FREE)
+    )
+    plans = result.scalars().all()
 
-        # Get all plans except FREE tier
-        result = await db.execute(
-            select(SubscriptionPlan).where(SubscriptionPlan.tier != PlanTier.FREE)
-        )
-        plans = result.scalars().all()
+    if not plans:
+        print("⚠️  No subscription plans found in database")
+        return
 
-        if not plans:
-            print("⚠️  No subscription plans found in database")
-            return
+    synced_count = 0
+    skipped_count = 0
+    error_count = 0
 
-        synced_count = 0
-        skipped_count = 0
-        error_count = 0
-
-        for plan in plans:
-            try:
-                # Skip if already configured and not forcing
-                if plan.stripe_product_id and plan.stripe_price_id and not force:
-                    print(f"⏭️  Skipping {plan.name} - already configured")
-                    print(f"   Product ID: {plan.stripe_product_id}")
-                    print(f"   Price ID: {plan.stripe_price_id}\n")
-                    skipped_count += 1
-                    continue
-
-                print(f"🔧 Processing {plan.name} ({plan.tier.value})...")
-
-                # Create or update Stripe product
-                if plan.stripe_product_id and force:
-                    # Update existing product
-                    product = stripe.Product.modify(
-                        plan.stripe_product_id,
-                        name=plan.name,
-                        description=plan.description,
-                        metadata={"tier": plan.tier.value, "plan_id": str(plan.id)},
-                    )
-                    print(f"   ✓ Updated Stripe product: {product.id}")
-                else:
-                    # Create new product
-                    product = stripe.Product.create(
-                        name=plan.name,
-                        description=plan.description,
-                        metadata={"tier": plan.tier.value, "plan_id": str(plan.id)},
-                    )
-                    print(f"   ✓ Created Stripe product: {product.id}")
-
-                # Create monthly price
-                price = stripe.Price.create(
-                    product=product.id,
-                    unit_amount=int(plan.price_monthly * 100),  # Convert to cents
-                    currency="usd",
-                    recurring={"interval": "month"},
-                    metadata={"tier": plan.tier.value, "billing_period": "monthly", "plan_id": str(plan.id)},
-                )
-                print(f"   ✓ Created monthly price: {price.id} (${plan.price_monthly}/month)")
-
-                # Create yearly price
-                yearly_price = stripe.Price.create(
-                    product=product.id,
-                    unit_amount=int(plan.price_yearly * 100),  # Convert to cents
-                    currency="usd",
-                    recurring={"interval": "year"},
-                    metadata={"tier": plan.tier.value, "billing_period": "yearly", "plan_id": str(plan.id)},
-                )
-                print(f"   ✓ Created yearly price: {yearly_price.id} (${plan.price_yearly}/year)")
-
-                # Update plan with Stripe IDs
-                plan.stripe_product_id = product.id
-                plan.stripe_price_id = price.id  # Default to monthly price
-
-                print("   ✓ Updated database with Stripe IDs\n")
-                synced_count += 1
-
-            except stripe.error.StripeError as e:
-                print(f"   ❌ Stripe error for {plan.name}: {str(e)}\n")
-                error_count += 1
-            except Exception as e:
-                print(f"   ❌ Error processing {plan.name}: {str(e)}\n")
-                error_count += 1
-
-        # Commit all changes
+    for plan in plans:
         try:
-            await db.commit()
-            print("=" * 60)
-            print("✅ Sync complete!")
-            print(f"   Synced: {synced_count}")
-            print(f"   Skipped: {skipped_count}")
-            print(f"   Errors: {error_count}")
-            print("=" * 60)
+            if plan.stripe_product_id and plan.stripe_price_id and not force:
+                print(f"⏭️  Skipping {plan.name} - already configured")
+                print(f"   Product ID: {plan.stripe_product_id}")
+                print(f"   Price ID: {plan.stripe_price_id}\n")
+                skipped_count += 1
+                continue
+
+            print(f"🔧 Processing {plan.name} ({plan.tier.value})...")
+
+            if plan.stripe_product_id and force:
+                product = stripe.Product.modify(
+                    plan.stripe_product_id,
+                    name=plan.name,
+                    description=plan.description,
+                    metadata={"tier": plan.tier.value, "plan_id": str(plan.id)},
+                )
+                print(f"   ✓ Updated Stripe product: {product.id}")
+            else:
+                product = stripe.Product.create(
+                    name=plan.name,
+                    description=plan.description,
+                    metadata={"tier": plan.tier.value, "plan_id": str(plan.id)},
+                )
+                print(f"   ✓ Created Stripe product: {product.id}")
+
+            price = stripe.Price.create(
+                product=product.id,
+                unit_amount=int(plan.price_monthly * 100),
+                currency="usd",
+                recurring={"interval": "month"},
+                metadata={"tier": plan.tier.value, "billing_period": "monthly", "plan_id": str(plan.id)},
+            )
+            print(f"   ✓ Created monthly price: {price.id} (${plan.price_monthly}/month)")
+
+            yearly_price = stripe.Price.create(
+                product=product.id,
+                unit_amount=int(plan.price_yearly * 100),
+                currency="usd",
+                recurring={"interval": "year"},
+                metadata={"tier": plan.tier.value, "billing_period": "yearly", "plan_id": str(plan.id)},
+            )
+            print(f"   ✓ Created yearly price: {yearly_price.id} (${plan.price_yearly}/year)")
+
+            plan.stripe_product_id = product.id
+            plan.stripe_price_id = price.id
+
+            print("   ✓ Updated database with Stripe IDs\n")
+            synced_count += 1
+
+        except stripe.error.StripeError as e:
+            print(f"   ❌ Stripe error for {plan.name}: {str(e)}\n")
+            error_count += 1
         except Exception as e:
-            await db.rollback()
-            print(f"❌ Error committing changes: {str(e)}")
-            sys.exit(1)
+            print(f"   ❌ Error processing {plan.name}: {str(e)}\n")
+            error_count += 1
+
+    try:
+        await db.commit()
+        print("=" * 60)
+        print("✅ Sync complete!")
+        print(f"   Synced: {synced_count}")
+        print(f"   Skipped: {skipped_count}")
+        print(f"   Errors: {error_count}")
+        print("=" * 60)
+    except Exception as e:
+        await db.rollback()
+        print(f"❌ Error committing changes: {str(e)}")
+        sys.exit(1)
 
 
-async def verify_sync_async() -> None:
+async def verify_sync_async(db: AsyncSession) -> None:
     """Verify that all plans are properly synced"""
     print("\n🔍 Verifying sync status...\n")
 
+    result = await db.execute(select(SubscriptionPlan))
+    plans = result.scalars().all()
+
+    for plan in plans:
+        if plan.tier == PlanTier.FREE:
+            print(f"✓ {plan.name} (FREE) - No Stripe sync required")
+        elif plan.stripe_product_id and plan.stripe_price_id:
+            print(f"✓ {plan.name} ({plan.tier.value})")
+            print(f"  Product: {plan.stripe_product_id}")
+            print(f"  Price: {plan.stripe_price_id}")
+        else:
+            print(f"❌ {plan.name} ({plan.tier.value}) - Missing Stripe IDs")
+
+
+async def run(force: bool = False, verify_only: bool = False) -> None:
+    """Single entry point — one event loop, one session."""
     factory = get_async_session_factory()
     async with factory() as db:
-        result = await db.execute(select(SubscriptionPlan))
-        plans = result.scalars().all()
-
-        for plan in plans:
-            if plan.tier == PlanTier.FREE:
-                print(f"✓ {plan.name} (FREE) - No Stripe sync required")
-            elif plan.stripe_product_id and plan.stripe_price_id:
-                print(f"✓ {plan.name} ({plan.tier.value})")
-                print(f"  Product: {plan.stripe_product_id}")
-                print(f"  Price: {plan.stripe_price_id}")
-            else:
-                print(f"❌ {plan.name} ({plan.tier.value}) - Missing Stripe IDs")
+        if not verify_only:
+            await sync_stripe_plans_async(db, force=force)
+        await verify_sync_async(db)
 
 
 def main():
-    """Main entry point"""
     import argparse
 
     parser = argparse.ArgumentParser(description="Sync subscription plans with Stripe")
@@ -182,12 +167,7 @@ def main():
     parser.add_argument("--verify", action="store_true", help="Only verify sync status without making changes")
 
     args = parser.parse_args()
-
-    if args.verify:
-        asyncio.run(verify_sync_async())
-    else:
-        asyncio.run(sync_stripe_plans_async(force=args.force))
-        asyncio.run(verify_sync_async())
+    asyncio.run(run(force=args.force, verify_only=args.verify))
 
 
 if __name__ == "__main__":
