@@ -1,0 +1,35 @@
+name: Branch Name Check
+
+on:
+  pull_request:
+    branches: [master]
+
+jobs:
+  check-branch-name:
+    name: Validate Branch Name
+    runs-on: ubuntu-latest
+    steps:
+      - name: Check branch naming convention
+        run: |
+          BRANCH="${{ github.head_ref }}"
+          PATTERN="^(feat|fix|chore|ci|docs|refactor|hotfix)/.+"
+
+          echo "Branch: $BRANCH"
+
+          if [[ "$BRANCH" =~ $PATTERN ]]; then
+            echo "✅ Branch name '$BRANCH' follows the naming convention."
+          else
+            echo "❌ Branch name '$BRANCH' does not follow the naming convention."
+            echo ""
+            echo "Branch names must match: (feat|fix|chore|ci|docs|refactor|hotfix)/<description>"
+            echo ""
+            echo "Examples:"
+            echo "  feat/slack-integration"
+            echo "  fix/scraper-rollout-timeout"
+            echo "  chore/update-dependencies"
+            echo "  ci/tag-based-deploy"
+            echo "  docs/api-reference"
+            echo "  refactor/auth-middleware"
+            echo "  hotfix/payment-webhook"
+            exit 1
+          fi
