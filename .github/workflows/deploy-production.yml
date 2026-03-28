@@ -1,10 +1,9 @@
 name: Deploy to Production
 
 on:
-  workflow_run:
-    workflows: ["Main CI Pipeline"]
-    types: [completed]
-    branches: [master]
+  push:
+    tags:
+      - "v*.*.*"
 
 env:
   AWS_REGION: ${{ vars.AWS_REGION || 'us-east-2' }}
@@ -20,7 +19,6 @@ jobs:
   build-and-push:
     name: Build & Push Docker Images
     runs-on: ubuntu-latest
-    if: ${{ github.event.workflow_run.conclusion == 'success' }}
     outputs:
       image-tag: ${{ steps.meta.outputs.tag }}
     steps:
@@ -40,7 +38,7 @@ jobs:
 
       - name: Set image tag
         id: meta
-        run: echo "tag=${{ github.sha }}" >> "$GITHUB_OUTPUT"
+        run: echo "tag=${{ github.ref_name }}" >> "$GITHUB_OUTPUT"
 
       - name: Validate required variables
         run: |
@@ -72,10 +70,10 @@ jobs:
           push: true
           platforms: linux/amd64
           tags: |
-            ${{ env.ECR_REGISTRY }}/synkora-api:${{ github.sha }}
+            ${{ env.ECR_REGISTRY }}/synkora-api:${{ github.ref_name }}
             ${{ env.ECR_REGISTRY }}/synkora-api:latest
           build-args: |
-            COMMIT_SHA=${{ github.sha }}
+            COMMIT_SHA=${{ github.ref_name }}
           cache-from: type=gha,scope=api
           cache-to: type=gha,mode=max,scope=api
 
@@ -92,7 +90,7 @@ jobs:
           push: true
           platforms: linux/amd64
           tags: |
-            ${{ env.ECR_REGISTRY }}/synkora-ml:${{ github.sha }}
+            ${{ env.ECR_REGISTRY }}/synkora-ml:${{ github.ref_name }}
             ${{ env.ECR_REGISTRY }}/synkora-ml:latest
           cache-from: type=gha,scope=ml
           cache-to: type=gha,mode=max,scope=ml
@@ -110,7 +108,7 @@ jobs:
           push: true
           platforms: linux/amd64
           tags: |
-            ${{ env.ECR_REGISTRY }}/synkora-scraper:${{ github.sha }}
+            ${{ env.ECR_REGISTRY }}/synkora-scraper:${{ github.ref_name }}
             ${{ env.ECR_REGISTRY }}/synkora-scraper:latest
           cache-from: type=gha,scope=scraper
           cache-to: type=gha,mode=max,scope=scraper
@@ -128,10 +126,10 @@ jobs:
           push: true
           platforms: linux/amd64
           tags: |
-            ${{ env.ECR_REGISTRY }}/synkora-frontend:${{ github.sha }}
+            ${{ env.ECR_REGISTRY }}/synkora-frontend:${{ github.ref_name }}
             ${{ env.ECR_REGISTRY }}/synkora-frontend:latest
           build-args: |
-            COMMIT_SHA=${{ github.sha }}
+            COMMIT_SHA=${{ github.ref_name }}
             NEXT_PUBLIC_API_URL=https://api.synkora.ai
             NEXT_PUBLIC_APP_URL=https://synkora.ai
             NEXT_PUBLIC_SENTRY_DSN=${{ secrets.SENTRY_DSN }}
@@ -232,8 +230,8 @@ jobs:
 
       - name: Run database migrations
         run: |
-          IMAGE_TAG="${{ github.sha }}"
-          POD_NAME="alembic-migrate-${IMAGE_TAG:0:8}"
+          IMAGE_TAG="${{ github.ref_name }}"
+          POD_NAME="alembic-migrate-$(echo ${IMAGE_TAG} | tr '.' '-')"
           kubectl delete pod "${POD_NAME}" -n ${{ env.NAMESPACE }} --ignore-not-found=true
 
           kubectl run "${POD_NAME}" \
@@ -285,7 +283,7 @@ jobs:
 
       - name: Deploy ML and scraper services
         run: |
-          IMAGE_TAG="${{ github.sha }}"
+          IMAGE_TAG="${{ github.ref_name }}"
           kubectl set image deployment/synkora-ml ml=${{ env.ECR_REGISTRY }}/synkora-ml:${IMAGE_TAG} -n ${{ env.NAMESPACE }}
           kubectl set image deployment/synkora-scraper scraper=${{ env.ECR_REGISTRY }}/synkora-scraper:${IMAGE_TAG} -n ${{ env.NAMESPACE }}
 
@@ -304,7 +302,7 @@ jobs:
 
       - name: Deploy API
         run: |
-          IMAGE_TAG="${{ github.sha }}"
+          IMAGE_TAG="${{ github.ref_name }}"
           kubectl set image deployment/synkora-api api=${{ env.ECR_REGISTRY }}/synkora-api:${IMAGE_TAG} -n ${{ env.NAMESPACE }}
           kubectl set image deployment/synkora-celery-worker celery-worker=${{ env.ECR_REGISTRY }}/synkora-api:${IMAGE_TAG} -n ${{ env.NAMESPACE }}
           kubectl set image deployment/synkora-celery-beat celery-beat=${{ env.ECR_REGISTRY }}/synkora-api:${IMAGE_TAG} -n ${{ env.NAMESPACE }}
@@ -313,7 +311,7 @@ jobs:
 
       - name: Deploy Frontend
         run: |
-          IMAGE_TAG="${{ github.sha }}"
+          IMAGE_TAG="${{ github.ref_name }}"
           kubectl set image deployment/synkora-frontend frontend=${{ env.ECR_REGISTRY }}/synkora-frontend:${IMAGE_TAG} -n ${{ env.NAMESPACE }}
 
       - name: Wait for API rollout
@@ -378,7 +376,7 @@ jobs:
         if: success()
         run: |
           echo "=== Deployment Summary ==="
-          echo "Image tag: ${{ github.sha }}"
+          echo "Image tag: ${{ github.ref_name }}"
           echo "Namespace: ${{ env.NAMESPACE }}"
           echo ""
           kubectl get deployments -n ${{ env.NAMESPACE }}
