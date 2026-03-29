@@ -6,7 +6,7 @@ Database model for storing user ratings (likes/dislikes) for agents.
 
 from sqlalchemy import Column, ForeignKey, String, UniqueConstraint
 from sqlalchemy.dialects.postgresql import UUID
-from sqlalchemy.orm import relationship
+from sqlalchemy.orm import backref, relationship
 
 from src.models.base import BaseModel
 
@@ -36,7 +36,7 @@ class AgentRating(BaseModel):
     rating = Column(String(20), nullable=False, comment="Rating type: 'like' or 'dislike'")
 
     # Relationships
-    agent = relationship("Agent", backref="ratings")
+    agent = relationship("Agent", backref=backref("ratings", passive_deletes=True))
 
     # Constraints
     __table_args__ = (UniqueConstraint("agent_id", "user_id", name="uq_agent_user_rating"),)

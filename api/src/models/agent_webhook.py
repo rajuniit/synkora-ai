@@ -8,7 +8,7 @@ from datetime import datetime
 
 from sqlalchemy import Boolean, Column, DateTime, ForeignKey, Index, Integer, String, Text
 from sqlalchemy.dialects.postgresql import JSONB, UUID
-from sqlalchemy.orm import relationship
+from sqlalchemy.orm import backref, relationship
 
 from src.models.base import BaseModel
 
@@ -68,7 +68,7 @@ class AgentWebhook(BaseModel):
     last_triggered_at = Column(DateTime(timezone=True), nullable=True, comment="Timestamp of last trigger")
 
     # Relationships
-    agent = relationship("Agent", backref="webhooks")
+    agent = relationship("Agent", backref=backref("webhooks", passive_deletes=True))
 
     events = relationship(
         "AgentWebhookEvent",
