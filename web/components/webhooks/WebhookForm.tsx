@@ -20,10 +20,11 @@ interface WebhookCreatedData {
 
 const providerOptions = [
   { value: 'github', label: 'GitHub', events: ['pull_request', 'issues', 'push', 'release'] },
+  { value: 'sentry', label: 'Sentry', events: ['issue', 'error', 'event_alert', 'issue_alert', 'metric_alert'] },
   { value: 'clickup', label: 'ClickUp', events: ['taskCreated', 'taskUpdated', 'taskDeleted', 'taskCommentPosted'] },
   { value: 'jira', label: 'Jira', events: ['issue_created', 'issue_updated', 'issue_deleted', 'comment_created'] },
   { value: 'slack', label: 'Slack', events: ['message', 'app_mention', 'reaction_added'] },
-  { value: 'custom', label: 'Custom', events: [] }
+  { value: 'custom', label: 'Custom', events: ['webhook'] }
 ]
 
 export function WebhookForm({ agentName, onSuccess, onCancel }: WebhookFormProps) {

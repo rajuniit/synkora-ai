@@ -241,6 +241,14 @@ class SignatureVerifier:
                 token = headers.get("x-gitlab-token", "")
                 return cls.verify_gitlab(token, secret)
 
+            elif provider == "sentry":
+                # Sentry sends HMAC-SHA256 in the sentry-hook-signature header
+                signature = headers.get("sentry-hook-signature", "")
+                if not signature:
+                    return False
+                mac = hmac.new(secret.encode("utf-8"), msg=payload, digestmod=hashlib.sha256)
+                return hmac.compare_digest(signature, mac.hexdigest())
+
             elif provider == "custom":
                 signature_header = config.get("signature_header", "x-signature")
                 algorithm = config.get("algorithm", "sha256")
