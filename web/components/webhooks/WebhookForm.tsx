@@ -16,15 +16,16 @@ export interface WebhookFormProps {
 interface WebhookCreatedData {
   webhookUrl: string
   secret: string
+  verifySignature: boolean
 }
 
 const providerOptions = [
-  { value: 'github', label: 'GitHub', events: ['pull_request', 'issues', 'push', 'release'] },
-  { value: 'sentry', label: 'Sentry', events: ['issue', 'error', 'event_alert', 'issue_alert', 'metric_alert'] },
-  { value: 'clickup', label: 'ClickUp', events: ['taskCreated', 'taskUpdated', 'taskDeleted', 'taskCommentPosted'] },
-  { value: 'jira', label: 'Jira', events: ['issue_created', 'issue_updated', 'issue_deleted', 'comment_created'] },
-  { value: 'slack', label: 'Slack', events: ['message', 'app_mention', 'reaction_added'] },
-  { value: 'custom', label: 'Custom', events: ['webhook'] }
+  { value: 'github', label: 'GitHub', events: ['pull_request', 'issues', 'push', 'release'], defaultVerify: true },
+  { value: 'sentry', label: 'Sentry', events: ['issue', 'error', 'event_alert', 'issue_alert', 'metric_alert'], defaultVerify: false },
+  { value: 'clickup', label: 'ClickUp', events: ['taskCreated', 'taskUpdated', 'taskDeleted', 'taskCommentPosted'], defaultVerify: true },
+  { value: 'jira', label: 'Jira', events: ['issue_created', 'issue_updated', 'issue_deleted', 'comment_created'], defaultVerify: true },
+  { value: 'slack', label: 'Slack', events: ['message', 'app_mention', 'reaction_added'], defaultVerify: true },
+  { value: 'custom', label: 'Custom', events: ['webhook'], defaultVerify: false }
 ]
 
 export function WebhookForm({ agentName, onSuccess, onCancel }: WebhookFormProps) {
@@ -38,7 +39,7 @@ export function WebhookForm({ agentName, onSuccess, onCancel }: WebhookFormProps
     name: '',
     provider: 'github',
     event_types: [] as string[],
-    secret: ''
+    verify_signature: true
   })
 
   const selectedProvider = providerOptions.find(p => p.value === formData.provider)
@@ -63,13 +64,15 @@ export function WebhookForm({ agentName, onSuccess, onCancel }: WebhookFormProps
         name: formData.name,
         provider: formData.provider as any,
         event_types: formData.event_types,
-        is_active: true
+        is_active: true,
+        config: { verify_signature: formData.verify_signature }
       } as any)
       
       // Show the secret modal
       setCreatedWebhook({
         webhookUrl: result.webhook_url,
-        secret: result.config?.secret || ''
+        secret: result.config?.secret || '',
+        verifySignature: formData.verify_signature
       })
       
       toast.success('Webhook created successfully!')
@@ -119,7 +122,9 @@ export function WebhookForm({ agentName, onSuccess, onCancel }: WebhookFormProps
         <div className="mb-6">
           <h3 className="text-lg font-semibold text-gray-900 mb-2">Webhook Created Successfully! 🎉</h3>
           <p className="text-sm text-gray-600">
-            Save these credentials now. The secret will only be shown once for security.
+            {createdWebhook.verifySignature
+              ? 'Save these credentials now. The secret will only be shown once for security.'
+              : 'Your webhook is ready. Signature verification is disabled — all incoming requests will be accepted.'}
           </p>
         </div>
 
@@ -147,8 +152,8 @@ export function WebhookForm({ agentName, onSuccess, onCancel }: WebhookFormProps
             </div>
           </div>
 
-          {/* Secret */}
-          {createdWebhook.secret && (
+          {/* Secret — only show if signature verification is enabled */}
+          {createdWebhook.verifySignature && createdWebhook.secret && (
             <div>
               <label className="block text-sm font-medium text-gray-700 mb-2">
                 Webhook Secret
@@ -189,10 +194,11 @@ export function WebhookForm({ agentName, onSuccess, onCancel }: WebhookFormProps
         <div className="bg-blue-50 border border-blue-200 rounded-lg p-4 mb-6">
           <h4 className="text-sm font-medium text-blue-900 mb-2">Next Steps:</h4>
           <ol className="text-xs text-blue-800 space-y-1 list-decimal list-inside">
-            <li>Copy the webhook URL and secret above</li>
-            <li>Go to your {selectedProvider?.label} settings</li>
-            <li>Add this webhook URL to your repository/project</li>
-            <li>Configure the secret in {selectedProvider?.label} for secure verification</li>
+            <li>Copy the webhook URL above</li>
+            <li>Go to your {selectedProvider?.label} settings and add this URL</li>
+            {createdWebhook.verifySignature && createdWebhook.secret && (
+              <li>Configure the webhook secret in {selectedProvider?.label} for signature verification</li>
+            )}
           </ol>
         </div>
 
@@ -237,7 +243,10 @@ export function WebhookForm({ agentName, onSuccess, onCancel }: WebhookFormProps
               </label>
               <select
                 value={formData.provider}
-                onChange={(e) => setFormData(prev => ({ ...prev, provider: e.target.value, event_types: [] }))}
+                onChange={(e) => {
+                  const p = providerOptions.find(o => o.value === e.target.value)
+                  setFormData(prev => ({ ...prev, provider: e.target.value, event_types: [], verify_signature: p?.defaultVerify ?? false }))
+                }}
                 className="w-full px-3 py-2 text-sm border border-gray-300 rounded-lg focus:ring-2 focus:ring-red-500 focus:border-transparent"
                 required
               >
@@ -293,6 +302,36 @@ export function WebhookForm({ agentName, onSuccess, onCancel }: WebhookFormProps
           )}
         </div>
 
+
+        {/* Signature Verification Toggle */}
+        <div>
+          <h3 className="text-base font-semibold text-gray-900 mb-1">Signature Verification</h3>
+          <p className="text-xs text-gray-600 mb-3">
+            Verify that incoming requests are genuinely from {selectedProvider?.label} using HMAC signature
+          </p>
+          <label className="flex items-center gap-3 cursor-pointer">
+            <div className="relative">
+              <input
+                type="checkbox"
+                className="sr-only"
+                checked={formData.verify_signature}
+                onChange={(e) => setFormData(prev => ({ ...prev, verify_signature: e.target.checked }))}
+              />
+              <div className={`w-10 h-6 rounded-full transition-colors ${formData.verify_signature ? 'bg-red-500' : 'bg-gray-300'}`} />
+              <div className={`absolute top-1 left-1 w-4 h-4 bg-white rounded-full shadow transition-transform ${formData.verify_signature ? 'translate-x-4' : 'translate-x-0'}`} />
+            </div>
+            <div>
+              <span className="text-sm font-medium text-gray-900">
+                {formData.verify_signature ? 'Enabled' : 'Disabled'}
+              </span>
+              <p className="text-xs text-gray-500">
+                {formData.verify_signature
+                  ? 'Requests without a valid signature will be rejected'
+                  : 'All incoming requests will be accepted without signature check'}
+              </p>
+            </div>
+          </label>
+        </div>
 
         {/* Info Box */}
         <div className="bg-red-50 border border-red-200 rounded-lg p-4">
