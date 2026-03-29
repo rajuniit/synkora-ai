@@ -192,16 +192,40 @@ class WebhookProcessor:
             logger.error(f"Failed to trigger agent: {e}", exc_info=True)
             raise
 
+    async def _record_failed_event(
+        self, webhook: AgentWebhook, payload_dict: dict[str, Any], error_message: str
+    ) -> None:
+        """Create a failed event record so failures are visible in the UI history."""
+        try:
+            event = AgentWebhookEvent(
+                webhook_id=webhook.id,
+                event_type="unknown",
+                status="failed",
+                payload=payload_dict,
+                parsed_data={},
+                error_message=error_message,
+                processing_started_at=datetime.now(UTC),
+                processing_completed_at=datetime.now(UTC),
+            )
+            self.db.add(event)
+            await self.db.commit()
+        except Exception:
+            logger.warning(f"Failed to record failed event for webhook {webhook.id}", exc_info=True)
+
     async def process_webhook(
         self, webhook: AgentWebhook, payload: bytes, payload_dict: dict[str, Any], headers: dict[str, str]
     ) -> dict[str, Any]:
         """Process incoming webhook."""
         try:
-            # Verify signature
-            if webhook.secret:
+            # Verify signature — only if the webhook has a secret AND verify_signature is enabled.
+            # verify_signature defaults to True for providers that always sign (GitHub, Slack etc.)
+            # and False for providers that don't (Sentry, custom) unless the user enables it.
+            verify_signature = (webhook.config or {}).get("verify_signature", True)
+            if webhook.secret and verify_signature:
                 if not self.verify_signature(webhook, payload, headers):
                     webhook.failure_count += 1
                     await self.db.commit()
+                    await self._record_failed_event(webhook, payload_dict, "Invalid signature")
                     raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Invalid signature")
 
             # Parse payload
@@ -265,5 +289,6 @@ class WebhookProcessor:
             logger.error(f"Error processing webhook: {e}", exc_info=True)
             webhook.failure_count += 1
             await self.db.commit()
+            await self._record_failed_event(webhook, payload_dict, str(e))
 
             raise HTTPException(status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail=str(e))

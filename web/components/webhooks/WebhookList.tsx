@@ -159,6 +159,10 @@ export function WebhookList({ agentName, refreshKey = 0, onCreateClick }: Webhoo
                           <span>{webhook.event_types.join(', ')}</span>
                         </>
                       )}
+                      <span className="text-gray-300">•</span>
+                      <span className={`text-xs font-medium ${webhook.config?.verify_signature !== false ? 'text-green-600' : 'text-gray-400'}`}>
+                        {webhook.config?.verify_signature !== false ? 'Signature: On' : 'Signature: Off'}
+                      </span>
                     </div>
 
                     <div className="flex items-center gap-2 bg-gray-50 rounded-lg p-3 border border-gray-200">

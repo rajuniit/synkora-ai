@@ -164,9 +164,17 @@ async def create_webhook(
     webhook_token = secrets.token_urlsafe(32)
     webhook_url = f"/api/webhooks/{webhook_token}"
 
-    # Generate and encrypt secret
-    secret = secrets.token_urlsafe(32)
-    encrypted_secret = encrypt_value(secret)
+    # Generate and encrypt secret (always — user may want to enable verification later)
+    plain_secret = secrets.token_urlsafe(32)
+    encrypted_secret = encrypt_value(plain_secret)
+
+    # Providers that natively support HMAC signatures have verification on by default.
+    # Sentry and custom don't send signatures by default, so verification is off by default
+    # but can be enabled by the user via the verify_signature config flag.
+    PROVIDERS_WITH_SIGNATURES = {"github", "gitlab", "clickup", "jira", "slack"}
+    config = dict(webhook_data.config or {})
+    if "verify_signature" not in config:
+        config["verify_signature"] = webhook_data.provider in PROVIDERS_WITH_SIGNATURES
 
     # Create webhook
     webhook = AgentWebhook(
@@ -176,7 +184,7 @@ async def create_webhook(
         webhook_url=webhook_url,
         secret=encrypted_secret,
         event_types=webhook_data.event_types,
-        config=webhook_data.config,
+        config=config,
         retry_config=webhook_data.retry_config or {"max_retries": 3, "retry_delay": 60},
     )
 
@@ -189,7 +197,7 @@ async def create_webhook(
     # Return response with plain secret (one-time only)
     response = WebhookResponse.model_validate(webhook)
     response.config = response.config or {}
-    response.config["secret"] = secret  # Return unencrypted secret once
+    response.config["secret"] = plain_secret
 
     return response
 
