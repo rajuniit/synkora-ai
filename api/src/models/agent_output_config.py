@@ -9,7 +9,7 @@ import enum
 
 from sqlalchemy import JSON, Boolean, Column, DateTime, Enum, ForeignKey, Integer, String, Text
 from sqlalchemy.dialects.postgresql import UUID
-from sqlalchemy.orm import relationship
+from sqlalchemy.orm import backref, relationship
 
 from .base import BaseModel, TenantMixin
 
@@ -80,7 +80,7 @@ class AgentOutputConfig(BaseModel, TenantMixin):
     max_retries = Column(Integer, default=3, nullable=False)
 
     # Relationships
-    agent = relationship("Agent", backref="output_configs")
+    agent = relationship("Agent", backref=backref("output_configs", passive_deletes=True))
     oauth_app = relationship("OAuthApp", backref="agent_outputs")
     deliveries = relationship("AgentOutputDelivery", back_populates="output_config", cascade="all, delete-orphan")
 

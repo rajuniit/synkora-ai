@@ -6,7 +6,7 @@ Links accounts to agents they interact with, tracking usage and engagement.
 
 from sqlalchemy import Column, ForeignKey, Integer, String, Text
 from sqlalchemy.dialects.postgresql import JSONB, UUID
-from sqlalchemy.orm import relationship
+from sqlalchemy.orm import backref, relationship
 
 from .base import BaseModel
 
@@ -85,7 +85,7 @@ class AgentUser(BaseModel):
     )
 
     # Relationships
-    agent = relationship("Agent", backref="agent_users")
+    agent = relationship("Agent", backref=backref("agent_users", passive_deletes=True))
     account = relationship("Account", backref="agent_interactions")
     tenant = relationship("Tenant")
 
