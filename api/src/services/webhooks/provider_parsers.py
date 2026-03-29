@@ -573,7 +573,8 @@ class ProviderParser:
                     "times_seen": 0,
                     "first_seen": "",
                     "last_seen": "",
-                    "stack_trace": inner_event.get("sentry.interfaces.Stacktrace", {}) or inner_event.get("stacktrace", {}),
+                    "stack_trace": inner_event.get("sentry.interfaces.Stacktrace", {})
+                    or inner_event.get("stacktrace", {}),
                     "tags": inner_event.get("tags", []),
                     "raw": payload,
                 },
