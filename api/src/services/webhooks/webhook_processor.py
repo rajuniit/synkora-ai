@@ -227,6 +227,8 @@ class WebhookProcessor:
                 event_id = headers.get("x-github-delivery")
             elif webhook.provider == "slack":
                 event_id = payload_dict.get("event_id")
+            elif webhook.provider == "sentry":
+                event_id = headers.get("sentry-hook-id")
 
             # SECURITY: Replay protection — reject if this delivery ID was already processed
             if event_id:

@@ -540,6 +540,54 @@ class ProviderParser:
         return parsed
 
     @staticmethod
+    def parse_sentry(payload: dict[str, Any]) -> dict[str, Any]:
+        """
+        Parse Sentry webhook payload.
+
+        Sentry sends alerts via its Alerts -> Webhooks integration.
+        Payload shape: https://docs.sentry.io/product/integrations/integration-platform/webhooks/
+        """
+        action = payload.get("action", "")
+        data = payload.get("data", {})
+        issue = data.get("issue", {})
+        event = data.get("event", {})
+
+        # Determine event type from action + resource
+        resource = payload.get("resource", "")
+        if resource == "event_alert":
+            event_type = "event_alert"
+        elif resource == "metric_alert":
+            event_type = "metric_alert"
+        elif action == "created":
+            event_type = "issue"
+        elif action == "triggered":
+            event_type = "issue_alert"
+        else:
+            event_type = action or "error"
+
+        return {
+            "provider": "sentry",
+            "event_type": event_type,
+            "timestamp": datetime.now(UTC).isoformat(),
+            "data": {
+                "action": action,
+                "issue_id": issue.get("id"),
+                "issue_title": issue.get("title") or event.get("title", ""),
+                "issue_url": issue.get("web_url") or issue.get("permalink", ""),
+                "level": issue.get("level") or event.get("level", ""),
+                "culprit": issue.get("culprit") or event.get("culprit", ""),
+                "project": issue.get("project", {}).get("slug") if isinstance(issue.get("project"), dict) else "",
+                "status": issue.get("status", ""),
+                "times_seen": issue.get("times_seen", 0),
+                "first_seen": issue.get("firstSeen", ""),
+                "last_seen": issue.get("lastSeen", ""),
+                "stack_trace": event.get("sentry.interfaces.Stacktrace", {}) or event.get("stacktrace", {}),
+                "tags": event.get("tags", []),
+                "raw": payload,
+            },
+        }
+
+    @staticmethod
     def parse_custom(payload: dict[str, Any], config: dict | None = None) -> dict[str, Any]:
         """
         Parse custom webhook payload.
@@ -548,22 +596,25 @@ class ProviderParser:
         """
         config = config or {}
 
-        parsed = {
-            "provider": "custom",
-            "event_type": "custom_event",
-            "timestamp": datetime.now(UTC).isoformat(),
-            "data": payload,
-        }
+        # Default to "webhook" so it matches the standard custom event_type selection
+        event_type = "webhook"
 
-        # Extract event type if configured
+        # Extract event type from payload if configured
         if "event_type_field" in config:
             event_type_path = config["event_type_field"].split(".")
             value = payload
             for key in event_type_path:
-                value = value.get(key, "unknown")
+                value = value.get(key, "webhook")
                 if not isinstance(value, dict):
                     break
-            parsed["event_type"] = value
+            event_type = value
+
+        parsed = {
+            "provider": "custom",
+            "event_type": event_type,
+            "timestamp": datetime.now(UTC).isoformat(),
+            "data": payload,
+        }
 
         return parsed
 
@@ -590,6 +641,8 @@ class ProviderParser:
             return cls.parse_jira(payload)
         elif provider == "slack":
             return cls.parse_slack(payload)
+        elif provider == "sentry":
+            return cls.parse_sentry(payload)
         elif provider == "custom":
             return cls.parse_custom(payload, config)
         else:
