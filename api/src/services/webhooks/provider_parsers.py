@@ -544,16 +544,48 @@ class ProviderParser:
         """
         Parse Sentry webhook payload.
 
-        Sentry sends alerts via its Alerts -> Webhooks integration.
-        Payload shape: https://docs.sentry.io/product/integrations/integration-platform/webhooks/
+        Handles two formats:
+        - Legacy Webhooks plugin (Settings → Integrations → Webhooks):
+          Top-level fields: project, level, culprit, message, url, event{}
+        - New Alerts API (Alerts → Alert Rules → Webhook action):
+          Top-level fields: action, resource, data{issue{}, event{}}
         """
+        # Detect format: legacy has top-level "event" but no "action"/"resource"
+        is_legacy = "action" not in payload and "event" in payload
+
+        if is_legacy:
+            # Legacy Webhooks plugin format
+            inner_event = payload.get("event", {})
+            event_type = "error"
+            return {
+                "provider": "sentry",
+                "event_type": event_type,
+                "timestamp": datetime.now(UTC).isoformat(),
+                "data": {
+                    "action": "triggered",
+                    "issue_id": inner_event.get("event_id") or inner_event.get("id"),
+                    "issue_title": inner_event.get("title") or payload.get("message", ""),
+                    "issue_url": payload.get("url", ""),
+                    "level": payload.get("level") or inner_event.get("level", ""),
+                    "culprit": payload.get("culprit") or inner_event.get("culprit", ""),
+                    "project": payload.get("project_slug") or payload.get("project", ""),
+                    "status": "",
+                    "times_seen": 0,
+                    "first_seen": "",
+                    "last_seen": "",
+                    "stack_trace": inner_event.get("sentry.interfaces.Stacktrace", {}) or inner_event.get("stacktrace", {}),
+                    "tags": inner_event.get("tags", []),
+                    "raw": payload,
+                },
+            }
+
+        # New Alerts API format
         action = payload.get("action", "")
         data = payload.get("data", {})
         issue = data.get("issue", {})
         event = data.get("event", {})
-
-        # Determine event type from action + resource
         resource = payload.get("resource", "")
+
         if resource == "event_alert":
             event_type = "event_alert"
         elif resource == "metric_alert":
