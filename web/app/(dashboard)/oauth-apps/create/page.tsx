@@ -318,7 +318,7 @@ const PROVIDERS = [
     color: 'text-gray-900',
     bgColor: 'bg-gray-100',
     description: 'Posts, mentions, and social engagement',
-    defaultScopes: ['tweet.read', 'users.read', 'offline.access'],
+    defaultScopes: ['tweet.read', 'tweet.write', 'users.read', 'offline.access'],
     redirectUri: `${API_URL}/api/v1/oauth/twitter/callback`,
     setupGuide: 'https://developer.twitter.com/en/portal/dashboard',
     supportsOAuth: true,

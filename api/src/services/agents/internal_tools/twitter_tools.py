@@ -146,7 +146,16 @@ async def _make_twitter_request(
                 error_body = response.json()
                 detail = error_body.get("detail") or error_body.get("title") or ""
             except Exception:
+                error_body = {}
                 detail = ""
+            logger.error(f"Twitter 403 response body: {error_body}")
+            if is_write:
+                raise ValueError(
+                    "Twitter returned 403 on a write operation. Your stored token likely lacks tweet.write scope. "
+                    "To fix: go to My Connections → Twitter → Disconnect, then reconnect via OAuth to get a fresh token. "
+                    "Also ensure your Twitter app has 'Read and Write' permissions enabled in the Developer Portal "
+                    "(Settings → User authentication settings → App permissions → Read and Write)."
+                )
             if "453" in response.text or "authorization" in response.text.lower():
                 raise ValueError(
                     "Twitter returned 403: your app needs 'Read and Write' permissions enabled in the "
