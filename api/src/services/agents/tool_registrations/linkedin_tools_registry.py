@@ -20,9 +20,11 @@ def register_linkedin_tools(registry):
     """
     from src.services.agents.internal_tools.linkedin_tools import (
         internal_linkedin_get_company_info,
+        internal_linkedin_get_managed_pages,
         internal_linkedin_get_posts,
         internal_linkedin_get_profile,
         internal_linkedin_post_text,
+        internal_linkedin_post_to_page,
         internal_linkedin_post_with_image,
         internal_linkedin_share_url,
     )
@@ -78,6 +80,24 @@ def register_linkedin_tools(registry):
         runtime_context = config.get("_runtime_context") if config else None
         return await internal_linkedin_get_posts(
             count=kwargs.get("count", 10),
+            runtime_context=runtime_context,
+            config=config,
+        )
+
+    async def internal_linkedin_get_managed_pages_wrapper(config: dict[str, Any] | None = None, **kwargs):
+        runtime_context = config.get("_runtime_context") if config else None
+        return await internal_linkedin_get_managed_pages(
+            runtime_context=runtime_context,
+            config=config,
+        )
+
+    async def internal_linkedin_post_to_page_wrapper(config: dict[str, Any] | None = None, **kwargs):
+        runtime_context = config.get("_runtime_context") if config else None
+        return await internal_linkedin_post_to_page(
+            organization_id=kwargs.get("organization_id"),
+            text=kwargs.get("text"),
+            visibility=kwargs.get("visibility", "PUBLIC"),
+            url=kwargs.get("url"),
             runtime_context=runtime_context,
             config=config,
         )
@@ -209,4 +229,45 @@ def register_linkedin_tools(registry):
         function=internal_linkedin_get_posts_wrapper,
     )
 
-    logger.info("Registered 6 LinkedIn tools")
+    registry.register_tool(
+        name="internal_linkedin_get_managed_pages",
+        description="Get the list of LinkedIn Pages/Organizations that the authenticated user administers. Use this to find the organization ID before posting to a page.",
+        parameters={
+            "type": "object",
+            "properties": {},
+            "required": [],
+        },
+        function=internal_linkedin_get_managed_pages_wrapper,
+    )
+
+    registry.register_tool(
+        name="internal_linkedin_post_to_page",
+        description="Post to a LinkedIn Page/Organization on behalf of the authenticated user. Use internal_linkedin_get_managed_pages first to get the organization_id.",
+        parameters={
+            "type": "object",
+            "properties": {
+                "organization_id": {
+                    "type": "string",
+                    "description": "LinkedIn organization/page numeric ID (e.g. '12345678')",
+                },
+                "text": {
+                    "type": "string",
+                    "description": "Post content (max 3000 characters)",
+                },
+                "visibility": {
+                    "type": "string",
+                    "enum": ["PUBLIC", "LOGGED_IN"],
+                    "description": "Who can see the post (default: PUBLIC)",
+                    "default": "PUBLIC",
+                },
+                "url": {
+                    "type": "string",
+                    "description": "Optional URL to share as article content",
+                },
+            },
+            "required": ["organization_id", "text"],
+        },
+        function=internal_linkedin_post_to_page_wrapper,
+    )
+
+    logger.info("Registered 8 LinkedIn tools")

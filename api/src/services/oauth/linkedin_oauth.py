@@ -54,7 +54,7 @@ class LinkedInOAuth:
         """
         if scopes is None:
             # Default scopes for basic profile and posting
-            scopes = ["openid", "profile", "email", "w_member_social"]
+            scopes = ["openid", "profile", "email", "w_member_social", "w_organization_social", "r_organization_social"]
 
         params = {
             "response_type": "code",

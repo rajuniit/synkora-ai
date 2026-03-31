@@ -85,7 +85,17 @@ async def twitter_authorize(
         if not state:
             raise HTTPException(status_code=500, detail="Failed to create OAuth state")
 
-        scopes = oauth_app.scopes or ["tweet.read", "tweet.write", "users.read", "offline.access"]
+        scopes = oauth_app.scopes or [
+            "tweet.read",
+            "tweet.write",
+            "users.read",
+            "follows.read",
+            "follows.write",
+            "like.read",
+            "like.write",
+            "bookmark.read",
+            "offline.access",
+        ]
         auth_url, code_verifier = oauth.get_authorization_url(state=state, scopes=scopes)
 
         # Store code_verifier in state for PKCE verification
@@ -141,9 +151,14 @@ async def twitter_callback(
         token_data = await oauth.get_access_token(code, code_verifier)
         access_token = token_data.get("access_token")
         refresh_token = token_data.get("refresh_token")
+        expires_in = token_data.get("expires_in")
 
         if not access_token:
             raise HTTPException(status_code=400, detail="Failed to get access token")
+
+        from datetime import UTC, datetime, timedelta
+
+        token_expires_at = datetime.now(UTC) + timedelta(seconds=int(expires_in)) if expires_in else None
 
         # Get user info
         user_info = await oauth.get_user_info(access_token)
@@ -179,6 +194,8 @@ async def twitter_callback(
             oauth_app.access_token = encrypt_value(access_token)
             if refresh_token:
                 oauth_app.refresh_token = encrypt_value(refresh_token)
+            if token_expires_at:
+                oauth_app.token_expires_at = token_expires_at
             logger.info(f"Twitter OAuth successful (app-level) for app {oauth_app_id}, user @{username}")
 
         await db.commit()
