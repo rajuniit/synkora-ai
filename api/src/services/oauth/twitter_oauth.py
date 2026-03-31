@@ -67,7 +67,17 @@ class TwitterOAuth:
             Tuple of (authorization_url, code_verifier)
         """
         if scopes is None:
-            scopes = ["tweet.read", "tweet.write", "users.read", "offline.access"]
+            scopes = [
+                "tweet.read",
+                "tweet.write",
+                "users.read",
+                "follows.read",
+                "follows.write",
+                "like.read",
+                "like.write",
+                "bookmark.read",
+                "offline.access",
+            ]
 
         if code_verifier is None:
             code_verifier = self._generate_code_verifier()

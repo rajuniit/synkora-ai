@@ -117,6 +117,12 @@ celery_app.conf.update(
             "schedule": crontab(minute=0, hour="*/6"),  # Every 6 hours
             "args": (24,),  # 24-hour TTL
         },
+        # Recover webhook events stuck in 'processing' (worker killed mid-task) every 15 minutes
+        "cleanup-stale-webhook-events": {
+            "task": "tasks.cleanup_stale_webhook_events",
+            "schedule": crontab(minute="*/15"),  # Every 15 minutes
+            "args": (30,),  # 30-minute stale threshold
+        },
     },
 )
 

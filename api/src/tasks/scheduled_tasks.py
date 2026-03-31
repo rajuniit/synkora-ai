@@ -894,3 +894,55 @@ def cleanup_old_executions(days: int = 30) -> dict[str, Any]:
         raise
     finally:
         db.close()
+
+
+@celery_app.task(name="tasks.cleanup_stale_webhook_events")
+def cleanup_stale_webhook_events(stale_minutes: int = 30) -> dict[str, Any]:
+    """
+    Mark webhook events stuck in 'processing' as failed.
+
+    Events stay in 'processing' forever when a Celery worker is killed mid-task
+    (e.g. during a deployment). This task finds them and marks them failed so
+    the UI shows the correct status instead of spinning forever.
+
+    Args:
+        stale_minutes: Minutes after which a 'processing' event is considered stale (default 30)
+    """
+    db: Session = next(get_db())
+
+    try:
+        from datetime import timedelta
+
+        from src.models.agent_webhook import AgentWebhookEvent
+
+        cutoff = datetime.now(UTC) - timedelta(minutes=stale_minutes)
+
+        stale_events = (
+            db.query(AgentWebhookEvent)
+            .filter(
+                AgentWebhookEvent.status == "processing",
+                AgentWebhookEvent.processing_started_at < cutoff,
+            )
+            .all()
+        )
+
+        for event in stale_events:
+            event.status = "failed"
+            event.error_message = (
+                f"Event timed out after {stale_minutes} minutes in 'processing' state. "
+                "Worker likely restarted mid-task."
+            )
+            event.processing_completed_at = datetime.now(UTC)
+
+        if stale_events:
+            db.commit()
+            logger.info(f"Marked {len(stale_events)} stale webhook event(s) as failed")
+
+        return {"status": "success", "recovered": len(stale_events)}
+
+    except Exception as e:
+        logger.error(f"Error cleaning up stale webhook events: {e}")
+        db.rollback()
+        raise
+    finally:
+        db.close()

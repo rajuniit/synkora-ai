@@ -83,8 +83,44 @@ async def _get_linkedin_credentials(
         credentials["access_token"] = decrypt_value(user_token.access_token)
         logger.info(f"✅ Using user's LinkedIn token (OAuth app: '{oauth_app.app_name}')")
     elif oauth_app.access_token:
-        # Fall back to OAuth app token
-        credentials["access_token"] = decrypt_value(oauth_app.access_token)
+        # Fall back to OAuth app token, refreshing if expired
+        from datetime import UTC, datetime
+
+        token_expired = oauth_app.token_expires_at is not None and oauth_app.token_expires_at.replace(
+            tzinfo=UTC
+        ) < datetime.now(UTC)
+        if token_expired and oauth_app.refresh_token:
+            try:
+                from src.services.oauth.linkedin_oauth import LinkedInOAuth
+
+                client_secret = decrypt_value(oauth_app.client_secret)
+                li_oauth = LinkedInOAuth(
+                    client_id=oauth_app.client_id,
+                    client_secret=client_secret,
+                    redirect_uri=oauth_app.redirect_uri,
+                )
+                refreshed = await li_oauth.refresh_access_token(decrypt_value(oauth_app.refresh_token))
+                new_access = refreshed.get("access_token")
+                new_refresh = refreshed.get("refresh_token")
+                new_expires_in = refreshed.get("expires_in")
+                if new_access:
+                    from datetime import timedelta
+
+                    from src.services.agents.security import encrypt_value as _enc
+
+                    oauth_app.access_token = _enc(new_access)
+                    if new_refresh:
+                        oauth_app.refresh_token = _enc(new_refresh)
+                    if new_expires_in:
+                        oauth_app.token_expires_at = datetime.now(UTC) + timedelta(seconds=int(new_expires_in))
+                    await db.commit()
+                    logger.info(f"✅ Refreshed LinkedIn token for app '{oauth_app.app_name}'")
+                    credentials["access_token"] = new_access
+            except Exception as refresh_err:
+                logger.warning(f"LinkedIn token refresh failed: {refresh_err} — falling back to stored token")
+                credentials["access_token"] = decrypt_value(oauth_app.access_token)
+        else:
+            credentials["access_token"] = decrypt_value(oauth_app.access_token)
         logger.info(f"✅ Using LinkedIn OAuth app token '{oauth_app.app_name}'")
     elif oauth_app.api_token:
         # Fall back to API token
@@ -620,4 +656,142 @@ async def internal_linkedin_post_with_image(
 
     except Exception as e:
         logger.error(f"Failed to post image to LinkedIn: {e}")
+        return {"success": False, "error": str(e)}
+
+
+async def internal_linkedin_get_managed_pages(
+    config: dict[str, Any] | None = None,
+    runtime_context: Any = None,
+) -> dict[str, Any]:
+    """
+    Get the LinkedIn Pages/Organizations that the authenticated user administers.
+    Requires w_organization_social scope.
+
+    Returns:
+        List of managed pages with id and name
+    """
+    if not runtime_context:
+        return {"success": False, "error": "Runtime context is required"}
+
+    try:
+        config = config or {}
+        tool_name = config.get("_tool_name", "internal_linkedin_get_profile")
+        credentials = await _get_linkedin_credentials(runtime_context, tool_name)
+
+        profile_result = await internal_linkedin_get_profile(config=config, runtime_context=runtime_context)
+        if not profile_result.get("success"):
+            return profile_result
+
+        user_id = profile_result.get("profile", {}).get("id")
+        if not user_id:
+            return {"success": False, "error": "Failed to get user ID"}
+
+        result = await _make_linkedin_request(
+            "/organizationAcls",
+            credentials=credentials,
+            params={
+                "q": "roleAssignee",
+                "role": "ADMINISTRATOR",
+                "projection": "(elements*(organization~(id,localizedName)))",
+            },
+        )
+
+        pages = []
+        for element in result.get("elements", []):
+            org = element.get("organization~", {})
+            if org:
+                pages.append(
+                    {
+                        "id": str(org.get("id", "")),
+                        "name": org.get("localizedName", ""),
+                        "urn": f"urn:li:organization:{org.get('id', '')}",
+                    }
+                )
+
+        return {"success": True, "pages": pages, "count": len(pages)}
+
+    except Exception as e:
+        logger.error(f"Failed to get LinkedIn managed pages: {e}")
+        return {"success": False, "error": str(e)}
+
+
+async def internal_linkedin_post_to_page(
+    organization_id: str,
+    text: str,
+    visibility: str = "PUBLIC",
+    url: str | None = None,
+    config: dict[str, Any] | None = None,
+    runtime_context: Any = None,
+) -> dict[str, Any]:
+    """
+    Post to a LinkedIn Page/Organization on behalf of the authenticated user.
+    Requires w_organization_social scope.
+
+    Args:
+        organization_id: LinkedIn organization/page ID (numeric, e.g. '12345678')
+        text: Post content (max 3000 characters)
+        visibility: "PUBLIC" or "LOGGED_IN" (default: PUBLIC)
+        url: Optional URL to share as article content
+
+    Returns:
+        Created post details
+    """
+    if not runtime_context:
+        return {"success": False, "error": "Runtime context is required"}
+
+    if not organization_id:
+        return {"success": False, "error": "Organization ID is required"}
+
+    if not text:
+        return {"success": False, "error": "Post text is required"}
+
+    if len(text) > 3000:
+        return {"success": False, "error": f"Post exceeds 3000 characters ({len(text)} chars)"}
+
+    try:
+        config = config or {}
+        tool_name = config.get("_tool_name", "internal_linkedin_get_profile")
+        credentials = await _get_linkedin_credentials(runtime_context, tool_name)
+
+        author_urn = f"urn:li:organization:{organization_id}"
+
+        json_data: dict[str, Any] = {
+            "author": author_urn,
+            "commentary": text,
+            "visibility": visibility,
+            "distribution": {
+                "feedDistribution": "MAIN_FEED",
+                "targetEntities": [],
+                "thirdPartyDistributionChannels": [],
+            },
+            "lifecycleState": "PUBLISHED",
+            "isReshareDisabledByAuthor": False,
+        }
+
+        if url:
+            json_data["content"] = {"article": {"source": url}}
+
+        result = await _make_linkedin_request(
+            "/posts",
+            method="POST",
+            credentials=credentials,
+            json_data=json_data,
+        )
+
+        post_id = result.get("id") or result.get("x-restli-id")
+
+        return {
+            "success": True,
+            "post": {
+                "id": post_id,
+                "text": text,
+                "organization_id": organization_id,
+                "author_urn": author_urn,
+                "visibility": visibility,
+            },
+            "message": f"Post published to LinkedIn Page ({organization_id}) successfully",
+        }
+
+    except Exception as e:
+        logger.error(f"Failed to post to LinkedIn page: {e}")
         return {"success": False, "error": str(e)}

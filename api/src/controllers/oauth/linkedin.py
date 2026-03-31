@@ -83,7 +83,14 @@ async def linkedin_authorize(
         if not state:
             raise HTTPException(status_code=500, detail="Failed to create OAuth state")
 
-        scopes = oauth_app.scopes or ["openid", "profile", "email", "w_member_social"]
+        scopes = oauth_app.scopes or [
+            "openid",
+            "profile",
+            "email",
+            "w_member_social",
+            "w_organization_social",
+            "r_organization_social",
+        ]
         auth_url = oauth.get_authorization_url(state=state, scopes=scopes)
 
         logger.info(f"Initiating LinkedIn OAuth for app {oauth_app_id} (user_level={user_level})")
@@ -151,9 +158,14 @@ async def linkedin_callback(
         token_data = await oauth.get_access_token(code)
         access_token = token_data.get("access_token")
         refresh_token = token_data.get("refresh_token")
+        expires_in = token_data.get("expires_in")
 
         if not access_token:
             raise HTTPException(status_code=400, detail="Failed to get access token")
+
+        from datetime import UTC, datetime, timedelta
+
+        token_expires_at = datetime.now(UTC) + timedelta(seconds=int(expires_in)) if expires_in else None
 
         # Get user info
         user_info = await oauth.get_user_info(access_token)
@@ -190,6 +202,8 @@ async def linkedin_callback(
             oauth_app.access_token = encrypt_value(access_token)
             if refresh_token:
                 oauth_app.refresh_token = encrypt_value(refresh_token)
+            if token_expires_at:
+                oauth_app.token_expires_at = token_expires_at
             logger.info(f"LinkedIn OAuth successful (app-level) for app {oauth_app_id}, user {user_name}")
 
         await db.commit()

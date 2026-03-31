@@ -617,13 +617,13 @@ async def internal_github_search_issues(
 
         params = {
             "q": query,
-            "order": order,
             "per_page": min(per_page, 100),
             "page": page,
         }
 
         if sort:
             params["sort"] = sort
+            params["order"] = order
 
         result = await _make_github_request("GET", "/search/issues", token, params=params)
 
