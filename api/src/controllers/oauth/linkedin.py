@@ -163,9 +163,9 @@ async def linkedin_callback(
         if not access_token:
             raise HTTPException(status_code=400, detail="Failed to get access token")
 
-        from datetime import UTC, datetime, timedelta
+        from datetime import datetime, timedelta
 
-        token_expires_at = datetime.now(UTC) + timedelta(seconds=int(expires_in)) if expires_in else None
+        token_expires_at = datetime.utcnow() + timedelta(seconds=int(expires_in)) if expires_in else None
 
         # Get user info
         user_info = await oauth.get_user_info(access_token)
@@ -228,11 +228,22 @@ async def linkedin_callback(
         redirect_url = error_state_data.get("redirect_url") if error_state_data else None
         oauth_app_id = error_state_data.get("oauth_app_id") if error_state_data else None
 
-        # Get base URL for validation
-        base_url = "/"
-        if oauth_app_id:
-            oauth_app = await _get_oauth_app_secure(db, oauth_app_id)
-            if oauth_app:
-                base_url = await get_app_base_url(db, oauth_app.tenant_id)
+        # Rollback any broken transaction before querying
+        try:
+            await db.rollback()
+        except Exception:
+            pass
+
+        # Get base URL — fall back to env var if DB is unavailable
+        import os
+
+        base_url = os.getenv("APP_BASE_URL", "").rstrip("/")
+        if not base_url and oauth_app_id:
+            try:
+                oauth_app = await _get_oauth_app_secure(db, oauth_app_id)
+                if oauth_app:
+                    base_url = await get_app_base_url(db, oauth_app.tenant_id)
+            except Exception:
+                pass
 
         return _safe_error_redirect(redirect_url, "/oauth-apps", base_url, "linkedin", e)
