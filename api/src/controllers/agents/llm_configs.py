@@ -37,14 +37,15 @@ def invalidate_agent_llm_cache(agent_name: str):
     """Invalidate agent cache and remove from memory when LLM configs change."""
     logger.info(f"🔄 Starting cache invalidation for agent '{agent_name}'...")
 
-    # Step 1: Invalidate Redis cache
+    # Step 1: Invalidate Redis cache using sync client
     try:
+        from src.config.redis import get_redis
+
         cache = get_agent_cache()
-        redis = cache._get_redis()
-        if redis:
-            # Use sync Redis call directly instead of async with new event loop
+        sync_redis = get_redis()
+        if sync_redis:
             key = cache._build_key("config", agent_name)
-            deleted = redis.delete(key)
+            deleted = sync_redis.delete(key)
             logger.info(f"✅ Deleted Redis cache key '{key}' (deleted: {deleted})")
         else:
             logger.warning("⚠️  Redis not available, skipping cache invalidation")

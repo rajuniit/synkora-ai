@@ -2,7 +2,7 @@
 
 import { useState } from 'react'
 import { useParams} from 'next/navigation'
-import { ArrowLeft, X } from 'lucide-react'
+import { ArrowLeft, X, AlertTriangle } from 'lucide-react'
 import Link from 'next/link'
 import toast from 'react-hot-toast'
 import { LLMConfigForm, LLMConfigList } from '@/components/agents/llm-configs'
@@ -25,6 +25,8 @@ export default function AgentLLMConfigsPage() {
   const [showForm, setShowForm] = useState(false)
   const [editingConfig, setEditingConfig] = useState<AgentLLMConfig | undefined>()
   const [isSubmitting, setIsSubmitting] = useState(false)
+  const [deletingConfigId, setDeletingConfigId] = useState<string | null>(null)
+  const [isDeleting, setIsDeleting] = useState(false)
 
   const handleAdd = () => {
     setEditingConfig(undefined)
@@ -60,16 +62,21 @@ export default function AgentLLMConfigsPage() {
     }
   }
 
-  const handleDelete = async (configId: string) => {
-    if (!confirm('Are you sure you want to delete this configuration?')) {
-      return
-    }
+  const handleDelete = (configId: string) => {
+    setDeletingConfigId(configId)
+  }
 
+  const confirmDelete = async () => {
+    if (!deletingConfigId) return
+    setIsDeleting(true)
     try {
-      await deleteConfig(configId)
+      await deleteConfig(deletingConfigId)
       toast.success('Configuration deleted successfully')
+      setDeletingConfigId(null)
     } catch (error: any) {
       toast.error(error.message || 'Failed to delete configuration')
+    } finally {
+      setIsDeleting(false)
     }
   }
 
@@ -92,8 +99,47 @@ export default function AgentLLMConfigsPage() {
   }
 
 
+  const deletingConfig = configs.find(c => c.id === deletingConfigId)
+
   return (
     <div className="min-h-screen bg-gradient-to-br from-gray-50 via-red-50/30 to-gray-50">
+      {/* Delete Confirmation Modal */}
+      {deletingConfigId && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50">
+          <div className="bg-white rounded-lg shadow-xl p-6 max-w-md w-full mx-4">
+            <div className="flex items-center gap-3 mb-4">
+              <div className="flex-shrink-0 w-10 h-10 rounded-full bg-red-100 flex items-center justify-center">
+                <AlertTriangle className="w-5 h-5 text-red-600" />
+              </div>
+              <h3 className="text-lg font-semibold text-gray-900">Delete Configuration</h3>
+            </div>
+            <p className="text-gray-600 mb-6">
+              Are you sure you want to delete{' '}
+              <span className="font-medium text-gray-900">
+                {deletingConfig?.name || 'this configuration'}
+              </span>
+              ? This action cannot be undone.
+            </p>
+            <div className="flex justify-end gap-3">
+              <button
+                onClick={() => setDeletingConfigId(null)}
+                disabled={isDeleting}
+                className="px-4 py-2 text-sm font-medium text-gray-700 bg-white border border-gray-300 rounded-lg hover:bg-gray-50 disabled:opacity-50"
+              >
+                Cancel
+              </button>
+              <button
+                onClick={confirmDelete}
+                disabled={isDeleting}
+                className="px-4 py-2 text-sm font-medium text-white bg-red-600 rounded-lg hover:bg-red-700 disabled:opacity-50 flex items-center gap-2"
+              >
+                {isDeleting && <div className="w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin" />}
+                Delete
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
       {/* Header */}
       <div className="bg-white border-b border-gray-200">
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-6">
