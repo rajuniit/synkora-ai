@@ -115,9 +115,11 @@ class LLMConfigService:
         if updates.get("is_default"):
             await LLMConfigService._unset_default_configs(session, config.agent_id)
 
-        # Encrypt API key if provided
+        # Encrypt API key if provided; auto-enable config when a valid key is saved
         if "api_key" in updates and updates["api_key"]:
             updates["api_key"] = encrypt_value(updates["api_key"])
+            if "enabled" not in updates:
+                updates["enabled"] = True
 
         # Update fields
         for key, value in updates.items():

@@ -164,8 +164,12 @@ export default function LLMConfigList({
 
                 <button
                   onClick={() => onDelete(config.id)}
-                  className="p-2 text-gray-400 hover:text-red-600 hover:bg-red-50 rounded-lg transition-colors"
-                  title="Delete"
+                  className={`p-2 rounded-lg transition-colors ${
+                    config.is_default
+                      ? 'text-gray-200 cursor-not-allowed'
+                      : 'text-gray-400 hover:text-red-600 hover:bg-red-50'
+                  }`}
+                  title={config.is_default ? 'Cannot delete the default configuration' : 'Delete'}
                   disabled={config.is_default}
                 >
                   <Trash2 className="w-4 h-4" />

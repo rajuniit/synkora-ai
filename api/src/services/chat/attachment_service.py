@@ -122,10 +122,13 @@ class AttachmentService:
         # Generate unique file ID
         file_id = str(uuid4())
 
+        # Sanitize filename for S3 key and metadata (S3 metadata must be ASCII-only)
+        safe_filename = filename.encode("ascii", "replace").decode("ascii").replace("?", "_")
+
         # Generate S3 key
         timestamp = datetime.now(UTC)
         date_path = timestamp.strftime("%Y/%m/%d")
-        s3_key = f"tenants/{tenant_id}/chat-attachments/{conversation_id}/{date_path}/{file_id}_{filename}"
+        s3_key = f"tenants/{tenant_id}/chat-attachments/{conversation_id}/{date_path}/{file_id}_{safe_filename}"
 
         # Upload to S3
         logger.info(f"Uploading chat attachment: {filename} ({content_type})")
@@ -136,7 +139,7 @@ class AttachmentService:
             metadata={
                 "tenant_id": str(tenant_id),
                 "conversation_id": str(conversation_id),
-                "original_filename": filename,
+                "original_filename": safe_filename,
                 "file_id": file_id,
             },
         )
