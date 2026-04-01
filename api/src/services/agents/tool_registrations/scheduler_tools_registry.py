@@ -35,13 +35,13 @@ def register_scheduler_tools(registry):
             logger.info("[scheduler] No message_id in runtime_context")
             return []
         try:
+            from src.core.database import get_async_session_factory
             from src.models.message import Message
 
             logger.info(f"[scheduler] Looking up message_id: {runtime_context.message_id}")
-            result = await runtime_context.db_session.execute(
-                select(Message).filter(Message.id == runtime_context.message_id)
-            )
-            message = result.scalar_one_or_none()
+            async with get_async_session_factory()() as session:
+                result = await session.execute(select(Message).filter(Message.id == runtime_context.message_id))
+                message = result.scalar_one_or_none()
             if message and message.content:
                 logger.info(f"[scheduler] Found message content: {message.content[:200]}...")
                 # Extract all email addresses from the message
@@ -94,17 +94,20 @@ def register_scheduler_tools(registry):
         emails = await _extract_emails_from_message(runtime_context)
         task_config = _fix_redacted_values(task_config, emails)
 
-        return await internal_create_scheduled_task(
-            db=runtime_context.db_session if runtime_context else None,
-            tenant_id=str(runtime_context.tenant_id) if runtime_context else None,
-            name=kwargs.get("name"),
-            task_type=kwargs.get("task_type"),
-            interval_seconds=kwargs.get("interval_seconds"),
-            config=task_config,
-            description=kwargs.get("description"),
-            is_active=kwargs.get("is_active", True),
-            account_id=account_id,
-        )
+        from src.core.database import get_async_session_factory
+
+        async with get_async_session_factory()() as session:
+            return await internal_create_scheduled_task(
+                db=session,
+                tenant_id=str(runtime_context.tenant_id) if runtime_context else None,
+                name=kwargs.get("name"),
+                task_type=kwargs.get("task_type"),
+                interval_seconds=kwargs.get("interval_seconds"),
+                config=task_config,
+                description=kwargs.get("description"),
+                is_active=kwargs.get("is_active", True),
+                account_id=account_id,
+            )
 
     async def _get_tenant_timezone(runtime_context) -> str:
         """Fetch the tenant's configured timezone from the database."""
@@ -113,13 +116,18 @@ def register_scheduler_tools(registry):
         try:
             from sqlalchemy import select
 
-            from src.models.tenant import Tenant
+            from src.core.database import get_async_session_factory
+            from src.models.tenant import Account, TenantAccountJoin
 
-            result = await runtime_context.db_session.execute(
-                select(Tenant.timezone).filter(Tenant.id == runtime_context.tenant_id)
-            )
-            tz = result.scalar_one_or_none()
-            return tz if tz else "UTC"
+            async with get_async_session_factory()() as session:
+                result = await session.execute(
+                    select(Account.timezone)
+                    .join(TenantAccountJoin, TenantAccountJoin.account_id == Account.id)
+                    .filter(TenantAccountJoin.tenant_id == runtime_context.tenant_id)
+                    .limit(1)
+                )
+                tz = result.scalar_one_or_none()
+                return tz if tz else "UTC"
         except Exception as e:
             logger.warning(f"[scheduler] Failed to fetch tenant timezone: {e}")
             return "UTC"
@@ -205,17 +213,20 @@ def register_scheduler_tools(registry):
         task_config["user_timezone"] = user_timezone
         task_config["original_cron"] = cron_expression
 
-        return await internal_create_cron_scheduled_task(
-            db=runtime_context.db_session if runtime_context else None,
-            tenant_id=str(runtime_context.tenant_id) if runtime_context else None,
-            name=kwargs.get("name"),
-            task_type=kwargs.get("task_type", "agent_task"),
-            cron_expression=utc_cron,
-            config=task_config,
-            description=kwargs.get("description"),
-            is_active=kwargs.get("is_active", True),
-            account_id=account_id,
-        )
+        from src.core.database import get_async_session_factory
+
+        async with get_async_session_factory()() as session:
+            return await internal_create_cron_scheduled_task(
+                db=session,
+                tenant_id=str(runtime_context.tenant_id) if runtime_context else None,
+                name=kwargs.get("name"),
+                task_type=kwargs.get("task_type", "agent_task"),
+                cron_expression=utc_cron,
+                config=task_config,
+                description=kwargs.get("description"),
+                is_active=kwargs.get("is_active", True),
+                account_id=account_id,
+            )
 
     async def internal_list_scheduled_tasks_wrapper(config: dict[str, Any] | None = None, **kwargs):
         runtime_context = config.get("_runtime_context") if config else None
