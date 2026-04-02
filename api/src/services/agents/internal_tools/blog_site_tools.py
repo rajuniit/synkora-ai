@@ -301,8 +301,12 @@ async def internal_deploy_to_github(
             ["git", "push", "-u", "origin", branch],
         ]
 
+        from src.services.agents.internal_tools.command_tools import _is_command_safe
+
         results = []
         for cmd in commands:
+            if not _is_command_safe(cmd, workspace_path):
+                return {"success": False, "error": f"Command blocked by security validator: {' '.join(cmd)}", "results": results}
             try:
                 result = subprocess.run(cmd, cwd=site_path, capture_output=True, text=True, timeout=120)
                 results.append(

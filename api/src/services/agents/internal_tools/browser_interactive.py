@@ -722,6 +722,22 @@ async def internal_browser_pdf(
         import base64
         import os
 
+        # Validate path is within workspace before writing
+        workspace_path = config.get("workspace_path") if config else None
+        if not workspace_path and config:
+            rc = config.get("_runtime_context")
+            if rc and getattr(rc, "tenant_id", None):
+                import uuid as _uuid
+                from src.services.agents.workspace_manager import get_workspace_manager
+                tenant_id = rc.tenant_id
+                conversation_id = getattr(rc, "conversation_id", None) or _uuid.uuid5(tenant_id, "background_tasks")
+                workspace_path = get_workspace_manager().get_or_create_workspace(tenant_id, conversation_id)
+        if workspace_path:
+            real_path = os.path.realpath(os.path.abspath(path))
+            real_workspace = os.path.realpath(workspace_path)
+            if not real_path.startswith(real_workspace + os.sep):
+                return {"success": False, "error": f"PDF path must be within workspace: {workspace_path}"}
+
         pdf_bytes = base64.b64decode(result["pdf_base64"])
         parent_dir = os.path.dirname(path)
         if parent_dir:

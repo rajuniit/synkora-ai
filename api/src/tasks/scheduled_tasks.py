@@ -20,7 +20,7 @@ from src.tasks.followup_reminder_task import execute_followup_reminder
 logger = logging.getLogger(__name__)
 
 
-@celery_app.task(bind=True, name="tasks.execute_scheduled_task")
+@celery_app.task(bind=True, name="tasks.execute_scheduled_task", soft_time_limit=3300, time_limit=3600)
 def execute_scheduled_task(
     self,
     task_id: str,
@@ -49,7 +49,12 @@ def execute_scheduled_task(
             return {"status": "skipped", "reason": "Task is not active"}
 
         # Create execution record
-        execution = TaskExecution(task_id=task_id, status=TaskStatus.RUNNING, started_at=datetime.now(UTC))
+        execution = TaskExecution(
+            task_id=task_id,
+            status=TaskStatus.RUNNING,
+            started_at=datetime.now(UTC),
+            celery_task_id=self.request.id,
+        )
         db.add(execution)
         db.commit()
 
@@ -220,10 +225,10 @@ This is an automated scheduled task. Complete it thoroughly and provide your fin
                                 except json_module.JSONDecodeError:
                                     pass
 
-                # Execute async agent call
+                # Execute async agent call (30-minute cap to prevent stuck tasks)
                 loop = asyncio.new_event_loop()
                 asyncio.set_event_loop(loop)
-                loop.run_until_complete(process_agent())
+                loop.run_until_complete(asyncio.wait_for(process_agent(), timeout=1800))
                 loop.close()
 
                 response_text = "".join(response_chunks)
@@ -340,7 +345,10 @@ This is an automated scheduled task. Complete it thoroughly and provide your fin
                 loop = asyncio.new_event_loop()
                 asyncio.set_event_loop(loop)
                 result = loop.run_until_complete(
-                    _run_autonomous_agent(task, db, approval_id=approval_id, feedback_text=feedback_text)
+                    asyncio.wait_for(
+                        _run_autonomous_agent(task, db, approval_id=approval_id, feedback_text=feedback_text),
+                        timeout=1800,
+                    )
                 )
                 loop.close()
 

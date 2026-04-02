@@ -100,9 +100,15 @@ async def internal_create_followup_item(
         Dictionary with followup item details
     """
     try:
-        # Convert followup_frequency_hours to float (LLM may pass as string)
-        followup_frequency_hours = float(followup_frequency_hours)
-        max_followup_attempts = int(max_followup_attempts)
+        # Convert followup_frequency_hours to float (LLM may pass as string like "24" or "24h")
+        try:
+            followup_frequency_hours = float(str(followup_frequency_hours).rstrip("hHmMsS"))
+        except (ValueError, TypeError):
+            return {"success": False, "error": f"Invalid followup_frequency_hours: '{followup_frequency_hours}'. Must be a number."}
+        try:
+            max_followup_attempts = int(str(max_followup_attempts).split(".")[0])
+        except (ValueError, TypeError):
+            return {"success": False, "error": f"Invalid max_followup_attempts: '{max_followup_attempts}'. Must be an integer."}
 
         # Handle both dict and RuntimeContext object
         if runtime_context:

@@ -15,11 +15,26 @@ from src.services.storage.s3_storage import get_s3_storage
 logger = logging.getLogger(__name__)
 
 
-def _get_workspace_path(config: dict[str, Any] | None) -> str | None:
+def _get_workspace_path(config: dict[str, Any] | None, runtime_context: Any = None) -> str | None:
     """Get the workspace path from config or RuntimeContext (including Celery task fallback)."""
+    import uuid as _uuid
+
     from src.services.agents.workspace_manager import get_workspace_path_from_config
 
-    return get_workspace_path_from_config(config)
+    path = get_workspace_path_from_config(config)
+    if path:
+        return path
+
+    # Fallback: create workspace directly from runtime_context when ContextVar isn't propagated
+    rc = runtime_context or (config.get("_runtime_context") if config else None)
+    if rc and getattr(rc, "tenant_id", None):
+        from src.services.agents.workspace_manager import get_workspace_manager
+
+        tenant_id = rc.tenant_id
+        conversation_id = getattr(rc, "conversation_id", None) or _uuid.uuid5(tenant_id, "background_tasks")
+        return get_workspace_manager().get_or_create_workspace(tenant_id, conversation_id)
+
+    return None
 
 
 def _validate_path_in_workspace(path: str, workspace_path: str | None) -> tuple[bool, str | None]:
@@ -66,7 +81,7 @@ async def internal_s3_upload_file(
     """
     try:
         # Validate file_path is within workspace
-        workspace_path = _get_workspace_path(config)
+        workspace_path = _get_workspace_path(config, runtime_context)
         is_valid, error = _validate_path_in_workspace(file_path, workspace_path)
         if not is_valid:
             return {"error": error}
@@ -139,7 +154,7 @@ async def internal_s3_upload_directory(
     """
     try:
         # Validate directory_path is within workspace
-        workspace_path = _get_workspace_path(config)
+        workspace_path = _get_workspace_path(config, runtime_context)
         is_valid, error = _validate_path_in_workspace(directory_path, workspace_path)
         if not is_valid:
             return {"error": error}
@@ -240,7 +255,7 @@ async def internal_s3_download_file(
     try:
         # Validate output_path is within workspace if provided
         if output_path:
-            workspace_path = _get_workspace_path(config)
+            workspace_path = _get_workspace_path(config, runtime_context)
             is_valid, error = _validate_path_in_workspace(output_path, workspace_path)
             if not is_valid:
                 return {"error": error}

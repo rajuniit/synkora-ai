@@ -397,6 +397,54 @@ async def get_task_executions(
         raise HTTPException(status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail="Failed to get task executions")
 
 
+@router.post("/executions/{execution_id}/cancel", status_code=status.HTTP_200_OK)
+async def cancel_task_execution(
+    execution_id: uuid.UUID,
+    db: AsyncSession = Depends(get_async_db),
+    current_account=Depends(get_current_account),
+    tenant_id: uuid.UUID = Depends(get_current_tenant_id),
+):
+    """Cancel a running task execution by revoking the Celery task."""
+    from datetime import UTC, datetime
+
+    from sqlalchemy import select
+
+    from src.celery_app import celery_app
+    from src.models.scheduled_task import TaskExecution, TaskStatus
+
+    result = await db.execute(select(TaskExecution).filter(TaskExecution.id == execution_id))
+    execution = result.scalar_one_or_none()
+
+    if not execution:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Execution not found")
+
+    # Verify tenant ownership via the parent task
+    from src.models.scheduled_task import ScheduledTask
+
+    task_result = await db.execute(select(ScheduledTask).filter(ScheduledTask.id == execution.task_id))
+    task = task_result.scalar_one_or_none()
+    if not task or task.tenant_id != tenant_id:
+        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Access denied")
+
+    if execution.status not in (TaskStatus.RUNNING, TaskStatus.PENDING):
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail=f"Cannot cancel execution in '{execution.status}' state",
+        )
+
+    # Revoke the Celery task (terminate=True sends SIGTERM to the worker process)
+    if execution.celery_task_id:
+        celery_app.control.revoke(execution.celery_task_id, terminate=True, signal="SIGTERM")
+        logger.info(f"Revoked Celery task {execution.celery_task_id} for execution {execution_id}")
+
+    execution.status = TaskStatus.CANCELLED
+    execution.completed_at = datetime.now(UTC)
+    execution.error_message = "Cancelled by user"
+    await db.commit()
+
+    return {"execution_id": str(execution_id), "status": "cancelled"}
+
+
 @router.post("/validate-cron", response_model=CronValidationResponse)
 async def validate_cron_expression(
     request: CronValidationRequest,

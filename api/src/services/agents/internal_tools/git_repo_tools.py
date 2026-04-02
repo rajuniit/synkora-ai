@@ -42,6 +42,13 @@ async def internal_git_clone_repo(
         from .github_auth_helper import prepare_authenticated_git_url
 
         workspace_path = _get_workspace_path(config)
+        if not workspace_path and runtime_context and getattr(runtime_context, "tenant_id", None):
+            # Fallback: create workspace directly from runtime_context when ContextVar isn't propagated
+            from src.services.agents.workspace_manager import get_workspace_manager
+            import uuid as _uuid
+            tenant_id = runtime_context.tenant_id
+            conversation_id = getattr(runtime_context, "conversation_id", None) or _uuid.uuid5(tenant_id, "background_tasks")
+            workspace_path = get_workspace_manager().get_or_create_workspace(tenant_id, conversation_id)
         if not workspace_path:
             return {
                 "success": False,
@@ -109,6 +116,14 @@ async def internal_git_add_remote(
     """
     try:
         workspace_path = _get_workspace_path(config)
+        if not workspace_path:
+            runtime_context = config.get("_runtime_context") if config else None
+            if runtime_context and getattr(runtime_context, "tenant_id", None):
+                from src.services.agents.workspace_manager import get_workspace_manager
+                import uuid as _uuid
+                tenant_id = runtime_context.tenant_id
+                conversation_id = getattr(runtime_context, "conversation_id", None) or _uuid.uuid5(tenant_id, "background_tasks")
+                workspace_path = get_workspace_manager().get_or_create_workspace(tenant_id, conversation_id)
         is_valid, error = _validate_repo_path(repo_path, workspace_path)
         if not is_valid:
             return {"success": False, "error": error}
@@ -167,6 +182,14 @@ async def internal_git_cleanup_repo(repo_path: str, config: dict[str, Any] | Non
             return {"success": True, "message": "Repository path does not exist (already cleaned up)"}
 
         workspace_path = _get_workspace_path(config)
+        if not workspace_path:
+            runtime_context = config.get("_runtime_context") if config else None
+            if runtime_context and getattr(runtime_context, "tenant_id", None):
+                from src.services.agents.workspace_manager import get_workspace_manager
+                import uuid as _uuid
+                tenant_id = runtime_context.tenant_id
+                conversation_id = getattr(runtime_context, "conversation_id", None) or _uuid.uuid5(tenant_id, "background_tasks")
+                workspace_path = get_workspace_manager().get_or_create_workspace(tenant_id, conversation_id)
         is_valid, error = _validate_repo_path(repo_path, workspace_path)
         if not is_valid:
             return {"success": False, "error": f"Can only cleanup directories within workspace. {error}"}

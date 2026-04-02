@@ -58,8 +58,17 @@ async def internal_send_email(
         if not runtime_context:
             return {"success": False, "error": "Runtime context is required"}
 
-        db = runtime_context.db_session
-        tenant_id = runtime_context.tenant_id
+        if isinstance(runtime_context, dict):
+            db = runtime_context.get("db_session")
+            tenant_id = runtime_context.get("tenant_id")
+        else:
+            db = getattr(runtime_context, "db_session", None)
+            tenant_id = getattr(runtime_context, "tenant_id", None)
+
+        if not db:
+            return {"success": False, "error": "db_session not available in runtime context"}
+        if not tenant_id:
+            return {"success": False, "error": "tenant_id not available in runtime context"}
 
         # Input validation
         if not to_email or "@" not in to_email:
@@ -315,8 +324,17 @@ async def internal_test_email_connection(
         if not runtime_context:
             return {"success": False, "error": "Runtime context is required"}
 
-        db = runtime_context.db_session
-        tenant_id = runtime_context.tenant_id
+        if isinstance(runtime_context, dict):
+            db = runtime_context.get("db_session")
+            tenant_id = runtime_context.get("tenant_id")
+        else:
+            db = getattr(runtime_context, "db_session", None)
+            tenant_id = getattr(runtime_context, "tenant_id", None)
+
+        if not db:
+            return {"success": False, "error": "db_session not available in runtime context"}
+        if not tenant_id:
+            return {"success": False, "error": "tenant_id not available in runtime context"}
 
         email_service = EmailService(db)
         result = email_service.test_connection(tenant_id=tenant_id)
