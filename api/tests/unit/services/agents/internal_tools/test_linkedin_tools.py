@@ -311,4 +311,4 @@ class TestInternalLinkedInPostWithImage:
         )
 
         assert result["success"] is False
-        assert "Image URL is required" in result["error"]
+        assert "At least one image URL is required" in result["error"]
