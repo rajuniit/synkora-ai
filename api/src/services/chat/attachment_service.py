@@ -314,6 +314,11 @@ class AttachmentService:
 
             context_parts.append(f"\n- {file_name} ({file_type}, {file_size} bytes)")
 
+            # Include download URL so the agent can reference or re-upload the file
+            download_url = att.get("download_url") or att.get("file_url")
+            if download_url:
+                context_parts.append(f"  Download URL: {download_url}")
+
             # Include extracted text if available
             extracted_text = att.get("extracted_text")
             if extracted_text:
