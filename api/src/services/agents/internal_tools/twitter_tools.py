@@ -82,10 +82,51 @@ async def _get_twitter_credentials(
     user_token = result.scalar_one_or_none()
 
     if user_token and user_token.access_token:
-        decrypted_token = decrypt_value(user_token.access_token)
-        credentials["access_token"] = decrypted_token
-        credentials["bearer_token"] = decrypted_token  # Use same token for both
-        credentials["token_type"] = "user"  # OAuth 2.0 user context — can read AND write
+        from datetime import UTC, datetime
+
+        user_token_expired = user_token.token_expires_at is not None and user_token.token_expires_at.replace(
+            tzinfo=UTC
+        ) < datetime.now(UTC)
+        if user_token_expired and user_token.refresh_token:
+            try:
+                from src.services.oauth.twitter_oauth import TwitterOAuth
+
+                client_secret = decrypt_value(oauth_app.client_secret)
+                tw_oauth = TwitterOAuth(
+                    client_id=oauth_app.client_id,
+                    client_secret=client_secret,
+                    redirect_uri=oauth_app.redirect_uri,
+                )
+                refreshed = await tw_oauth.refresh_access_token(decrypt_value(user_token.refresh_token))
+                new_access = refreshed.get("access_token")
+                new_refresh = refreshed.get("refresh_token")
+                new_expires_in = refreshed.get("expires_in")
+                if new_access:
+                    from datetime import timedelta
+
+                    from src.services.agents.security import encrypt_value as _enc
+
+                    user_token.access_token = _enc(new_access)
+                    if new_refresh:
+                        user_token.refresh_token = _enc(new_refresh)
+                    if new_expires_in:
+                        user_token.token_expires_at = datetime.now(UTC) + timedelta(seconds=int(new_expires_in))
+                    await db.commit()
+                    logger.info(f"✅ Refreshed user Twitter token (OAuth app: '{oauth_app.app_name}')")
+                    credentials["access_token"] = new_access
+                    credentials["bearer_token"] = new_access
+                    credentials["token_type"] = "user"
+            except Exception as refresh_err:
+                logger.warning(f"User Twitter token refresh failed: {refresh_err} — using stored token")
+                decrypted_token = decrypt_value(user_token.access_token)
+                credentials["access_token"] = decrypted_token
+                credentials["bearer_token"] = decrypted_token
+                credentials["token_type"] = "user"
+        else:
+            decrypted_token = decrypt_value(user_token.access_token)
+            credentials["access_token"] = decrypted_token
+            credentials["bearer_token"] = decrypted_token  # Use same token for both
+            credentials["token_type"] = "user"  # OAuth 2.0 user context — can read AND write
         logger.info(f"✅ Using user's Twitter token (OAuth app: '{oauth_app.app_name}')")
     elif oauth_app.access_token:
         # Fall back to OAuth app access token (user context)

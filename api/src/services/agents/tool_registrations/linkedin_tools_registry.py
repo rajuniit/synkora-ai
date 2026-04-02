@@ -71,6 +71,7 @@ def register_linkedin_tools(registry):
         return await internal_linkedin_post_with_image(
             text=kwargs.get("text"),
             image_url=kwargs.get("image_url"),
+            image_urls=kwargs.get("image_urls"),
             visibility=kwargs.get("visibility", "PUBLIC"),
             runtime_context=runtime_context,
             config=config,
@@ -188,7 +189,11 @@ def register_linkedin_tools(registry):
 
     registry.register_tool(
         name="internal_linkedin_post_with_image",
-        description="Post text with an image to LinkedIn. The image must be a publicly accessible URL.",
+        description=(
+            "Post text with one or more images to LinkedIn. "
+            "Use image_url for a single image or image_urls for multiple images (up to 9). "
+            "When the user attaches images in the chat, use the Download URL from the attachment context."
+        ),
         parameters={
             "type": "object",
             "properties": {
@@ -198,7 +203,12 @@ def register_linkedin_tools(registry):
                 },
                 "image_url": {
                     "type": "string",
-                    "description": "URL of the image to include",
+                    "description": "URL of a single image to include (use image_urls for multiple)",
+                },
+                "image_urls": {
+                    "type": "array",
+                    "items": {"type": "string"},
+                    "description": "List of image URLs to include (up to 9 images for a multi-image post)",
                 },
                 "visibility": {
                     "type": "string",
@@ -207,7 +217,7 @@ def register_linkedin_tools(registry):
                     "default": "PUBLIC",
                 },
             },
-            "required": ["text", "image_url"],
+            "required": ["text"],
         },
         function=internal_linkedin_post_with_image_wrapper,
     )

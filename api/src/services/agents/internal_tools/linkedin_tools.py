@@ -80,7 +80,43 @@ async def _get_linkedin_credentials(
     user_token = result.scalar_one_or_none()
 
     if user_token and user_token.access_token:
-        credentials["access_token"] = decrypt_value(user_token.access_token)
+        from datetime import UTC, datetime
+
+        user_token_expired = user_token.token_expires_at is not None and user_token.token_expires_at.replace(
+            tzinfo=UTC
+        ) < datetime.now(UTC)
+        if user_token_expired and user_token.refresh_token:
+            try:
+                from src.services.oauth.linkedin_oauth import LinkedInOAuth
+
+                client_secret = decrypt_value(oauth_app.client_secret)
+                li_oauth = LinkedInOAuth(
+                    client_id=oauth_app.client_id,
+                    client_secret=client_secret,
+                    redirect_uri=oauth_app.redirect_uri,
+                )
+                refreshed = await li_oauth.refresh_access_token(decrypt_value(user_token.refresh_token))
+                new_access = refreshed.get("access_token")
+                new_refresh = refreshed.get("refresh_token")
+                new_expires_in = refreshed.get("expires_in")
+                if new_access:
+                    from datetime import timedelta
+
+                    from src.services.agents.security import encrypt_value as _enc
+
+                    user_token.access_token = _enc(new_access)
+                    if new_refresh:
+                        user_token.refresh_token = _enc(new_refresh)
+                    if new_expires_in:
+                        user_token.token_expires_at = datetime.now(UTC) + timedelta(seconds=int(new_expires_in))
+                    await db.commit()
+                    logger.info(f"✅ Refreshed user LinkedIn token (OAuth app: '{oauth_app.app_name}')")
+                    credentials["access_token"] = new_access
+            except Exception as refresh_err:
+                logger.warning(f"User LinkedIn token refresh failed: {refresh_err} — using stored token")
+                credentials["access_token"] = decrypt_value(user_token.access_token)
+        else:
+            credentials["access_token"] = decrypt_value(user_token.access_token)
         logger.info(f"✅ Using user's LinkedIn token (OAuth app: '{oauth_app.app_name}')")
     elif oauth_app.access_token:
         # Fall back to OAuth app token, refreshing if expired
@@ -566,17 +602,22 @@ async def internal_linkedin_get_posts(
 
 async def internal_linkedin_post_with_image(
     text: str,
-    image_url: str,
+    image_url: str | None = None,
+    image_urls: list[str] | None = None,
     visibility: str = "PUBLIC",
     config: dict[str, Any] | None = None,
     runtime_context: Any = None,
 ) -> dict[str, Any]:
     """
-    Post text with an image to LinkedIn.
+    Post text with one or more images to LinkedIn using the proper Images API.
+
+    Downloads each image, uploads it to LinkedIn, then creates the post.
+    Uses `content.media` for a single image and `content.multiImage` for 2-9 images.
 
     Args:
         text: Post content
-        image_url: URL of the image to include
+        image_url: URL of a single image (use image_urls for multiple)
+        image_urls: List of image URLs (supports up to 9 images)
         visibility: "PUBLIC", "CONNECTIONS", or "LOGGED_IN"
 
     Returns:
@@ -588,13 +629,26 @@ async def internal_linkedin_post_with_image(
     if not text:
         return {"success": False, "error": "Post text is required"}
 
-    if not image_url:
-        return {"success": False, "error": "Image URL is required"}
+    # Normalise: merge image_url + image_urls into one list
+    all_urls: list[str] = []
+    if image_urls:
+        all_urls.extend(image_urls)
+    if image_url and image_url not in all_urls:
+        all_urls.append(image_url)
+
+    if not all_urls:
+        return {"success": False, "error": "At least one image URL is required"}
+
+    if len(all_urls) > 9:
+        return {"success": False, "error": "LinkedIn supports a maximum of 9 images per post"}
 
     try:
+        import httpx
+
         config = config or {}
         tool_name = config.get("_tool_name", "internal_linkedin_get_profile")
         credentials = await _get_linkedin_credentials(runtime_context, tool_name)
+        access_token = credentials.get("access_token")
 
         # Get user profile for author URN
         profile_result = await internal_linkedin_get_profile(
@@ -611,10 +665,69 @@ async def internal_linkedin_post_with_image(
 
         author_urn = f"urn:li:person:{user_id}"
 
-        # Create post with image
-        # Note: For proper image upload, you'd need to use the Assets API
-        # This simplified version uses an external image URL
-        json_data = {
+        init_headers = {
+            "Authorization": f"Bearer {access_token}",
+            "Content-Type": "application/json",
+            "X-Restli-Protocol-Version": "2.0.0",
+        }
+
+        # Upload all images and collect their URNs
+        uploaded_urns: list[str] = []
+        for idx, url in enumerate(all_urls):
+            # Step 1: Download image bytes
+            async with httpx.AsyncClient(follow_redirects=True, timeout=30.0) as client:
+                img_response = await client.get(url)
+                if img_response.status_code != 200:
+                    return {
+                        "success": False,
+                        "error": f"Failed to download image {idx + 1} from URL (HTTP {img_response.status_code})",
+                    }
+                image_bytes = img_response.content
+                content_type = img_response.headers.get("content-type", "image/jpeg").split(";")[0].strip()
+
+            # Step 2: Initialize LinkedIn image upload
+            async with httpx.AsyncClient(timeout=30.0) as client:
+                init_response = await client.post(
+                    "https://api.linkedin.com/v2/images?action=initializeUpload",
+                    headers=init_headers,
+                    json={"initializeUploadRequest": {"owner": author_urn}},
+                )
+                if init_response.status_code not in (200, 201):
+                    error_detail = init_response.text
+                    logger.error(f"LinkedIn image init failed: {error_detail}")
+                    return {"success": False, "error": f"Failed to initialize LinkedIn image upload: {error_detail}"}
+                init_data = init_response.json()
+
+            upload_url = init_data.get("value", {}).get("uploadUrl")
+            image_urn = init_data.get("value", {}).get("image")
+
+            if not upload_url or not image_urn:
+                return {"success": False, "error": "LinkedIn did not return upload URL or image URN"}
+
+            # Step 3: Upload image binary
+            async with httpx.AsyncClient(timeout=60.0) as client:
+                upload_response = await client.put(
+                    upload_url,
+                    content=image_bytes,
+                    headers={"Content-Type": content_type},
+                )
+                if upload_response.status_code not in (200, 201, 204):
+                    logger.error(f"LinkedIn image upload failed: {upload_response.status_code} {upload_response.text}")
+                    return {
+                        "success": False,
+                        "error": f"Failed to upload image {idx + 1} to LinkedIn (HTTP {upload_response.status_code})",
+                    }
+
+            logger.info(f"✅ Uploaded image {idx + 1}/{len(all_urls)} to LinkedIn: {image_urn}")
+            uploaded_urns.append(image_urn)
+
+        # Step 4: Build content block — single image vs multi-image
+        if len(uploaded_urns) == 1:
+            content_block = {"media": {"id": uploaded_urns[0]}}
+        else:
+            content_block = {"multiImage": {"images": [{"id": urn, "altText": ""} for urn in uploaded_urns]}}
+
+        post_data = {
             "author": author_urn,
             "commentary": text,
             "visibility": visibility,
@@ -623,13 +736,7 @@ async def internal_linkedin_post_with_image(
                 "targetEntities": [],
                 "thirdPartyDistributionChannels": [],
             },
-            "content": {
-                "article": {
-                    "source": image_url,
-                    "title": "",
-                    "description": "",
-                }
-            },
+            "content": content_block,
             "lifecycleState": "PUBLISHED",
             "isReshareDisabledByAuthor": False,
         }
@@ -638,7 +745,7 @@ async def internal_linkedin_post_with_image(
             "/posts",
             method="POST",
             credentials=credentials,
-            json_data=json_data,
+            json_data=post_data,
         )
 
         post_id = result.get("id") or result.get("x-restli-id")
@@ -648,10 +755,11 @@ async def internal_linkedin_post_with_image(
             "post": {
                 "id": post_id,
                 "text": text,
-                "image_url": image_url,
+                "image_urns": uploaded_urns,
+                "image_count": len(uploaded_urns),
                 "visibility": visibility,
             },
-            "message": "Post with image published successfully",
+            "message": f"Post with {len(uploaded_urns)} image(s) published successfully",
         }
 
     except Exception as e:
