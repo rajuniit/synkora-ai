@@ -44,8 +44,9 @@ async def internal_git_clone_repo(
         workspace_path = _get_workspace_path(config)
         if not workspace_path and runtime_context and getattr(runtime_context, "tenant_id", None):
             # Fallback: create workspace directly from runtime_context when ContextVar isn't propagated
-            from src.services.agents.workspace_manager import get_workspace_manager
             import uuid as _uuid
+
+            from src.services.agents.workspace_manager import get_workspace_manager
             tenant_id = runtime_context.tenant_id
             conversation_id = getattr(runtime_context, "conversation_id", None) or _uuid.uuid5(tenant_id, "background_tasks")
             workspace_path = get_workspace_manager().get_or_create_workspace(tenant_id, conversation_id)
@@ -119,8 +120,9 @@ async def internal_git_add_remote(
         if not workspace_path:
             runtime_context = config.get("_runtime_context") if config else None
             if runtime_context and getattr(runtime_context, "tenant_id", None):
-                from src.services.agents.workspace_manager import get_workspace_manager
                 import uuid as _uuid
+
+                from src.services.agents.workspace_manager import get_workspace_manager
                 tenant_id = runtime_context.tenant_id
                 conversation_id = getattr(runtime_context, "conversation_id", None) or _uuid.uuid5(tenant_id, "background_tasks")
                 workspace_path = get_workspace_manager().get_or_create_workspace(tenant_id, conversation_id)
@@ -185,8 +187,9 @@ async def internal_git_cleanup_repo(repo_path: str, config: dict[str, Any] | Non
         if not workspace_path:
             runtime_context = config.get("_runtime_context") if config else None
             if runtime_context and getattr(runtime_context, "tenant_id", None):
-                from src.services.agents.workspace_manager import get_workspace_manager
                 import uuid as _uuid
+
+                from src.services.agents.workspace_manager import get_workspace_manager
                 tenant_id = runtime_context.tenant_id
                 conversation_id = getattr(runtime_context, "conversation_id", None) or _uuid.uuid5(tenant_id, "background_tasks")
                 workspace_path = get_workspace_manager().get_or_create_workspace(tenant_id, conversation_id)

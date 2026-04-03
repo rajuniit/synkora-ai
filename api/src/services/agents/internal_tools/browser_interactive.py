@@ -728,6 +728,7 @@ async def internal_browser_pdf(
             rc = config.get("_runtime_context")
             if rc and getattr(rc, "tenant_id", None):
                 import uuid as _uuid
+
                 from src.services.agents.workspace_manager import get_workspace_manager
                 tenant_id = rc.tenant_id
                 conversation_id = getattr(rc, "conversation_id", None) or _uuid.uuid5(tenant_id, "background_tasks")
