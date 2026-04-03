@@ -1075,6 +1075,12 @@ async def internal_directory_tree(
         command.append(directory_path)
 
         try:
+            from src.services.agents.internal_tools.command_tools import _is_command_safe
+
+            workspace_path = _get_workspace_path(config)
+            if not _is_command_safe(command, workspace_path):
+                return {"error": f"Command blocked by security validator: {' '.join(command)}"}
+
             result = subprocess.run(
                 command,
                 capture_output=True,

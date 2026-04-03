@@ -60,7 +60,7 @@ async def internal_analyze_contract(
         # Validate file path
         path = Path(file_path)
         if not path.exists():
-            return {"error": f"File not found: {file_path}"}
+            return {"success": False, "error": f"File not found: {file_path}"}
 
         file_name = path.name
         file_extension = path.suffix.lower()
@@ -69,7 +69,11 @@ async def internal_analyze_contract(
         contract_text = ""
 
         if file_extension not in [".txt", ".pdf", ".docx", ".doc"]:
-            return {"error": f"Unsupported file type: {file_extension}", "supported_types": [".txt", ".pdf", ".docx"]}
+            return {
+                "success": False,
+                "error": f"Unsupported file type: {file_extension}",
+                "supported_types": [".txt", ".pdf", ".docx"],
+            }
 
         result = await internal_read_file(file_path)
         if "error" in result:
@@ -87,7 +91,7 @@ async def internal_analyze_contract(
             }
 
         if not contract_text or len(contract_text.strip()) < 100:
-            return {"error": "Contract text is too short or empty. Please provide a valid contract."}
+            return {"success": False, "error": "Contract text is too short or empty. Please provide a valid contract."}
 
         # Detect contract type based on keywords
         contract_type = _detect_contract_type(contract_text)
@@ -170,7 +174,7 @@ async def internal_analyze_contract(
 
     except Exception as e:
         logger.error(f"Error analyzing contract {file_path}: {e}", exc_info=True)
-        return {"error": f"Failed to analyze contract: {str(e)}"}
+        return {"success": False, "error": f"Failed to analyze contract: {str(e)}"}
 
 
 async def internal_generate_contract_report(
@@ -206,7 +210,7 @@ async def internal_generate_contract_report(
     """
     try:
         if not analysis_data or "error" in analysis_data:
-            return {"error": "Invalid analysis data provided"}
+            return {"success": False, "error": "Invalid analysis data provided"}
 
         logger.info(f"Generating contract report in {report_format} format")
 
@@ -226,7 +230,7 @@ async def internal_generate_contract_report(
             report_content = _generate_text_report(analysis_data, include_raw_findings)
             file_extension = "txt"
         else:
-            return {"error": f"Unsupported report format: {report_format}"}
+            return {"success": False, "error": f"Unsupported report format: {report_format}"}
 
         # Generate filename
         timestamp = datetime.now(UTC).strftime("%Y%m%d_%H%M%S")
@@ -254,7 +258,7 @@ async def internal_generate_contract_report(
 
     except Exception as e:
         logger.error(f"Error generating contract report: {e}", exc_info=True)
-        return {"error": f"Failed to generate report: {str(e)}"}
+        return {"success": False, "error": f"Failed to generate report: {str(e)}"}
 
 
 # Helper functions

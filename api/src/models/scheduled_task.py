@@ -20,6 +20,7 @@ class TaskStatus(StrEnum):
     SUCCESS = "success"
     FAILED = "failed"
     AWAITING_APPROVAL = "awaiting_approval"
+    CANCELLED = "cancelled"
 
 
 class ScheduledTask(Base):
@@ -88,7 +89,8 @@ class TaskExecution(Base):
     task_id = Column(
         UUID(as_uuid=True), ForeignKey("scheduled_tasks.id", ondelete="CASCADE"), nullable=False, index=True
     )
-    status = Column(String(20), nullable=False, index=True)  # 'pending', 'running', 'success', 'failed'
+    status = Column(String(20), nullable=False, index=True)  # 'pending', 'running', 'success', 'failed', 'cancelled'
+    celery_task_id = Column(String(36), nullable=True, index=True)  # Celery task UUID for revoke
     started_at = Column(DateTime(timezone=True), nullable=False, index=True)
     completed_at = Column(DateTime(timezone=True), nullable=True)
     result = Column(JSONB, nullable=True)

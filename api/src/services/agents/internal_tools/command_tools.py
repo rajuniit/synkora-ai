@@ -90,6 +90,17 @@ SAFE_COMMANDS: dict[str, list[str]] = {
     "file": [],
     "stat": [],
     "diff": [],
+    "diff3": [],
+    "dirname": [],
+    "basename": [],
+    "realpath": [],
+    "readlink": [],
+    "md5sum": [],
+    "sha256sum": [],
+    "gzip": [],
+    "gunzip": [],
+    "env": [],
+    "printenv": [],
     # --- File/Directory (Write) ---
     "mkdir": [],
     "touch": [],
@@ -105,8 +116,15 @@ SAFE_COMMANDS: dict[str, list[str]] = {
     "cut": [],
     "awk": [],
     "sed": [],
+    "tr": [],
+    "tee": [],
     "ag": [],
     "rg": [],
+    "jq": [],
+    "xargs": [],
+    "bc": [],
+    "xxd": [],
+    "strings": [],
     # --- Archiving ---
     "tar": [
         "--list",
@@ -342,7 +360,6 @@ def _check_shell_metacharacters(command: list[str]) -> bool:
     # still block them as a precaution against future changes
     dangerous_patterns = [
         ";",  # Command separator
-        "|",  # Pipe
         "&",  # Background / AND operator
         "$(",  # Command substitution
         "$((",  # Arithmetic expansion
@@ -354,6 +371,7 @@ def _check_shell_metacharacters(command: list[str]) -> bool:
     ]
 
     # NOTE: We intentionally DO NOT block:
+    # - '|' (pipe) - Safe with subprocess list (no shell=True); used in grep regex patterns like 'foo\|bar'
     # - '\n' (newlines) - Safe with subprocess list, needed for gh pr create --body
     # - '`' (backticks) - Safe with subprocess list, may appear in markdown content
 
@@ -501,11 +519,10 @@ def _validate_dangerous_flags(command_name: str, command: list[str]) -> bool:
     dangerous_flags_map = {
         "rm": ["-rf", "-fr", "--recursive", "--force"],
         "rmdir": ["-rf", "-fr", "--recursive", "--force"],
-        "find": ["-exec", "-execdir", "-delete", "-ok"],
+        "find": ["-delete"],  # -exec/-execdir allowed; workspace path validation confines them
         "tar": ["--absolute-names", "--no-overwrite-dir"],
-        "sed": ["-i", "--in-place"],
-        # SECURITY: Block code execution flags
-        "awk": ["-f"],  # Can execute arbitrary awk scripts from files
+        # sed -i (in-place edit) is allowed; workspace path validation already confines it
+        # awk -f (run script file) is allowed; workspace path validation confines the script file
         "npm": ["exec", "npx"],  # Can execute arbitrary packages
         "yarn": ["dlx"],  # Can download and execute packages
     }
@@ -742,13 +759,21 @@ async def internal_run_command(
     if not working_directory and workspace_path:
         working_directory = workspace_path
 
-    # Validate working directory exists (if provided)
+    # Validate working directory exists and is within workspace
     if working_directory and not os.path.isdir(working_directory):
         logger.error(f"Working directory does not exist: '{working_directory}'")
         return {
             "success": False,
             "output": "",
             "error": f"Working directory '{working_directory}' does not exist",
+            "return_code": -1,
+        }
+    if working_directory and workspace_path and not _validate_path(working_directory, workspace_path):
+        logger.error(f"Working directory outside workspace: '{working_directory}'")
+        return {
+            "success": False,
+            "output": "",
+            "error": f"Working directory must be within workspace: {workspace_path}",
             "return_code": -1,
         }
 

@@ -122,8 +122,7 @@ def _validate_input(input_str: str, input_type: str) -> dict[str, Any]:
     elif input_type == "repo_path":
         if not os.path.exists(input_str):
             return {"valid": False, "error": f"Repository path does not exist: {input_str}"}
-        if not input_str.startswith(tempfile.gettempdir()):
-            logger.warning(f"Potentially unsafe repository path: {input_str}")
+        # Path safety is enforced by _validate_repo_path (workspace containment check)
 
     return {"valid": True}
 

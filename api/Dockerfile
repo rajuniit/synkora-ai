@@ -62,6 +62,7 @@ RUN apt-get update \
         ca-certificates \
         git \
         openssh-client \
+        tree \
         # SAML/xmlsec runtime libraries
         libxml2 \
         libxmlsec1 \
