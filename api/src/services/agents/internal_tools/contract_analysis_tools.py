@@ -69,7 +69,11 @@ async def internal_analyze_contract(
         contract_text = ""
 
         if file_extension not in [".txt", ".pdf", ".docx", ".doc"]:
-            return {"success": False, "error": f"Unsupported file type: {file_extension}", "supported_types": [".txt", ".pdf", ".docx"]}
+            return {
+                "success": False,
+                "error": f"Unsupported file type: {file_extension}",
+                "supported_types": [".txt", ".pdf", ".docx"],
+            }
 
         result = await internal_read_file(file_path)
         if "error" in result:

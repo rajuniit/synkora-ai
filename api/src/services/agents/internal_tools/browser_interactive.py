@@ -730,6 +730,7 @@ async def internal_browser_pdf(
                 import uuid as _uuid
 
                 from src.services.agents.workspace_manager import get_workspace_manager
+
                 tenant_id = rc.tenant_id
                 conversation_id = getattr(rc, "conversation_id", None) or _uuid.uuid5(tenant_id, "background_tasks")
                 workspace_path = get_workspace_manager().get_or_create_workspace(tenant_id, conversation_id)
