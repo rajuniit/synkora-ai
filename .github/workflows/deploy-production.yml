@@ -287,11 +287,15 @@ jobs:
           POD_NAME="alembic-migrate-$(echo ${IMAGE_TAG} | tr '.' '-')"
           kubectl delete pod "${POD_NAME}" -n ${{ env.NAMESPACE }} --ignore-not-found=true
 
+          # Migrations must connect DIRECTLY to PostgreSQL — not through PgBouncer.
+          # PgBouncer transaction mode does not support the advisory locks and SET
+          # statements that Alembic requires. Override DB_HOST/DB_PORT here so the
+          # migration pod bypasses the PgBouncer service entirely.
           kubectl run "${POD_NAME}" \
             --image=${{ env.ECR_REGISTRY }}/synkora-api:${IMAGE_TAG} \
             --restart=Never \
             --namespace=${{ env.NAMESPACE }} \
-            --overrides='{"spec":{"imagePullSecrets":[{"name":"ecr-registry-secret"}],"containers":[{"name":"migrate","image":"${{ env.ECR_REGISTRY }}/synkora-api:'"${IMAGE_TAG}"'","command":["alembic","upgrade","head"],"envFrom":[{"secretRef":{"name":"synkora-secrets"}}]}]}}'
+            --overrides='{"spec":{"imagePullSecrets":[{"name":"ecr-registry-secret"}],"containers":[{"name":"migrate","image":"${{ env.ECR_REGISTRY }}/synkora-api:'"${IMAGE_TAG}"'","command":["alembic","upgrade","head"],"envFrom":[{"secretRef":{"name":"synkora-secrets"}}],"env":[{"name":"DB_HOST","value":"${{ secrets.K8S_DB_DIRECT_HOST }}"},{"name":"DB_PORT","value":"${{ secrets.K8S_DB_DIRECT_PORT }}"}]}]}}'
 
           echo "Waiting for migration pod to start running (image pull + init)..."
           # Wait up to 3 minutes for the pod to actually start running
