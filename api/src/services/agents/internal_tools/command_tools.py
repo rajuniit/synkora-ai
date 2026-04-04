@@ -832,7 +832,7 @@ async def internal_run_command(
         if truncated:
             stdout += (
                 f"\n\n[OUTPUT TRUNCATED at {MAX_COMMAND_OUTPUT_CHARS} chars - "
-                f"original output was {len(result.stdout)} chars / ~{len(result.stdout)//40} lines. "
+                f"original output was {len(result.stdout)} chars / ~{len(result.stdout) // 40} lines. "
                 "Use internal_read_file(path, start_line=N, max_lines=100) to read specific sections, "
                 "or internal_grep(pattern, path) to find specific content without reading the whole file.]"
             )
