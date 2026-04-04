@@ -22,10 +22,10 @@ spec:
   tls:
   - hosts:
     # REQUIRED: replace with your deployment domain before applying.
-    - api.your-domain.com
+    - api.synkora.ai
     secretName: synkora-api-tls
   rules:
-  - host: api.your-domain.com
+  - host: api.synkora.ai
     http:
       paths:
       - path: /api

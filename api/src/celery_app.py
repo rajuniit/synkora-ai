@@ -151,14 +151,22 @@ if settings.celery_result_backend:
     )
 
 # Sentinel requires master_name in broker_transport_options.
-# The result_backend_transport_options above only covers the result backend;
-# the broker (Kombu) needs its own master_name to connect to the sentinel cluster.
+# sentinel_kwargs passes the sentinel auth password separately from the Redis
+# master password embedded in the sentinel:// URL — both are required when
+# the sentinel process itself has requirepass set.
 if settings.celery_broker_url_str.startswith("sentinel://"):
     import os as _os
 
+    _sentinel_pwd = _os.getenv("REDIS_SENTINEL_PASSWORD", "")
     celery_app.conf.update(
         broker_transport_options={
             "master_name": _os.getenv("REDIS_MASTER_NAME", "mymaster"),
+            "sentinel_kwargs": {"password": _sentinel_pwd},
+        },
+        result_backend_transport_options={
+            "master_name": _os.getenv("REDIS_MASTER_NAME", "mymaster"),
+            "sentinel_kwargs": {"password": _sentinel_pwd},
+            "visibility_timeout": 3600,
         },
     )
 
