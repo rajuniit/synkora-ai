@@ -39,7 +39,7 @@ spec:
         # Handles: email sending, in-app notifications, Slack/Teams/WhatsApp notifications.
         # Tasks are I/O-bound and short-lived — high concurrency, low memory.
         args: ["-A", "src.celery_app", "worker", "--loglevel=info", "-Q", "email,notifications",
-               "--concurrency=8"]
+               "--concurrency=4"]
         envFrom:
         - configMapRef:
             name: synkora-config
@@ -47,11 +47,10 @@ spec:
             name: synkora-secrets
         resources:
           requests:
-            # I/O-bound tasks (SMTP, HTTP) — minimal CPU/memory needed.
-            memory: "256Mi"
+            memory: "512Mi"
             cpu: "100m"
           limits:
-            memory: "1Gi"
+            memory: "1.5Gi"
             cpu: "500m"
         volumeMounts:
         - name: tmp

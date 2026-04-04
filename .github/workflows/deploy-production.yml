@@ -208,6 +208,8 @@ jobs:
             --from-literal=JWT_ALGORITHM="${{ secrets.K8S_JWT_ALGORITHM }}" \
             --from-literal=DB_HOST="${{ secrets.K8S_DB_HOST }}" \
             --from-literal=DB_PORT="${{ secrets.K8S_DB_PORT }}" \
+            --from-literal=DB_DIRECT_HOST="${{ secrets.K8S_DB_DIRECT_HOST }}" \
+            --from-literal=DB_DIRECT_PORT="${{ secrets.K8S_DB_DIRECT_PORT }}" \
             --from-literal=DB_USERNAME="${{ secrets.K8S_DB_USERNAME }}" \
             --from-literal=DB_DATABASE="${{ secrets.K8S_DB_DATABASE }}" \
             --from-literal=DB_CHARSET="${{ secrets.K8S_DB_CHARSET }}" \
@@ -224,6 +226,7 @@ jobs:
             --from-literal=REDIS_URL="${{ secrets.K8S_REDIS_URL }}" \
             --from-literal=REDIS_PASSWORD="${{ secrets.K8S_REDIS_PASSWORD }}" \
             --from-literal=REDIS_SENTINEL_PASSWORD="${{ secrets.K8S_REDIS_SENTINEL_PASSWORD }}" \
+            --from-literal=REDIS_SENTINEL_HOSTS="${{ vars.K8S_REDIS_SENTINEL_HOSTS }}" \
             --from-literal=REDIS_MAX_CONNECTIONS="${{ secrets.K8S_REDIS_MAX_CONNECTIONS }}" \
             --from-literal=CELERY_BROKER_URL="${{ secrets.K8S_CELERY_BROKER_URL }}" \
             --from-literal=CELERY_RESULT_BACKEND="${{ secrets.K8S_CELERY_RESULT_BACKEND }}" \

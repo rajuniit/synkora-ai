@@ -19,10 +19,10 @@ spec:
   tls:
   - hosts:
     # REQUIRED: replace with your deployment domain before applying.
-    - your-domain.com
+    - synkora.ai
     secretName: synkora-frontend-tls
   rules:
-  - host: your-domain.com
+  - host: synkora.ai
     http:
       paths:
       - path: /

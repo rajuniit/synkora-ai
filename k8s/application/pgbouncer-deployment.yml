@@ -60,12 +60,24 @@ spec:
           value: "5432"
 
         # --- Backend PostgreSQL connection ---
+        # DB_DIRECT_HOST/PORT point directly to RDS — NOT to synkora-pgbouncer.
+        # DB_HOST in synkora-secrets is synkora-pgbouncer (for the app); using
+        # that here would cause PgBouncer to connect to itself.
         - name: DB_HOST
-          value: synkora-postgres
+          valueFrom:
+            secretKeyRef:
+              name: synkora-secrets
+              key: DB_DIRECT_HOST
         - name: DB_PORT
-          value: "5432"
+          valueFrom:
+            secretKeyRef:
+              name: synkora-secrets
+              key: DB_DIRECT_PORT
         - name: DB_NAME
-          value: synkora
+          valueFrom:
+            secretKeyRef:
+              name: synkora-secrets
+              key: DB_DATABASE
         - name: DB_USER
           valueFrom:
             secretKeyRef:
@@ -100,9 +112,10 @@ spec:
           value: "600"
 
         # --- Auth ---
-        # md5 is widely compatible and sufficient for intra-cluster traffic.
+        # scram-sha-256 required for RDS PostgreSQL 14+ (default auth method).
+        # md5 will fail with "wrong password type" against modern RDS instances.
         - name: AUTH_TYPE
-          value: "md5"
+          value: "scram-sha-256"
 
         resources:
           requests:
