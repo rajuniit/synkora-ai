@@ -150,6 +150,18 @@ if settings.celery_result_backend:
         },
     )
 
+# Sentinel requires master_name in broker_transport_options.
+# The result_backend_transport_options above only covers the result backend;
+# the broker (Kombu) needs its own master_name to connect to the sentinel cluster.
+if settings.celery_broker_url_str.startswith("sentinel://"):
+    import os as _os
+
+    celery_app.conf.update(
+        broker_transport_options={
+            "master_name": _os.getenv("REDIS_MASTER_NAME", "mymaster"),
+        },
+    )
+
 
 # Global Dead-Letter Queue handlers for failed tasks
 DLQ_KEY = "celery:dlq"
