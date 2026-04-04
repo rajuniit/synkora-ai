@@ -241,6 +241,7 @@ jobs:
             --from-literal=ANTHROPIC_API_KEY="${{ secrets.K8S_ANTHROPIC_API_KEY }}" \
             --from-literal=SENTRY_DSN="${{ secrets.SENTRY_DSN }}" \
             --from-literal=SENTRY_ENVIRONMENT="${{ vars.SENTRY_ENVIRONMENT }}" \
+            --from-literal=CORS_ORIGINS="${{ secrets.K8S_CORS_ORIGINS }}" \
             --from-literal=METRICS_AUTH_TOKEN="${{ secrets.K8S_METRICS_AUTH_TOKEN }}" \
             --dry-run=client -o yaml | kubectl apply -f -
 

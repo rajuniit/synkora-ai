@@ -26,9 +26,9 @@ data:
   API_HOST: "0.0.0.0"
   API_PORT: "5001"
   # REQUIRED: set to your deployment domain before applying.
-  APP_BASE_URL: "https://your-domain.com"
+  APP_BASE_URL: "https://synkora.ai"
 
-  INNER_CORS_ORIGINS: "https://your-domain.com"
+  INNER_CORS_ORIGINS: "https://synkora.ai"
 
   RATE_LIMIT_ENABLED: "true"
   RATE_LIMIT_PER_MINUTE: "60"
@@ -58,15 +58,15 @@ data:
 
   SMTP_HOST: "smtp.gmail.com"
   SMTP_PORT: "587"
-  SMTP_USER: "your-email@gmail.com"
+  SMTP_USER: "noreply@synkora.ai"
   # REQUIRED: set to your deployment domain before applying.
-  FROM_EMAIL: "noreply@your-domain.com"
+  FROM_EMAIL: "noreply@synkora.ai"
 
   # Domain & URL Settings — REQUIRED: replace with your deployment domain.
-  PLATFORM_DOMAIN: "your-domain.com"
-  WEBHOOK_BASE_URL: "https://api.your-domain.com"
-  WIDGET_JS_URL: "https://your-domain.com/widget.js"
-  PUBLIC_API_URL: "https://api.your-domain.com/api/v1"
+  PLATFORM_DOMAIN: "synkora.ai"
+  WEBHOOK_BASE_URL: "https://api.synkora.ai"
+  WIDGET_JS_URL: "https://synkora.ai/widget.js"
+  PUBLIC_API_URL: "https://api.synkora.ai/api/v1"
 
   # Workspace Settings (Agent Sandbox)
   WORKSPACE_BASE_PATH: "/tmp/synkora/workspaces"
