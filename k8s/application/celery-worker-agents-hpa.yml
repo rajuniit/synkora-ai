@@ -9,9 +9,9 @@ spec:
     kind: Deployment
     name: synkora-celery-worker-agents
   minReplicas: 1
-  # 30 agent workers × 2 concurrency × 4Gi limit = 240Gi memory ceiling.
-  # Scale based on CPU: each agent task (LLM calls, code execution) is CPU-intensive.
-  maxReplicas: 30
+  # 7-node cluster (s-2vcpu-4gb). Agents pod requests 1Gi/500m.
+  # Capped at 4 to prevent cluster OOM. Raise alongside cluster node count.
+  maxReplicas: 1
   metrics:
   - type: Resource
     resource:
