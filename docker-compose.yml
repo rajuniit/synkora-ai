@@ -348,6 +348,54 @@ services:
     networks:
       - synkora-network
 
+  # ---------------------------------------------------------------------------
+  # PgBouncer — connection pooler in front of PostgreSQL.
+  # Mirrors the production K8s setup (pgbouncer-deployment.yml).
+  #
+  # LOCAL TESTING:
+  #   Set DB_HOST=pgbouncer and PGBOUNCER_ENABLED=true in api/.env, then:
+  #     docker-compose --profile pgbouncer up -d
+  #
+  #   Verify pooling (PGBOUNCER_PORT=5432 overrides bitnami default of 6432):
+  #     docker-compose exec pgbouncer psql -p 5432 -U pgbouncer pgbouncer -c "SHOW POOLS;"
+  #
+  # Default (no profile): api connects directly to postgres (simpler local dev).
+  # ---------------------------------------------------------------------------
+  # edoburu/pgbouncer used for local dev — supports env var config without a config file.
+  # Production K8s uses bitnami/pgbouncer:1 (see k8s/application/pgbouncer-deployment.yml).
+  pgbouncer:
+    image: edoburu/pgbouncer
+    container_name: synkora-pgbouncer
+    profiles:
+      - pgbouncer
+    environment:
+      - DB_HOST=postgres
+      - DB_PORT=5432
+      - DB_NAME=${POSTGRES_DB:-synkora}
+      - DB_USER=${POSTGRES_USER:-synkora}
+      - DB_PASSWORD=${POSTGRES_PASSWORD:-synkora}
+      - POOL_MODE=transaction
+      - MAX_CLIENT_CONN=200
+      - DEFAULT_POOL_SIZE=10
+      - RESERVE_POOL_SIZE=5
+      # DISCARD TEMP only — DISCARD ALL runs RESET ALL which clears statement_timeout.
+      - SERVER_RESET_QUERY=DISCARD TEMP
+      - SERVER_IDLE_TIMEOUT=600
+      - AUTH_TYPE=md5
+      - LISTEN_PORT=5432
+    ports:
+      - "127.0.0.1:5432:5432"
+    depends_on:
+      postgres:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -h localhost -p 5432 -U ${POSTGRES_USER:-synkora}"]
+      interval: 5s
+      timeout: 3s
+      retries: 5
+    networks:
+      - synkora-network
+
   # API Service
   api:
     build:
@@ -357,7 +405,9 @@ services:
     env_file:
       - ./api/.env
     environment:
-      - DB_HOST=postgres
+      # DB_HOST and PGBOUNCER_ENABLED are read from api/.env (env_file above).
+      # Override here only if you need to switch without editing .env:
+      #   DB_HOST=pgbouncer PGBOUNCER_ENABLED=true docker-compose --profile pgbouncer up
       - PYTHONUNBUFFERED=1
       - ML_SERVICE_URL=http://synkora-ml:5002
       - SCRAPER_SERVICE_URL=http://synkora-scraper:5003
@@ -390,22 +440,86 @@ services:
     networks:
       - synkora-network
 
-  # Celery Worker - Default queue
+  # ---------------------------------------------------------------------------
+  # Celery Workers — split queues to mirror K8s deployments.
+  # Each worker handles one queue group to verify task routing locally before
+  # deploying the K8s split (celery-worker-*-deployment.yml).
+  #
+  # Verify routing:
+  #   docker-compose exec celery-worker-agents celery -A src.celery_app inspect active
+  #   docker-compose exec celery-worker-notifications celery -A src.celery_app inspect active
+  # ---------------------------------------------------------------------------
+
+  # Default queue — general tasks, beat-dispatched jobs, cleanup tasks.
   celery-worker:
     build:
       context: ./api
       dockerfile: Dockerfile.dev
     container_name: synkora-celery-worker
-    command: celery -A src.celery_app worker --loglevel=info --concurrency=${CELERY_CONCURRENCY:-4} -Q default,email,notifications,agents
+    command: celery -A src.celery_app worker --loglevel=info --concurrency=${CELERY_CONCURRENCY:-4} -Q default
     env_file:
       - ./api/.env
     environment:
-      - DB_HOST=postgres
       - PYTHONUNBUFFERED=1
       - CELERY_CONCURRENCY=${CELERY_CONCURRENCY:-4}
       - ML_SERVICE_URL=http://synkora-ml:5002
       - SCRAPER_SERVICE_URL=http://synkora-scraper:5003
-      # Workspace Settings (uses /tmp which is already writable)
+      - WORKSPACE_BASE_PATH=/tmp/synkora/workspaces
+      - WORKSPACE_TTL_HOURS=24
+      - WORKSPACE_MAX_SIZE_MB=2000
+    volumes:
+      - ./api:/app/api
+      - /app/api/.venv
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    networks:
+      - synkora-network
+
+  # Agents queue — autonomous agent execution (tasks.execute_scheduled_task,
+  # execute_spawn_agent_task, process_webhook_event). Memory-intensive, long-running.
+  celery-worker-agents:
+    build:
+      context: ./api
+      dockerfile: Dockerfile.dev
+    container_name: synkora-celery-worker-agents
+    command: celery -A src.celery_app worker --loglevel=info --concurrency=2 -Q agents
+    env_file:
+      - ./api/.env
+    environment:
+      - PYTHONUNBUFFERED=1
+      - ML_SERVICE_URL=http://synkora-ml:5002
+      - SCRAPER_SERVICE_URL=http://synkora-scraper:5003
+      - WORKSPACE_BASE_PATH=/tmp/synkora/workspaces
+      - WORKSPACE_TTL_HOURS=24
+      - WORKSPACE_MAX_SIZE_MB=2000
+    volumes:
+      - ./api:/app/api
+      - /app/api/.venv
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    networks:
+      - synkora-network
+
+  # Notifications queue — email + in-app + Slack/Teams/WhatsApp notifications.
+  # I/O-bound, short-lived tasks; high concurrency, low memory.
+  celery-worker-notifications:
+    build:
+      context: ./api
+      dockerfile: Dockerfile.dev
+    container_name: synkora-celery-worker-notifications
+    command: celery -A src.celery_app worker --loglevel=info --concurrency=8 -Q email,notifications
+    env_file:
+      - ./api/.env
+    environment:
+      - PYTHONUNBUFFERED=1
+      - ML_SERVICE_URL=http://synkora-ml:5002
+      - SCRAPER_SERVICE_URL=http://synkora-scraper:5003
       - WORKSPACE_BASE_PATH=/tmp/synkora/workspaces
       - WORKSPACE_TTL_HOURS=24
       - WORKSPACE_MAX_SIZE_MB=2000
@@ -430,13 +544,12 @@ services:
     env_file:
       - ./api/.env
     environment:
-      - DB_HOST=postgres
       - PYTHONUNBUFFERED=1
       - ML_SERVICE_URL=http://synkora-ml:5002
       - SCRAPER_SERVICE_URL=http://synkora-scraper:5003
-      # Workspace Settings (uses /tmp which is already writable)
       - WORKSPACE_BASE_PATH=/tmp/synkora/workspaces
       - WORKSPACE_TTL_HOURS=24
+      - WORKSPACE_MAX_SIZE_MB=2000
     volumes:
       - ./api:/app/api
       - /app/api/.venv
@@ -458,13 +571,12 @@ services:
     env_file:
       - ./api/.env
     environment:
-      - DB_HOST=postgres
       - PYTHONUNBUFFERED=1
       - ML_SERVICE_URL=http://synkora-ml:5002
       - SCRAPER_SERVICE_URL=http://synkora-scraper:5003
-      # Workspace Settings (uses /tmp which is already writable)
       - WORKSPACE_BASE_PATH=/tmp/synkora/workspaces
       - WORKSPACE_TTL_HOURS=24
+      - WORKSPACE_MAX_SIZE_MB=2000
     volumes:
       - ./api:/app/api
       - /app/api/.venv
@@ -486,7 +598,8 @@ services:
     env_file:
       - ./api/.env
     environment:
-      - DB_HOST=postgres
+      - DB_HOST=${DB_HOST:-postgres}
+      - PGBOUNCER_ENABLED=${PGBOUNCER_ENABLED:-false}
       - PYTHONUNBUFFERED=1
       - ML_SERVICE_URL=http://synkora-ml:5002
       - SCRAPER_SERVICE_URL=http://synkora-scraper:5003

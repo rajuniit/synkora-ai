@@ -150,10 +150,10 @@ jobs:
             ${{ env.ECR_REGISTRY }}/synkora-frontend:latest
           build-args: |
             COMMIT_SHA=${{ github.ref_name }}
-            NEXT_PUBLIC_API_URL=https://api.synkora.ai
-            NEXT_PUBLIC_APP_URL=https://synkora.ai
+            NEXT_PUBLIC_API_URL=${{ vars.NEXT_PUBLIC_API_URL }}
+            NEXT_PUBLIC_APP_URL=${{ vars.NEXT_PUBLIC_APP_URL }}
             NEXT_PUBLIC_SENTRY_DSN=${{ secrets.SENTRY_DSN }}
-            NEXT_PUBLIC_SENTRY_HOST=https://logs.synkora.ai
+            NEXT_PUBLIC_SENTRY_HOST=${{ vars.NEXT_PUBLIC_SENTRY_HOST }}
           cache-from: type=gha,scope=web
           cache-to: type=gha,mode=max,scope=web
 
@@ -198,8 +198,8 @@ jobs:
         run: |
           kubectl create secret generic synkora-secrets \
             --namespace=${{ env.NAMESPACE }} \
-            --from-literal=ML_SERVICE_URL="http://synkora-ml:5002" \
-            --from-literal=SCRAPER_SERVICE_URL="http://synkora-scraper:5003" \
+            --from-literal=ML_SERVICE_URL="${{ vars.K8S_ML_SERVICE_URL }}" \
+            --from-literal=SCRAPER_SERVICE_URL="${{ vars.K8S_SCRAPER_SERVICE_URL }}" \
             --from-literal=SECRET_KEY="${{ secrets.K8S_SECRET_KEY }}" \
             --from-literal=JWT_SECRET_KEY="${{ secrets.K8S_JWT_SECRET_KEY }}" \
             --from-literal=ENCRYPTION_KEY="${{ secrets.K8S_ENCRYPTION_KEY }}" \
@@ -221,7 +221,8 @@ jobs:
             --from-literal=SQLALCHEMY_POOL_PRE_PING="${{ secrets.K8S_SQLALCHEMY_POOL_PRE_PING }}" \
             --from-literal=SQLALCHEMY_ECHO="${{ secrets.K8S_SQLALCHEMY_ECHO }}" \
             --from-literal=SQLALCHEMY_POOL_TIMEOUT="${{ secrets.K8S_SQLALCHEMY_POOL_TIMEOUT }}" \
-            --from-literal=REDIS_URL="${{ secrets.K8S_REDIS_URL }}" \
+            --from-literal=REDIS_PASSWORD="${{ secrets.K8S_REDIS_PASSWORD }}" \
+            --from-literal=REDIS_SENTINEL_PASSWORD="${{ secrets.K8S_REDIS_SENTINEL_PASSWORD }}" \
             --from-literal=REDIS_MAX_CONNECTIONS="${{ secrets.K8S_REDIS_MAX_CONNECTIONS }}" \
             --from-literal=CELERY_BROKER_URL="${{ secrets.K8S_CELERY_BROKER_URL }}" \
             --from-literal=CELERY_RESULT_BACKEND="${{ secrets.K8S_CELERY_RESULT_BACKEND }}" \
@@ -235,17 +236,47 @@ jobs:
             --from-literal=OPENAI_API_KEY="${{ secrets.K8S_OPENAI_API_KEY }}" \
             --from-literal=ANTHROPIC_API_KEY="${{ secrets.K8S_ANTHROPIC_API_KEY }}" \
             --from-literal=SENTRY_DSN="${{ secrets.SENTRY_DSN }}" \
-            --from-literal=SENTRY_ENVIRONMENT="production" \
+            --from-literal=SENTRY_ENVIRONMENT="${{ vars.SENTRY_ENVIRONMENT }}" \
             --from-literal=METRICS_AUTH_TOKEN="${{ secrets.K8S_METRICS_AUTH_TOKEN }}" \
             --dry-run=client -o yaml | kubectl apply -f -
 
       - name: Apply deployment manifests
         run: |
+          # Infrastructure — config and service accounts first so pods can reference them
+          kubectl apply -f k8s/application/synkora-config.yml
+          kubectl apply -f k8s/application/synkora-api-serviceaccount.yml
+
+          # Networking — services and ingresses
+          kubectl apply -f k8s/application/api-service.yml
+          kubectl apply -f k8s/application/synkora-ingress.yml
+          kubectl apply -f k8s/application/synkora-frontend-service.yml
+          kubectl apply -f k8s/application/synkora-frontend-ingress.yml
+
+          # PgBouncer
+          kubectl apply -f k8s/application/pgbouncer-configmap.yml
+          kubectl apply -f k8s/application/pgbouncer-deployment.yml
+          kubectl apply -f k8s/application/pgbouncer-service.yml
+
+          # ML and scraper services
           kubectl apply -f k8s/application/ml-service-deployment.yaml
           kubectl apply -f k8s/application/scraper-service-deployment.yaml
+
+          # API and autoscaling
           kubectl apply -f k8s/application/api-deployment.yml
+          kubectl apply -f k8s/application/api-hpa.yml
+
+          # Celery workers
           kubectl apply -f k8s/application/celery-worker-deployment.yml
+          kubectl apply -f k8s/application/celery-worker-agents-deployment.yml
+          kubectl apply -f k8s/application/celery-worker-agents-hpa.yml
+          kubectl apply -f k8s/application/celery-worker-billing-deployment.yml
+          kubectl apply -f k8s/application/celery-worker-notifications-deployment.yml
           kubectl apply -f k8s/application/celery-beat-deployment.yml
+
+          # Frontend
+          kubectl apply -f k8s/application/synkora-frontend-deployment.yml
+
+          # Flower
           kubectl apply -f k8s/application/flower-deployment.yml
           kubectl apply -f k8s/application/flower-ingress.yml
 
@@ -326,6 +357,9 @@ jobs:
           IMAGE_TAG="${{ github.ref_name }}"
           kubectl set image deployment/synkora-api api=${{ env.ECR_REGISTRY }}/synkora-api:${IMAGE_TAG} -n ${{ env.NAMESPACE }}
           kubectl set image deployment/synkora-celery-worker celery-worker=${{ env.ECR_REGISTRY }}/synkora-api:${IMAGE_TAG} -n ${{ env.NAMESPACE }}
+          kubectl set image deployment/synkora-celery-worker-agents celery-worker-agents=${{ env.ECR_REGISTRY }}/synkora-api:${IMAGE_TAG} -n ${{ env.NAMESPACE }}
+          kubectl set image deployment/synkora-celery-worker-billing celery-worker-billing=${{ env.ECR_REGISTRY }}/synkora-api:${IMAGE_TAG} -n ${{ env.NAMESPACE }}
+          kubectl set image deployment/synkora-celery-worker-notifications celery-worker-notifications=${{ env.ECR_REGISTRY }}/synkora-api:${IMAGE_TAG} -n ${{ env.NAMESPACE }}
           kubectl set image deployment/synkora-celery-beat celery-beat=${{ env.ECR_REGISTRY }}/synkora-api:${IMAGE_TAG} -n ${{ env.NAMESPACE }}
           kubectl set image deployment/synkora-bot-worker bot-worker=${{ env.ECR_REGISTRY }}/synkora-api:${IMAGE_TAG} -n ${{ env.NAMESPACE }}
           kubectl set image deployment/synkora-flower flower=${{ env.ECR_REGISTRY }}/synkora-api:${IMAGE_TAG} -n ${{ env.NAMESPACE }}
@@ -348,6 +382,30 @@ jobs:
           if ! kubectl rollout status deployment/synkora-celery-worker -n ${{ env.NAMESPACE }} --timeout=600s; then
             echo "Celery worker deployment failed, rolling back..."
             kubectl rollout undo deployment/synkora-celery-worker -n ${{ env.NAMESPACE }}
+            exit 1
+          fi
+
+      - name: Wait for Celery agents worker rollout
+        run: |
+          if ! kubectl rollout status deployment/synkora-celery-worker-agents -n ${{ env.NAMESPACE }} --timeout=600s; then
+            echo "Celery agents worker deployment failed, rolling back..."
+            kubectl rollout undo deployment/synkora-celery-worker-agents -n ${{ env.NAMESPACE }}
+            exit 1
+          fi
+
+      - name: Wait for Celery billing worker rollout
+        run: |
+          if ! kubectl rollout status deployment/synkora-celery-worker-billing -n ${{ env.NAMESPACE }} --timeout=600s; then
+            echo "Celery billing worker deployment failed, rolling back..."
+            kubectl rollout undo deployment/synkora-celery-worker-billing -n ${{ env.NAMESPACE }}
+            exit 1
+          fi
+
+      - name: Wait for Celery notifications worker rollout
+        run: |
+          if ! kubectl rollout status deployment/synkora-celery-worker-notifications -n ${{ env.NAMESPACE }} --timeout=600s; then
+            echo "Celery notifications worker deployment failed, rolling back..."
+            kubectl rollout undo deployment/synkora-celery-worker-notifications -n ${{ env.NAMESPACE }}
             exit 1
           fi
 
@@ -386,6 +444,9 @@ jobs:
             echo "Health check failed! Rolling back all deployments..."
             kubectl rollout undo deployment/synkora-api -n ${{ env.NAMESPACE }}
             kubectl rollout undo deployment/synkora-celery-worker -n ${{ env.NAMESPACE }}
+            kubectl rollout undo deployment/synkora-celery-worker-agents -n ${{ env.NAMESPACE }}
+            kubectl rollout undo deployment/synkora-celery-worker-billing -n ${{ env.NAMESPACE }}
+            kubectl rollout undo deployment/synkora-celery-worker-notifications -n ${{ env.NAMESPACE }}
             kubectl rollout undo deployment/synkora-celery-beat -n ${{ env.NAMESPACE }}
             kubectl rollout undo deployment/synkora-bot-worker -n ${{ env.NAMESPACE }}
             kubectl rollout undo deployment/synkora-frontend -n ${{ env.NAMESPACE }}

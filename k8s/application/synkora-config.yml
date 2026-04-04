@@ -5,13 +5,30 @@ metadata:
   namespace: synkora-production
 data:
   APP_ENV: "production"
+
+  # Database — point all pods at PgBouncer, not PostgreSQL directly.
+  # PgBouncer (pool_mode=transaction) multiplexes thousands of app connections
+  # down to 25 real PostgreSQL connections, keeping Postgres under max_connections=100.
+  DB_HOST: "synkora-pgbouncer"
+  DB_PORT: "5432"
+  # Tells api/src/core/database.py to disable asyncpg prepared statements,
+  # which are incompatible with PgBouncer transaction-mode pooling.
+  PGBOUNCER_ENABLED: "true"
+
+  # Redis — Sentinel mode for HA (replaces the single-node redis-deployment.yml).
+  # The application code (api/src/config/redis.py:82-109) handles Sentinel automatically
+  # when REDIS_SENTINEL_HOSTS is set. No URL needed.
+  # Headless service DNS from Bitnami chart: <release>-redis-headless.<namespace>.svc.cluster.local
+  REDIS_SENTINEL_HOSTS: "synkora-redis-headless:26379"
+  REDIS_MASTER_NAME: "mymaster"
   SERVER_WORKER_AMOUNT: "2"
   APP_DEBUG: "false"
   API_HOST: "0.0.0.0"
   API_PORT: "5001"
-  APP_BASE_URL: "https://synkora.ai"
+  # REQUIRED: set to your deployment domain before applying.
+  APP_BASE_URL: "https://your-domain.com"
 
-  INNER_CORS_ORIGINS: "https://synkora.ai"
+  INNER_CORS_ORIGINS: "https://your-domain.com"
 
   RATE_LIMIT_ENABLED: "true"
   RATE_LIMIT_PER_MINUTE: "60"
@@ -42,13 +59,14 @@ data:
   SMTP_HOST: "smtp.gmail.com"
   SMTP_PORT: "587"
   SMTP_USER: "your-email@gmail.com"
-  FROM_EMAIL: "noreply@synkora.ai"
+  # REQUIRED: set to your deployment domain before applying.
+  FROM_EMAIL: "noreply@your-domain.com"
 
-  # Domain & URL Settings
-  PLATFORM_DOMAIN: "synkora.ai"
-  WEBHOOK_BASE_URL: "https://api.synkora.ai"
-  WIDGET_JS_URL: "https://synkora.ai/widget.js"
-  PUBLIC_API_URL: "https://api.synkora.ai/api/v1"
+  # Domain & URL Settings — REQUIRED: replace with your deployment domain.
+  PLATFORM_DOMAIN: "your-domain.com"
+  WEBHOOK_BASE_URL: "https://api.your-domain.com"
+  WIDGET_JS_URL: "https://your-domain.com/widget.js"
+  PUBLIC_API_URL: "https://api.your-domain.com/api/v1"
 
   # Workspace Settings (Agent Sandbox)
   WORKSPACE_BASE_PATH: "/tmp/synkora/workspaces"

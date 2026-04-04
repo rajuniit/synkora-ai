@@ -282,6 +282,11 @@ class ADKToolRegistry:
 
 IMPORTANT: All file paths must be within the workspace directory. The workspace path is provided in your context. Always use paths like: {workspace_path}/files/example.txt or {workspace_path}/repos/project/file.py
 
+TIP FOR LARGE FILES: If a file is large (>300 lines) and you're looking for specific code, use internal_grep first
+with path=<file_path> and a pattern matching the function/class/variable you need. This finds the exact line numbers
+instantly, then you can read just that section with start_line + max_lines. Avoid reading the same large file
+multiple times in overlapping chunks — use grep to locate what you need.
+
 For text files: Returns content as string with token counting and pagination support.
 For media files: Returns content as base64 encoded string with MIME type metadata.
 
@@ -361,7 +366,17 @@ IMPORTANT: Path must be within the workspace directory.""",
 
         self.register_tool(
             name="internal_grep",
-            description="""Search file contents for a regex pattern within the workspace.
+            description="""Search file contents for a regex pattern. Works on a single file OR an entire directory tree.
+
+PREFERRED APPROACH FOR LARGE FILES: Instead of reading a large file in chunks with internal_read_file,
+use internal_grep with path=<file_path> to instantly find relevant lines by pattern. This is far more
+efficient - you get only the lines that match plus a few lines of context, rather than reading hundreds
+of lines hoping to find the right section.
+
+Example usage:
+- Find a function in a large file: pattern="def myFunction|class MyClass", path="/path/to/file.dart"
+- Find all usages of a variable: pattern="totalBalance|balanceProvider", path="/path/to/repo/lib"
+- Find imports: pattern="^import.*router", path="/path/to/file.dart", include="*.dart"
 
 Similar to ripgrep - walks the directory tree and searches file contents using regex.
 Returns matching files with line numbers and content snippets with context.
@@ -376,11 +391,11 @@ IMPORTANT: Path must be within the workspace directory.""",
                     },
                     "path": {
                         "type": "string",
-                        "description": "File or directory to search in (defaults to workspace root)",
+                        "description": "File or directory to search in (defaults to workspace root). Can be a specific file path to search within that file only.",
                     },
                     "include": {
                         "type": "string",
-                        "description": "Glob pattern to filter files (e.g. '*.py', '*.ts')",
+                        "description": "Glob pattern to filter files (e.g. '*.py', '*.ts', '*.dart')",
                     },
                     "case_insensitive": {
                         "type": "boolean",

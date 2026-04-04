@@ -1,0 +1,67 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: synkora-celery-worker-agents
+  namespace: synkora-production
+  labels:
+    app: synkora
+    component: celery-worker-agents
+    version: v1
+spec:
+  replicas: 2
+  strategy:
+    type: RollingUpdate
+    rollingUpdate:
+      maxSurge: 1
+      maxUnavailable: 0
+  selector:
+    matchLabels:
+      app: synkora
+      component: celery-worker-agents
+  template:
+    metadata:
+      labels:
+        app: synkora
+        component: celery-worker-agents
+        version: v1
+    spec:
+      imagePullSecrets:
+      - name: ecr-registry-secret
+      securityContext:
+        runAsNonRoot: true
+        runAsUser: 1000
+        fsGroup: 1000
+      containers:
+      - name: celery-worker-agents
+        image: IMAGE_PLACEHOLDER
+        imagePullPolicy: Always
+        command: ["celery"]
+        # Handles: autonomous agent execution, scheduled task runs, webhook event processing.
+        # Tasks can run up to 1 hour (task_time_limit=3600 in celery_app.py).
+        args: ["-A", "src.celery_app", "worker", "--loglevel=info", "-Q", "agents",
+               "--concurrency=2"]
+        envFrom:
+        - configMapRef:
+            name: synkora-config
+        - secretRef:
+            name: synkora-secrets
+        resources:
+          requests:
+            # Agent tasks spawn sub-processes, load models, and hold large context windows.
+            memory: "1Gi"
+            cpu: "500m"
+          limits:
+            memory: "4Gi"
+            cpu: "2000m"
+        volumeMounts:
+        - name: tmp
+          mountPath: /tmp
+      volumes:
+      - name: tmp
+        emptyDir:
+          sizeLimit: 20Gi
+      # task_time_limit=3600s + 60s buffer for graceful shutdown handoff.
+      # K8s sends SIGTERM at this deadline — Celery warm-shutdown completes
+      # running tasks before exiting. Without sufficient time, K8s sends SIGKILL
+      # mid-task and task_acks_late + task_reject_on_worker_lost requeues it.
+      terminationGracePeriodSeconds: 3660

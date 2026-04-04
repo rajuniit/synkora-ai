@@ -16,6 +16,12 @@ from urllib.parse import urlparse
 
 logger = logging.getLogger(__name__)
 
+# Maximum characters returned from a single command's stdout.
+# Prevents `cat` on large files from flooding the LLM context window and
+# triggering aggressive pruning that wipes all prior tool results.
+# Agents should use internal_read_file (paginated) or internal_grep instead.
+MAX_COMMAND_OUTPUT_CHARS = 8000
+
 # Allowed domains for external requests (curl/wget)
 ALLOWED_DOMAINS = [
     "api.github.com",
@@ -625,10 +631,13 @@ def _is_command_safe(command: list[str], workspace_path: str | None = None) -> b
         logger.warning("Safety check failed: Empty command list provided")
         return False
 
-    # Check for blocked paths in the command itself
+    # Check for blocked paths in the command itself.
+    # Strip /dev/null first — it is a safe stderr/stdout redirect target and must not
+    # trigger the /dev blocked-path entry (e.g. "2>/dev/null" is a valid shell redirect).
     for part in command:
+        clean_part = part.replace("/dev/null", "")
         for blocked in BLOCKED_PATHS:
-            if blocked in part:
+            if blocked in clean_part:
                 logger.warning(f"Command part validation failed: '{part}' contains blocked pattern '{blocked}'")
                 return False
 
@@ -808,9 +817,29 @@ async def internal_run_command(
         else:
             logger.warning(f"Command failed: '{sanitized_command}'. Return code: {result.returncode}")
 
+        stdout = result.stdout
+        truncated = False
+        if len(stdout) > MAX_COMMAND_OUTPUT_CHARS:
+            stdout = stdout[:MAX_COMMAND_OUTPUT_CHARS]
+            truncated = True
+            logger.warning(
+                f"Command output truncated to {MAX_COMMAND_OUTPUT_CHARS} chars "
+                f"(original: {len(result.stdout)} chars). "
+                "Use internal_read_file with start_line/max_lines to read large files, "
+                "or internal_grep to search for specific content."
+            )
+
+        if truncated:
+            stdout += (
+                f"\n\n[OUTPUT TRUNCATED at {MAX_COMMAND_OUTPUT_CHARS} chars - "
+                f"original output was {len(result.stdout)} chars / ~{len(result.stdout)//40} lines. "
+                "Use internal_read_file(path, start_line=N, max_lines=100) to read specific sections, "
+                "or internal_grep(pattern, path) to find specific content without reading the whole file.]"
+            )
+
         return {
             "success": success,
-            "output": result.stdout,
+            "output": stdout,
             "error": result.stderr if not success else "",
             "return_code": result.returncode,
         }

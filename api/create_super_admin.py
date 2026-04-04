@@ -14,6 +14,7 @@ Usage:
 Interactive prompts will guide you through the process.
 """
 
+import asyncio
 import getpass
 import os
 import sys
@@ -27,11 +28,18 @@ from datetime import UTC
 import bcrypt
 from sqlalchemy.orm import Session
 
-from src.core.database import get_db
+from src.core.database import get_async_session_factory, get_db
 from src.models import Account, AccountStatus, Role, Tenant, TenantAccountJoin, TenantPlan, TenantStatus, TenantType
 from src.models.subscription_plan import PlanTier, SubscriptionPlan
 from src.models.tenant_subscription import BillingCycle, SubscriptionStatus, TenantSubscription
 from src.services.permissions.seed_roles_permissions import seed_roles_and_permissions
+
+
+async def _run_seed_roles_and_permissions():
+    """Run the async seed function with an async session."""
+    factory = get_async_session_factory()
+    async with factory() as async_db:
+        await seed_roles_and_permissions(async_db)
 
 
 def validate_email(email: str) -> bool:
@@ -65,7 +73,7 @@ def create_super_admin(email: str, password: str, name: str, tenant_name: str, d
         print("\n📋 Step 1: Seeding system roles and permissions...")
         # 2. Seed roles and permissions
         try:
-            seed_roles_and_permissions(db)
+            asyncio.run(_run_seed_roles_and_permissions())
             print("✅ Roles and permissions seeded successfully")
         except Exception as e:
             # If already seeded, that's okay

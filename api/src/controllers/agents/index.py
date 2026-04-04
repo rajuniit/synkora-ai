@@ -890,47 +890,17 @@ async def update_agent(
         await cache.invalidate_agents_list(str(tenant_id))  # PERFORMANCE: Also invalidate list cache
         logger.info(f"🗑️  Invalidated cache for agent '{agent_name}'")
 
-        # Recreate agent in memory with updated config
+        # Evict stale agent from memory so the next request reloads it properly
+        # via agent_loader_service._resolve_llm_config, which queries AgentLLMConfig
+        # and decrypts the API key correctly.  Do NOT recreate here using the
+        # inline db_agent.llm_config field — that field may be stale or its api_key
+        # still encrypted, which would break the in-memory LLM client.
         if agent_name in agent_manager.registry:
             try:
-                # Delete old agent from memory
                 await agent_manager.delete_agent(agent_name)
-
-                # Reconstruct and recreate agent
-                from src.services.agents.config import ModelConfig, ToolConfig
-
-                llm_config = ModelConfig(**db_agent.llm_config)
-                tools = []
-                if db_agent.tools_config and "tools" in db_agent.tools_config:
-                    tools = [ToolConfig(**tool) for tool in db_agent.tools_config["tools"]]
-
-                config = AgentConfig(
-                    name=db_agent.agent_name,
-                    description=db_agent.description or "",
-                    system_prompt=db_agent.system_prompt or "",
-                    llm_config=llm_config,
-                    tools=tools,
-                )
-
-                # Determine agent class
-                agent_class_map = {
-                    "llm": LLMAgent,
-                    "research": ResearchAgent,
-                    "code": CodeAgent,
-                    "claude_code": ClaudeCodeAgent,
-                }
-                agent_class = agent_class_map.get(
-                    db_agent.agent_type.lower() if db_agent.agent_type else "llm", LLMAgent
-                )
-
-                # Get API key from llm_config
-                api_key = db_agent.llm_config.get("api_key", "")
-
-                # Recreate agent in memory
-                await agent_manager.create_agent(config=config, agent_class=agent_class, api_key=api_key)
-                logger.info(f"Recreated agent '{agent_name}' in memory with updated config")
+                logger.info(f"Evicted agent '{agent_name}' from memory; will reload on next request")
             except Exception as e:
-                logger.error(f"Failed to recreate agent in memory: {e}")
+                logger.error(f"Failed to evict agent from memory: {e}")
 
         return AgentResponse(
             success=True,

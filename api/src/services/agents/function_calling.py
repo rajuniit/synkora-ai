@@ -295,11 +295,15 @@ class FunctionCallingHandler:
             max_result_chars=5000,
             head_chars=1500,
             tail_chars=1500,
+            max_total_tool_chars=80000,
         )
 
         # Deduplication cache: maps (tool_name + serialized_args) → result.
-        # Prevents re-fetching the same URLs/data after context pruning replaces
-        # old tool results with placeholders, which would cause an infinite loop.
+        # Avoids redundant tool re-execution within a single agentic run.
+        # IMPORTANT: entries are evicted when their corresponding conversation-history
+        # messages are pruned/truncated (see eviction block below).  This lets the LLM
+        # re-read the full content of a pruned file instead of being stuck with a
+        # truncated version indefinitely.
         _tool_call_cache: dict[str, Any] = {}
 
         # Loop detection: track the sequence of tool names called each iteration.
@@ -308,17 +312,57 @@ class FunctionCallingHandler:
         _iteration_tool_sequences: list[tuple[str, ...]] = []
         LOOP_REPEAT_THRESHOLD = 3
 
+        # "Not found" note deduplication: tracks keys we've already injected a
+        # persistent user message for so we don't spam the conversation.
+        _not_found_noted: set[str] = set()
+
         for iteration in range(max_iterations):
             logger.info(f"Function calling iteration {iteration + 1}/{max_iterations}")
 
             # Prune old tool results to prevent context bloat during long agentic loops
             if iteration > 0:  # Only prune after first iteration when we have tool results
+                # Build tool_call_id → cache_key mapping BEFORE pruning so we can evict
+                # pruned entries from _tool_call_cache.  Without this the LLM re-requests
+                # a file, the cache returns the (now-truncated) version from history, and
+                # the agent loops until it hits the max-iteration limit.
+                _call_id_to_cache_key: dict[str, str] = {}
+                for _msg in conversation_history:
+                    if _msg.get("role") == "assistant" and _msg.get("tool_calls"):
+                        for _tc in _msg["tool_calls"]:
+                            _tc_id = _tc.get("id", "")
+                            try:
+                                _args = json.loads(_tc.get("function", {}).get("arguments", "{}"))
+                                _ck = f"{_tc['function']['name']}:{json.dumps(_args, sort_keys=True)}"
+                            except Exception:
+                                _ck = _tc.get("function", {}).get("name", "")
+                            if _tc_id and _ck:
+                                _call_id_to_cache_key[_tc_id] = _ck
+
                 conversation_history, pruning_stats = prune_tool_results(conversation_history, pruning_settings)
                 if pruning_stats.chars_saved > 0:
                     logger.info(
                         f"🧹 Pruned {pruning_stats.chars_saved:,} chars "
                         f"(~{pruning_stats.estimated_tokens_saved:,} tokens) from tool results"
                     )
+
+                # Evict any cache entries whose messages were truncated or replaced with
+                # placeholders so the next identical request re-executes the tool and
+                # gets fresh full content (which will land at the end of history and be
+                # protected from pruning as one of the last keep_last_results entries).
+                if pruning_stats.tool_results_pruned > 0:
+                    _TRIM_MARKER = "[... "
+                    _PLACEHOLDER_MARKER = "[Previous "
+                    for _msg in conversation_history:
+                        if _msg.get("role") == "tool":
+                            _content = _msg.get("content", "")
+                            if isinstance(_content, str) and (
+                                _TRIM_MARKER in _content or _PLACEHOLDER_MARKER in _content
+                            ):
+                                _tc_id = _msg.get("tool_call_id", "")
+                                _ck = _call_id_to_cache_key.get(_tc_id)
+                                if _ck and _ck in _tool_call_cache:
+                                    del _tool_call_cache[_ck]
+                                    logger.debug(f"Dedup cache evicted pruned entry: {_ck[:80]}")
 
             # Generate response with tools (non-streaming for function detection)
             response = await self._generate_with_tools(conversation_history, temperature, max_tokens)
@@ -441,6 +485,38 @@ class FunctionCallingHandler:
                     error_message = exec_result.error or (
                         exec_result.result.get("error", "") if isinstance(exec_result.result, dict) else ""
                     )
+
+                    # "File not found" is a deterministic, non-transient error — retrying the
+                    # same path will never succeed.  Instead of counting toward the circuit
+                    # breaker (which would kill the whole agent), inject a persistent user
+                    # message into conversation history.  User-role messages are never touched
+                    # by the context pruner, so the agent will remember the path doesn't exist
+                    # even after many iterations of pruning.
+                    _NOT_FOUND_PHRASES = (
+                        "file not found",
+                        "not found",
+                        "no such file",
+                        "does not exist",
+                        "path not found",
+                        "no such directory",
+                        "exceeds maximum allowed size",
+                    )
+                    if any(p in error_message.lower() for p in _NOT_FOUND_PHRASES):
+                        note_key = f"{exec_result.name}:{error_message[:150]}"
+                        if note_key not in _not_found_noted:
+                            _not_found_noted.add(note_key)
+                            conversation_history.append(
+                                {
+                                    "role": "user",
+                                    "content": (
+                                        f"[System note: {error_message} — this path does not exist. "
+                                        "Do not retry it; look for the correct path instead.]"
+                                    ),
+                                }
+                            )
+                            logger.debug(f"Injected persistent not-found note for: {error_message[:120]}")
+                        continue  # Do not count toward circuit breaker
+
                     should_break = error_tracker.track_error(exec_result.name, error_message)
                     if should_break:
                         yield {
@@ -947,6 +1023,24 @@ class FunctionCallingHandler:
 
                     # Don't retry parameter validation errors or missing config - they won't succeed on retry
                     if "Missing required parameter" in str(last_error) or "not configured" in str(last_error).lower():
+                        break
+
+                    # Don't retry missing system commands - the binary won't appear on retry
+                    if (
+                        "command not found" in str(last_error).lower()
+                        or "no such file or directory" in str(last_error).lower()
+                    ):
+                        logger.info(f"Not retrying {func_name}: missing system command: {str(last_error)[:100]}")
+                        break
+
+                    # Don't retry deterministic size/capacity errors
+                    if (
+                        "exceeds maximum allowed size" in str(last_error)
+                        or "exceeds maximum" in str(last_error).lower()
+                    ):
+                        logger.info(
+                            f"Not retrying {func_name}: deterministic size limit error: {str(last_error)[:100]}"
+                        )
                         break
 
                     # Don't retry HTTP 4xx client errors - they are permanent failures

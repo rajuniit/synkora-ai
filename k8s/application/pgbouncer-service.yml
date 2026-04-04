@@ -1,0 +1,20 @@
+apiVersion: v1
+kind: Service
+metadata:
+  name: synkora-pgbouncer
+  namespace: synkora-production
+  labels:
+    app: synkora
+    component: pgbouncer
+spec:
+  type: ClusterIP
+  # API pods connect here on the standard PostgreSQL port.
+  # DB_HOST in synkora-config.yml must point to this service name.
+  ports:
+  - name: postgres
+    port: 5432
+    targetPort: 5432
+    protocol: TCP
+  selector:
+    app: synkora
+    component: pgbouncer

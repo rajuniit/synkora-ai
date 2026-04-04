@@ -1,3 +1,13 @@
+# SUPERSEDED — this single-node Redis deployment has been replaced by Redis Sentinel (HA).
+# Deploy the Sentinel cluster first using redis-sentinel-values.yml, verify connectivity,
+# then remove this file and run:
+#   kubectl delete deployment synkora-redis -n synkora-production
+#   kubectl delete service synkora-redis -n synkora-production
+#   kubectl delete pvc synkora-redis-data -n synkora-production
+#
+# The application code (api/src/config/redis.py) switches to Sentinel mode automatically
+# when REDIS_SENTINEL_HOSTS is set in synkora-config.yml.
+
 ---
 # Redis PersistentVolumeClaim
 apiVersion: v1

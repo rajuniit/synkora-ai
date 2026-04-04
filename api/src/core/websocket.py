@@ -580,10 +580,12 @@ class DistributedConnectionManager(ConnectionManager):
             redis = get_redis_async()
             self._redis_pubsub = redis.pubsub()
 
-            # Subscribe to broadcast channel
+            # Exact-match channel for global broadcasts.
             await self._redis_pubsub.subscribe(f"{self.CHANNEL_PREFIX}all")
-            await self._redis_pubsub.subscribe(f"{self.CHANNEL_PREFIX}room:*")
+            # Pattern subscriptions for per-user and per-room channels.
+            # subscribe() does NOT support glob patterns — only psubscribe() does.
             await self._redis_pubsub.psubscribe(f"{self.CHANNEL_PREFIX}user:*")
+            await self._redis_pubsub.psubscribe(f"{self.CHANNEL_PREFIX}room:*")
 
             logger.info(f"WebSocket Redis pub/sub started on pod {self._pod_id}")
 
@@ -635,33 +637,43 @@ class DistributedConnectionManager(ConnectionManager):
 
     async def _handle_distributed_message(self, channel: str, data: dict) -> None:
         """Handle incoming message from another pod."""
+        from uuid import UUID
+
         msg_type = data.get("type")
         payload = data.get("payload")
 
         if msg_type == "room":
             room_id = data.get("room_id")
             if room_id:
-                # Cross-pod messages skip sender verification (already verified on origin pod)
-                await super().send_to_room(room_id, payload)
+                # Reconstruct the exclude set so the sender is not echoed back
+                # from this pod. The exclude list was serialised as strings when
+                # published; convert back to UUIDs.
+                exclude_strs = data.get("exclude", [])
+                exclude = {UUID(u) for u in exclude_strs} if exclude_strs else None
+                # Cross-pod room messages skip sender_user_id check (already
+                # verified on the origin pod).
+                await super().send_to_room(room_id, payload, exclude=exclude)
         elif msg_type == "user":
             user_id = data.get("user_id")
             if user_id:
-                from uuid import UUID
-
                 await super().send_to_user(payload, UUID(user_id))
         elif msg_type == "broadcast":
-            await super().broadcast(payload)
+            exclude_strs = data.get("exclude", [])
+            exclude = {UUID(u) for u in exclude_strs} if exclude_strs else None
+            await super().broadcast(payload, exclude=exclude)
 
     async def _publish_to_redis(self, channel: str, data: dict) -> None:
         """Publish message to Redis for other pods."""
         import json
 
         try:
-            from src.config.redis import get_redis
+            from src.config.redis import get_redis_async
 
-            redis = get_redis()
+            # Use the async Redis client — calling the sync client inside an async
+            # method blocks the event loop on every WebSocket message send.
+            redis = get_redis_async()
             data["source_pod"] = self._pod_id
-            redis.publish(channel, json.dumps(data))
+            await redis.publish(channel, json.dumps(data))
         except Exception as e:
             logger.debug(f"Failed to publish to Redis: {e}")
 

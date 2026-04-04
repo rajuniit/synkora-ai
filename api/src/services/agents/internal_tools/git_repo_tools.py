@@ -12,6 +12,7 @@ import uuid
 from typing import Any
 
 from .git_helpers import (
+    MAX_CLONE_TIMEOUT,
     MAX_REPO_SIZE_MB,
     _convert_https_to_ssh,
     _get_repo_size,
@@ -69,13 +70,47 @@ async def internal_git_clone_repo(
         elif use_ssh:
             repo_url = _convert_https_to_ssh(repo_url)
 
+        # Pre-check repo size via GitHub API before cloning to avoid downloading
+        # hundreds of MB only to reject the repo afterwards.
+        # Only applies to github.com URLs when credentials are available.
+        _gh_match = __import__("re").search(r"github\.com[:/](?:[^@/]+@)?([^/]+)/([^/]+?)(?:\.git)?$", repo_url)
+        if _gh_match and runtime_context:
+            try:
+                from .github_auth_helper import get_github_token_from_context
+
+                _token = await get_github_token_from_context(runtime_context, tool_name="internal_git_clone_repo")
+                if _token:
+                    import asyncio as _asyncio
+
+                    from github import Github as _Github
+
+                    _slug = f"{_gh_match.group(1)}/{_gh_match.group(2)}"
+
+                    def _fetch_size() -> float:
+                        return _Github(_token).get_repo(_slug).size / 1024  # KB → MB
+
+                    _size_mb = await _asyncio.get_event_loop().run_in_executor(None, _fetch_size)
+                    if _size_mb > MAX_REPO_SIZE_MB:
+                        return {
+                            "success": False,
+                            "error": (
+                                f"Repository size ({_size_mb:.1f}MB) exceeds maximum allowed size "
+                                f"({MAX_REPO_SIZE_MB}MB). Cannot clone this repository."
+                            ),
+                            "repo_path": None,
+                        }
+                    logger.info(f"Pre-clone size check passed: {_size_mb:.1f}MB")
+            except Exception as _pre_check_err:
+                # Non-fatal: if the pre-check fails, proceed and let the post-clone check catch it
+                logger.debug(f"Pre-clone size check skipped: {_pre_check_err}")
+
         repos_dir = os.path.join(workspace_path, "repos")
         os.makedirs(repos_dir, exist_ok=True)
 
         repo_dir = os.path.join(repos_dir, f"git_{uuid.uuid4().hex[:12]}")
         logger.info(f"Cloning '{repo_url}' into {repo_dir}")
 
-        result = _run_git_command(["git", "clone", repo_url, repo_dir], timeout=600)
+        result = _run_git_command(["git", "clone", repo_url, repo_dir], timeout=MAX_CLONE_TIMEOUT)
 
         if not result["success"]:
             shutil.rmtree(repo_dir, ignore_errors=True)

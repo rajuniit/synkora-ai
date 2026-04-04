@@ -4,11 +4,11 @@ metadata:
   name: synkora-ingress
   namespace: synkora-production
   annotations:
-    # This annotation is crucial if your app expects requests at root "/" 
+    # This annotation is crucial if your app expects requests at root "/"
     # but you expose it at "/api". It strips "/api" before sending to the pod.
     # If your app handles "/api" internally, remove this line.
     # nginx.ingress.kubernetes.io/rewrite-target: /
-    
+
     # Increase body size for file uploads if needed
     nginx.ingress.kubernetes.io/proxy-body-size: "10m"
     cert-manager.io/cluster-issuer: "letsencrypt-prod"
@@ -21,10 +21,11 @@ spec:
   ingressClassName: nginx
   tls:
   - hosts:
-    - api.synkora.ai
+    # REQUIRED: replace with your deployment domain before applying.
+    - api.your-domain.com
     secretName: synkora-api-tls
   rules:
-  - host: api.synkora.ai
+  - host: api.your-domain.com
     http:
       paths:
       - path: /api
@@ -56,6 +57,15 @@ spec:
             port:
               number: 5001
       - path: /metrics
+        pathType: Prefix
+        backend:
+          service:
+            name: synkora-api
+            port:
+              number: 5001
+      # WebSocket path — distributed via Redis pub/sub (no sticky sessions needed).
+      # Nginx must not buffer WebSocket frames; upgrade headers are required.
+      - path: /ws
         pathType: Prefix
         backend:
           service:

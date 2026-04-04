@@ -56,21 +56,22 @@ class DatabaseConfig(BaseSettings):
     )
 
     sqlalchemy_pool_size: NonNegativeInt = Field(
-        default=10,
+        default=5,
         description=(
-            "Maximum number of database connections in the pool per process. "
-            "In Kubernetes, each pod/worker creates this many connections. "
-            "Keep low (10-20) to avoid exhausting PostgreSQL's max_connections. "
-            "Use PgBouncer in production for higher concurrency needs."
+            "Connections held open per process. "
+            "With PgBouncer (PGBOUNCER_ENABLED=true) in front of PostgreSQL, "
+            "keep this small — PgBouncer multiplexes app connections to a fixed "
+            "pool of real PostgreSQL connections, so a large per-process pool "
+            "wastes memory without adding PostgreSQL capacity."
         ),
     )
 
     sqlalchemy_max_overflow: NonNegativeInt = Field(
-        default=10,
+        default=5,
         description=(
-            "Burst connections beyond pool_size. Total max = pool_size + max_overflow. "
-            "At default (10+10=20 per worker), 4 workers → 80 connections, "
-            "well within PostgreSQL's default max_connections=100."
+            "Burst connections beyond pool_size. "
+            "PgBouncer handles multiplexing; keep overflow small (5) to avoid "
+            "a thundering-herd of client connections to PgBouncer under load."
         ),
     )
 
@@ -146,24 +147,40 @@ class DatabaseConfig(BaseSettings):
             "pool_timeout": self.sqlalchemy_pool_timeout,
         }
 
+    pgbouncer_enabled: bool = Field(
+        default=False,
+        description=(
+            "Set to True when PgBouncer sits between the app and PostgreSQL. "
+            "Disables asyncpg prepared-statement caching (statement_cache_size=0), "
+            "which is incompatible with PgBouncer transaction-mode pooling."
+        ),
+    )
+
     @computed_field  # type: ignore[misc]
     @property
     def sqlalchemy_async_engine_options(self) -> dict[str, Any]:
         """Get SQLAlchemy async engine options (for asyncpg)."""
-        # asyncpg uses different connection args format than psycopg2
-        # server_settings is the asyncpg equivalent of psycopg2's options
-        connect_args = {
+        # asyncpg uses different connection args format than psycopg2.
+        # server_settings is the asyncpg equivalent of psycopg2's options.
+        connect_args: dict[str, Any] = {
             "server_settings": {"timezone": "UTC"},
             "command_timeout": 30,  # Statement timeout in seconds
         }
 
+        if self.pgbouncer_enabled:
+            # PgBouncer transaction mode does not support named prepared statements.
+            # asyncpg caches prepared statements by default — disable to prevent
+            # "prepared statement ... already exists" errors under transaction pooling.
+            connect_args["statement_cache_size"] = 0
+
+        # pool_use_lifo is omitted: AsyncAdaptedQueuePool (used by async engines)
+        # does not support the use_lifo parameter — only the sync QueuePool does.
         return {
             "pool_size": self.sqlalchemy_pool_size,
             "max_overflow": self.sqlalchemy_max_overflow,
             "pool_recycle": self.sqlalchemy_pool_recycle,
             "pool_pre_ping": self.sqlalchemy_pool_pre_ping,
             "connect_args": connect_args,
-            "pool_use_lifo": self.sqlalchemy_pool_use_lifo,
             "pool_reset_on_return": "rollback",
             "pool_timeout": self.sqlalchemy_pool_timeout,
         }

@@ -1435,6 +1435,11 @@ class ChatStreamService:
         from src.services.agents.config import AgenticConfig
 
         agentic_meta = (db_agent.agent_metadata or {}).get("agentic_config", {}) if db_agent.agent_metadata else {}
+        logger.info(
+            f"🔧 agentic_config loaded for '{db_agent.agent_name}': "
+            f"max_iterations={agentic_meta.get('max_iterations', 150)}, "
+            f"raw_agent_metadata={db_agent.agent_metadata}"
+        )
         agentic_config = AgenticConfig(
             max_iterations=agentic_meta.get("max_iterations", 150),
             parallel_tools=agentic_meta.get("parallel_tools", True),

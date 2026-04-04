@@ -1,0 +1,159 @@
+---
+# PgBouncer Deployment
+# Sits between API pods and PostgreSQL, multiplexing thousands of application
+# connections down to a small fixed pool of real database connections.
+#
+# pool_mode=transaction means PgBouncer holds a PostgreSQL connection only for
+# the duration of each transaction — ideal for async SQLAlchemy (asyncpg).
+#
+# Math: 2 replicas × max_client_conn=2000 = 4000 concurrent app connections.
+# All 4000 map to ≤35 real PostgreSQL connections (pool=25 + reserve=10).
+# PostgreSQL sees constant load regardless of how many API pods are running.
+#
+# Configuration is driven entirely by environment variables — the bitnami image
+# auto-generates pgbouncer.ini and userlist.txt from them. No ConfigMap mount
+# needed; mounting a custom ini on top of bitnami's generated config causes
+# conflicts and is the most common source of misconfiguration.
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: synkora-pgbouncer
+  namespace: synkora-production
+  labels:
+    app: synkora
+    component: pgbouncer
+    version: v1
+spec:
+  replicas: 2
+  strategy:
+    type: RollingUpdate
+    rollingUpdate:
+      maxSurge: 1
+      maxUnavailable: 0
+  selector:
+    matchLabels:
+      app: synkora
+      component: pgbouncer
+  template:
+    metadata:
+      labels:
+        app: synkora
+        component: pgbouncer
+        version: v1
+      annotations:
+        prometheus.io/scrape: "false"
+    spec:
+      imagePullSecrets:
+      - name: ecr-registry-secret
+      securityContext:
+        runAsNonRoot: true
+        runAsUser: 1001   # bitnami images run as UID 1001
+        fsGroup: 1001
+      containers:
+      - name: pgbouncer
+        image: bitnami/pgbouncer:1
+        imagePullPolicy: IfNotPresent
+        ports:
+        - containerPort: 5432
+          name: postgres
+          protocol: TCP
+        env:
+        # --- Listen port ---
+        # Bitnami default is 6432; override to 5432 so the ClusterIP service
+        # (targetPort: 5432) and the probes below don't need special treatment.
+        - name: PGBOUNCER_PORT
+          value: "5432"
+
+        # --- Backend PostgreSQL connection ---
+        - name: POSTGRESQL_HOST
+          value: synkora-postgres
+        - name: POSTGRESQL_PORT
+          value: "5432"
+        - name: POSTGRESQL_DATABASE
+          value: synkora
+        - name: POSTGRESQL_USERNAME
+          valueFrom:
+            secretKeyRef:
+              name: synkora-secrets
+              key: DB_USERNAME
+        - name: POSTGRESQL_PASSWORD
+          valueFrom:
+            secretKeyRef:
+              name: synkora-secrets
+              key: DB_PASSWORD
+
+        # --- Database routing ---
+        # Bitnami requires PGBOUNCER_DATABASES to generate the [databases] section
+        # in pgbouncer.ini. Without it PgBouncer starts but no database is defined
+        # and every connection attempt returns "no such database".
+        # Format: "local_db_name=host=backend port=port dbname=real_db"
+        - name: PGBOUNCER_DATABASES
+          value: "synkora=host=synkora-postgres port=5432 dbname=synkora"
+
+        # --- Pool settings ---
+        # transaction mode: required for asyncpg / async SQLAlchemy.
+        # session or statement mode will break prepared-statement handling.
+        - name: PGBOUNCER_POOL_MODE
+          value: "transaction"
+        - name: PGBOUNCER_MAX_CLIENT_CONN
+          value: "2000"
+        - name: PGBOUNCER_DEFAULT_POOL_SIZE
+          value: "25"
+        - name: PGBOUNCER_RESERVE_POOL_SIZE
+          value: "10"
+        # DISCARD TEMP drops only temporary tables between transactions.
+        # DISCARD ALL must NOT be used in transaction mode — it runs RESET ALL
+        # which clears statement_timeout (and all other SET parameters) set by
+        # SQLAlchemy's receive_connect event listener, silently disabling query
+        # timeouts after the first transaction on each server connection.
+        - name: PGBOUNCER_SERVER_RESET_QUERY
+          value: "DISCARD TEMP"
+        # Close idle server connections after 10 minutes to free PostgreSQL slots.
+        - name: PGBOUNCER_SERVER_IDLE_TIMEOUT
+          value: "600"
+
+        # --- Auth ---
+        # md5 is widely compatible and sufficient for intra-cluster traffic.
+        - name: PGBOUNCER_AUTH_TYPE
+          value: "md5"
+
+        resources:
+          requests:
+            memory: "64Mi"
+            cpu: "50m"
+          limits:
+            memory: "256Mi"
+            cpu: "500m"
+        livenessProbe:
+          tcpSocket:
+            port: 5432
+          initialDelaySeconds: 10
+          periodSeconds: 10
+          timeoutSeconds: 5
+          failureThreshold: 3
+        readinessProbe:
+          tcpSocket:
+            port: 5432
+          initialDelaySeconds: 5
+          periodSeconds: 5
+          timeoutSeconds: 3
+          failureThreshold: 3
+        securityContext:
+          allowPrivilegeEscalation: false
+          readOnlyRootFilesystem: false  # bitnami writes config + pid files at runtime
+          capabilities:
+            drop:
+              - ALL
+      affinity:
+        podAntiAffinity:
+          preferredDuringSchedulingIgnoredDuringExecution:
+          - weight: 100
+            podAffinityTerm:
+              labelSelector:
+                matchExpressions:
+                - key: component
+                  operator: In
+                  values:
+                  - pgbouncer
+              topologyKey: kubernetes.io/hostname
+      terminationGracePeriodSeconds: 30
