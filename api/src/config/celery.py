@@ -55,3 +55,12 @@ celery_app.conf.update(
     task_time_limit=30 * 60,  # 30 minutes
     task_soft_time_limit=25 * 60,  # 25 minutes
 )
+
+# Sentinel requires master_name transport option — safe to set for all sentinel:// URLs.
+# For redis:// or rediss:// URLs this block is skipped entirely.
+if _broker_url.startswith("sentinel://"):
+    _sentinel_master = os.getenv("REDIS_SENTINEL_MASTER", "mymaster")
+    celery_app.conf.update(
+        broker_transport_options={"master_name": _sentinel_master},
+        result_backend_transport_options={"master_name": _sentinel_master},
+    )
