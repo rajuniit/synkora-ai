@@ -10,10 +10,9 @@
 # All 4000 map to ≤35 real PostgreSQL connections (pool=25 + reserve=10).
 # PostgreSQL sees constant load regardless of how many API pods are running.
 #
-# Configuration is driven entirely by environment variables — the bitnami image
+# Configuration is driven entirely by environment variables — edoburu/pgbouncer
 # auto-generates pgbouncer.ini and userlist.txt from them. No ConfigMap mount
-# needed; mounting a custom ini on top of bitnami's generated config causes
-# conflicts and is the most common source of misconfiguration.
+# needed; mounting a custom ini on top of the generated config causes conflicts.
 apiVersion: apps/v1
 kind: Deployment
 metadata:
@@ -46,12 +45,10 @@ spec:
       imagePullSecrets:
       - name: ecr-registry-secret
       securityContext:
-        runAsNonRoot: true
-        runAsUser: 1001   # bitnami images run as UID 1001
-        fsGroup: 1001
+        runAsNonRoot: false  # edoburu runs as root internally; pgbouncer drops privs itself
       containers:
       - name: pgbouncer
-        image: bitnami/pgbouncer:1
+        image: edoburu/pgbouncer:latest
         imagePullPolicy: IfNotPresent
         ports:
         - containerPort: 5432
@@ -59,62 +56,52 @@ spec:
           protocol: TCP
         env:
         # --- Listen port ---
-        # Bitnami default is 6432; override to 5432 so the ClusterIP service
-        # (targetPort: 5432) and the probes below don't need special treatment.
-        - name: PGBOUNCER_PORT
+        - name: LISTEN_PORT
           value: "5432"
 
         # --- Backend PostgreSQL connection ---
-        - name: POSTGRESQL_HOST
+        - name: DB_HOST
           value: synkora-postgres
-        - name: POSTGRESQL_PORT
+        - name: DB_PORT
           value: "5432"
-        - name: POSTGRESQL_DATABASE
+        - name: DB_NAME
           value: synkora
-        - name: POSTGRESQL_USERNAME
+        - name: DB_USER
           valueFrom:
             secretKeyRef:
               name: synkora-secrets
               key: DB_USERNAME
-        - name: POSTGRESQL_PASSWORD
+        - name: DB_PASSWORD
           valueFrom:
             secretKeyRef:
               name: synkora-secrets
               key: DB_PASSWORD
 
-        # --- Database routing ---
-        # Bitnami requires PGBOUNCER_DATABASES to generate the [databases] section
-        # in pgbouncer.ini. Without it PgBouncer starts but no database is defined
-        # and every connection attempt returns "no such database".
-        # Format: "local_db_name=host=backend port=port dbname=real_db"
-        - name: PGBOUNCER_DATABASES
-          value: "synkora=host=synkora-postgres port=5432 dbname=synkora"
-
         # --- Pool settings ---
         # transaction mode: required for asyncpg / async SQLAlchemy.
         # session or statement mode will break prepared-statement handling.
-        - name: PGBOUNCER_POOL_MODE
+        - name: POOL_MODE
           value: "transaction"
-        - name: PGBOUNCER_MAX_CLIENT_CONN
+        - name: MAX_CLIENT_CONN
           value: "2000"
-        - name: PGBOUNCER_DEFAULT_POOL_SIZE
+        - name: DEFAULT_POOL_SIZE
           value: "25"
-        - name: PGBOUNCER_RESERVE_POOL_SIZE
+        - name: RESERVE_POOL_SIZE
           value: "10"
         # DISCARD TEMP drops only temporary tables between transactions.
         # DISCARD ALL must NOT be used in transaction mode — it runs RESET ALL
         # which clears statement_timeout (and all other SET parameters) set by
         # SQLAlchemy's receive_connect event listener, silently disabling query
         # timeouts after the first transaction on each server connection.
-        - name: PGBOUNCER_SERVER_RESET_QUERY
+        - name: SERVER_RESET_QUERY
           value: "DISCARD TEMP"
         # Close idle server connections after 10 minutes to free PostgreSQL slots.
-        - name: PGBOUNCER_SERVER_IDLE_TIMEOUT
+        - name: SERVER_IDLE_TIMEOUT
           value: "600"
 
         # --- Auth ---
         # md5 is widely compatible and sufficient for intra-cluster traffic.
-        - name: PGBOUNCER_AUTH_TYPE
+        - name: AUTH_TYPE
           value: "md5"
 
         resources:

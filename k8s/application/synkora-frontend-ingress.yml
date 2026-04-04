@@ -12,12 +12,8 @@ metadata:
     # Enable gzip compression for faster JS/CSS/HTML transfer
     nginx.ingress.kubernetes.io/enable-gzip: "true"
     nginx.ingress.kubernetes.io/gzip-types: "text/plain text/css text/javascript application/javascript application/json image/svg+xml"
-    # Cache Next.js static assets (content-hashed, safe to cache long-term)
-    nginx.ingress.kubernetes.io/configuration-snippet: |
-      location ~* ^/_next/static/ {
-        expires 1y;
-        add_header Cache-Control "public, max-age=31536000, immutable";
-      }
+    # Next.js already sets Cache-Control: public, max-age=31536000, immutable on
+    # /_next/static/ assets natively — no configuration-snippet needed.
 spec:
   ingressClassName: nginx
   tls:

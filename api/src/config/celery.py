@@ -3,32 +3,33 @@
 import os
 
 from celery import Celery
-from pydantic import Field, RedisDsn
+from pydantic import Field
 from pydantic_settings import BaseSettings
 
 
 class CeleryConfig(BaseSettings):
     """Celery configuration settings."""
 
-    celery_broker_url: RedisDsn = Field(
+    # str instead of RedisDsn so sentinel:// URLs are accepted alongside redis://
+    celery_broker_url: str = Field(
         ...,
-        description="Celery broker URL",
+        description="Celery broker URL (redis://, rediss://, or sentinel://)",
     )
 
-    celery_result_backend: RedisDsn = Field(
+    celery_result_backend: str = Field(
         ...,
-        description="Celery result backend URL",
+        description="Celery result backend URL (redis://, rediss://, or sentinel://)",
     )
 
     @property
     def celery_broker_url_str(self) -> str:
         """Get Celery broker URL as string."""
-        return str(self.celery_broker_url)
+        return self.celery_broker_url
 
     @property
     def celery_result_backend_str(self) -> str:
         """Get Celery result backend URL as string."""
-        return str(self.celery_result_backend)
+        return self.celery_result_backend
 
 
 # Get broker/backend URLs from environment (K8s compatible)
