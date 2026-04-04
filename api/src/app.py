@@ -223,12 +223,13 @@ async def lifespan(app: FastAPI):  # noqa: ARG001
     except Exception as e:
         logging.error(f"Error closing database pool: {e}")
 
-    # Close Redis connection
+    # Close Redis connections (sync + async)
     try:
-        from src.config.redis import close_redis
+        from src.config.redis import close_redis, close_redis_async
 
         close_redis()
-        logging.info("Redis connection closed")
+        await close_redis_async()
+        logging.info("Redis connections closed")
     except Exception as e:
         logging.error(f"Error closing Redis connection: {e}")
 

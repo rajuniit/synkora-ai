@@ -15,8 +15,11 @@ spec:
   strategy:
     type: RollingUpdate
     rollingUpdate:
-      maxSurge: 0
-      maxUnavailable: 1
+      # Spin up 1 new pod before terminating any old pod.
+      # Requires 1Gi headroom in the cluster (1 extra pod at request size).
+      # Guarantees zero capacity drop during deploys.
+      maxSurge: 1
+      maxUnavailable: 0
   selector:
     matchLabels:
       app: synkora

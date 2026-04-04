@@ -1,11 +1,11 @@
 apiVersion: apps/v1
 kind: Deployment
 metadata:
-  name: synkora-celery-worker
+  name: synkora-celery-worker-notifications
   namespace: synkora-production
   labels:
     app: synkora
-    component: celery-worker
+    component: celery-worker-notifications
     version: v1
 spec:
   replicas: 1
@@ -17,12 +17,12 @@ spec:
   selector:
     matchLabels:
       app: synkora
-      component: celery-worker
+      component: celery-worker-notifications
   template:
     metadata:
       labels:
         app: synkora
-        component: celery-worker
+        component: celery-worker-notifications
         version: v1
     spec:
       imagePullSecrets:
@@ -32,14 +32,14 @@ spec:
         runAsUser: 1000
         fsGroup: 1000
       containers:
-      - name: celery-worker
+      - name: celery-worker-notifications
         image: IMAGE_PLACEHOLDER
         imagePullPolicy: Always
         command: ["celery"]
-        # Handles only the "default" queue (general-purpose tasks).
-        # Agent tasks → celery-worker-agents-deployment.yml (memory-intensive, long-running)
-        # Email/notification tasks → celery-worker-notifications-deployment.yml (I/O-bound, short)
-        args: ["-A", "src.celery_app", "worker", "--loglevel=info", "-Q", "default"]
+        # Handles: email sending, in-app notifications, Slack/Teams/WhatsApp notifications.
+        # Tasks are I/O-bound and short-lived — high concurrency, low memory.
+        args: ["-A", "src.celery_app", "worker", "--loglevel=info", "-Q", "email,notifications",
+               "--concurrency=8"]
         envFrom:
         - configMapRef:
             name: synkora-config
@@ -47,18 +47,17 @@ spec:
             name: synkora-secrets
         resources:
           requests:
-            memory: "512Mi"
+            # I/O-bound tasks (SMTP, HTTP) — minimal CPU/memory needed.
+            memory: "256Mi"
             cpu: "100m"
           limits:
-            memory: "2Gi"
-            cpu: "1000m"
+            memory: "1Gi"
+            cpu: "500m"
         volumeMounts:
         - name: tmp
           mountPath: /tmp
       volumes:
       - name: tmp
         emptyDir:
-          sizeLimit: 20Gi
-      # Document/data-source/workspace tasks can take several minutes.
-      # 120s gives enough headroom for graceful task completion before SIGKILL.
-      terminationGracePeriodSeconds: 120
+          sizeLimit: 2Gi
+      terminationGracePeriodSeconds: 60

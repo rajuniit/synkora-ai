@@ -24,6 +24,10 @@ spec:
     spec:
       imagePullSecrets:
       - name: ecr-registry-secret
+      securityContext:
+        runAsNonRoot: true
+        runAsUser: 1000
+        fsGroup: 1000
       containers:
       - name: celery-beat
         image: IMAGE_PLACEHOLDER

@@ -69,6 +69,7 @@ ALLOWED_EXTENSIONS = {
         ".hpp",
         ".swift",
         ".m",
+        ".dart",
         ".toml",
         ".lock",
         ".prisma",

@@ -46,6 +46,11 @@ celery_app = Celery(
         "src.tasks.email_tasks",  # Email sending
         "src.tasks.billing_tasks",  # Credit deduction and reconciliation
         "src.tasks.workspace_tasks",  # Workspace cleanup
+        "src.tasks.data_source_tasks",  # Data source ingestion
+        "src.tasks.document_tasks",  # Document processing
+        "src.tasks.file_tasks",  # File handling
+        "src.tasks.load_testing_tasks",  # Load test execution
+        "src.tasks.followup_reminder_task",  # Follow-up reminders
     ],
 )
 
@@ -86,8 +91,14 @@ celery_app.conf.update(
         # Agent tasks to agents queue
         "execute_spawn_agent_task": {"queue": "agents"},
         "process_webhook_event": {"queue": "agents"},
+        # Autonomous agent execution (the heavy scheduled task runner).
+        # Uses the actual registered task name from @celery_app.task(name=...).
+        # tasks.check_scheduled_tasks is lightweight (beat dispatcher) → default queue.
+        "tasks.execute_scheduled_task": {"queue": "agents"},
         # Billing tasks to billing queue
         "billing.flush_usage_analytics": {"queue": "billing"},
+        "billing.deduct_credits_async": {"queue": "billing"},
+        "billing.reconcile_credits_daily": {"queue": "billing"},
     },
     beat_schedule={
         # Check for due scheduled tasks every minute

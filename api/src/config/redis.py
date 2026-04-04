@@ -14,9 +14,14 @@ logger = logging.getLogger(__name__)
 class RedisConfig(BaseSettings):
     """Redis configuration settings."""
 
-    redis_url: RedisDsn = Field(
-        ...,
-        description="Redis URL",
+    redis_url: RedisDsn | None = Field(
+        default=None,
+        description=(
+            "Redis connection URL (e.g. redis://localhost:6379/0). "
+            "Not required when REDIS_SENTINEL_HOSTS is set — Sentinel mode "
+            "discovers the master automatically and ignores this field. "
+            "Required in standalone mode."
+        ),
     )
 
     redis_max_connections: int = Field(
@@ -111,6 +116,11 @@ def get_redis() -> redis.Redis:
                 logger.info(f"Redis Sentinel connected to master '{master_name}' via {hosts}")
             else:
                 # Standard mode
+                if not settings.redis_url:
+                    raise ValueError(
+                        "REDIS_URL is required when REDIS_SENTINEL_HOSTS is not set. "
+                        "Set REDIS_URL=redis://host:6379/0 in your environment."
+                    )
                 redis_url = str(settings.redis_url)
 
                 # Create connection pool with retry
@@ -213,8 +223,14 @@ def get_redis_async():
             master_name,
             password=redis_password,
             decode_responses=True,
+            max_connections=settings.redis_max_connections,
         )
     else:
+        if not settings.redis_url:
+            raise ValueError(
+                "REDIS_URL is required when REDIS_SENTINEL_HOSTS is not set. "
+                "Set REDIS_URL=redis://host:6379/0 in your environment."
+            )
         redis_url = str(settings.redis_url)
         _redis_async_client = aioredis.from_url(
             redis_url,
@@ -226,16 +242,15 @@ def get_redis_async():
     return _redis_async_client
 
 
-def close_redis_async():
+async def close_redis_async():
     """Close async Redis connection and cleanup."""
     global _redis_async_client, _redis_async_client_loop
-    if _redis_async_client:
+    client = _redis_async_client
+    _redis_async_client = None
+    _redis_async_client_loop = None
+    if client:
         try:
-            # aioredis client close is async, but we do best-effort sync cleanup
-            _redis_async_client = None
+            await client.aclose()
         except Exception as e:
             logger.warning(f"Error closing async Redis connection: {e}")
-        finally:
-            _redis_async_client = None
-            _redis_async_client_loop = None
-            logger.info("Async Redis connection reference cleared")
+        logger.info("Async Redis connection closed")

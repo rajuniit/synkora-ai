@@ -9,7 +9,10 @@ spec:
     kind: Deployment
     name: synkora-api
   minReplicas: 2
-  maxReplicas: 10
+  # With PgBouncer in place, 50 pods × 4 workers × 10 connections = 2000 client
+  # connections to PgBouncer, which maps to just 25 real PostgreSQL connections.
+  # PostgreSQL load stays constant regardless of API pod count.
+  maxReplicas: 50
   metrics:
   - type: Resource
     resource:
@@ -23,3 +26,19 @@ spec:
       target:
         type: Utilization
         averageUtilization: 80
+  behavior:
+    scaleDown:
+      # Wait 5 minutes of sustained low load before scaling down.
+      # Prevents thrashing when traffic is spiky.
+      stabilizationWindowSeconds: 300
+      policies:
+      - type: Pods
+        value: 2
+        periodSeconds: 60
+    scaleUp:
+      # Scale up immediately on load spikes — no stabilization window.
+      stabilizationWindowSeconds: 0
+      policies:
+      - type: Pods
+        value: 4
+        periodSeconds: 60

@@ -20,8 +20,8 @@ logger = logging.getLogger(__name__)
 # Security configuration
 # ---------------------------------------------------------------------------
 
-MAX_REPO_SIZE_MB = 500  # Maximum allowed repository size (in MB)
-MAX_CLONE_TIMEOUT = 600  # Maximum clone timeout (10 minutes)
+MAX_REPO_SIZE_MB = 2048  # Maximum allowed repository size (in MB)
+MAX_CLONE_TIMEOUT = 1800  # Maximum clone timeout (30 minutes)
 MAX_COMMAND_TIMEOUT = 300  # Maximum command timeout (5 minutes)
 MAX_BRANCH_NAME_LENGTH = 255
 MAX_COMMIT_MESSAGE_LENGTH = 1000

@@ -46,8 +46,9 @@ spec:
           value: "3000"
         - name: NEXT_TELEMETRY_DISABLED
           value: "1"
-        - name: NEXT_PUBLIC_SENTRY_HOST
-          value: "https://logs.synkora.ai"
+        # REQUIRED: set to your Sentry DSN host if using Sentry, or remove this env var.
+        # - name: NEXT_PUBLIC_SENTRY_HOST
+        #   value: "https://your-sentry-host"
         - name: NEXT_PUBLIC_COMING_SOON
           value: "true"
         - name: PM2_INSTANCES

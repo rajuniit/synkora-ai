@@ -1,0 +1,90 @@
+# Bitnami Redis Helm chart values for Redis Sentinel (HA) mode.
+# Deploy with:
+#   helm repo add bitnami https://charts.bitnami.com/bitnami
+#   helm upgrade --install synkora-redis bitnami/redis \
+#     --namespace synkora-production \
+#     --values k8s/application/redis-sentinel-values.yml
+#
+# After deployment, update synkora-config.yml:
+#   REDIS_SENTINEL_HOSTS: "<release>-redis-headless:26379"  (all sentinel pods share this headless DNS)
+#   REDIS_MASTER_NAME: "mymaster"
+#
+# The application code (api/src/config/redis.py) already handles Sentinel mode
+# when REDIS_SENTINEL_HOSTS is set — no application code changes required.
+
+architecture: replication
+
+sentinel:
+  enabled: true
+  # 3 Sentinel pods provide quorum with f=1 failure tolerance (need (N/2)+1 = 2 votes)
+  replicaCount: 3
+  resources:
+    requests:
+      memory: 64Mi
+      cpu: 25m
+    limits:
+      memory: 128Mi
+      cpu: 100m
+
+master:
+  resources:
+    requests:
+      memory: 512Mi
+      cpu: 100m
+    limits:
+      memory: 2Gi
+      cpu: 500m
+  persistence:
+    enabled: true
+    size: 10Gi
+  # Use appendonly AOF for durability; RDB snapshot as a safety net
+  extraFlags:
+    - "--appendonly yes"
+    - "--appendfsync everysec"
+    - "--maxmemory 1536mb"
+    - "--maxmemory-policy allkeys-lfu"
+    - "--lazyfree-lazy-eviction yes"
+    - "--lazyfree-lazy-expire yes"
+
+replica:
+  replicaCount: 2
+  resources:
+    requests:
+      memory: 512Mi
+      cpu: 100m
+    limits:
+      memory: 2Gi
+      cpu: 500m
+  persistence:
+    enabled: true
+    size: 10Gi
+
+auth:
+  enabled: true
+  # References the same secret used by the application so passwords stay in sync.
+  existingSecret: synkora-secrets
+  existingSecretPasswordKey: REDIS_PASSWORD
+  # When auth is enabled the Bitnami chart applies the same password to Sentinel
+  # nodes. The application reads REDIS_SENTINEL_PASSWORD separately (redis.py).
+  # Add REDIS_SENTINEL_PASSWORD=<same value as REDIS_PASSWORD> to synkora-secrets
+  # so the app can authenticate to Sentinel nodes:
+  #   kubectl patch secret synkora-secrets -n synkora-production \
+  #     --type=merge -p '{"stringData":{"REDIS_SENTINEL_PASSWORD":"<password>"}}'
+  sentinelPassword: ""  # leave empty to share the Redis password (bitnami default)
+
+# Metrics sidecar for Prometheus scraping
+metrics:
+  enabled: true
+  resources:
+    requests:
+      memory: 32Mi
+      cpu: 10m
+    limits:
+      memory: 64Mi
+      cpu: 50m
+
+# Pod anti-affinity: spread master + replicas across nodes for true HA
+commonConfiguration: |
+  save 3600 1
+  save 300 100
+  save 60 10000
