@@ -49,15 +49,15 @@ STATE_TTL_SECONDS = 600
 
 def _get_redis_client():
     """
-    Get Redis client for OAuth state storage.
+    Get async Redis client for OAuth state storage.
 
     SECURITY: Redis is required for OAuth state - no fallback.
     Raises exception if Redis is unavailable.
     """
     try:
-        from src.config.redis import get_redis
+        from src.config.redis import get_redis_async
 
-        redis = get_redis()
+        redis = get_redis_async()
         if redis is None:
             raise RuntimeError("Redis connection returned None")
         return redis
@@ -66,7 +66,7 @@ def _get_redis_client():
         raise RuntimeError("OAuth service temporarily unavailable. Please try again later.")
 
 
-def _store_oauth_state(state: str, data: dict[str, Any]) -> None:
+async def _store_oauth_state(state: str, data: dict[str, Any]) -> None:
     """
     Store OAuth state in Redis.
 
@@ -77,10 +77,10 @@ def _store_oauth_state(state: str, data: dict[str, Any]) -> None:
         RuntimeError: If Redis is unavailable
     """
     redis = _get_redis_client()
-    redis.setex(f"oauth_state:{state}", STATE_TTL_SECONDS, json.dumps(data))
+    await redis.setex(f"oauth_state:{state}", STATE_TTL_SECONDS, json.dumps(data))
 
 
-def _get_oauth_state(state: str) -> dict[str, Any] | None:
+async def _get_oauth_state(state: str) -> dict[str, Any] | None:
     """
     Retrieve and delete OAuth state from Redis.
 
@@ -92,9 +92,9 @@ def _get_oauth_state(state: str) -> dict[str, Any] | None:
     """
     try:
         redis = _get_redis_client()
-        data = redis.get(f"oauth_state:{state}")
+        data = await redis.get(f"oauth_state:{state}")
         if data:
-            redis.delete(f"oauth_state:{state}")
+            await redis.delete(f"oauth_state:{state}")
             return json.loads(data)
         return None
     except RuntimeError:
@@ -106,23 +106,23 @@ def _get_oauth_state(state: str) -> dict[str, Any] | None:
 EXCHANGE_CODE_TTL_SECONDS = 60
 
 
-def _store_exchange_tokens(code: str, access_token: str, refresh_token: str) -> None:
+async def _store_exchange_tokens(code: str, access_token: str, refresh_token: str) -> None:
     """Store tokens in Redis under a one-time exchange code."""
     redis = _get_redis_client()
-    redis.setex(
+    await redis.setex(
         f"oauth_exchange:{code}",
         EXCHANGE_CODE_TTL_SECONDS,
         json.dumps({"access_token": access_token, "refresh_token": refresh_token}),
     )
 
 
-def _consume_exchange_tokens(code: str) -> dict[str, str] | None:
+async def _consume_exchange_tokens(code: str) -> dict[str, str] | None:
     """Atomically retrieve and delete the exchange token pair. Returns None if expired/invalid."""
     try:
         redis = _get_redis_client()
-        data = redis.get(f"oauth_exchange:{code}")
+        data = await redis.get(f"oauth_exchange:{code}")
         if data:
-            redis.delete(f"oauth_exchange:{code}")
+            await redis.delete(f"oauth_exchange:{code}")
             return json.loads(data)
         return None
     except RuntimeError:
@@ -220,7 +220,7 @@ async def token_exchange(code: str = Query(..., description="One-time exchange c
     endpoint) so JS cannot read or exfiltrate it.  The access token is returned in
     the response body only.
     """
-    tokens = _consume_exchange_tokens(code)
+    tokens = await _consume_exchange_tokens(code)
     if not tokens:
         raise HTTPException(status_code=400, detail="Invalid or expired exchange code")
 
@@ -333,7 +333,7 @@ async def google_login(
         validated_redirect = _validate_redirect_url(redirect_url, f"{base_url}/signin")
 
         # SECURITY: Store state in Redis (required, no fallback)
-        _store_oauth_state(
+        await _store_oauth_state(
             state,
             {
                 "provider": "google",
@@ -368,7 +368,7 @@ async def google_callback(
     """
     try:
         # SECURITY: Verify state from Redis
-        state_data = _get_oauth_state(state)
+        state_data = await _get_oauth_state(state)
         if not state_data:
             raise HTTPException(status_code=400, detail="Invalid or expired state parameter")
 
@@ -464,7 +464,7 @@ async def google_callback(
         # SECURITY: Use a one-time exchange code instead of tokens in URL params.
         # The code is stored in Redis (60s TTL) and redeemed via /auth/token-exchange.
         exchange_code = secrets.token_urlsafe(32)
-        _store_exchange_tokens(exchange_code, access_token, refresh_token)
+        await _store_exchange_tokens(exchange_code, access_token, refresh_token)
 
         final_redirect_url = f"{redirect_url}?login=success&provider=google&exchange_code={exchange_code}"
         logger.info(f"Redirecting to: {final_redirect_url}")
@@ -514,7 +514,7 @@ async def microsoft_login(
         validated_redirect = _validate_redirect_url(redirect_url, f"{base_url}/signin")
 
         # SECURITY: Store state in Redis (required, no fallback)
-        _store_oauth_state(
+        await _store_oauth_state(
             state,
             {
                 "provider": "microsoft",
@@ -550,7 +550,7 @@ async def microsoft_callback(
     state_data = None
     try:
         # SECURITY: Verify state from Redis
-        state_data = _get_oauth_state(state)
+        state_data = await _get_oauth_state(state)
         if not state_data:
             raise HTTPException(status_code=400, detail="Invalid or expired state parameter")
 
@@ -638,7 +638,7 @@ async def microsoft_callback(
         refresh_token = AuthService.generate_refresh_token(account_id=account.id, token_version=token_version)
 
         exchange_code = secrets.token_urlsafe(32)
-        _store_exchange_tokens(exchange_code, access_token, refresh_token)
+        await _store_exchange_tokens(exchange_code, access_token, refresh_token)
 
         final_redirect_url = f"{redirect_url}?login=success&provider=microsoft&exchange_code={exchange_code}"
         return RedirectResponse(url=final_redirect_url, status_code=302)
@@ -685,7 +685,7 @@ async def apple_login(
         validated_redirect = _validate_redirect_url(redirect_url, f"{base_url}/signin")
 
         # SECURITY: Store state in Redis (required, no fallback)
-        _store_oauth_state(
+        await _store_oauth_state(
             state,
             {
                 "provider": "apple",
@@ -725,7 +725,7 @@ async def apple_callback(request: Request, db: AsyncSession = Depends(get_async_
             raise HTTPException(status_code=400, detail="Missing code or state parameter")
 
         # SECURITY: Verify state from Redis
-        state_data = _get_oauth_state(state)
+        state_data = await _get_oauth_state(state)
         if not state_data:
             raise HTTPException(status_code=400, detail="Invalid or expired state parameter")
 
@@ -812,7 +812,7 @@ async def apple_callback(request: Request, db: AsyncSession = Depends(get_async_
         refresh_token = AuthService.generate_refresh_token(account_id=account.id, token_version=token_version)
 
         exchange_code = secrets.token_urlsafe(32)
-        _store_exchange_tokens(exchange_code, access_token, refresh_token)
+        await _store_exchange_tokens(exchange_code, access_token, refresh_token)
 
         final_redirect_url = f"{redirect_url}?login=success&provider=apple&exchange_code={exchange_code}"
         return RedirectResponse(url=final_redirect_url, status_code=302)

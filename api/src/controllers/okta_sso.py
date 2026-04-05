@@ -32,9 +32,9 @@ _STATE_TTL = 600  # 10 minutes
 
 def _get_redis():
     try:
-        from src.config.redis import get_redis
+        from src.config.redis import get_redis_async
 
-        redis = get_redis()
+        redis = get_redis_async()
         if redis is None:
             raise RuntimeError("Redis returned None")
         return redis
@@ -43,16 +43,16 @@ def _get_redis():
         raise RuntimeError("SSO service temporarily unavailable")
 
 
-def _store_okta_state(state: str, data: dict) -> None:
-    _get_redis().setex(f"okta_sso_state:{state}", _STATE_TTL, json.dumps(data))
+async def _store_okta_state(state: str, data: dict) -> None:
+    await _get_redis().setex(f"okta_sso_state:{state}", _STATE_TTL, json.dumps(data))
 
 
-def _consume_okta_state(state: str) -> dict | None:
+async def _consume_okta_state(state: str) -> dict | None:
     try:
         redis = _get_redis()
-        raw = redis.get(f"okta_sso_state:{state}")
+        raw = await redis.get(f"okta_sso_state:{state}")
         if raw:
-            redis.delete(f"okta_sso_state:{state}")
+            await redis.delete(f"okta_sso_state:{state}")
             return json.loads(raw)
         return None
     except RuntimeError:
@@ -111,7 +111,7 @@ async def okta_login(
         state = secrets.token_urlsafe(32)
 
         # Store state in Redis
-        _store_okta_state(
+        await _store_okta_state(
             state,
             {
                 "tenant_id": tenant_id,
@@ -146,7 +146,7 @@ async def okta_callback(
     This endpoint receives the authorization code from Okta,
     exchanges it for an access token, gets user info, and creates/links account.
     """
-    state_data = _consume_okta_state(state)
+    state_data = await _consume_okta_state(state)
     try:
         if not state_data:
             raise HTTPException(status_code=400, detail="Invalid or expired state parameter")

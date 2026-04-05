@@ -37,6 +37,16 @@ agents_index_router = APIRouter()
 # Global agent manager instance
 agent_manager = AgentManager()
 
+# Singleton S3 storage service — reused across requests to avoid boto3 client overhead
+_storage_service: S3StorageService | None = None
+
+
+def _get_storage_service() -> S3StorageService:
+    global _storage_service
+    if _storage_service is None:
+        _storage_service = S3StorageService()
+    return _storage_service
+
 
 def convert_s3_uri_to_presigned_url(s3_uri: str) -> str:
     """
@@ -58,7 +68,7 @@ def convert_s3_uri_to_presigned_url(s3_uri: str) -> str:
     # If it's an S3 URI or key path, generate presigned URL
     if s3_uri.startswith("s3://") or "/" in s3_uri:
         try:
-            storage_service = S3StorageService()
+            storage_service = _get_storage_service()
             # Generate presigned URL valid for 7 days
             return storage_service.generate_presigned_url(s3_uri, expiration=86400 * 7)
         except Exception as e:
