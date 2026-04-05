@@ -5,16 +5,28 @@ import { useRouter, usePathname } from 'next/navigation'
 import { Sidebar } from '@/components/layout/Sidebar'
 import { Header } from '@/components/layout/Header'
 import { useAuth } from '@/lib/hooks/useAuth'
+import { secureStorage } from '@/lib/auth/secure-storage'
 
 export default function DashboardLayout({
   children,
 }: {
   children: React.ReactNode
 }) {
-  const { user, isLoading } = useAuth()
+  const { user, isLoading, fetchUser } = useAuth()
   const router = useRouter()
   const pathname = usePathname()
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false)
+
+  // Single session initialization point — runs once for the entire dashboard.
+  // Keeping fetchUser() here (not in useAuth) prevents Header, Sidebar, and
+  // other consumers from each firing a separate /me request on mount.
+  useEffect(() => {
+    if (typeof window !== 'undefined') {
+      secureStorage.migrateFromLocalStorage()
+      fetchUser()
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [])
 
   useEffect(() => {
     if (!isLoading && !user) {

@@ -13,7 +13,7 @@ from pydantic import BaseModel
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from src.config.redis import get_redis
+from src.config.redis import get_redis_async
 from src.core.database import get_async_db
 from src.middleware.auth_middleware import get_current_tenant_id
 from src.models.credit_topup import CreditTopup
@@ -125,9 +125,9 @@ async def get_credit_balance(
     """Get current credit balance for tenant"""
     cache_key = f"billing:balance:{tenant_id}"
     try:
-        redis = get_redis()
+        redis = get_redis_async()
         if redis:
-            cached = redis.get(cache_key)
+            cached = await redis.get(cache_key)
             if cached:
                 return CreditBalanceResponse(**json.loads(cached))
     except Exception:
@@ -150,9 +150,9 @@ async def get_credit_balance(
         )
 
     try:
-        redis = get_redis()
+        redis = get_redis_async()
         if redis:
-            redis.setex(cache_key, 120, result.model_dump_json())
+            await redis.setex(cache_key, 120, result.model_dump_json())
     except Exception:
         pass
 
@@ -323,9 +323,9 @@ async def get_active_subscription(
     """Get active subscription for tenant"""
     cache_key = f"billing:subscription:{tenant_id}"
     try:
-        redis = get_redis()
+        redis = get_redis_async()
         if redis:
-            cached = redis.get(cache_key)
+            cached = await redis.get(cache_key)
             if cached:
                 data = json.loads(cached)
                 return SubscriptionResponse(**data) if data else None
@@ -337,9 +337,9 @@ async def get_active_subscription(
 
     if not subscription:
         try:
-            redis = get_redis()
+            redis = get_redis_async()
             if redis:
-                redis.setex(cache_key, 120, "null")
+                await redis.setex(cache_key, 120, "null")
         except Exception:
             pass
         return None
@@ -355,9 +355,9 @@ async def get_active_subscription(
     )
 
     try:
-        redis = get_redis()
+        redis = get_redis_async()
         if redis:
-            redis.setex(cache_key, 120, result.model_dump_json())
+            await redis.setex(cache_key, 120, result.model_dump_json())
     except Exception:
         pass
 
@@ -369,9 +369,9 @@ async def get_subscription_plans(db: AsyncSession = Depends(get_async_db)):
     """Get all available subscription plans"""
     cache_key = "billing:plans"
     try:
-        redis = get_redis()
+        redis = get_redis_async()
         if redis:
-            cached = redis.get(cache_key)
+            cached = await redis.get(cache_key)
             if cached:
                 return [SubscriptionPlanResponse(**p) for p in json.loads(cached)]
     except Exception:
@@ -397,9 +397,9 @@ async def get_subscription_plans(db: AsyncSession = Depends(get_async_db)):
     ]
 
     try:
-        redis = get_redis()
+        redis = get_redis_async()
         if redis:
-            redis.setex(cache_key, 3600, json.dumps([p.model_dump() for p in result], default=str))
+            await redis.setex(cache_key, 3600, json.dumps([p.model_dump() for p in result], default=str))
     except Exception:
         pass
 
@@ -660,29 +660,29 @@ async def verify_checkout_session(
         raise HTTPException(status_code=400, detail=str(e))
 
 
-def _invalidate_billing_cache_for_tenant(tenant_id: str) -> None:
+async def _invalidate_billing_cache_for_tenant(tenant_id: str) -> None:
     """Invalidate per-tenant billing cache keys."""
     try:
-        redis = get_redis()
+        redis = get_redis_async()
         if redis:
-            redis.delete(f"billing:subscription:{tenant_id}")
-            redis.delete(f"billing:balance:{tenant_id}")
+            await redis.delete(f"billing:subscription:{tenant_id}")
+            await redis.delete(f"billing:balance:{tenant_id}")
     except Exception:
         pass
 
 
-def _invalidate_billing_cache_from_event(obj: dict) -> None:
+async def _invalidate_billing_cache_from_event(obj: dict) -> None:
     """Invalidate billing cache from a Stripe webhook object."""
     tenant_id = (obj.get("metadata") or {}).get("tenant_id")
     if tenant_id:
-        _invalidate_billing_cache_for_tenant(tenant_id)
+        await _invalidate_billing_cache_for_tenant(tenant_id)
 
 
-def _invalidate_billing_cache_from_paddle_event(data: dict) -> None:
+async def _invalidate_billing_cache_from_paddle_event(data: dict) -> None:
     """Invalidate billing cache from a Paddle webhook data object."""
     tenant_id = (data.get("custom_data") or {}).get("tenant_id")
     if tenant_id:
-        _invalidate_billing_cache_for_tenant(tenant_id)
+        await _invalidate_billing_cache_for_tenant(tenant_id)
 
 
 # Stripe Webhook
@@ -714,7 +714,7 @@ async def stripe_webhook(request: Request, db: AsyncSession = Depends(get_async_
 
         if success:
             # Invalidate subscription/balance caches for affected tenant
-            _invalidate_billing_cache_from_event(event.get("data", {}).get("object", {}))
+            await _invalidate_billing_cache_from_event(event.get("data", {}).get("object", {}))
             return {"status": "success"}
         else:
             raise HTTPException(status_code=500, detail="Failed to handle webhook event")
@@ -758,7 +758,7 @@ async def paddle_webhook(request: Request, db: AsyncSession = Depends(get_async_
 
         if success:
             # Invalidate subscription/balance caches for affected tenant
-            _invalidate_billing_cache_from_paddle_event(data)
+            await _invalidate_billing_cache_from_paddle_event(data)
             return {"status": "success"}
         else:
             raise HTTPException(status_code=500, detail="Failed to handle webhook event")

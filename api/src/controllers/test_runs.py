@@ -267,16 +267,17 @@ async def stream_test_results(
             import asyncio
             import json
 
-            from src.config.redis import get_redis
+            from src.config.redis import get_redis_async
 
-            redis = get_redis()
+            redis = get_redis_async()
             channel_name = f"test_run:{test_run_id}:results"
             pubsub = redis.pubsub()
-            pubsub.subscribe(channel_name)
+            await pubsub.subscribe(channel_name)
 
             try:
                 while True:
-                    message = pubsub.get_message(timeout=1.0)
+                    # Non-blocking async get — does not stall the event loop
+                    message = await pubsub.get_message(ignore_subscribe_messages=True, timeout=0.1)
                     if message and message["type"] == "message":
                         data = json.loads(message["data"])
                         yield f"data: {json.dumps(data)}\n\n"
@@ -298,8 +299,8 @@ async def stream_test_results(
                         break
 
             finally:
-                pubsub.unsubscribe(channel_name)
-                pubsub.close()
+                await pubsub.unsubscribe(channel_name)
+                await pubsub.aclose()
 
         return StreamingResponse(
             event_generator(),

@@ -114,9 +114,9 @@ async def login(data: LoginRequest, db: AsyncSession = Depends(get_async_db)):
             temp_token = secrets.token_urlsafe(32)
 
             # SECURITY: Store 2FA pending tokens in Redis - no fallback
-            from src.config.redis import get_redis
+            from src.config.redis import get_redis_async
 
-            redis_client = get_redis()
+            redis_client = get_redis_async()
             if not redis_client:
                 logger.error("SECURITY: Redis unavailable for 2FA token storage")
                 raise HTTPException(
@@ -125,7 +125,7 @@ async def login(data: LoginRequest, db: AsyncSession = Depends(get_async_db)):
                 )
 
             # Store with 5 minute TTL
-            redis_client.setex(
+            await redis_client.setex(
                 f"2fa_pending:{temp_token}",
                 300,  # 5 minutes TTL
                 json.dumps({"account_id": str(account.id)}),
@@ -146,9 +146,9 @@ async def login(data: LoginRequest, db: AsyncSession = Depends(get_async_db)):
 
             import pyotp
 
-            from src.config.redis import get_redis
+            from src.config.redis import get_redis_async
 
-            redis_client = get_redis()
+            redis_client = get_redis_async()
             if not redis_client:
                 logger.error("SECURITY: Redis unavailable for 2FA verification")
                 raise HTTPException(
@@ -164,7 +164,7 @@ async def login(data: LoginRequest, db: AsyncSession = Depends(get_async_db)):
                 )
 
             pending_key = f"2fa_pending:{data.temp_token}"
-            pending_data = redis_client.get(pending_key)
+            pending_data = await redis_client.get(pending_key)
             if not pending_data:
                 raise HTTPException(
                     status_code=status.HTTP_401_UNAUTHORIZED,
@@ -174,7 +174,7 @@ async def login(data: LoginRequest, db: AsyncSession = Depends(get_async_db)):
             pending = json.loads(pending_data)
             if pending.get("account_id") != str(account.id):
                 # Token/account mismatch — reject and invalidate token
-                redis_client.delete(pending_key)
+                await redis_client.delete(pending_key)
                 raise HTTPException(
                     status_code=status.HTTP_401_UNAUTHORIZED,
                     detail="Invalid two-factor session.",
@@ -182,12 +182,12 @@ async def login(data: LoginRequest, db: AsyncSession = Depends(get_async_db)):
 
             # Rate-limit TOTP attempts per temp_token (max 5)
             attempts_key = f"2fa_attempts:{data.temp_token}"
-            attempt_count = redis_client.incr(attempts_key)
-            redis_client.expire(attempts_key, 300)  # Expire with the session
+            attempt_count = await redis_client.incr(attempts_key)
+            await redis_client.expire(attempts_key, 300)  # Expire with the session
 
             if attempt_count > 5:
-                redis_client.delete(pending_key)
-                redis_client.delete(attempts_key)
+                await redis_client.delete(pending_key)
+                await redis_client.delete(attempts_key)
                 raise HTTPException(
                     status_code=status.HTTP_429_TOO_MANY_REQUESTS,
                     detail="Too many two-factor attempts. Please log in again.",
@@ -200,8 +200,8 @@ async def login(data: LoginRequest, db: AsyncSession = Depends(get_async_db)):
                 )
 
             # TOTP verified — consume the pending token (single-use)
-            redis_client.delete(pending_key)
-            redis_client.delete(attempts_key)
+            await redis_client.delete(pending_key)
+            await redis_client.delete(attempts_key)
 
     # Get user's tenants
     tenants = await AuthService.get_account_tenants(db, account.id)
@@ -428,10 +428,26 @@ async def get_current_user(
     Returns:
         User account and tenant information
     """
+    import json
+
+    from src.config.redis import get_redis_async
+
+    cache_key = f"me:{current_account.id}"
+    redis = get_redis_async()
+
+    # Try Redis cache first (60s TTL — fresh enough for nav, fast on every page load)
+    if redis:
+        try:
+            cached = await redis.get(cache_key)
+            if cached:
+                return json.loads(cached)
+        except Exception:
+            pass
+
     # Get user's tenants
     tenants = await AuthService.get_account_tenants(db, current_account.id)
 
-    return {
+    result = {
         "success": True,
         "data": {
             "account": {
@@ -444,6 +460,14 @@ async def get_current_user(
             "tenants": tenants,
         },
     }
+
+    if redis:
+        try:
+            await redis.setex(cache_key, 60, json.dumps(result, default=str))
+        except Exception:
+            pass
+
+    return result
 
 
 class ForgotPasswordRequest(BaseModel):

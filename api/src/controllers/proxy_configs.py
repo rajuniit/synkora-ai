@@ -250,20 +250,20 @@ async def get_proxy_usage(
         # Get usage stats from Redis
         from datetime import timedelta
 
-        from src.config.redis import get_redis
+        from src.config.redis import get_redis_async
 
-        redis = get_redis()
+        redis = get_redis_async()
 
         # Get hourly and daily counts from Redis
         hour_key = f"proxy:{config_id}:requests:hour"
         day_key = f"proxy:{config_id}:requests:day"
 
-        requests_last_hour = int(redis.get(hour_key) or 0)
-        requests_last_day = int(redis.get(day_key) or 0)
+        requests_last_hour = int(await redis.get(hour_key) or 0)
+        requests_last_day = int(await redis.get(day_key) or 0)
 
         # Calculate error rate from Redis
         error_key = f"proxy:{config_id}:errors:day"
-        errors_last_day = int(redis.get(error_key) or 0)
+        errors_last_day = int(await redis.get(error_key) or 0)
         error_rate = errors_last_day / max(requests_last_day, 1)
 
         return ProxyUsageResponse(

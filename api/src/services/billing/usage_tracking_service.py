@@ -31,7 +31,7 @@ def _to_date(value: datetime | date) -> date:
     return value
 
 
-def record_usage_buffered(
+async def record_usage_buffered(
     tenant_id: UUID,
     metric_type: str,
     count: int = 1,
@@ -56,7 +56,7 @@ def record_usage_buffered(
         agent_id: Agent UUID (None for tenant-wide metrics)
         analytics_date: Date bucket (defaults to today UTC)
     """
-    from src.config.redis import get_redis
+    from src.config.redis import get_redis_async
 
     if analytics_date is None:
         analytics_date = datetime.now(UTC).date()
@@ -65,12 +65,12 @@ def record_usage_buffered(
     key = f"{USAGE_REDIS_PREFIX}{tenant_id}:{agent_part}:{metric_type}:{analytics_date.isoformat()}"
 
     try:
-        redis = get_redis()
+        redis = get_redis_async()
         pipe = redis.pipeline()
         pipe.hincrby(key, "count", count)
         pipe.hincrby(key, "credits", credits)
         pipe.expire(key, 172800)  # 2-day TTL safety net
-        pipe.execute()
+        await pipe.execute()
     except Exception as e:
         # Analytics loss is acceptable — do not propagate errors to the hot path.
         logger.warning(f"Failed to buffer usage in Redis (analytics may be delayed): {e}")
@@ -107,7 +107,7 @@ class UsageTrackingService:
             date: Date bucket (defaults to today UTC)
         """
         analytics_date = _to_date(date) if date is not None else None
-        record_usage_buffered(
+        await record_usage_buffered(
             tenant_id=tenant_id,
             metric_type=metric_type,
             count=count,
