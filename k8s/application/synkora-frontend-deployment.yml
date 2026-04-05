@@ -52,7 +52,7 @@ spec:
         - name: NEXT_PUBLIC_COMING_SOON
           value: "true"
         - name: PM2_INSTANCES
-          value: "1"
+          value: "2"
         resources:
           requests:
             memory: "512Mi"

@@ -132,8 +132,8 @@ class RateLimitMiddleware:
         # Get limits for this path
         max_requests, window = self._get_limit_for_path(path)
 
-        # Check rate limit
-        result: RateLimitResult = self.rate_limiter.check(
+        # Check rate limit (async — does not block the event loop)
+        result: RateLimitResult = await self.rate_limiter.check(
             key=f"{key}:{path}",
             max_requests=max_requests,
             window=window,

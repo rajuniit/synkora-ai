@@ -78,14 +78,14 @@ class RateLimiter:
         logger.info(f"Rate limiter initialized: default={default_requests} requests/{default_window}s")
 
     def _get_redis(self):
-        """Get Redis client."""
+        """Get async Redis client."""
         if self._redis:
             return self._redis
 
         try:
-            from src.config.redis import get_redis
+            from src.config.redis import get_redis_async
 
-            return get_redis()
+            return get_redis_async()
         except Exception as e:
             logger.warning(f"Redis not available for rate limiting: {e}")
             return None
@@ -111,8 +111,8 @@ class RateLimiter:
 
         return (self.default_requests, self.default_window)
 
-    def _check_redis(self, key: str, max_requests: int, window: int) -> RateLimitResult:
-        """Check rate limit using Redis."""
+    async def _check_redis(self, key: str, max_requests: int, window: int) -> RateLimitResult:
+        """Check rate limit using async Redis — non-blocking, safe to call from ASGI middleware."""
         redis = self._get_redis()
         if not redis:
             return self._check_memory(key, max_requests, window)
@@ -132,7 +132,7 @@ class RateLimiter:
             # Set expiry
             pipe.expire(key, window)
 
-            results = pipe.execute()
+            results = await pipe.execute()
             request_count = results[2]
 
             if request_count <= max_requests:
@@ -143,7 +143,7 @@ class RateLimiter:
                 )
             else:
                 # Get oldest request time for retry calculation
-                oldest = redis.zrange(key, 0, 0, withscores=True)
+                oldest = await redis.zrange(key, 0, 0, withscores=True)
                 retry_after = (oldest[0][1] + window - now) if oldest else window
 
                 return RateLimitResult(
@@ -190,7 +190,7 @@ class RateLimiter:
                     retry_after=retry_after,
                 )
 
-    def check(
+    async def check(
         self,
         key: str,
         max_requests: int | None = None,
@@ -211,9 +211,9 @@ class RateLimiter:
         max_requests = max_requests or limit_requests
         window = window or limit_window
 
-        return self._check_redis(f"ratelimit:{key}", max_requests, window)
+        return await self._check_redis(f"ratelimit:{key}", max_requests, window)
 
-    def is_allowed(
+    async def is_allowed(
         self,
         key: str,
         max_requests: int | None = None,
@@ -230,16 +230,16 @@ class RateLimiter:
         Returns:
             True if allowed, False if rate limited
         """
-        return self.check(key, max_requests, window).allowed
+        return (await self.check(key, max_requests, window)).allowed
 
-    def reset(self, key: str):
+    async def reset(self, key: str):
         """Reset rate limit for a key."""
         redis = self._get_redis()
         full_key = f"ratelimit:{key}"
 
         if redis:
             try:
-                redis.delete(full_key)
+                await redis.delete(full_key)
             except Exception as e:
                 logger.warning(f"Failed to reset rate limit in Redis: {e}")
 
@@ -248,7 +248,7 @@ class RateLimiter:
 
         logger.debug(f"Reset rate limit for: {key}")
 
-    def get_status(self, key: str) -> dict[str, Any]:
+    async def get_status(self, key: str) -> dict[str, Any]:
         """
         Get current rate limit status for a key.
 
@@ -259,7 +259,7 @@ class RateLimiter:
             Dictionary with current status
         """
         max_requests, window = self._get_limit(key)
-        result = self.check(key, max_requests=max_requests + 1, window=window)
+        result = await self.check(key, max_requests=max_requests + 1, window=window)
 
         return {
             "key": key,
