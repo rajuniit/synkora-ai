@@ -205,7 +205,7 @@ class TestSubscriptionEndpoints:
 
         mock_subscription.get_available_plans = AsyncMock(return_value=[mock_plan])
 
-        with patch("src.controllers.billing.get_redis", return_value=None):
+        with patch("src.controllers.billing.get_redis_async", return_value=None):
             response = test_client.get("/api/v1/billing/plans")
 
         assert response.status_code == status.HTTP_200_OK
