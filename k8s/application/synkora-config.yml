@@ -15,12 +15,9 @@ data:
   # which are incompatible with PgBouncer transaction-mode pooling.
   PGBOUNCER_ENABLED: "true"
 
-  # Redis — Sentinel mode for HA (replaces the single-node redis-deployment.yml).
-  # The application code (api/src/config/redis.py:82-109) handles Sentinel automatically
-  # when REDIS_SENTINEL_HOSTS is set. No URL needed.
-  # Headless service DNS from Bitnami chart: <release>-redis-headless.<namespace>.svc.cluster.local
-  REDIS_SENTINEL_HOSTS: "synkora-redis-headless:26379"
-  REDIS_MASTER_NAME: "mymaster"
+  # Redis — AWS ElastiCache (standalone, no Sentinel).
+  # REDIS_URL is set in synkora-secrets (contains auth token).
+  # Format: rediss://:<auth_token>@<elasticache-endpoint>:6379/0
   SERVER_WORKER_AMOUNT: "2"
   APP_DEBUG: "false"
   API_HOST: "0.0.0.0"
