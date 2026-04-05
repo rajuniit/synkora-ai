@@ -22,6 +22,7 @@ def _run_async(coro) -> object:
     with concurrent.futures.ThreadPoolExecutor(max_workers=1) as pool:
         return pool.submit(asyncio.run, coro).result()
 
+
 logger = logging.getLogger(__name__)
 
 

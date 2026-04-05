@@ -62,8 +62,12 @@ class TelegramConversation(Base):
     __tablename__ = "telegram_conversations"
 
     id = Column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
-    telegram_bot_id = Column(UUID(as_uuid=True), ForeignKey("telegram_bots.id", ondelete="CASCADE"), nullable=False, index=True)
-    conversation_id = Column(UUID(as_uuid=True), ForeignKey("conversations.id", ondelete="CASCADE"), nullable=False, index=True)
+    telegram_bot_id = Column(
+        UUID(as_uuid=True), ForeignKey("telegram_bots.id", ondelete="CASCADE"), nullable=False, index=True
+    )
+    conversation_id = Column(
+        UUID(as_uuid=True), ForeignKey("conversations.id", ondelete="CASCADE"), nullable=False, index=True
+    )
 
     # Telegram Chat Information
     telegram_chat_id = Column(BigInteger, nullable=False, comment="Telegram chat ID")
