@@ -236,6 +236,8 @@ def get_redis_async():
             redis_url,
             decode_responses=True,
             max_connections=settings.redis_max_connections,
+            socket_timeout=5.0,
+            socket_connect_timeout=5.0,
         )
 
     _redis_async_client_loop = current_loop

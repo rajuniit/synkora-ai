@@ -224,9 +224,6 @@ jobs:
             --from-literal=SQLALCHEMY_ECHO="${{ secrets.K8S_SQLALCHEMY_ECHO }}" \
             --from-literal=SQLALCHEMY_POOL_TIMEOUT="${{ secrets.K8S_SQLALCHEMY_POOL_TIMEOUT }}" \
             --from-literal=REDIS_URL="${{ secrets.K8S_REDIS_URL }}" \
-            --from-literal=REDIS_PASSWORD="${{ secrets.K8S_REDIS_PASSWORD }}" \
-            --from-literal=REDIS_SENTINEL_PASSWORD="${{ secrets.K8S_REDIS_SENTINEL_PASSWORD }}" \
-            --from-literal=REDIS_SENTINEL_HOSTS="${{ vars.K8S_REDIS_SENTINEL_HOSTS }}" \
             --from-literal=REDIS_MAX_CONNECTIONS="${{ secrets.K8S_REDIS_MAX_CONNECTIONS }}" \
             --from-literal=CELERY_BROKER_URL="${{ secrets.K8S_CELERY_BROKER_URL }}" \
             --from-literal=CELERY_RESULT_BACKEND="${{ secrets.K8S_CELERY_RESULT_BACKEND }}" \
