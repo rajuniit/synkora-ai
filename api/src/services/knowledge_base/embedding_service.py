@@ -1,8 +1,22 @@
 """Embedding service — delegates sentence_transformers to the ML microservice."""
 
+import asyncio
+import concurrent.futures
 import logging
 
 logger = logging.getLogger(__name__)
+
+
+def _run_async(coro) -> object:
+    """Run an async coroutine safely from synchronous code.
+
+    Uses a dedicated thread so this works whether or not there is already a
+    running event loop in the calling context (FastAPI, Celery, tests, etc.).
+    Calling ``asyncio.run()`` directly inside a running loop raises
+    ``RuntimeError: This event loop is already running``.
+    """
+    with concurrent.futures.ThreadPoolExecutor(max_workers=1) as pool:
+        return pool.submit(asyncio.run, coro).result()
 
 
 class EmbeddingService:
@@ -69,12 +83,10 @@ class EmbeddingService:
         """Generate embedding for a single text."""
         try:
             if self.provider in ("sentence_transformers", "huggingface"):
-                import asyncio
-
                 from src.core.ml_client import get_ml_client
 
                 client = get_ml_client()
-                return asyncio.run(client.embed_text(text, model=self.model_name))
+                return _run_async(client.embed_text(text, model=self.model_name))
 
             elif self.provider == "OPENAI":
                 response = self.client.embeddings.create(model=self.model_name, input=text)
@@ -103,13 +115,11 @@ class EmbeddingService:
         """Generate embeddings for multiple texts in batches."""
         try:
             if self.provider in ("sentence_transformers", "huggingface"):
-                import asyncio
-
                 from src.core.ml_client import get_ml_client
 
                 client = get_ml_client()
                 # ML service handles batching internally
-                return asyncio.run(client.embed(texts, model=self.model_name))
+                return _run_async(client.embed(texts, model=self.model_name))
 
             elif self.provider == "OPENAI":
                 response = self.client.embeddings.create(model=self.model_name, input=texts)
@@ -140,12 +150,10 @@ class EmbeddingService:
             return self.config["dimension"]
 
         if self.provider in ("sentence_transformers", "huggingface"):
-            import asyncio
-
             from src.core.ml_client import get_ml_client
 
             client = get_ml_client()
-            return asyncio.run(client.get_embedding_dimension(model=self.model_name))
+            return _run_async(client.get_embedding_dimension(model=self.model_name))
 
         raise ValueError(
             f"Embedding dimension not configured for provider '{self.provider}'. "

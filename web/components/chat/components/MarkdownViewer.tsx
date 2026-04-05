@@ -63,26 +63,30 @@ export function MarkdownViewer({ url, primaryColor = '#0d9488', onError }: Markd
     fetchMarkdown()
   }, [url, onError])
 
-  // Render Mermaid diagrams after content updates
+  // Render Mermaid diagrams after content updates.
+  // Return a cleanup function so the timer is cancelled if the component unmounts
+  // before the timeout fires (avoids writing to detached DOM nodes).
   useEffect(() => {
-    if (content && !loading && mermaidRef.current) {
-      setTimeout(() => {
-        const diagrams = document.querySelectorAll<HTMLElement>('.mermaid-diagram')
-        diagrams.forEach((el, index) => {
-          const code = el.innerText
-          const id = `mermaid-${index}`
-          el.id = id
-          el.innerHTML = ''
-          try {
-            mermaidRef.current.render(id, code, (svgCode: string) => {
-              el.innerHTML = svgCode
-            })
-          } catch (err) {
-            console.error('Mermaid rendering error:', err)
-          }
-        })
-      }, 100)
-    }
+    if (!content || loading || !mermaidRef.current) return
+
+    const timer = setTimeout(() => {
+      const diagrams = document.querySelectorAll<HTMLElement>('.mermaid-diagram')
+      diagrams.forEach((el, index) => {
+        const code = el.innerText
+        const id = `mermaid-${index}`
+        el.id = id
+        el.innerHTML = ''
+        try {
+          mermaidRef.current.render(id, code, (svgCode: string) => {
+            el.innerHTML = svgCode
+          })
+        } catch (err) {
+          console.error('Mermaid rendering error:', err)
+        }
+      })
+    }, 100)
+
+    return () => clearTimeout(timer)
   }, [content, loading])
 
   if (loading) {

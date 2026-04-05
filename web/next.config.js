@@ -55,7 +55,8 @@ const nextConfig = {
     const cspDirectives = [
       "default-src 'self'",
       // Next.js requires unsafe-inline for hydration scripts; unsafe-eval for some libs
-      "script-src 'self' 'unsafe-inline' 'unsafe-eval'",
+      // Cloudflare injects beacon.min.js at the edge — must be explicitly allowed
+      "script-src 'self' 'unsafe-inline' 'unsafe-eval' https://static.cloudflareinsights.com",
       // Tailwind and styled components require unsafe-inline for styles
       "style-src 'self' 'unsafe-inline'",
       // Images from self, data URIs, blobs, and any HTTPS source (for user avatars etc.)
@@ -71,6 +72,8 @@ const nextConfig = {
         // Sentry error reporting (self-hosted + cloud)
         'https://*.sentry.io',
         'https://ingest.sentry.io',
+        // Cloudflare Analytics beacon
+        'https://cloudflareinsights.com',
         process.env.NEXT_PUBLIC_LOGS_URL || '',
         process.env.NEXT_PUBLIC_SENTRY_HOST || '',
       ].filter(Boolean).join(' '),

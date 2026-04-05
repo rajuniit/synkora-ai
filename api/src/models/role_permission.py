@@ -32,7 +32,11 @@ class RolePermission(BaseModel):
     )
 
     permission_id = Column(
-        UUID(as_uuid=True), ForeignKey("permissions.id", ondelete="CASCADE"), nullable=False, comment="Permission ID"
+        UUID(as_uuid=True),
+        ForeignKey("permissions.id", ondelete="CASCADE"),
+        nullable=False,
+        index=True,
+        comment="Permission ID",
     )
 
     tenant_id = Column(

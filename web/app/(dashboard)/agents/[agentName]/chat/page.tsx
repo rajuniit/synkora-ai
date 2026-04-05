@@ -266,20 +266,16 @@ export default function AdvancedChatPage() {
     if (!agentId) return
 
     try {
-      // Fetch MCP servers
-      const mcpData = await apiClient.getAgentMCPServers(agentId)
+      // All four requests are independent — run in parallel instead of serially
+      const [mcpData, kbData, toolsData, filesData] = await Promise.all([
+        apiClient.getAgentMCPServers(agentId),
+        apiClient.getAgentKnowledgeBases(agentId),
+        apiClient.getAgentToolsForAgent(agentId),
+        apiClient.getAgentContextFiles(agentName),
+      ])
       setMcpServers(mcpData || [])
-
-      // Fetch knowledge bases
-      const kbData = await apiClient.getAgentKnowledgeBases(agentId)
       setKnowledgeBases(kbData || [])
-
-      // Fetch tools
-      const toolsData = await apiClient.getAgentToolsForAgent(agentId)
       setTools(toolsData || [])
-
-      // Fetch context files
-      const filesData = await apiClient.getAgentContextFiles(agentName)
       setContextFiles(filesData || [])
     } catch (error) {
       console.error('Failed to fetch agent configuration:', error)
@@ -411,11 +407,11 @@ export default function AdvancedChatPage() {
     fetchChatConfig()
   }, [agentName, fetchAgentInfo, fetchChatConfig])
 
-  // Load conversations when agent ID is available
+  // Load conversations and agent config when agent ID is available.
+  // Both are independent of each other — run in parallel.
   useEffect(() => {
     if (agentId) {
-      fetchAgentConfiguration()
-      loadConversations()
+      Promise.all([fetchAgentConfiguration(), loadConversations()])
     }
   }, [agentId, fetchAgentConfiguration, loadConversations])
 

@@ -158,9 +158,10 @@ class RateLimitMiddleware:
             await response(scope, receive, send)
             return
 
-        # Log every request to agent endpoints so we can see what's consuming the quota
+        # Downgraded to DEBUG — at production volume this INFO log generated thousands
+        # of log lines per minute and added measurable I/O overhead
         if path.startswith("/api/v1/agents/"):
-            logger.info(
+            logger.debug(
                 f"Rate limit OK | key={key} path={path} method={method} remaining={result.remaining}/{max_requests}"
             )
 

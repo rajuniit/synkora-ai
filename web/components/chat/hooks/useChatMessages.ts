@@ -2,7 +2,7 @@
  * Custom hook for managing chat messages
  */
 
-import { useState, useCallback, useEffect } from 'react'
+import { useState, useCallback, useEffect, useRef } from 'react'
 import { Message, Attachment } from '../types'
 import { generateId } from '../utils'
 
@@ -46,6 +46,9 @@ export function useChatMessages({ agentName }: UseChatMessagesProps): UseChatMes
   const [thinkingStatus, setThinkingStatus] = useState('')
   const [toolStatus, setToolStatus] = useState<ToolStatus | null>(null)
   const [recentTools, setRecentTools] = useState<ToolStatus[]>([])
+  // Debounce timer ref for localStorage saves — avoids 50+ synchronous writes
+  // during a single streaming response
+  const saveHistoryTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null)
 
   // Load chat history from localStorage ONLY on initial mount
   // Never reload while component is active to prevent overwriting streamed content
@@ -54,12 +57,21 @@ export function useChatMessages({ agentName }: UseChatMessagesProps): UseChatMes
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [agentName]) // Only depend on agentName changes, not isStreaming
 
-  // Save chat history whenever messages change
+  // Save chat history whenever messages change.
+  // Debounced to 1.5 s — during streaming a 500-token response fires 50+ state
+  // updates.  Without debouncing that means 50+ synchronous JSON.stringify +
+  // localStorage.setItem calls on the main thread per response.
   useEffect(() => {
-    if (messages.length > 0) {
-      saveChatHistory()
+    if (messages.length === 0) return
+    if (saveHistoryTimerRef.current) clearTimeout(saveHistoryTimerRef.current)
+    saveHistoryTimerRef.current = setTimeout(saveChatHistory, 1500)
+    return () => {
+      if (saveHistoryTimerRef.current) {
+        clearTimeout(saveHistoryTimerRef.current)
+        saveHistoryTimerRef.current = null
+      }
     }
-  }, [messages])
+  }, [messages, saveChatHistory])
 
   const loadChatHistory = useCallback(() => {
     try {
@@ -184,12 +196,13 @@ export function useChatMessages({ agentName }: UseChatMessagesProps): UseChatMes
             if (data.type === 'start') {
               startTime = Date.now() / 1000
               // Update thinking status with elapsed time
+              // 500 ms — 2 re-renders/sec instead of 10 while waiting for first token
               elapsedInterval = setInterval(() => {
                 if (startTime) {
                   const elapsed = ((Date.now() / 1000) - startTime).toFixed(1)
                   setThinkingStatus(`Thinking... ${elapsed}s`)
                 }
-              }, 100)
+              }, 500)
             } else if (data.type === 'first_token') {
               if (elapsedInterval) {
                 clearInterval(elapsedInterval)

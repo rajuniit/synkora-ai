@@ -43,12 +43,16 @@ export function useSpeechSynthesis(): UseSpeechSynthesisReturn {
   const [volume, setVolume] = useState(1);
 
   const utteranceRef = useRef<SpeechSynthesisUtterance | null>(null);
+  // Guard: set default voice only once to prevent selectedVoice → effect → setSelectedVoice loop
+  const hasInitializedVoiceRef = useRef(false);
 
   // Check if Web Speech API is supported
   const isSupported =
     typeof window !== 'undefined' && 'speechSynthesis' in window;
 
-  // Load available voices
+  // Load available voices.
+  // selectedVoice is intentionally NOT in the dependency array — including it
+  // caused an infinite loop: setSelectedVoice → re-run effect → setSelectedVoice → …
   useEffect(() => {
     if (!isSupported) return;
 
@@ -61,11 +65,12 @@ export function useSpeechSynthesis(): UseSpeechSynthesisReturn {
         localService: voice.localService,
         voiceURI: voice.voiceURI,
       }));
-      
+
       setVoices(voiceList);
 
-      // Set default voice (prefer English voices)
-      if (!selectedVoice && voiceList.length > 0) {
+      // Set default voice only on the first successful load
+      if (!hasInitializedVoiceRef.current && voiceList.length > 0) {
+        hasInitializedVoiceRef.current = true;
         const englishVoice = voiceList.find((v) => v.lang.startsWith('en'));
         setSelectedVoice(englishVoice || voiceList[0]);
       }
@@ -83,7 +88,8 @@ export function useSpeechSynthesis(): UseSpeechSynthesisReturn {
         window.speechSynthesis.onvoiceschanged = null;
       }
     };
-  }, [isSupported, selectedVoice]);
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [isSupported]);
 
   // Cleanup on unmount
   useEffect(() => {

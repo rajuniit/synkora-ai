@@ -96,7 +96,7 @@ export function ToolStatusDisplay({
 }: ToolStatusDisplayProps) {
   const [elapsedTime, setElapsedTime] = useState(0)
 
-  // Update elapsed time every 100ms while streaming
+  // Update elapsed time every 500ms while streaming (was 100ms = 10 re-renders/sec)
   useEffect(() => {
     if (!isStreaming || !streamStartTime) {
       return
@@ -104,7 +104,7 @@ export function ToolStatusDisplay({
 
     const interval = setInterval(() => {
       setElapsedTime(Date.now() - streamStartTime)
-    }, 100)
+    }, 500)
 
     return () => clearInterval(interval)
   }, [isStreaming, streamStartTime])
