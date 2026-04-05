@@ -12,7 +12,7 @@ jobs:
       - name: Check branch naming convention
         run: |
           BRANCH="${{ github.head_ref }}"
-          PATTERN="^(feat|fix|chore|ci|docs|refactor|hotfix|infra)/.+"
+          PATTERN="^(feat|fix|chore|ci|docs|refactor|hotfix|infra|perf)/.+"
 
           echo "Branch: $BRANCH"
 
@@ -21,7 +21,7 @@ jobs:
           else
             echo "❌ Branch name '$BRANCH' does not follow the naming convention."
             echo ""
-            echo "Branch names must match: (feat|fix|chore|ci|docs|refactor|hotfix|infra)/<description>"
+            echo "Branch names must match: (feat|fix|chore|ci|docs|refactor|hotfix|infra|perf)/<description>"
             echo ""
             echo "Examples:"
             echo "  feat/slack-integration"
@@ -32,5 +32,6 @@ jobs:
             echo "  refactor/auth-middleware"
             echo "  hotfix/payment-webhook"
             echo "  infra/pgbouncer-redis-sentinel"
+            echo "  perf/performance-optimizations"
             exit 1
           fi
