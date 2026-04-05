@@ -50,6 +50,31 @@ export function useChatMessages({ agentName }: UseChatMessagesProps): UseChatMes
   // during a single streaming response
   const saveHistoryTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null)
 
+  const loadChatHistory = useCallback(() => {
+    try {
+      const historyKey = `chat_history_${agentName}`
+      const savedHistory = localStorage.getItem(historyKey)
+      if (savedHistory) {
+        const parsed = JSON.parse(savedHistory)
+        setMessages(parsed.map((msg: any) => ({
+          ...msg,
+          timestamp: new Date(msg.timestamp)
+        })))
+      }
+    } catch (error) {
+      console.error('Failed to load chat history:', error)
+    }
+  }, [agentName])
+
+  const saveChatHistory = useCallback(() => {
+    try {
+      const historyKey = `chat_history_${agentName}`
+      localStorage.setItem(historyKey, JSON.stringify(messages))
+    } catch (error) {
+      console.error('Failed to save chat history:', error)
+    }
+  }, [agentName, messages])
+
   // Load chat history from localStorage ONLY on initial mount
   // Never reload while component is active to prevent overwriting streamed content
   useEffect(() => {
@@ -72,31 +97,6 @@ export function useChatMessages({ agentName }: UseChatMessagesProps): UseChatMes
       }
     }
   }, [messages, saveChatHistory])
-
-  const loadChatHistory = useCallback(() => {
-    try {
-      const historyKey = `chat_history_${agentName}`
-      const savedHistory = localStorage.getItem(historyKey)
-      if (savedHistory) {
-        const parsed = JSON.parse(savedHistory)
-        setMessages(parsed.map((msg: any) => ({
-          ...msg,
-          timestamp: new Date(msg.timestamp)
-        })))
-      }
-    } catch (error) {
-      console.error('Failed to load chat history:', error)
-    }
-  }, [agentName])
-  
-  const saveChatHistory = useCallback(() => {
-    try {
-      const historyKey = `chat_history_${agentName}`
-      localStorage.setItem(historyKey, JSON.stringify(messages))
-    } catch (error) {
-      console.error('Failed to save chat history:', error)
-    }
-  }, [agentName, messages])
 
   const clearMessages = useCallback(() => {
     setMessages([])

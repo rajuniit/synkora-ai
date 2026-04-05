@@ -25,25 +25,28 @@ depends_on: str | Sequence[str] | None = None
 
 
 def upgrade() -> None:
-    op.create_index("ix_telegram_bots_agent_id", "telegram_bots", ["agent_id"], unique=False)
-    op.create_index("ix_telegram_bots_tenant_id", "telegram_bots", ["tenant_id"], unique=False)
+    op.create_index("ix_telegram_bots_agent_id", "telegram_bots", ["agent_id"], unique=False, if_not_exists=True)
+    op.create_index("ix_telegram_bots_tenant_id", "telegram_bots", ["tenant_id"], unique=False, if_not_exists=True)
     op.create_index(
         "ix_telegram_conversations_telegram_bot_id",
         "telegram_conversations",
         ["telegram_bot_id"],
         unique=False,
+        if_not_exists=True,
     )
     op.create_index(
         "ix_telegram_conversations_conversation_id",
         "telegram_conversations",
         ["conversation_id"],
         unique=False,
+        if_not_exists=True,
     )
     op.create_index(
         "ix_role_permissions_permission_id",
         "role_permissions",
         ["permission_id"],
         unique=False,
+        if_not_exists=True,
     )
 
 
