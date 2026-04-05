@@ -602,7 +602,7 @@ def register_routers(app: FastAPI) -> None:
         stats = {
             "metrics": get_metrics_collector().collect_all(),
             "circuit_breakers": get_all_circuit_breaker_stats(),
-            "rate_limiter": get_rate_limiter().get_status("global"),
+            "rate_limiter": await get_rate_limiter().get_status("global"),
             "vector_db_pool": get_vector_db_pool().get_stats(),
             "llm_client_pool": get_llm_client_pool().get_stats(),
         }

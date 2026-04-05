@@ -175,11 +175,18 @@ class DatabaseConfig(BaseSettings):
 
         # pool_use_lifo is omitted: AsyncAdaptedQueuePool (used by async engines)
         # does not support the use_lifo parameter — only the sync QueuePool does.
+        #
+        # pool_pre_ping: disabled when PgBouncer is in front. PgBouncer keeps persistent
+        # connections to PostgreSQL and handles dead connection detection itself.
+        # pre_ping sends SELECT 1 on every checkout — with cross-cloud latency (DO→AWS)
+        # this adds ~15ms per session per request for zero benefit.
+        pre_ping = False if self.pgbouncer_enabled else self.sqlalchemy_pool_pre_ping
+
         return {
             "pool_size": self.sqlalchemy_pool_size,
             "max_overflow": self.sqlalchemy_max_overflow,
             "pool_recycle": self.sqlalchemy_pool_recycle,
-            "pool_pre_ping": self.sqlalchemy_pool_pre_ping,
+            "pool_pre_ping": pre_ping,
             "connect_args": connect_args,
             "pool_reset_on_return": "rollback",
             "pool_timeout": self.sqlalchemy_pool_timeout,
