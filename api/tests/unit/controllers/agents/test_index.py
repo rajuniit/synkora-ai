@@ -157,6 +157,7 @@ class TestConvertS3UriToPresignedUrl:
 
         assert result == "https://s3.amazonaws.com/presigned"
 
+    @patch("src.controllers.agents.index._storage_service", None)
     @patch("src.controllers.agents.index.S3StorageService")
     def test_returns_original_on_exception(self, mock_storage):
         """Test original URI returned on S3 exception."""
