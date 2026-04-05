@@ -774,30 +774,16 @@ class TestUserTokens:
         """GET /user-tokens returns token list with provider info."""
         test_client, mock_db, tenant_id, mock_account = authenticated_client
 
+        mock_app = _create_mock_oauth_app(provider="github")
+        mock_app.tenant_id = None  # platform app — passes the tenant security check
+
         mock_token = MagicMock()
         mock_token.oauth_app_id = 1
+        mock_token.oauth_app = mock_app  # selectinload populates relationship directly
         mock_token.to_dict.return_value = {"id": str(uuid.uuid4()), "provider": "github"}
 
-        mock_app = _create_mock_oauth_app(provider="github")
-
-        mock_result = MagicMock()
-        mock_result.scalars.return_value.all.return_value = [mock_token]
-        mock_result.scalar_one_or_none.return_value = mock_app
-
-        call_count = 0
-
-        async def multi_execute(stmt):
-            nonlocal call_count
-            call_count += 1
-            if call_count == 1:
-                r = MagicMock()
-                r.scalars.return_value.all.return_value = [mock_token]
-                return r
-            r = MagicMock()
-            r.scalar_one_or_none.return_value = mock_app
-            return r
-
-        mock_db.execute = multi_execute
+        # Single execute call — selectinload means no second query for oauth_app
+        _setup_mock_db_result_list(mock_db, [mock_token])
 
         response = test_client.get("/api/v1/oauth/user-tokens")
 

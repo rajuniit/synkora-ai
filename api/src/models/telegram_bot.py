@@ -16,8 +16,8 @@ class TelegramBot(Base):
     __tablename__ = "telegram_bots"
 
     id = Column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
-    agent_id = Column(UUID(as_uuid=True), ForeignKey("agents.id", ondelete="CASCADE"), nullable=False)
-    tenant_id = Column(UUID(as_uuid=True), ForeignKey("tenants.id", ondelete="CASCADE"), nullable=False)
+    agent_id = Column(UUID(as_uuid=True), ForeignKey("agents.id", ondelete="CASCADE"), nullable=False, index=True)
+    tenant_id = Column(UUID(as_uuid=True), ForeignKey("tenants.id", ondelete="CASCADE"), nullable=False, index=True)
 
     # Bot Configuration
     bot_name = Column(String(255), nullable=False, comment="Display name for the bot")
@@ -62,8 +62,12 @@ class TelegramConversation(Base):
     __tablename__ = "telegram_conversations"
 
     id = Column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
-    telegram_bot_id = Column(UUID(as_uuid=True), ForeignKey("telegram_bots.id", ondelete="CASCADE"), nullable=False)
-    conversation_id = Column(UUID(as_uuid=True), ForeignKey("conversations.id", ondelete="CASCADE"), nullable=False)
+    telegram_bot_id = Column(
+        UUID(as_uuid=True), ForeignKey("telegram_bots.id", ondelete="CASCADE"), nullable=False, index=True
+    )
+    conversation_id = Column(
+        UUID(as_uuid=True), ForeignKey("conversations.id", ondelete="CASCADE"), nullable=False, index=True
+    )
 
     # Telegram Chat Information
     telegram_chat_id = Column(BigInteger, nullable=False, comment="Telegram chat ID")

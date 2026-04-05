@@ -504,7 +504,16 @@ function SourceCard({ source, primaryColor = '#14b8a6' }: SourceCardProps) {
             style={{ backgroundColor: primaryLight }}
           >
             {source.favicon ? (
-              <img src={source.favicon} alt="" className="w-4 h-4 rounded" />
+              // eslint-disable-next-line @next/next/no-img-element
+              <img
+                src={source.favicon}
+                alt=""
+                width={16}
+                height={16}
+                loading="lazy"
+                className="w-4 h-4 rounded"
+                onError={(e) => { (e.currentTarget as HTMLImageElement).style.display = 'none' }}
+              />
             ) : (
               <Globe size={14} style={{ color: primaryColor }} />
             )}
@@ -543,10 +552,15 @@ function PersonCard({ person, primaryColor = '#14b8a6' }: PersonCardProps) {
     <ModernCard primaryColor={primaryColor}>
       <div className="flex items-start gap-2">
         {person.avatar ? (
+          // eslint-disable-next-line @next/next/no-img-element
           <img
             src={person.avatar}
             alt={person.name}
+            width={40}
+            height={40}
+            loading="lazy"
             className="w-10 h-10 rounded-lg object-cover flex-shrink-0 ring-2 ring-gray-100"
+            onError={(e) => { (e.currentTarget as HTMLImageElement).style.display = 'none' }}
           />
         ) : (
           <div 
@@ -605,10 +619,15 @@ function NewsCard({ news, primaryColor = '#14b8a6' }: NewsCardProps) {
       <ModernCard primaryColor={primaryColor} className="hover:scale-[1.02] cursor-pointer">
         <div className="flex gap-2">
           {news.thumbnail && (
+            // eslint-disable-next-line @next/next/no-img-element
             <img
               src={news.thumbnail}
               alt=""
+              width={64}
+              height={64}
+              loading="lazy"
               className="w-16 h-16 rounded-lg object-cover flex-shrink-0 ring-2 ring-gray-100"
+              onError={(e) => { (e.currentTarget as HTMLImageElement).style.display = 'none' }}
             />
           )}
           <div className="flex-1 min-w-0">

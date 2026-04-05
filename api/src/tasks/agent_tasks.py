@@ -196,11 +196,52 @@ Please process this webhook event using your configured tools."""
                         except json.JSONDecodeError:
                             pass
 
-        # Execute async agent call
+        # Execute agent call and send outputs in a single event loop.
+        # Using two separate loops (one for agent execution, one for output delivery)
+        # doubles the loop allocation/teardown cost and risks leaving dangling tasks
+        # between the two loops.
+        async def run_agent_and_deliver():
+            await process_agent()
+
+            # response_chunks is a list defined in the enclosing scope — no nonlocal needed
+            response = "".join(response_chunks)
+
+            if not response:
+                return response, []
+
+            from src.core.database import create_celery_async_session
+            from src.services.agent_output_service import AgentOutputService
+
+            context = {
+                "agent_name": agent_db.agent_name,
+                "event_type": event_type,
+                "provider": provider,
+                "webhook_id": webhook_id,
+                "event_id": event_id,
+            }
+
+            # Wrap output delivery so a failure here doesn't fail the whole task
+            try:
+                logger.info("📬 Sending outputs to configured destinations...")
+                async_session_factory = create_celery_async_session()
+                async with async_session_factory() as async_db:
+                    output_service = AgentOutputService(async_db)
+                    deliveries = await output_service.send_outputs(
+                        agent_id=webhook.agent_id,
+                        agent_response=response,
+                        context=context,
+                        webhook_event_id=UUID(event_id),
+                        trigger_type="webhook",
+                    )
+                return response, deliveries
+            except Exception as output_error:
+                logger.error(f"Error sending outputs: {output_error}", exc_info=True)
+                return response, []
+
         loop = asyncio.new_event_loop()
         asyncio.set_event_loop(loop)
         try:
-            loop.run_until_complete(process_agent())
+            response_text, deliveries = loop.run_until_complete(run_agent_and_deliver())
             # Drain background tasks (e.g. LiteLLM async logging) before closing
             pending = asyncio.all_tasks(loop)
             if pending:
@@ -209,64 +250,18 @@ Please process this webhook event using your configured tools."""
             loop.close()
 
         # Update event status
-        response_text = "".join(response_chunks)
         event.status = "completed"
         event.processing_completed_at = datetime.now(UTC)
-        # Note: Response text is logged below but not stored in DB
-        # (parsed_data already contains the input, agent actions are tracked elsewhere)
-
         db.commit()
 
-        # Send outputs to configured destinations
-        if response_text:
-            try:
-                from src.core.database import create_celery_async_session
-                from src.services.agent_output_service import AgentOutputService
-
-                context = {
-                    "agent_name": agent_db.agent_name,
-                    "event_type": event_type,
-                    "provider": provider,
-                    "webhook_id": webhook_id,
-                    "event_id": event_id,
-                }
-
-                logger.info("📬 Sending outputs to configured destinations...")
-
-                # Run output sending asynchronously
-                async def send_outputs():
-                    async_session_factory = create_celery_async_session()
-                    async with async_session_factory() as async_db:
-                        output_service = AgentOutputService(async_db)
-                        deliveries = await output_service.send_outputs(
-                            agent_id=webhook.agent_id,
-                            agent_response=response_text,
-                            context=context,
-                            webhook_event_id=UUID(event_id),
-                            trigger_type="webhook",
-                        )
-                        return deliveries
-
-                loop = asyncio.new_event_loop()
-                asyncio.set_event_loop(loop)
-                try:
-                    deliveries = loop.run_until_complete(send_outputs())
-                    pending = asyncio.all_tasks(loop)
-                    if pending:
-                        loop.run_until_complete(asyncio.gather(*pending, return_exceptions=True))
-                finally:
-                    loop.close()
-
-                logger.info(f"📨 Sent {len(deliveries)} outputs")
-                for delivery in deliveries:
-                    if delivery.status == "delivered":
-                        logger.info(f"  ✅ {delivery.provider.value}: Delivered")
-                    else:
-                        logger.warning(f"  ❌ {delivery.provider.value}: {delivery.error_message}")
-
-            except Exception as output_error:
-                # Don't fail the whole task if output sending fails
-                logger.error(f"Error sending outputs: {output_error}", exc_info=True)
+        # Log output delivery results
+        if response_text and deliveries:
+            logger.info(f"📨 Sent {len(deliveries)} outputs")
+            for delivery in deliveries:
+                if delivery.status == "delivered":
+                    logger.info(f"  ✅ {delivery.provider.value}: Delivered")
+                else:
+                    logger.warning(f"  ❌ {delivery.provider.value}: {delivery.error_message}")
 
         logger.info(f"✅ Successfully processed webhook event {event_id}")
         if response_text:

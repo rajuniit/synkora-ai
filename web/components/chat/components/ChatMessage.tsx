@@ -1,6 +1,6 @@
 'use client'
 
-import { useState } from 'react'
+import { useState, useMemo } from 'react'
 import Image from 'next/image'
 import { Copy, Check, RefreshCw, User, Sparkles, FileText, Image as ImageIcon, Download, File, ThumbsUp, ThumbsDown, Volume2 } from 'lucide-react'
 import { cn } from '@/lib/utils'
@@ -118,6 +118,13 @@ export function ChatMessage({
   const primaryColor = chatConfig?.chat_primary_color || '#0d9488'
   const fontFamily = chatConfig?.chat_font_family || 'inherit'
 
+  // Memoize URL detection — three regex passes over message content are
+  // expensive; skip entirely while streaming (URLs may be partial/incomplete)
+  const imageUrls = useMemo(
+    () => (!isStreaming ? detectImageUrls(message.content) : []),
+    [message.content, isStreaming]
+  )
+
   const handleCopy = async () => {
     if (onCopy) {
       onCopy(message.content, message.id)
@@ -162,7 +169,14 @@ export function ChatMessage({
         {agentAvatar ? (
           <div className="w-5 h-5 rounded-full overflow-hidden flex items-center justify-center bg-white relative">
             {agentAvatar.startsWith('http://') || agentAvatar.startsWith('https://') ? (
-              <img src={agentAvatar} alt="Agent" className="w-full h-full object-cover" />
+              <Image
+                src={agentAvatar}
+                alt="Agent"
+                width={20}
+                height={20}
+                className="w-full h-full object-cover"
+                unoptimized
+              />
             ) : (
               <Image src={agentAvatar} alt="Agent" fill className="object-cover" />
             )}
@@ -214,23 +228,17 @@ export function ChatMessage({
 
         {/* Image URL Viewers - Render embedded images from URLs in content */}
         {/* NOTE: Only render after streaming completes to avoid loading partial/incomplete URLs */}
-        {!isStreaming && (() => {
-          const imageUrls = detectImageUrls(message.content)
-          if (imageUrls.length > 0) {
-            return (
-              <div className="space-y-3 mb-3">
-                {imageUrls.map((url, index) => (
-                  <EmbeddedImage
-                    key={`img-${index}`}
-                    url={url}
-                    primaryColor={primaryColor}
-                  />
-                ))}
-              </div>
-            )
-          }
-          return null
-        })()}
+        {imageUrls.length > 0 && (
+          <div className="space-y-3 mb-3">
+            {imageUrls.map((url, index) => (
+              <EmbeddedImage
+                key={`img-${index}`}
+                url={url}
+                primaryColor={primaryColor}
+              />
+            ))}
+          </div>
+        )}
 
         {/* Tool Status Display - Fixed height todo-list style */}
         {(toolStatus || recentTools.length > 0) && !message.content && (
@@ -722,9 +730,11 @@ function EmbeddedImage({ url, primaryColor = '#0d9488' }: EmbeddedImageProps) {
             />
           </div>
         )}
+        {/* eslint-disable-next-line @next/next/no-img-element */}
         <img
           src={url}
           alt="Screenshot"
+          loading="lazy"
           className={cn(
             "w-full h-auto transition-opacity",
             isLoading ? "opacity-0" : "opacity-100"
@@ -767,6 +777,7 @@ function EmbeddedImage({ url, primaryColor = '#0d9488' }: EmbeddedImageProps) {
             >
               <Download size={20} />
             </a>
+            {/* eslint-disable-next-line @next/next/no-img-element */}
             <img
               src={url}
               alt="Screenshot"

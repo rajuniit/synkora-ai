@@ -5,10 +5,23 @@ The ``cross_encoder`` provider is delegated to the ML microservice so that
 ``sentence-transformers`` is not required in the API image.
 """
 
+import asyncio
+import concurrent.futures
 import logging
 from dataclasses import dataclass
 from enum import StrEnum
 from typing import Any
+
+
+def _run_async(coro) -> object:
+    """Run an async coroutine safely from synchronous code.
+
+    Uses a dedicated thread so this works whether or not there is already a
+    running event loop in the calling context (FastAPI, Celery, tests, etc.).
+    """
+    with concurrent.futures.ThreadPoolExecutor(max_workers=1) as pool:
+        return pool.submit(asyncio.run, coro).result()
+
 
 logger = logging.getLogger(__name__)
 
@@ -108,12 +121,10 @@ class RerankerService:
         score_weight: float,
     ) -> list[RerankResult]:
         """Rerank via ML microservice cross-encoder."""
-        import asyncio
-
         from src.core.ml_client import get_ml_client
 
         client = get_ml_client()
-        raw = asyncio.run(
+        raw = _run_async(
             client.rerank(
                 query=query,
                 results=results,

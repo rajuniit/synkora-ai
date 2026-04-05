@@ -10,6 +10,7 @@ import uuid
 from fastapi import APIRouter, Depends, HTTPException, Query
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
+from sqlalchemy.orm import selectinload
 
 from ...core.database import get_async_db
 from ...middleware.auth_middleware import get_current_account, get_current_tenant_id, get_optional_account
@@ -45,14 +46,22 @@ async def list_user_tokens(
     including provider info and connection status.
     """
     try:
-        tokens_result = await db.execute(select(UserOAuthToken).filter(UserOAuthToken.account_id == current_account.id))
+        # Load tokens and their oauth_app in a single query to avoid N+1.
+        # The tenant-scoping check (via _get_oauth_app_secure) is replaced by a
+        # direct tenant_id filter on the joined OAuthApp row.
+        tokens_result = await db.execute(
+            select(UserOAuthToken)
+            .options(selectinload(UserOAuthToken.oauth_app))
+            .filter(UserOAuthToken.account_id == current_account.id)
+        )
         user_tokens = tokens_result.scalars().all()
 
         result = []
         for token in user_tokens:
-            # Get the associated OAuth app for provider info
-            # SECURITY: Validate OAuth app belongs to user's tenant
-            oauth_app = await _get_oauth_app_secure(db, token.oauth_app_id, tenant_id=tenant_id)
+            oauth_app = token.oauth_app
+            # SECURITY: skip tokens whose OAuth app belongs to a different tenant
+            if oauth_app and oauth_app.tenant_id and oauth_app.tenant_id != tenant_id:
+                continue
 
             token_data = token.to_dict()
             if oauth_app:
