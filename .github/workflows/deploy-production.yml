@@ -267,6 +267,9 @@ jobs:
           kubectl apply -f k8s/application/celery-worker-notifications-deployment.yml
           kubectl apply -f k8s/application/celery-beat-deployment.yml
 
+          # Bot worker
+          kubectl apply -f k8s/application/bot-worker-deployment.yaml
+
           # Frontend
           kubectl apply -f k8s/application/synkora-frontend-deployment.yml
 
