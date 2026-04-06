@@ -27,7 +27,7 @@ class PruningSettings:
     max_result_chars: int = 5000  # Trim results larger than this
     head_chars: int = 1500  # Keep first N chars when trimming
     tail_chars: int = 1500  # Keep last N chars when trimming
-    max_total_tool_chars: int = 50000  # Max total chars for all tool results combined
+    max_total_tool_chars: int = 400000  # Max total chars for all tool results combined
     prune_error_results: bool = False  # Don't prune error results (useful for debugging)
 
 

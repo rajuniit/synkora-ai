@@ -295,7 +295,7 @@ class FunctionCallingHandler:
             max_result_chars=5000,
             head_chars=1500,
             tail_chars=1500,
-            max_total_tool_chars=80000,
+            max_total_tool_chars=400000,
         )
 
         # Deduplication cache: maps (tool_name + serialized_args) → result.
