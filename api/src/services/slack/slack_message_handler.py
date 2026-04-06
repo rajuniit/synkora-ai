@@ -127,14 +127,12 @@ class SlackMessageHandler:
                 slack_bot=slack_bot, channel_id=channel_id, user_id=user_id, thread_ts=thread_ts
             )
 
-            # Fetch user, channel, and auth info in parallel (suppress individual failures)
+            # Fetch user and channel info in parallel (suppress individual failures)
             user_info: Any
             channel_info: Any
-            auth_info: Any
-            user_info, channel_info, auth_info = await asyncio.gather(
+            user_info, channel_info = await asyncio.gather(
                 client.users_info(user=user_id),
                 client.conversations_info(channel=channel_id),
-                client.auth_test(),
                 return_exceptions=True,
             )
             if isinstance(user_info, Exception):
@@ -149,29 +147,9 @@ class SlackMessageHandler:
                 channel_name = channel_id
             else:
                 channel_name = channel_info.get("channel", {}).get("name", channel_id)
-            if isinstance(auth_info, Exception):
-                logger.warning(f"Could not fetch auth info: {auth_info}")
-                team_domain = ""
-            else:
-                team_domain = auth_info.get("url", "").replace("https://", "").replace(".slack.com/", "")
-
-            # Generate Slack permalink
-            permalink = None
-            if message_ts and team_domain:
-                ts_for_url = message_ts.replace(".", "")
-                permalink = f"https://{team_domain}.slack.com/archives/{channel_id}/p{ts_for_url}"
 
             # Remove bot mention from text if present
             clean_text = self._remove_bot_mention(text, slack_bot.slack_app_id)
-
-            # Extract mentions from the message, filtering out bot users
-            mentioned_users = await self._extract_user_mentions(clean_text, client)
-
-            # Build mention context for the system note (not the user message)
-            mentions_info = ""
-            if mentioned_users:
-                user_list = ", ".join([u["name"] for u in mentioned_users])
-                mentions_info = f" (mentions: {user_list})"
 
             logger.info(f"Slack message: Channel: #{channel_name} (ID: {channel_id}), Message TS: {message_ts}")
 
