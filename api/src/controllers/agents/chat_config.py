@@ -5,10 +5,9 @@ Handles endpoints for managing agent chat customization
 
 import logging
 import uuid
-
-from fastapi import APIRouter, Depends, HTTPException
 from typing import Literal
 
+from fastapi import APIRouter, Depends, HTTPException
 from pydantic import BaseModel, Field
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession

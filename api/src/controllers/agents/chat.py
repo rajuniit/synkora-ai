@@ -12,7 +12,18 @@ import uuid
 from collections.abc import AsyncGenerator
 from typing import Any
 
-from fastapi import APIRouter, Depends, File, Form, HTTPException, Request, UploadFile, WebSocket, WebSocketDisconnect, status
+from fastapi import (
+    APIRouter,
+    Depends,
+    File,
+    Form,
+    HTTPException,
+    Request,
+    UploadFile,
+    WebSocket,
+    WebSocketDisconnect,
+    status,
+)
 from fastapi.responses import StreamingResponse
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -545,7 +556,7 @@ async def chat_websocket(websocket: WebSocket) -> None:
     # ── 1. Auth handshake (5 s window) ───────────────────────────────────────
     try:
         auth_frame: dict = await asyncio.wait_for(websocket.receive_json(), timeout=5.0)
-    except (asyncio.TimeoutError, Exception):
+    except (TimeoutError, Exception):
         await websocket.close(code=1008, reason="Auth timeout")
         return
 
