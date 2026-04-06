@@ -44,21 +44,17 @@ Synkora is an open-source platform for building AI-powered teammates. Create age
 
 ## See It In Action
 
-### 1. Create & Configure Your First Agent
+### 1. RajuClaw — Personal AI Assistant
 <!-- VIDEO PLACEHOLDER 1: Replace with actual video URL -->
-> _Video coming soon — Creating and configuring an AI agent with custom tools and knowledge base_
+> _Video coming soon — A personal AI assistant that can do everything_
 
-### 2. Chat & Collaborate with Your AI Teammate
+### 2. Daily AI News Reporter — Setup
 <!-- VIDEO PLACEHOLDER 2: Replace with actual video URL -->
-> _Video coming soon — Real-time chat interface, streaming responses, and multi-turn conversations_
+> _Video coming soon — Setting up a Daily AI News Reporter agent from the chat interface_
 
-### 3. Integrations & Tools (Slack, Jira, GitHub, and more)
+### 3. Daily AI News Reporter — Email News Demo
 <!-- VIDEO PLACEHOLDER 3: Replace with actual video URL -->
-> _Video coming soon — Connecting Slack bots, OAuth integrations, and enabling built-in tools_
-
-### 4. Knowledge Base & RAG Search
-<!-- VIDEO PLACEHOLDER 4: Replace with actual video URL -->
-> _Video coming soon — Uploading documents, configuring knowledge bases, and semantic search_
+> _Video coming soon — Watch the Daily AI News Reporter send a personalized email newsletter_
 
 
 ## Key Features
