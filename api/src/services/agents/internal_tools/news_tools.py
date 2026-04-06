@@ -125,8 +125,10 @@ async def internal_news_search(
         if from_date:
             params["from"] = from_date
 
+        # Note: `category` is only supported by /v2/top-headlines, not /v2/everything.
+        # Append it to the query string instead so the filter still takes effect.
         if category:
-            params["category"] = category
+            params["q"] = f"{params['q']} {category}"
 
         async with httpx.AsyncClient(timeout=REQUEST_TIMEOUT) as client:
             response = await client.get(f"{NEWSAPI_BASE}/everything", params=params)

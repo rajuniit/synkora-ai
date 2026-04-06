@@ -7,7 +7,7 @@ metadata:
     app: synkora-bot-worker
     component: bot-worker
 spec:
-  replicas: 3
+  replicas: 1
   selector:
     matchLabels:
       app: synkora-bot-worker
@@ -100,7 +100,7 @@ spec:
     apiVersion: apps/v1
     kind: Deployment
     name: synkora-bot-worker
-  minReplicas: 3
+  minReplicas: 1
   maxReplicas: 1000
   metrics:
   - type: Resource
@@ -141,7 +141,7 @@ metadata:
   labels:
     app: synkora-bot-worker
 spec:
-  minAvailable: 2
+  minAvailable: 1
   selector:
     matchLabels:
       app: synkora-bot-worker

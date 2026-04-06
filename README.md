@@ -42,6 +42,25 @@ Synkora is an open-source platform for building AI-powered teammates. Create age
 - **Open source** - Self-host on your infrastructure or use our cloud. You own your data
 
 
+## See It In Action
+
+### 1. Create & Configure Your First Agent
+<!-- VIDEO PLACEHOLDER 1: Replace with actual video URL -->
+> _Video coming soon — Creating and configuring an AI agent with custom tools and knowledge base_
+
+### 2. Chat & Collaborate with Your AI Teammate
+<!-- VIDEO PLACEHOLDER 2: Replace with actual video URL -->
+> _Video coming soon — Real-time chat interface, streaming responses, and multi-turn conversations_
+
+### 3. Integrations & Tools (Slack, Jira, GitHub, and more)
+<!-- VIDEO PLACEHOLDER 3: Replace with actual video URL -->
+> _Video coming soon — Connecting Slack bots, OAuth integrations, and enabling built-in tools_
+
+### 4. Knowledge Base & RAG Search
+<!-- VIDEO PLACEHOLDER 4: Replace with actual video URL -->
+> _Video coming soon — Uploading documents, configuring knowledge bases, and semantic search_
+
+
 ## Key Features
 
 ### AI Teammates for Every Role
