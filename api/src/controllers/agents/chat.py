@@ -400,18 +400,19 @@ async def _ws_chat_pipeline(
     )
     if not scan_result["is_safe"]:
         logger.error(
-            "SECURITY VIOLATION: Prompt injection blocked in WS chat. "
-            "Agent: %s, Tenant: %s, Risk: %s",
+            "SECURITY VIOLATION: Prompt injection blocked in WS chat. Agent: %s, Tenant: %s, Risk: %s",
             agent_name,
             tenant_id,
             scan_result["risk_score"],
         )
-        yield _json.dumps({
-            "type": "error",
-            "error": "Message blocked by security policy",
-            "error_type": "security_violation",
-            "risk_score": scan_result["risk_score"],
-        })
+        yield _json.dumps(
+            {
+                "type": "error",
+                "error": "Message blocked by security policy",
+                "error_type": "security_violation",
+                "risk_score": scan_result["risk_score"],
+            }
+        )
         return
 
     # ── HITL approval intercept ──────────────────────────────────────────────
@@ -425,9 +426,7 @@ async def _ws_chat_pipeline(
             _approval_svc = HumanApprovalService(db)
             _decision = _approval_svc.parse_reply(message)
             if _decision != "unclear":
-                _result = await _approval_svc.handle_reply(
-                    uuid.UUID(_approval_id_str), message, db
-                )
+                _result = await _approval_svc.handle_reply(uuid.UUID(_approval_id_str), message, db)
                 _reply_map = {
                     "approved": "Great! Proceeding with the action now.",
                     "rejected": "Understood. Action cancelled.",
@@ -474,11 +473,13 @@ async def _ws_chat_pipeline(
                 )
 
             if not llm_config or not llm_config.model_name:
-                yield _json.dumps({
-                    "type": "error",
-                    "error": "No LLM configuration. Please configure an LLM model for the agent.",
-                    "error_code": "NO_LLM_CONFIG",
-                })
+                yield _json.dumps(
+                    {
+                        "type": "error",
+                        "error": "No LLM configuration. Please configure an LLM model for the agent.",
+                        "error_code": "NO_LLM_CONFIG",
+                    }
+                )
                 return
 
             conversation_uuid = validate_conversation_id(conversation_id) if conversation_id else None
@@ -489,11 +490,13 @@ async def _ws_chat_pipeline(
                 conversation_id=conversation_uuid,
             )
             if not billing_result.is_valid:
-                yield _json.dumps({
-                    "type": "error",
-                    "error": billing_result.error.message,
-                    "error_code": billing_result.error.error_code.value,
-                })
+                yield _json.dumps(
+                    {
+                        "type": "error",
+                        "error": billing_result.error.message,
+                        "error_code": billing_result.error.error_code.value,
+                    }
+                )
                 return
     except Exception as _billing_err:
         # Fail open for non-critical billing errors (same behaviour as SSE endpoint)

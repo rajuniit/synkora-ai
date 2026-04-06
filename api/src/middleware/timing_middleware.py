@@ -63,7 +63,7 @@ class RequestTimingMiddleware:
 
         request_id = uuid.uuid4().hex[:8]
         scope["state"]["_request_id"] = request_id
-        scope["state"]["_timing"] = {}          # {component: ms}
+        scope["state"]["_timing"] = {}  # {component: ms}
         scope["state"]["_timing_start"] = time.perf_counter()
 
         method = scope.get("method", "?")
@@ -89,8 +89,7 @@ class RequestTimingMiddleware:
                 # ---- Slow-request structured log -------------------------
                 if total_ms >= self.slow_threshold_ms:
                     detail_parts = " ".join(
-                        f"{k}={v:.1f}ms" if isinstance(v, float) else f"{k}={v}"
-                        for k, v in timing.items()
+                        f"{k}={v:.1f}ms" if isinstance(v, float) else f"{k}={v}" for k, v in timing.items()
                     )
                     logger.warning(
                         "SLOW_REQUEST rid=%s %s %s total=%.1fms status=%s | %s",
