@@ -131,12 +131,14 @@ async def create_agent(
             )
 
             if not scan_result["is_safe"]:
+                detections = scan_result.get("detections", [])
+                threat_names = [d.get("pattern_id", "unknown") for d in detections]
                 logger.warning(
-                    f"System prompt injection detected during agent creation '{request.config.name}' by tenant {tenant_id}: {scan_result['threats']}"
+                    f"System prompt injection detected during agent creation '{request.config.name}' by tenant {tenant_id}: {threat_names}"
                 )
                 raise HTTPException(
                     status_code=status.HTTP_400_BAD_REQUEST,
-                    detail=f"System prompt contains potentially dangerous patterns: {', '.join(scan_result['threats'])}",
+                    detail=f"System prompt contains potentially dangerous patterns: {', '.join(threat_names)}",
                 )
 
         # SECURITY: Sanitize suggestion_prompts to prevent stored XSS
@@ -838,12 +840,14 @@ async def update_agent(
             )
 
             if not scan_result["is_safe"]:
+                detections = scan_result.get("detections", [])
+                threat_names = [d.get("pattern_id", "unknown") for d in detections]
                 logger.warning(
-                    f"System prompt injection detected for agent '{agent_name}' by tenant {tenant_id}: {scan_result['threats']}"
+                    f"System prompt injection detected for agent '{agent_name}' by tenant {tenant_id}: {threat_names}"
                 )
                 raise HTTPException(
                     status_code=status.HTTP_400_BAD_REQUEST,
-                    detail=f"System prompt contains potentially dangerous patterns: {', '.join(scan_result['threats'])}",
+                    detail=f"System prompt contains potentially dangerous patterns: {', '.join(threat_names)}",
                 )
 
             db_agent.system_prompt = request.system_prompt

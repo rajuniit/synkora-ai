@@ -1312,6 +1312,25 @@ class CredentialResolver:
                         )
                         return token
 
+            # Pinned Slack bot: use the explicitly selected bot for this tool
+            if agent_tool and agent_tool.slack_bot_id:
+                result = await self.db.execute(
+                    select(SlackBot).filter(
+                        SlackBot.id == agent_tool.slack_bot_id, SlackBot.connection_status == "connected"
+                    )
+                )
+                pinned_bot = result.scalar_one_or_none()
+                if pinned_bot and pinned_bot.slack_bot_token:
+                    token = decrypt_value(pinned_bot.slack_bot_token)
+                    logger.info(
+                        f"✅ Resolved Slack token from pinned bot '{pinned_bot.bot_name}' for tool '{tool_name}'"
+                    )
+                    return token
+                logger.warning(
+                    f"Pinned Slack bot {agent_tool.slack_bot_id} not found or disconnected for tool '{tool_name}'"
+                )
+
+            # Auto-discover: find any connected bot for this agent
             result = await self.db.execute(
                 select(SlackBot).filter(
                     SlackBot.agent_id == self.context.agent_id, SlackBot.connection_status == "connected"
@@ -1321,7 +1340,7 @@ class CredentialResolver:
 
             if slack_bot and slack_bot.slack_bot_token:
                 token = decrypt_value(slack_bot.slack_bot_token)
-                logger.info(f"✅ Resolved Slack token from legacy bot for tool '{tool_name}'")
+                logger.info(f"✅ Resolved Slack token from auto-discovered bot for tool '{tool_name}'")
                 return token
 
             logger.warning(

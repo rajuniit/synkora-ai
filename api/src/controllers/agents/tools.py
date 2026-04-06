@@ -61,6 +61,7 @@ class SaveAgentToolRequest(BaseModel):
     custom_tool_id: str | None = Field(None, description="UUID of custom tool (for custom tool operations)")
     operation_id: str | None = Field(None, description="Operation ID from custom tool's OpenAPI schema")
     oauth_app_id: int | None = Field(None, description="OAuth app ID to use for this tool")
+    slack_bot_id: str | None = Field(None, description="Slack bot UUID to pin for Slack tools")
 
 
 @agents_tools_router.get("/{agent_id}/tools", response_model=AgentResponse)
@@ -178,6 +179,8 @@ async def save_agent_tool(
         )
         existing_tool = existing_result.scalar_one_or_none()
 
+        slack_bot_uuid = uuid.UUID(request.slack_bot_id) if request.slack_bot_id else None
+
         if existing_tool:
             # Update existing tool
             existing_tool.config = request.config
@@ -185,6 +188,7 @@ async def save_agent_tool(
             existing_tool.oauth_app_id = request.oauth_app_id
             existing_tool.custom_tool_id = uuid.UUID(request.custom_tool_id) if request.custom_tool_id else None
             existing_tool.operation_id = request.operation_id
+            existing_tool.slack_bot_id = slack_bot_uuid
             message = f"Tool '{request.tool_name}' updated successfully"
         else:
             # Create new tool
@@ -196,6 +200,7 @@ async def save_agent_tool(
                 oauth_app_id=request.oauth_app_id,
                 custom_tool_id=uuid.UUID(request.custom_tool_id) if request.custom_tool_id else None,
                 operation_id=request.operation_id,
+                slack_bot_id=slack_bot_uuid,
             )
             db.add(new_tool)
             message = f"Tool '{request.tool_name}' configured successfully"

@@ -62,12 +62,22 @@ class AgentTool(BaseModel):
         String(100), nullable=True, comment="Optional: Specific operation ID from custom tool's OpenAPI schema"
     )
 
+    slack_bot_id = Column(
+        UUID(as_uuid=True),
+        ForeignKey("slack_bots.id", ondelete="SET NULL"),
+        nullable=True,
+        index=True,
+        comment="Optional: specific Slack bot to use for this tool",
+    )
+
     # Relationships
     agent = relationship("Agent", back_populates="tools")
 
     oauth_app = relationship("OAuthApp", foreign_keys=[oauth_app_id])
 
     custom_tool = relationship("CustomTool", foreign_keys=[custom_tool_id])
+
+    slack_bot = relationship("SlackBot", foreign_keys=[slack_bot_id])
 
     def __repr__(self) -> str:
         """String representation of agent tool."""
