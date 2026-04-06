@@ -251,11 +251,6 @@ jobs:
           kubectl apply -f k8s/application/synkora-frontend-service.yml
           kubectl apply -f k8s/application/synkora-frontend-ingress.yml
 
-          # PgBouncer
-          kubectl apply -f k8s/application/pgbouncer-configmap.yml
-          kubectl apply -f k8s/application/pgbouncer-deployment.yml
-          kubectl apply -f k8s/application/pgbouncer-service.yml
-
           # ML and scraper services
           kubectl apply -f k8s/application/ml-service-deployment.yaml
           kubectl apply -f k8s/application/scraper-service-deployment.yaml
