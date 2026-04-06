@@ -61,7 +61,7 @@ export default function CreateDomainPage() {
     const platformDomain = dnsRecords.platform_domain;
 
     return (
-      <div className="min-h-screen bg-gradient-to-br from-amber-50 via-yellow-50/30 to-amber-50 p-4 md:p-6">
+      <div className="min-h-screen bg-gradient-to-br from-red-50 via-red-50/30 to-red-50 p-4 md:p-6">
         <div className="max-w-4xl mx-auto">
           {/* Header */}
           <div className="mb-6">
@@ -81,20 +81,20 @@ export default function CreateDomainPage() {
             {/* Domain Info */}
             <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-5">
               <h2 className="text-base font-semibold text-gray-900 mb-3 flex items-center gap-2">
-                <Globe className="w-4 h-4 text-amber-600" />
+                <Globe className="w-4 h-4 text-red-600" />
                 Your Domain
               </h2>
-              <div className="flex items-center gap-3 p-3 bg-amber-50 border border-amber-200 rounded-lg">
+              <div className="flex items-center gap-3 p-3 bg-red-50 border border-red-200 rounded-lg">
                 <div className="flex-1">
-                  <p className="text-xs text-amber-700 mb-1">Domain</p>
+                  <p className="text-xs text-red-700 mb-1">Domain</p>
                   <p className="text-base font-mono font-semibold text-gray-900">{fullDomain}</p>
                 </div>
                 <button
                   onClick={() => copyToClipboard(fullDomain)}
-                  className="p-2 hover:bg-amber-100 rounded-lg transition-colors"
+                  className="p-2 hover:bg-red-100 rounded-lg transition-colors"
                   title="Copy domain"
                 >
-                  <Copy className="w-4 h-4 text-amber-600" />
+                  <Copy className="w-4 h-4 text-red-600" />
                 </button>
               </div>
             </div>
@@ -105,7 +105,7 @@ export default function CreateDomainPage() {
               
               <div className="space-y-5">
                 <div className="flex gap-3">
-                  <div className="flex-shrink-0 w-8 h-8 bg-amber-100 text-amber-700 rounded-full flex items-center justify-center font-semibold text-sm shadow-sm">
+                  <div className="flex-shrink-0 w-8 h-8 bg-red-100 text-red-700 rounded-full flex items-center justify-center font-semibold text-sm shadow-sm">
                     1
                   </div>
                   <div className="flex-1">
@@ -130,7 +130,7 @@ export default function CreateDomainPage() {
                       </div>
                       <button
                         onClick={() => copyToClipboard(`${cnameRecord?.name || createdDomain.subdomain || "@"} CNAME ${cnameRecord?.value || platformDomain}`)}
-                        className="text-xs text-amber-600 hover:text-amber-700 flex items-center gap-1.5 font-medium"
+                        className="text-xs text-red-600 hover:text-red-700 flex items-center gap-1.5 font-medium"
                       >
                         <Copy className="w-3.5 h-3.5" />
                         Copy DNS record
@@ -140,7 +140,7 @@ export default function CreateDomainPage() {
                 </div>
 
                 <div className="flex gap-3">
-                  <div className="flex-shrink-0 w-8 h-8 bg-amber-100 text-amber-700 rounded-full flex items-center justify-center font-semibold text-sm shadow-sm">
+                  <div className="flex-shrink-0 w-8 h-8 bg-red-100 text-red-700 rounded-full flex items-center justify-center font-semibold text-sm shadow-sm">
                     2
                   </div>
                   <div className="flex-1">
@@ -152,7 +152,7 @@ export default function CreateDomainPage() {
                 </div>
 
                 <div className="flex gap-3">
-                  <div className="flex-shrink-0 w-8 h-8 bg-amber-100 text-amber-700 rounded-full flex items-center justify-center font-semibold text-sm shadow-sm">
+                  <div className="flex-shrink-0 w-8 h-8 bg-red-100 text-red-700 rounded-full flex items-center justify-center font-semibold text-sm shadow-sm">
                     3
                   </div>
                   <div className="flex-1">
@@ -164,7 +164,7 @@ export default function CreateDomainPage() {
                 </div>
 
                 <div className="flex gap-3">
-                  <div className="flex-shrink-0 w-8 h-8 bg-amber-100 text-amber-700 rounded-full flex items-center justify-center font-semibold text-sm shadow-sm">
+                  <div className="flex-shrink-0 w-8 h-8 bg-red-100 text-red-700 rounded-full flex items-center justify-center font-semibold text-sm shadow-sm">
                     4
                   </div>
                   <div className="flex-1">
@@ -178,26 +178,26 @@ export default function CreateDomainPage() {
             </div>
 
             {/* Important Notes */}
-            <div className="bg-amber-50 border border-amber-200 rounded-lg shadow-sm p-4">
-              <h3 className="font-semibold text-amber-900 text-sm mb-2 flex items-center gap-2">
+            <div className="bg-red-50 border border-red-200 rounded-lg shadow-sm p-4">
+              <h3 className="font-semibold text-red-900 text-sm mb-2 flex items-center gap-2">
                 <AlertCircle className="w-4 h-4" />
                 Important Notes
               </h3>
-              <ul className="space-y-1.5 text-xs text-amber-800">
+              <ul className="space-y-1.5 text-xs text-red-800">
                 <li className="flex items-start gap-2">
-                  <span className="text-amber-600 mt-0.5">•</span>
+                  <span className="text-red-600 mt-0.5">•</span>
                   <span>SSL certificates will be automatically provisioned once the domain is verified</span>
                 </li>
                 <li className="flex items-start gap-2">
-                  <span className="text-amber-600 mt-0.5">•</span>
+                  <span className="text-red-600 mt-0.5">•</span>
                   <span>Make sure to use the exact DNS record values provided above</span>
                 </li>
                 <li className="flex items-start gap-2">
-                  <span className="text-amber-600 mt-0.5">•</span>
+                  <span className="text-red-600 mt-0.5">•</span>
                   <span>If using Cloudflare, disable the proxy (orange cloud) for the DNS record</span>
                 </li>
                 <li className="flex items-start gap-2">
-                  <span className="text-amber-600 mt-0.5">•</span>
+                  <span className="text-red-600 mt-0.5">•</span>
                   <span>Contact support if you encounter any issues with DNS configuration</span>
                 </li>
               </ul>
@@ -207,13 +207,13 @@ export default function CreateDomainPage() {
             <div className="flex items-center gap-3 pt-2">
               <button
                 onClick={() => router.push(`/agents/${agentName}/domains`)}
-                className="px-5 py-2 text-sm bg-gradient-to-r from-amber-500 to-yellow-500 text-white rounded-lg hover:from-amber-600 hover:to-yellow-600 transition-all shadow-sm font-medium"
+                className="px-5 py-2 text-sm bg-gradient-to-r from-red-500 to-red-600 text-white rounded-lg hover:from-red-600 hover:to-red-700 transition-all shadow-sm font-medium"
               >
                 Go to Domains
               </button>
               <button
                 onClick={() => router.push(`/agents/${agentName}/domains/${createdDomain.id}/edit`)}
-                className="px-5 py-2 text-sm text-gray-700 bg-white border border-gray-300 rounded-lg hover:bg-white hover:border-amber-300 transition-colors shadow-sm font-medium"
+                className="px-5 py-2 text-sm text-gray-700 bg-white border border-gray-300 rounded-lg hover:bg-white hover:border-red-300 transition-colors shadow-sm font-medium"
               >
                 Customize Chat Interface
               </button>
@@ -225,13 +225,13 @@ export default function CreateDomainPage() {
   }
 
   return (
-    <div className="min-h-screen bg-gradient-to-br from-amber-50 via-yellow-50/30 to-amber-50 p-4 md:p-6">
+    <div className="min-h-screen bg-gradient-to-br from-red-50 via-red-50/30 to-red-50 p-4 md:p-6">
       <div className="max-w-3xl mx-auto">
         {/* Header */}
         <div className="mb-6">
           <button
             onClick={() => router.push(`/agents/${agentName}/domains`)}
-            className="flex items-center gap-2 text-amber-600 hover:text-amber-700 mb-4 transition-colors text-sm font-medium"
+            className="flex items-center gap-2 text-red-600 hover:text-red-700 mb-4 transition-colors text-sm font-medium"
           >
             <ArrowLeft size={16} />
             Back to Domains
@@ -262,14 +262,14 @@ export default function CreateDomainPage() {
                 Domain Type
               </label>
               <div className="space-y-2">
-                <label className="flex items-start gap-2 p-3 border-2 border-gray-200 rounded-lg cursor-pointer hover:border-amber-200 hover:bg-amber-50/50 transition-colors">
+                <label className="flex items-start gap-2 p-3 border-2 border-gray-200 rounded-lg cursor-pointer hover:border-red-200 hover:bg-red-50/50 transition-colors">
                   <input
                     type="radio"
                     checked={formData.is_custom_domain}
                     onChange={() =>
                       setFormData({ ...formData, is_custom_domain: true })
                     }
-                    className="mt-0.5 w-4 h-4 text-amber-600 focus:ring-amber-500"
+                    className="mt-0.5 w-4 h-4 text-red-600 focus:ring-red-500"
                   />
                   <div className="flex-1">
                     <span className="font-medium text-gray-900 block mb-0.5 text-sm">
@@ -280,14 +280,14 @@ export default function CreateDomainPage() {
                     </span>
                   </div>
                 </label>
-                <label className="flex items-start gap-2 p-3 border-2 border-gray-200 rounded-lg cursor-pointer hover:border-amber-200 hover:bg-amber-50/50 transition-colors">
+                <label className="flex items-start gap-2 p-3 border-2 border-gray-200 rounded-lg cursor-pointer hover:border-red-200 hover:bg-red-50/50 transition-colors">
                   <input
                     type="radio"
                     checked={!formData.is_custom_domain}
                     onChange={() =>
                       setFormData({ ...formData, is_custom_domain: false })
                     }
-                    className="mt-0.5 w-4 h-4 text-amber-600 focus:ring-amber-500"
+                    className="mt-0.5 w-4 h-4 text-red-600 focus:ring-red-500"
                   />
                   <div className="flex-1">
                     <span className="font-medium text-gray-900 block mb-0.5 text-sm">
@@ -319,7 +319,7 @@ export default function CreateDomainPage() {
                       setFormData({ ...formData, domain: e.target.value })
                     }
                     placeholder="yourdomain.com"
-                    className="w-full px-3 py-2 text-sm border border-gray-300 rounded-lg focus:ring-2 focus:ring-amber-500 focus:border-transparent"
+                    className="w-full px-3 py-2 text-sm border border-gray-300 rounded-lg focus:ring-2 focus:ring-red-500 focus:border-transparent"
                     required
                   />
                   <p className="text-xs text-gray-500 mt-1">
@@ -342,7 +342,7 @@ export default function CreateDomainPage() {
                       setFormData({ ...formData, subdomain: e.target.value })
                     }
                     placeholder="myagent"
-                    className="w-full px-3 py-2 text-sm border border-gray-300 rounded-lg focus:ring-2 focus:ring-amber-500 focus:border-transparent"
+                    className="w-full px-3 py-2 text-sm border border-gray-300 rounded-lg focus:ring-2 focus:ring-red-500 focus:border-transparent"
                     required
                   />
                   <p className="text-xs text-gray-500 mt-1">
@@ -367,7 +367,7 @@ export default function CreateDomainPage() {
                       setFormData({ ...formData, subdomain: e.target.value })
                     }
                     placeholder="yourname"
-                    className="flex-1 px-3 py-2 text-sm border border-gray-300 rounded-lg focus:ring-2 focus:ring-amber-500 focus:border-transparent"
+                    className="flex-1 px-3 py-2 text-sm border border-gray-300 rounded-lg focus:ring-2 focus:ring-red-500 focus:border-transparent"
                     required
                   />
                   <span className="text-gray-600 text-sm">.platform.com</span>
@@ -379,23 +379,23 @@ export default function CreateDomainPage() {
             )}
 
             {/* Info Box */}
-            <div className="p-3 bg-amber-50 border border-amber-200 rounded-lg">
-              <h3 className="font-medium text-amber-900 mb-2 text-xs">Next Steps</h3>
-              <ul className="space-y-1 text-xs text-amber-800">
+            <div className="p-3 bg-red-50 border border-red-200 rounded-lg">
+              <h3 className="font-medium text-red-900 mb-2 text-xs">Next Steps</h3>
+              <ul className="space-y-1 text-xs text-red-800">
                 <li className="flex items-start gap-2">
-                  <span className="text-amber-600 mt-0.5">•</span>
+                  <span className="text-red-600 mt-0.5">•</span>
                   <span>After creating the domain, you'll receive DNS configuration instructions</span>
                 </li>
                 <li className="flex items-start gap-2">
-                  <span className="text-amber-600 mt-0.5">•</span>
+                  <span className="text-red-600 mt-0.5">•</span>
                   <span>Add the required DNS records to your domain provider</span>
                 </li>
                 <li className="flex items-start gap-2">
-                  <span className="text-amber-600 mt-0.5">•</span>
+                  <span className="text-red-600 mt-0.5">•</span>
                   <span>DNS verification typically takes 5-10 minutes</span>
                 </li>
                 <li className="flex items-start gap-2">
-                  <span className="text-amber-600 mt-0.5">•</span>
+                  <span className="text-red-600 mt-0.5">•</span>
                   <span>Once verified, you can customize the chat interface</span>
                 </li>
               </ul>
@@ -407,7 +407,7 @@ export default function CreateDomainPage() {
             <button
               type="submit"
               disabled={loading}
-              className="flex items-center gap-2 px-5 py-2 text-sm bg-gradient-to-r from-amber-500 to-yellow-500 text-white rounded-lg hover:from-amber-600 hover:to-yellow-600 transition-all disabled:opacity-50 disabled:cursor-not-allowed shadow-sm font-medium"
+              className="flex items-center gap-2 px-5 py-2 text-sm bg-gradient-to-r from-red-500 to-red-600 text-white rounded-lg hover:from-red-600 hover:to-red-700 transition-all disabled:opacity-50 disabled:cursor-not-allowed shadow-sm font-medium"
             >
               <Save className="w-4 h-4" />
               {loading ? "Creating..." : "Create Domain"}
@@ -415,7 +415,7 @@ export default function CreateDomainPage() {
             <button
               type="button"
               onClick={() => router.push(`/agents/${agentName}/domains`)}
-              className="px-5 py-2 text-sm text-gray-700 bg-white border border-gray-300 rounded-lg hover:bg-white hover:border-amber-300 transition-colors shadow-sm font-medium"
+              className="px-5 py-2 text-sm text-gray-700 bg-white border border-gray-300 rounded-lg hover:bg-white hover:border-red-300 transition-colors shadow-sm font-medium"
             >
               Cancel
             </button>

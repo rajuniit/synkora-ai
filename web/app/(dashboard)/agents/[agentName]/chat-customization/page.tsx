@@ -3,10 +3,10 @@
 import { useState, useEffect } from 'react'
 import { useParams, useRouter } from 'next/navigation'
 import toast from 'react-hot-toast'
-import { ArrowLeft, Palette, MessageSquare, Eye } from 'lucide-react'
+import { ArrowLeft, Palette, MessageSquare, Eye, Zap } from 'lucide-react'
 import { apiClient } from '@/lib/api/client'
 
-type Tab = 'branding' | 'content' | 'preview'
+type Tab = 'branding' | 'content' | 'advanced' | 'preview'
 
 export default function ChatCustomizationPage() {
   const params = useParams()
@@ -26,6 +26,7 @@ export default function ChatCustomizationPage() {
     chat_logo_url: '',
     chat_background_color: '#ffffff',
     chat_font_family: 'Inter',
+    chat_transport: 'sse' as 'sse' | 'websocket',
   })
 
   useEffect(() => {
@@ -46,6 +47,7 @@ export default function ChatCustomizationPage() {
           chat_logo_url: config.chat_logo_url || '',
           chat_background_color: config.chat_background_color || '#ffffff',
           chat_font_family: config.chat_font_family || 'Inter',
+          chat_transport: (config.chat_transport as 'sse' | 'websocket') || 'sse',
         })
       }
     } catch (error) {
@@ -74,6 +76,7 @@ export default function ChatCustomizationPage() {
   const tabs = [
     { id: 'branding' as Tab, label: 'Branding', icon: Palette },
     { id: 'content' as Tab, label: 'Content', icon: MessageSquare },
+    { id: 'advanced' as Tab, label: 'Advanced', icon: Zap },
     { id: 'preview' as Tab, label: 'Preview', icon: Eye },
   ]
 
@@ -137,6 +140,9 @@ export default function ChatCustomizationPage() {
             )}
             {activeTab === 'content' && (
               <ContentTab formData={formData} setFormData={setFormData} />
+            )}
+            {activeTab === 'advanced' && (
+              <AdvancedTab formData={formData} setFormData={setFormData} />
             )}
             {activeTab === 'preview' && (
               <PreviewTab formData={formData} />
@@ -438,6 +444,68 @@ function PreviewTab({ formData }: any) {
         <h4 className="text-xs font-medium text-red-900 mb-2">👁️ Preview Note</h4>
         <p className="text-xs text-red-800">
           This is a simplified preview. The actual chat interface will include additional features like message history, typing indicators, and more.
+        </p>
+      </div>
+    </div>
+  )
+}
+
+// Advanced Tab Component
+function AdvancedTab({ formData, setFormData }: any) {
+  return (
+    <div className="space-y-6 max-w-2xl">
+      <div>
+        <h3 className="text-base font-semibold text-gray-900 mb-1">Advanced Settings</h3>
+        <p className="text-xs text-gray-600 mb-4">
+          Fine-tune the technical behaviour of your chat interface.
+        </p>
+      </div>
+
+      {/* Chat Transport */}
+      <div>
+        <label className="block text-xs font-medium text-gray-700 mb-2">
+          Chat Transport
+        </label>
+        <div className="space-y-2">
+          {([
+            {
+              value: 'sse',
+              label: 'Server-Sent Events (SSE)',
+              description: 'Default. Each message opens a new HTTP stream. Works everywhere, no extra setup.',
+            },
+            {
+              value: 'websocket',
+              label: 'WebSocket',
+              description: 'Persistent connection. Saves ~20–50 ms per message after the first by reusing the same socket. Recommended for high-frequency or latency-sensitive chats.',
+            },
+          ] as const).map(({ value, label, description }) => (
+            <label
+              key={value}
+              className={`flex items-start gap-3 p-3 rounded-lg border cursor-pointer transition-colors ${
+                formData.chat_transport === value
+                  ? 'border-red-500 bg-red-50'
+                  : 'border-gray-200 hover:border-gray-300 bg-white'
+              }`}
+            >
+              <input
+                type="radio"
+                name="chat_transport"
+                value={value}
+                checked={formData.chat_transport === value}
+                onChange={() => setFormData({ ...formData, chat_transport: value })}
+                className="mt-0.5 accent-red-600"
+              />
+              <div>
+                <p className={`text-sm font-medium ${formData.chat_transport === value ? 'text-red-700' : 'text-gray-800'}`}>
+                  {label}
+                </p>
+                <p className="text-xs text-gray-500 mt-0.5">{description}</p>
+              </div>
+            </label>
+          ))}
+        </div>
+        <p className="mt-2 text-xs text-gray-500">
+          Changes take effect the next time a user loads the chat page.
         </p>
       </div>
     </div>

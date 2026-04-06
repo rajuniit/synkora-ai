@@ -169,16 +169,23 @@ export default function AgentKnowledgeBasesPage() {
       <div className="max-w-7xl mx-auto">
       {/* Header */}
       <div className="mb-6">
-        <Link
-          href={`/agents/${agentName}/view`}
-          className="text-red-600 hover:text-red-700 flex items-center gap-2 mb-4 text-sm font-medium"
-        >
-          <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 19l-7-7 7-7" />
+        {/* Breadcrumb */}
+        <nav className="flex items-center gap-1.5 text-sm mb-4">
+          <Link href="/agents" className="text-gray-500 hover:text-gray-700">
+            Agents
+          </Link>
+          <svg className="w-3.5 h-3.5 text-gray-400 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" />
           </svg>
-          Back to Agent
-        </Link>
-        
+          <Link href={`/agents/${agentName}/view`} className="text-gray-500 hover:text-gray-700">
+            {decodeURIComponent(agentName)}
+          </Link>
+          <svg className="w-3.5 h-3.5 text-gray-400 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" />
+          </svg>
+          <span className="text-gray-900 font-medium">Knowledge Bases</span>
+        </nav>
+
         <div className="flex justify-between items-start">
           <div>
             <h1 className="text-2xl font-bold text-gray-900">Knowledge Bases</h1>

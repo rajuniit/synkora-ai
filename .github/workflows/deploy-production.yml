@@ -207,13 +207,10 @@ jobs:
             --from-literal=JWT_REFRESH_TOKEN_EXPIRES="${{ secrets.K8S_JWT_REFRESH_TOKEN_EXPIRES }}" \
             --from-literal=JWT_ALGORITHM="${{ secrets.K8S_JWT_ALGORITHM }}" \
             --from-literal=DB_HOST="${{ secrets.K8S_DB_HOST }}" \
-            --from-literal=DB_PORT="${{ secrets.K8S_DB_PORT }}" \
-            --from-literal=DB_DIRECT_HOST="${{ secrets.K8S_DB_DIRECT_HOST }}" \
-            --from-literal=DB_DIRECT_PORT="${{ secrets.K8S_DB_DIRECT_PORT }}" \
             --from-literal=DB_USERNAME="${{ secrets.K8S_DB_USERNAME }}" \
             --from-literal=DB_DATABASE="${{ secrets.K8S_DB_DATABASE }}" \
-            --from-literal=DB_CHARSET="${{ secrets.K8S_DB_CHARSET }}" \
-            --from-literal=DB_EXTRAS="${{ secrets.K8S_DB_EXTRAS }}" \
+            --from-literal=DB_CHARSET="" \
+            --from-literal=DB_EXTRAS="" \
             --from-literal=DB_PASSWORD="${{ secrets.K8S_DB_PASSWORD }}" \
             --from-literal=SQLALCHEMY_DATABASE_URI_SCHEME="${{ secrets.K8S_SQLALCHEMY_DATABASE_URI_SCHEME }}" \
             --from-literal=SQLALCHEMY_POOL_SIZE="${{ secrets.K8S_SQLALCHEMY_POOL_SIZE }}" \
@@ -288,15 +285,13 @@ jobs:
           POD_NAME="alembic-migrate-$(echo ${IMAGE_TAG} | tr '.' '-')"
           kubectl delete pod "${POD_NAME}" -n ${{ env.NAMESPACE }} --ignore-not-found=true
 
-          # Migrations must connect DIRECTLY to PostgreSQL — not through PgBouncer.
-          # PgBouncer transaction mode does not support the advisory locks and SET
-          # statements that Alembic requires. Override DB_HOST/DB_PORT here so the
-          # migration pod bypasses the PgBouncer service entirely.
+          # Migrations connect directly to DigitalOcean Managed PostgreSQL.
+          # DB_HOST is in synkora-secrets; DB_PORT comes from synkora-config (ConfigMap).
           kubectl run "${POD_NAME}" \
             --image=${{ env.ECR_REGISTRY }}/synkora-api:${IMAGE_TAG} \
             --restart=Never \
             --namespace=${{ env.NAMESPACE }} \
-            --overrides='{"spec":{"imagePullSecrets":[{"name":"ecr-registry-secret"}],"containers":[{"name":"migrate","image":"${{ env.ECR_REGISTRY }}/synkora-api:'"${IMAGE_TAG}"'","command":["alembic","upgrade","head"],"envFrom":[{"secretRef":{"name":"synkora-secrets"}}],"env":[{"name":"DB_HOST","value":"${{ secrets.K8S_DB_DIRECT_HOST }}"},{"name":"DB_PORT","value":"${{ secrets.K8S_DB_DIRECT_PORT }}"}]}]}}'
+            --overrides='{"spec":{"imagePullSecrets":[{"name":"ecr-registry-secret"}],"containers":[{"name":"migrate","image":"${{ env.ECR_REGISTRY }}/synkora-api:'"${IMAGE_TAG}"'","command":["alembic","upgrade","head"],"envFrom":[{"configMapRef":{"name":"synkora-config"}},{"secretRef":{"name":"synkora-secrets"}}]}]}}'
 
           echo "Waiting for migration pod to start running (image pull + init)..."
           # Wait up to 3 minutes for the pod to actually start running

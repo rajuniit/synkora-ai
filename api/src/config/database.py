@@ -118,10 +118,19 @@ class DatabaseConfig(BaseSettings):
     @computed_field  # type: ignore[misc]
     @property
     def sqlalchemy_async_database_uri(self) -> str:
-        """Construct SQLAlchemy async database URI."""
+        """Construct SQLAlchemy async database URI.
+
+        asyncpg does not accept 'sslmode' as a URL parameter (that is a libpq/psycopg2
+        concept). SSL for asyncpg is passed via connect_args['ssl'] instead, so we
+        strip any 'sslmode=*' segment from db_extras here.
+        """
+        import re
+
         db_extras = (
             f"{self.db_extras}&client_encoding={self.db_charset}" if self.db_charset else self.db_extras
         ).strip("&")
+        # Remove sslmode=* — asyncpg doesn't recognise it; ssl is set via connect_args.
+        db_extras = re.sub(r"sslmode=[^&]*", "", db_extras).strip("&")
         db_extras = f"?{db_extras}" if db_extras else ""
         return (
             f"{self.sqlalchemy_async_database_uri_scheme}://"
@@ -166,6 +175,15 @@ class DatabaseConfig(BaseSettings):
             "server_settings": {"timezone": "UTC"},
             "command_timeout": 30,  # Statement timeout in seconds
         }
+
+        # If DB_EXTRAS contains sslmode=require (or any non-disable sslmode), pass ssl=True
+        # to asyncpg.  asyncpg does not accept 'sslmode' as a keyword argument.
+        if self.db_extras and "sslmode=" in self.db_extras:
+            import re
+
+            m = re.search(r"sslmode=(\w+)", self.db_extras)
+            if m and m.group(1) not in ("disable",):
+                connect_args["ssl"] = True
 
         if self.pgbouncer_enabled:
             # PgBouncer transaction mode does not support named prepared statements.

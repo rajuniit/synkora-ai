@@ -59,6 +59,7 @@ export default function AutonomousPage() {
   const [error, setError] = useState<string | null>(null)
   const [toastMsg, setToastMsg] = useState<string | null>(null)
   const [pendingApprovals, setPendingApprovals] = useState(0)
+  const [showDisableDialog, setShowDisableDialog] = useState(false)
 
   function showToast(msg: string) {
     setToastMsg(msg)
@@ -121,13 +122,13 @@ export default function AutonomousPage() {
   }
 
   async function handleDelete() {
-    if (!confirm('Delete autonomous schedule and all run history?')) return
     try {
       const { apiClient } = await import('@/lib/api/client')
       await apiClient.request(
         'DELETE',
         `/api/v1/agents/${encodeURIComponent(agentName)}/autonomous`
       )
+      setShowDisableDialog(false)
       await fetchStatus()
       showToast('Autonomous mode disabled')
     } catch (err: any) {
@@ -196,7 +197,7 @@ export default function AutonomousPage() {
                   {status.is_active ? 'Active' : 'Paused'}
                 </button>
                 <button
-                  onClick={handleDelete}
+                  onClick={() => setShowDisableDialog(true)}
                   className="px-3 py-1.5 text-sm text-red-600 border border-red-200 rounded-md hover:bg-red-50 transition-colors"
                 >
                   Disable
@@ -302,6 +303,38 @@ export default function AutonomousPage() {
           </div>
         )}
       </div>
+
+      {/* Disable confirmation dialog */}
+      {showDisableDialog && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
+          <div className="absolute inset-0 bg-black/40" onClick={() => setShowDisableDialog(false)} />
+          <div className="relative bg-white rounded-xl shadow-xl w-full max-w-sm p-6">
+            <div className="flex items-center gap-3 mb-4">
+              <div className="p-2 bg-red-100 rounded-lg">
+                <Bot className="w-5 h-5 text-red-600" />
+              </div>
+              <h2 className="text-base font-semibold text-gray-900">Disable Autonomous Mode</h2>
+            </div>
+            <p className="text-sm text-gray-600 mb-6">
+              This will delete the autonomous schedule and all run history for <strong>{agentName}</strong>. This action cannot be undone.
+            </p>
+            <div className="flex gap-3 justify-end">
+              <button
+                onClick={() => setShowDisableDialog(false)}
+                className="px-4 py-2 text-sm font-medium text-gray-700 border border-gray-300 rounded-lg hover:bg-gray-50 transition-colors"
+              >
+                Cancel
+              </button>
+              <button
+                onClick={handleDelete}
+                className="px-4 py-2 text-sm font-medium text-white bg-red-600 rounded-lg hover:bg-red-700 transition-colors"
+              >
+                Disable
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   )
 }

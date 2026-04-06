@@ -10,8 +10,8 @@ import {
 } from '@/components/chat/components'
 import { Message, Agent, Source, Person, NewsItem, Attachment } from '@/components/chat/types'
 import { apiClient } from '@/lib/api/client'
-import { secureStorage } from '@/lib/auth/secure-storage'
 import { useAgentLLMConfigs } from '@/hooks/useAgentLLMConfigs'
+import { useChatTransport } from '@/components/chat/hooks/useChatTransport'
 
 const API_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:5001'
 
@@ -23,6 +23,7 @@ interface ChatConfig {
   chat_logo_url: string
   chat_background_color: string
   chat_font_family: string
+  chat_transport?: 'sse' | 'websocket'
   chat_footer_text?: string
   chat_footer_links?: Array<{ text: string; url: string }>
   // Widget-based customization
@@ -305,6 +306,9 @@ export default function AdvancedChatPage() {
   // Track if we just created a new conversation (to skip loading messages)
   const skipLoadMessagesRef = useRef(false)
 
+  // Chat transport — SSE by default; switches to WebSocket when configured per-agent
+  const transport = useChatTransport(chatConfig?.chat_transport ?? 'sse', API_URL)
+
   // Load messages when conversation changes (skip if streaming or just created)
   useEffect(() => {
     if (currentConversation?.id && !isStreaming && !skipLoadMessagesRef.current) {
@@ -485,199 +489,106 @@ export default function AdvancedChatPage() {
     }
 
     try {
-      // Get the access token from secure storage
-      const token = secureStorage.getAccessToken()
-      
-      const response = await fetch(`${API_URL}/api/v1/agents/chat/stream`, {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          ...(token && { 'Authorization': `Bearer ${token}` }),
-        },
-        body: JSON.stringify({
-          agent_name: agentName,
-          message: message,
-          conversation_id: activeConversation?.id,
-          attachments: attachments,
-          llm_config_id: selectedModelId || undefined,
-          conversation_history: messages.slice(-10).map((msg) => ({
-            role: msg.role,
-            content: msg.content,
-          })),
-        }),
-      })
-
-      if (!response.ok) {
-        if (response.status === 402) {
-          try {
-            const errorData = await response.json()
-            const msg = errorData?.detail?.message || errorData?.message || 'Insufficient credits or subscription issue.'
-            throw new Error(msg)
-          } catch (e) {
-            if (e instanceof SyntaxError) throw new Error('Insufficient credits or subscription issue.')
-            throw e
-          }
-        }
-        throw new Error(`HTTP error! status: ${response.status}`)
-      }
-
-      if (!response.body) {
-        throw new Error('No response body')
-      }
-
-      const reader = response.body.getReader()
-      const decoder = new TextDecoder()
-      let buffer = ''
       let fullResponse = ''
-      let responseSources: Source[] = []
+      let responseSources: any[] = []
 
-      while (true) {
-        const { done, value } = await reader.read()
-        if (done) break
-
-        buffer += decoder.decode(value, { stream: true })
-        const lines = buffer.split('\n')
-        buffer = lines.pop() || ''
-
-        for (const line of lines) {
-          if (!line.trim() || !line.startsWith('data: ')) continue
-
-          try {
-            const jsonStr = line.slice(6).trim()
-            if (jsonStr === '[DONE]') continue
-
-            const data = JSON.parse(jsonStr)
-
-            if (data.type === 'chunk') {
-              fullResponse += data.content
-              // Clear thinking status when we have actual content to display
-              setThinkingStatus('')
-              setMessages((prev: Message[]) => {
-                const newMessages = [...prev]
-                const lastIndex = newMessages.length - 1
-                if (lastIndex >= 0 && newMessages[lastIndex].role === 'assistant') {
-                  newMessages[lastIndex] = {
-                    ...newMessages[lastIndex],
-                    content: fullResponse,
-                  }
-                }
-                return newMessages
-              })
-            } else if (data.type === 'status') {
-              if (!data.content.includes('completed')) {
-                const statusText = data.content || 'Thinking...'
-                setThinkingStatus(statusText)
-              }
-            } else if (data.type === 'tool_status') {
-              // Handle rich tool status events with metrics
-              const newToolStatus = {
-                tool_name: data.tool_name,
-                status: data.status as 'started' | 'completed' | 'error',
-                description: data.description || `Using ${data.tool_name}`,
-                details: data.details,
-                duration_ms: data.duration_ms,
-                input_tokens: data.input_tokens,
-                output_tokens: data.output_tokens,
-              }
-
-              if (data.status === 'started') {
-                setToolStatus(newToolStatus)
-                setThinkingStatus(data.description || `Using ${data.tool_name}...`)
-              } else if (data.status === 'completed') {
-                // Add to recent tools list (keep last 5) with metrics
-                setRecentTools(prev => {
-                  const updated = [...prev, { ...newToolStatus, status: 'completed' as const }]
-                  return updated.slice(-5)
-                })
-                setToolStatus(null)
-              } else if (data.status === 'error') {
-                setRecentTools(prev => {
-                  const updated = [...prev, { ...newToolStatus, status: 'error' as const }]
-                  return updated.slice(-5)
-                })
-                setToolStatus(null)
-              }
-            } else if (data.type === 'chart') {
-              // Handle chart data
-              setMessages((prev) => {
-                const newMessages = [...prev]
-                const lastIndex = newMessages.length - 1
-
-                if (lastIndex >= 0 && newMessages[lastIndex].role === 'assistant') {
-                  const currentMetadata = newMessages[lastIndex].metadata || {}
-                  const currentCharts = currentMetadata.charts || []
-
-                  // Transform chart data to match ChartData interface from types.ts
-                  // Backend sends: {type: "chart", chart: {chart_type, library, title, data, ...}}
-                  const chart = data.chart || data // Support both formats
-                  const chartData = {
-                    type: chart.chart_type || data.chart_type || 'bar',
-                    title: chart.title || 'Chart',
-                    data: chart.data || data.chart_data || {},
-                    config: chart.config || data.chart_config || {}
-                  }
-
-                  newMessages[lastIndex] = {
-                    ...newMessages[lastIndex],
-                    metadata: {
-                      ...currentMetadata,
-                      charts: [...currentCharts, chartData]
-                    }
-                  }
-                }
-
-                return newMessages
-              })
-            } else if (data.type === 'done') {
-              setThinkingStatus('')
-              const sources = data.sources || []
-              responseSources = sources
-              
-              // Update message with sources and metadata (timing + tokens)
-              setMessages((prev) => {
-                const newMessages = [...prev]
-                const lastIndex = newMessages.length - 1
-                if (lastIndex >= 0 && newMessages[lastIndex].role === 'assistant') {
-                  newMessages[lastIndex] = {
-                    ...newMessages[lastIndex],
-                    sources: sources,
-                    metadata: {
-                      ...newMessages[lastIndex].metadata,
-                      sources: sources,
-                      usage: data.metadata ? {
-                        input_tokens: data.metadata.input_tokens || 0,
-                        output_tokens: data.metadata.output_tokens || 0,
-                        total_tokens: data.metadata.total_tokens || 0
-                      } : undefined,
-                      timing: data.metadata ? {
-                        duration: data.metadata.total_time,
-                        time_to_first_token: data.metadata.time_to_first_token
-                      } : undefined
-                    },
-                  }
-                }
-                return newMessages
-              })
-              
-              // Reload conversations to update message count
-              if (agentId) {
-                loadConversations()
-              }
-            } else if (data.type === 'error') {
-              console.error('Streaming error:', data.error)
-              throw new Error(data.error)
+      // Single loop handles both SSE (default) and WebSocket transports.
+      // The transport hook abstracts protocol differences — event handling is written once.
+      for await (const event of transport.sendMessage({
+        agent_name: agentName,
+        message,
+        conversation_id: activeConversation?.id,
+        attachments: attachments as unknown[],
+        llm_config_id: selectedModelId || undefined,
+        conversation_history: messages.slice(-10).map((msg) => ({
+          role: msg.role,
+          content: msg.content,
+        })),
+      })) {
+        if (event.type === 'chunk') {
+          fullResponse += event.content
+          setThinkingStatus('')
+          setMessages((prev: Message[]) => {
+            const newMessages = [...prev]
+            const lastIndex = newMessages.length - 1
+            if (lastIndex >= 0 && newMessages[lastIndex].role === 'assistant') {
+              newMessages[lastIndex] = { ...newMessages[lastIndex], content: fullResponse }
             }
-          } catch (e) {
-            if (e instanceof SyntaxError) {
-              console.error('SSE parse error:', e)
-            } else {
-              throw e
-            }
+            return newMessages
+          })
+        } else if (event.type === 'status') {
+          if (!event.content?.includes('completed')) {
+            setThinkingStatus(event.content || 'Thinking...')
           }
+        } else if (event.type === 'tool_status') {
+          const newToolStatus = {
+            tool_name: event.tool_name,
+            status: event.status,
+            description: event.description || `Using ${event.tool_name}`,
+            details: event.details as any,
+            duration_ms: event.duration_ms,
+            input_tokens: event.input_tokens,
+            output_tokens: event.output_tokens,
+          }
+          if (event.status === 'started') {
+            setToolStatus(newToolStatus)
+            setThinkingStatus(event.description || `Using ${event.tool_name}...`)
+          } else {
+            setRecentTools((prev) => [...prev, newToolStatus].slice(-5))
+            setToolStatus(null)
+          }
+        } else if (event.type === 'chart') {
+          setMessages((prev) => {
+            const newMessages = [...prev]
+            const lastIndex = newMessages.length - 1
+            if (lastIndex >= 0 && newMessages[lastIndex].role === 'assistant') {
+              const currentMetadata = newMessages[lastIndex].metadata || {}
+              // Backend sends: {type: "chart", chart: {chart_type, library, title, data, ...}}
+              const chart = (event as any).chart || event // Support both formats
+              const chartData = {
+                type: chart.chart_type || (event as any).chart_type || 'bar',
+                title: chart.title || 'Chart',
+                data: chart.data || (event as any).chart_data || {},
+                config: chart.config || (event as any).chart_config || {},
+              }
+              newMessages[lastIndex] = {
+                ...newMessages[lastIndex],
+                metadata: { ...currentMetadata, charts: [...(currentMetadata.charts || []), chartData] },
+              }
+            }
+            return newMessages
+          })
+        } else if (event.type === 'done') {
+          setThinkingStatus('')
+          responseSources = event.sources || []
+          setMessages((prev) => {
+            const newMessages = [...prev]
+            const lastIndex = newMessages.length - 1
+            if (lastIndex >= 0 && newMessages[lastIndex].role === 'assistant') {
+              newMessages[lastIndex] = {
+                ...newMessages[lastIndex],
+                sources: responseSources,
+                metadata: {
+                  ...newMessages[lastIndex].metadata,
+                  sources: responseSources,
+                  usage: event.metadata ? {
+                    input_tokens: event.metadata.input_tokens || 0,
+                    output_tokens: event.metadata.output_tokens || 0,
+                    total_tokens: event.metadata.total_tokens || 0,
+                  } : undefined,
+                  timing: event.metadata ? {
+                    duration: event.metadata.total_time,
+                    time_to_first_token: event.metadata.time_to_first_token,
+                  } : undefined,
+                },
+              }
+            }
+            return newMessages
+          })
+          if (agentId) loadConversations()
         }
       }
 
-      // Update context sidebar with sources from the response
       if (responseSources.length > 0) {
         setSources((prev) => {
           const combined = [...prev, ...responseSources]
