@@ -167,19 +167,20 @@ class SlackMessageHandler:
             # Extract mentions from the message, filtering out bot users
             mentioned_users = await self._extract_user_mentions(clean_text, client)
 
-            # Enhanced message to provide context to the agent
+            # Build mention context for the system note (not the user message)
             mentions_info = ""
             if mentioned_users:
-                user_list = ", ".join([f"{u['name']} ({u['id']})" for u in mentioned_users])
-                mentions_info = f", Mentioned Users: {user_list}"
+                user_list = ", ".join([u["name"] for u in mentioned_users])
+                mentions_info = f" (mentions: {user_list})"
 
-            permalink_info = f", Message Link: {permalink}" if permalink else ""
+            logger.info(f"Slack message: Channel: #{channel_name} (ID: {channel_id}), Message TS: {message_ts}")
 
-            context_message = f"""[Slack Context: Channel #{channel_name} (ID: {channel_id}), Message Timestamp: {message_ts}{mentions_info}{permalink_info}]
-
-{clean_text}"""
-
-            logger.info(f"CONTEXT MESSAGE: Channel: #{channel_name} (ID: {channel_id}), Message TS: {message_ts}")
+            # The agent receives only the clean user text — no raw Slack metadata.
+            # Injecting channel IDs and timestamps into the message confused the agent
+            # into thinking it received a forwarded Slack notification rather than a
+            # direct message, causing it to say it "lacks a Slack tool to reply."
+            # Slack context (channel, user) is passed via shared_state for tool use.
+            context_message = clean_text
 
             # Save user message with enhanced metadata
             user_message = Message(
@@ -250,7 +251,13 @@ class SlackMessageHandler:
                 attachments=None,
                 llm_config_id=None,
                 db=self.db_session,
-                shared_state={"slack_message_ts": message_ts, "slack_channel_id": channel_id},
+                shared_state={
+                    "slack_message_ts": message_ts,
+                    "slack_channel_id": channel_id,
+                    "slack_channel_name": channel_name,
+                    "slack_user_id": user_id,
+                    "slack_user_name": user_name,
+                },
             ):
                 if not event_data.startswith("data: "):
                     continue

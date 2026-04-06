@@ -448,6 +448,7 @@ export default function AgentToolsPage() {
   const [apiTokenModal, setApiTokenModal] = useState<{ open: boolean; appId: number | null; provider: string }>({ open: false, appId: null, provider: '' });
   const [apiTokenInput, setApiTokenInput] = useState('');
   const [savingApiToken, setSavingApiToken] = useState(false);
+  const [slackBots, setSlackBots] = useState<any[]>([]);
 
   useEffect(() => {
     loadAgent();
@@ -475,10 +476,25 @@ export default function AgentToolsPage() {
       const data = await apiClient.getAgent(agentName);
       setAgent(data);
       setAgentId(data.id);
-      // Load tools immediately using the just-fetched ID
-      await loadAgentTools(true, data.id);
+      // Load tools and Slack bots immediately using the just-fetched ID
+      await Promise.all([
+        loadAgentTools(true, data.id),
+        loadSlackBots(data.id),
+      ]);
     } catch (error) {
       console.error('Failed to load agent:', error);
+    }
+  };
+
+  const loadSlackBots = async (id?: string) => {
+    const resolvedId = id ?? agentId;
+    if (!resolvedId) return;
+    try {
+      const bots = await apiClient.getSlackBots(resolvedId);
+      setSlackBots(Array.isArray(bots) ? bots : []);
+    } catch (error) {
+      console.error('Failed to load Slack bots:', error);
+      setSlackBots([]);
     }
   };
 
@@ -1182,7 +1198,55 @@ export default function AgentToolsPage() {
   const openConfigModal = async (tool: Tool) => {
     // Create a copy of the tool to avoid mutating the original
     const toolCopy = JSON.parse(JSON.stringify(tool));
-    
+
+    // For Slack tools: rebuild the field to show bots + OAuth apps in one combined dropdown
+    const isSlackTool = tool.name.includes('slack') && tool.name.startsWith('internal_');
+    if (isSlackTool) {
+      const activeBots = slackBots.filter(b => b.is_active);
+      const botsToShow = activeBots.length > 0 ? activeBots : slackBots;
+      const botOptions = botsToShow.map(b => ({
+        value: `bot:${b.id}`,
+        label: `${b.bot_name}${b.slack_workspace_name ? ` (${b.slack_workspace_name})` : ''} — ${b.connection_status}`,
+        group: 'Slack Bots',
+      }));
+      const oauthOptions = getOAuthAppsForProvider('SLACK').map((app: any) => ({
+        value: `oauth:${app.id}`,
+        label: `${app.app_name}${app.has_access_token || app.has_api_token ? ' (connected)' : ''}`,
+        group: 'OAuth Apps',
+      }));
+      const allOptions = [...botOptions, ...oauthOptions];
+
+      // Replace the requiredField with a combined slack_connection field
+      toolCopy.requiredFields = [
+        {
+          key: 'slack_connection',
+          label: 'Slack Connection',
+          description: 'Select a Slack bot or OAuth app to use for this tool.',
+          placeholder: 'Select connection...',
+          type: 'select',
+          options: allOptions,
+          isSlackCombined: true,
+          noAccountsAvailable: allOptions.length === 0,
+          providerName: 'SLACK',
+        },
+      ];
+
+      // Reconstruct the current selection from saved agentTool
+      const savedTool = agentTools.find(t => t.tool_name === tool.name);
+      const initialConfig = getToolConfig(tool.name);
+      // Carry over any non-slack-connection keys from the saved config
+      const { slack_connection: _sc, ...otherConfig } = initialConfig as any;
+      let preselected = '';
+      if ((savedTool as any)?.slack_bot_id) {
+        preselected = `bot:${(savedTool as any).slack_bot_id}`;
+      } else if ((savedTool as any)?.oauth_app_id) {
+        preselected = `oauth:${(savedTool as any).oauth_app_id}`;
+      }
+      setSelectedTool(toolCopy);
+      setToolConfig({ ...otherConfig, slack_connection: preselected });
+      return;
+    }
+
     // Populate OAuth app options if tool uses OAuth
     if (toolCopy.oauthProvider) {
       const providerApps = getOAuthAppsForProvider(toolCopy.oauthProvider);
@@ -1258,17 +1322,26 @@ export default function AgentToolsPage() {
 
     setSaving(true);
     try {
-      // Extract oauth_app_id and custom_tool_id from config
-      const { oauth_app_id, custom_tool_id, operation_id, ...remainingConfig } = toolConfig;
-      
-      // Convert oauth_app_id to integer if it exists
-      const oauthAppId = oauth_app_id ? parseInt(oauth_app_id, 10) : undefined;
-      
+      // Extract oauth_app_id, slack_bot_id, custom_tool_id from config
+      const { oauth_app_id, slack_connection, custom_tool_id, operation_id, ...remainingConfig } = toolConfig as any;
+
+      // Parse combined slack_connection value (e.g. "bot:uuid" or "oauth:123")
+      let resolvedOauthAppId: number | undefined = oauth_app_id ? parseInt(oauth_app_id, 10) : undefined;
+      let resolvedSlackBotId: string | undefined = undefined;
+      if (slack_connection) {
+        if (slack_connection.startsWith('bot:')) {
+          resolvedSlackBotId = slack_connection.slice(4);
+        } else if (slack_connection.startsWith('oauth:')) {
+          resolvedOauthAppId = parseInt(slack_connection.slice(6), 10);
+        }
+      }
+
       await apiClient.addToolToAgent(agentId, {
         tool_name: selectedTool.name,
-        config: remainingConfig, // Send config without oauth_app_id
+        config: remainingConfig,
         enabled: true,
-        oauth_app_id: oauthAppId, // Send as separate field
+        oauth_app_id: resolvedOauthAppId,
+        slack_bot_id: resolvedSlackBotId,
         custom_tool_id: custom_tool_id || undefined,
         operation_id: operation_id || undefined
       });
@@ -1702,8 +1775,66 @@ export default function AgentToolsPage() {
                           {field.label}
                         </label>
                         <p className="text-xs text-gray-500 mb-1.5">{field.description}</p>
-                        {field.type === 'select' && field.key === 'oauth_app_id' ? (
-                          // Special handling for Connected Account dropdown
+                        {field.type === 'select' && field.key === 'slack_connection' ? (
+                          // Combined Slack bot + OAuth app dropdown
+                          (field as any).noAccountsAvailable ? (
+                            <div className="border border-amber-200 bg-amber-50 rounded-lg p-4">
+                              <div className="flex items-start gap-3">
+                                <AlertTriangle className="w-5 h-5 text-amber-600 flex-shrink-0 mt-0.5" />
+                                <div className="flex-1">
+                                  <p className="text-sm font-medium text-amber-800">No Slack connections found</p>
+                                  <p className="text-xs text-amber-700 mt-1">
+                                    Connect a Slack bot to this agent or add a Slack OAuth app.
+                                  </p>
+                                  <div className="flex gap-2 mt-3">
+                                    <Link
+                                      href={`/agents/${agentName}/slack-bots/create`}
+                                      className="inline-flex items-center gap-1.5 px-3 py-1.5 bg-amber-600 hover:bg-amber-700 text-white text-xs font-medium rounded-lg transition-colors"
+                                    >
+                                      <Link2 className="w-3.5 h-3.5" />
+                                      Add Slack Bot
+                                    </Link>
+                                    <Link
+                                      href="/oauth-apps/create"
+                                      className="inline-flex items-center gap-1.5 px-3 py-1.5 border border-amber-300 text-amber-700 text-xs font-medium rounded-lg hover:bg-amber-100 transition-colors"
+                                    >
+                                      Add OAuth App
+                                    </Link>
+                                  </div>
+                                </div>
+                              </div>
+                            </div>
+                          ) : (
+                            <div>
+                              <select
+                                value={toolConfig['slack_connection'] || ''}
+                                onChange={(e) => handleConfigChange('slack_connection', e.target.value)}
+                                className="w-full px-3 py-2 text-sm border border-gray-300 rounded-lg focus:ring-2 focus:ring-red-500 focus:border-red-500"
+                              >
+                                <option value="">Select connection (uses bot auto-detect if empty)</option>
+                                {(() => {
+                                  const groups: Record<string, any[]> = {};
+                                  (field.options || []).forEach((opt: any) => {
+                                    const g = opt.group || 'Other';
+                                    if (!groups[g]) groups[g] = [];
+                                    groups[g].push(opt);
+                                  });
+                                  return Object.entries(groups).map(([groupLabel, opts]) => (
+                                    <optgroup key={groupLabel} label={groupLabel}>
+                                      {opts.map((opt: any) => (
+                                        <option key={opt.value} value={opt.value}>{opt.label}</option>
+                                      ))}
+                                    </optgroup>
+                                  ));
+                                })()}
+                              </select>
+                              <p className="mt-1.5 text-xs text-gray-500">
+                                Leave empty to auto-detect the connected Slack bot.
+                              </p>
+                            </div>
+                          )
+                        ) : field.type === 'select' && field.key === 'oauth_app_id' ? (
+                          // Special handling for non-Slack Connected Account dropdown
                           (field as any).noAccountsAvailable ? (
                             <div className="border border-amber-200 bg-amber-50 rounded-lg p-4">
                               <div className="flex items-start gap-3">

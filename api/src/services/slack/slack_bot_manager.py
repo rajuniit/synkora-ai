@@ -1,7 +1,7 @@
 """Slack Bot Manager for managing bot lifecycle and operations."""
 
 import logging
-from datetime import UTC, datetime
+from datetime import datetime
 from typing import Any
 from uuid import UUID
 
@@ -196,7 +196,7 @@ class SlackBotManager:
                 if not is_active and slack_bot.connection_status == "connected" and slack_bot.is_socket_mode:
                     await self.deployment_service.deactivate_slack_bot(bot_id)
 
-            slack_bot.updated_at = datetime.now(UTC)
+            slack_bot.updated_at = datetime.utcnow()
             await self.db_session.commit()
             await self.db_session.refresh(slack_bot)
 
@@ -241,7 +241,7 @@ class SlackBotManager:
             await asyncio.sleep(1)
 
             # Soft delete
-            slack_bot.deleted_at = datetime.now(UTC)
+            slack_bot.deleted_at = datetime.utcnow()
             slack_bot.is_active = False
             slack_bot.connection_status = "disconnected"
 
@@ -310,7 +310,7 @@ class SlackBotManager:
                 # Event Mode: No worker needed, just mark as connected
                 slack_bot.is_active = True
                 slack_bot.connection_status = "connected"
-                slack_bot.last_connected_at = datetime.now(UTC)
+                slack_bot.last_connected_at = datetime.utcnow()
 
                 # Generate webhook URL if not already set
                 if not slack_bot.webhook_url:
@@ -389,7 +389,7 @@ class SlackBotManager:
             if slack_bot.is_event_mode:
                 # Event Mode: Just refresh connection status
                 slack_bot.connection_status = "connected"
-                slack_bot.last_connected_at = datetime.now(UTC)
+                slack_bot.last_connected_at = datetime.utcnow()
                 await self.db_session.commit()
                 logger.info(f"Event Mode Slack bot {bot_id} restarted (refreshed status)")
                 return True
