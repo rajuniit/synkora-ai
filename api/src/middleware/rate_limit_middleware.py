@@ -70,6 +70,9 @@ class RateLimitMiddleware:
         "/api/v1/redoc",
         "/api/v1/openapi.json",
         "/health",
+        "/api/health",
+        "/live",
+        "/ready",
     ]
 
     def __init__(

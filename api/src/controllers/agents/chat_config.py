@@ -5,6 +5,7 @@ Handles endpoints for managing agent chat customization
 
 import logging
 import uuid
+from typing import Literal
 
 from fastapi import APIRouter, Depends, HTTPException
 from pydantic import BaseModel, Field
@@ -31,6 +32,10 @@ class ChatConfigUpdate(BaseModel):
     chat_logo_url: str | None = Field(None, max_length=500)
     chat_background_color: str | None = Field(None, max_length=7)
     chat_font_family: str | None = Field(None, max_length=100)
+    chat_transport: Literal["sse", "websocket"] | None = Field(
+        None,
+        description="Chat transport protocol. 'sse' uses HTTP streaming (default); 'websocket' uses a persistent connection.",
+    )
 
 
 @router.get("/agents/{agent_name}/chat-config")
@@ -60,6 +65,7 @@ async def get_agent_chat_config(agent_name: str, db: AsyncSession = Depends(get_
             "chat_logo_url": chat_config.get("chat_logo_url", ""),
             "chat_background_color": chat_config.get("chat_background_color", "#ffffff"),
             "chat_font_family": chat_config.get("chat_font_family", "Inter"),
+            "chat_transport": chat_config.get("chat_transport", "sse"),
         }
 
         return {"success": True, "data": config}
@@ -117,6 +123,7 @@ async def update_agent_chat_config(
             "chat_logo_url": chat_config.get("chat_logo_url", ""),
             "chat_background_color": chat_config.get("chat_background_color", "#ffffff"),
             "chat_font_family": chat_config.get("chat_font_family", "Inter"),
+            "chat_transport": chat_config.get("chat_transport", "sse"),
         }
 
         return {"success": True, "message": "Chat configuration updated successfully", "data": updated_config}
