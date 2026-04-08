@@ -44,33 +44,40 @@ Synkora is an open-source platform for building AI-powered teammates. Create age
 
 ## See It In Action
 
-### 1. RajuClaw — Personal AI Assistant
-
-<video src="https://github.com/user-attachments/assets/ce64d4bc-c47e-48f6-af2d-9287d6b3b836" controls width="100%">
-  Your browser does not support the video tag.
-</video>
-
-> A personal AI assistant that can do everything — browsing, coding, scheduling, and more.
-
----
-
-### 2. Daily AI News Reporter — Setup
-
-<video src="https://github.com/user-attachments/assets/a590dc34-3744-4359-9254-357e0d95d5ee" controls width="100%">
-  Your browser does not support the video tag.
-</video>
-
-> Setting up a Daily AI News Reporter agent from the chat interface.
-
----
-
-### 3. Daily AI News Reporter — Email Newsletter Demo
-
-<video src="https://github.com/user-attachments/assets/4001f0a0-f82d-453e-9b0c-f6e16afd514d" controls width="100%">
-  Your browser does not support the video tag.
-</video>
-
-> Watch the Daily AI News Reporter automatically send a personalized AI news email digest.
+<table>
+  <tr>
+    <td align="center" width="50%">
+      <strong>RajuClaw — Personal AI Assistant</strong><br><br>
+      <video src="https://github.com/user-attachments/assets/ce64d4bc-c47e-48f6-af2d-9287d6b3b836" controls width="100%">
+        Your browser does not support the video tag.
+      </video>
+      <br><em>A personal AI assistant that can do everything — browsing, coding, scheduling, and more.</em>
+    </td>
+    <td align="center" width="50%">
+      <strong>Platform Engineer & Agents</strong><br><br>
+      <video src="https://github.com/user-attachments/assets/c27ebb0c-1742-4897-9f7f-eaa112d66470" controls width="100%">
+        Your browser does not support the video tag.
+      </video>
+      <br><em>Managing agents and platform operations with the Platform Engineer Agent.</em>
+    </td>
+  </tr>
+  <tr>
+    <td align="center" width="50%">
+      <strong>Daily AI News Reporter — Setup</strong><br><br>
+      <video src="https://github.com/user-attachments/assets/a590dc34-3744-4359-9254-357e0d95d5ee" controls width="100%">
+        Your browser does not support the video tag.
+      </video>
+      <br><em>Setting up a Daily AI News Reporter agent from the chat interface.</em>
+    </td>
+    <td align="center" width="50%">
+      <strong>Daily AI News Reporter — Email Newsletter Demo</strong><br><br>
+      <video src="https://github.com/user-attachments/assets/4001f0a0-f82d-453e-9b0c-f6e16afd514d" controls width="100%">
+        Your browser does not support the video tag.
+      </video>
+      <br><em>Watch the Daily AI News Reporter automatically send a personalized AI news email digest.</em>
+    </td>
+  </tr>
+</table>
 
 
 ## Key Features
