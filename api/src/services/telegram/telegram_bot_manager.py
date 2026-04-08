@@ -40,6 +40,7 @@ class TelegramBotManager:
         use_webhook: bool = False,
         webhook_url: str | None = None,
         webhook_secret: str | None = None,
+        created_by: UUID | None = None,
     ) -> TelegramBot:
         """
         Create a new Telegram bot configuration.
@@ -79,6 +80,7 @@ class TelegramBotManager:
                 webhook_secret=encrypted_webhook_secret,
                 is_active=True,
                 connection_status="disconnected",
+                created_by=created_by,
             )
 
             self.db_session.add(telegram_bot)

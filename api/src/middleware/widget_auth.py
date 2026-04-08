@@ -34,7 +34,7 @@ def _get_redis_rate_limiter():
             raise RuntimeError("Redis connection returned None")
         return redis
     except Exception as e:
-        logger.error(f"SECURITY: Redis unavailable for widget rate limiting: {e}")
+        logger.warning(f"SECURITY: Redis unavailable for widget rate limiting: {e}")
         raise RuntimeError("Rate limiting service temporarily unavailable. Please try again later.")
 
 

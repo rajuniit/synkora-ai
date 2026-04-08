@@ -95,7 +95,7 @@ async def _check_token_revocation(token: str, account_id: uuid.UUID, token_versi
         current_version = int(results[1]) if results[1] else 0
     except Exception as exc:
         # Fail closed on Redis errors — treat token as revoked.
-        logger.error(f"Redis pipeline auth check failed: {exc}")
+        logger.warning(f"Redis pipeline auth check failed: {exc}")
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,
             detail="Token has been revoked",

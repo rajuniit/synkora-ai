@@ -132,7 +132,7 @@ class OAuthStateService:
             key = f"{OAUTH_STATE_KEY_PREFIX}{state}"
             return redis_client.exists(key) > 0
         except Exception as e:
-            logger.error(f"Failed to validate OAuth state: {e}")
+            logger.warning(f"Failed to validate OAuth state: {e}")
             return False
 
     @staticmethod

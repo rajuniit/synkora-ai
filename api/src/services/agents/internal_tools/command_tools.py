@@ -472,7 +472,7 @@ def _validate_path(path: str, workspace_path: str | None = None) -> bool:
         logger.warning(f"Path validation failed: '{real_path}' is not within workspace '{real_workspace}'")
         return False
     except Exception as e:
-        logger.error(f"Path validation error: {e}")
+        logger.warning(f"Path validation error: {e}")
         return False
 
 
@@ -507,7 +507,7 @@ def _validate_url(url: str) -> bool:
         logger.warning(f"URL validation failed: '{url}' domain '{parsed.netloc}' is not allowed")
         return False
     except Exception as e:
-        logger.error(f"URL validation error: {e}")
+        logger.warning(f"URL validation error: {e}")
         return False
 
 

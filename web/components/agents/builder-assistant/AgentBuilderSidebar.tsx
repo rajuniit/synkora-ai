@@ -152,49 +152,49 @@ export function AgentBuilderSidebar({ onInsertContent, currentContext }: AgentBu
         for (const line of lines) {
           if (!line.trim() || !line.startsWith('data: ')) continue;
 
+          const jsonStr = line.slice(6).trim();
+          if (jsonStr === '[DONE]') continue;
+
+          let data: Record<string, unknown>;
           try {
-            const jsonStr = line.slice(6).trim();
-            if (jsonStr === '[DONE]') continue;
+            data = JSON.parse(jsonStr);
+          } catch {
+            continue; // skip malformed JSON
+          }
 
-            const data = JSON.parse(jsonStr);
+          if (data.type === 'error') {
+            throw new Error((data.error as string) || 'Something went wrong');
+          }
 
-            if (data.type === 'chunk') {
-              fullResponse += data.content;
-              setMessages((prev: Message[]) => {
-                const newMessages = [...prev];
-                const lastIndex = newMessages.length - 1;
-                if (lastIndex >= 0 && newMessages[lastIndex].role === 'assistant') {
-                  newMessages[lastIndex] = {
-                    ...newMessages[lastIndex],
-                    content: fullResponse,
-                  };
-                }
-                return newMessages;
-              });
-            } else if (data.type === 'error') {
-              throw new Error(data.error || 'An error occurred');
-            }
-          } catch (e) {
-            // Skip invalid JSON
-            console.error('Parse error:', e);
+          if (data.type === 'chunk') {
+            fullResponse += data.content;
+            setMessages((prev: Message[]) => {
+              const newMessages = [...prev];
+              const lastIndex = newMessages.length - 1;
+              if (lastIndex >= 0 && newMessages[lastIndex].role === 'assistant') {
+                newMessages[lastIndex] = {
+                  ...newMessages[lastIndex],
+                  content: fullResponse,
+                };
+              }
+              return newMessages;
+            });
           }
         }
       }
-    } catch (error) {
+    } catch (error: any) {
       console.error('Error sending message:', error);
-      const errorMessage: Message = {
-        role: 'assistant',
-        content: 'Sorry, I encountered an error. Please try again.',
-        timestamp: new Date()
-      };
+      const msg = error?.message || 'Failed to get response';
       setMessages(prev => {
         const newMessages = [...prev];
-        if (newMessages[newMessages.length - 1].role === 'assistant' && !newMessages[newMessages.length - 1].content) {
-          newMessages[newMessages.length - 1] = errorMessage;
+        const last = newMessages[newMessages.length - 1];
+        if (last?.role === 'assistant') {
+          const existing = last.content ? `${last.content}\n\n` : '';
+          newMessages[newMessages.length - 1] = { ...last, content: `${existing}⚠ ${msg}` };
         }
         return newMessages;
       });
-      toast.error('Failed to get response from assistant');
+      toast.error(msg);
     } finally {
       setIsLoading(false);
     }

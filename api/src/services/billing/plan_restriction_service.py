@@ -206,6 +206,7 @@ class PlanRestrictionService:
                 "mcp_servers": features.get("mcp_servers", False),
                 "knowledge_bases": features.get("knowledge_bases", False),
                 "custom_tools": features.get("custom_tools", False),
+                "platform_engineer_agent": features.get("platform_engineer_agent", False),
             },
         }
 

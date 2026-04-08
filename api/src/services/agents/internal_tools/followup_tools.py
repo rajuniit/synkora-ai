@@ -207,7 +207,7 @@ async def internal_create_followup_item(
             }
 
     except Exception as e:
-        logger.error(f"Error creating followup item: {e}", exc_info=True)
+        logger.warning(f"Error creating followup item: {e}", exc_info=True)
         return {"success": False, "error": str(e)}
 
 
@@ -283,7 +283,7 @@ async def internal_list_pending_followups(
             return {"success": True, "followup_items": [item.to_dict() for item in items], "total": len(items)}
 
     except Exception as e:
-        logger.error(f"Error listing followup items: {e}", exc_info=True)
+        logger.warning(f"Error listing followup items: {e}", exc_info=True)
         return {"success": False, "error": str(e)}
 
 
@@ -394,7 +394,7 @@ async def internal_send_followup_message(
             }
 
     except Exception as e:
-        logger.error(f"Error sending followup message: {e}", exc_info=True)
+        logger.warning(f"Error sending followup message: {e}", exc_info=True)
         return {"success": False, "error": str(e)}
 
 
@@ -456,7 +456,7 @@ async def internal_mark_followup_complete(
             result = await db.execute(
                 select(ScheduledTask).filter(
                     ScheduledTask.task_type == "followup_reminder",
-                    ScheduledTask.config["followup_item_id"].astext == str(followup_item.id),
+                    ScheduledTask.config["followup_item_id"].as_string() == str(followup_item.id),
                 )
             )
             scheduled_task = result.scalar_one_or_none()
@@ -474,7 +474,7 @@ async def internal_mark_followup_complete(
             }
 
     except Exception as e:
-        logger.error(f"Error marking followup complete: {e}", exc_info=True)
+        logger.warning(f"Error marking followup complete: {e}", exc_info=True)
         return {"success": False, "error": str(e)}
 
 
@@ -530,7 +530,7 @@ async def internal_get_followup_history(
             }
 
     except Exception as e:
-        logger.error(f"Error getting followup history: {e}", exc_info=True)
+        logger.warning(f"Error getting followup history: {e}", exc_info=True)
         return {"success": False, "error": str(e)}
 
 
@@ -573,7 +573,7 @@ async def internal_search_slack_mentions(
         return results
 
     except Exception as e:
-        logger.error(f"Error searching Slack mentions: {e}", exc_info=True)
+        logger.warning(f"Error searching Slack mentions: {e}", exc_info=True)
         return {"success": False, "error": str(e)}
 
 
@@ -625,7 +625,7 @@ async def internal_update_followup_priority(
             }
 
     except Exception as e:
-        logger.error(f"Error updating followup priority: {e}", exc_info=True)
+        logger.warning(f"Error updating followup priority: {e}", exc_info=True)
         return {"success": False, "error": str(e)}
 
 
@@ -700,5 +700,5 @@ async def internal_escalate_followup(
             }
 
     except Exception as e:
-        logger.error(f"Error escalating followup: {e}", exc_info=True)
+        logger.warning(f"Error escalating followup: {e}", exc_info=True)
         return {"success": False, "error": str(e)}

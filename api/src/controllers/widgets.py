@@ -676,8 +676,8 @@ async def widget_chat(request: WidgetChatRequest, http_request: Request, db: Asy
 
         # Block if threat detected
         if not scan_result["is_safe"]:
-            logger.error(
-                f"SECURITY VIOLATION: Prompt injection blocked. Widget: {widget.id}, Risk: {scan_result['risk_score']}"
+            logger.warning(
+                f"SECURITY: Prompt injection blocked. Widget: {widget.id}, Risk: {scan_result['risk_score']}"
             )
 
             async def generate_security_block():

@@ -337,21 +337,29 @@ export function useChatMessages({ agentName }: UseChatMessagesProps): UseChatMes
               setMessages((prev: Message[]) => {
                 const newMessages = [...prev]
                 const lastIndex = newMessages.length - 1
-                const errorContent = `Error: ${data.error}`
+                const errorMsg = (data.error as string) || 'Something went wrong'
 
-                // If last message is assistant, update it with error
                 if (lastIndex >= 0 && newMessages[lastIndex].role === 'assistant') {
-                  newMessages[lastIndex] = {
-                    ...newMessages[lastIndex],
-                    content: data.error,
-                    isError: true
+                  const existing = newMessages[lastIndex].content
+                  if (existing) {
+                    // Mid-stream error: append inline so partial content is preserved
+                    newMessages[lastIndex] = {
+                      ...newMessages[lastIndex],
+                      content: `${existing}\n\n---\n⚠️ ${errorMsg}`,
+                    }
+                  } else {
+                    // No content yet: show as error
+                    newMessages[lastIndex] = {
+                      ...newMessages[lastIndex],
+                      content: errorMsg,
+                      isError: true,
+                    }
                   }
                 } else {
-                  // No assistant message exists yet - create one with the error
                   newMessages.push({
                     id: `error-${Date.now()}`,
                     role: 'assistant',
-                    content: data.error,
+                    content: errorMsg,
                     isError: true,
                     timestamp: new Date()
                   })
@@ -393,8 +401,8 @@ export function useChatMessages({ agentName }: UseChatMessagesProps): UseChatMes
         const newMessages = [...prev]
         const lastMessage = newMessages[newMessages.length - 1]
         if (lastMessage && lastMessage.role === 'assistant' && !lastMessage.content) {
-          // No content was received - show a fallback error
-          lastMessage.content = 'Error: Failed to get a response. Please check your API key configuration and try again.'
+          lastMessage.content = 'Failed to get a response. Please check your API key configuration and try again.'
+          lastMessage.isError = true
         }
         return newMessages
       })
@@ -404,10 +412,15 @@ export function useChatMessages({ agentName }: UseChatMessagesProps): UseChatMes
       setMessages((prev: Message[]) => {
         const newMessages = [...prev]
         const lastMessage = newMessages[newMessages.length - 1]
-        if (lastMessage.role === 'assistant') {
+        if (lastMessage?.role === 'assistant') {
           const errorMsg = error instanceof Error ? error.message : 'Sorry, I encountered an error. Please try again.'
-          lastMessage.content = errorMsg
-          lastMessage.isError = true
+          const existing = lastMessage.content
+          if (existing) {
+            lastMessage.content = `${existing}\n\n---\n⚠️ ${errorMsg}`
+          } else {
+            lastMessage.content = errorMsg
+            lastMessage.isError = true
+          }
         }
         return newMessages
       })

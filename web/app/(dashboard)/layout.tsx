@@ -5,14 +5,17 @@ import { useRouter, usePathname } from 'next/navigation'
 import { Sidebar } from '@/components/layout/Sidebar'
 import { Header } from '@/components/layout/Header'
 import { useAuth } from '@/lib/hooks/useAuth'
+import { useAuthStore } from '@/lib/store/authStore'
 import { secureStorage } from '@/lib/auth/secure-storage'
+import { PlatformEngineerPanel } from '@/components/agents/platform-engineer/PlatformEngineerPanel'
 
 export default function DashboardLayout({
   children,
 }: {
   children: React.ReactNode
 }) {
-  const { user, isLoading, fetchUser } = useAuth()
+  const { user, isLoading } = useAuth()
+  const fetchUser = useAuthStore((state) => state.fetchUser)
   const router = useRouter()
   const pathname = usePathname()
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false)
@@ -38,9 +41,9 @@ export default function DashboardLayout({
 
   if (isLoading) {
     return (
-      <div className="min-h-screen flex items-center justify-center bg-gradient-to-br from-amber-50 via-yellow-50 to-white">
+      <div className="min-h-screen flex items-center justify-center bg-gradient-to-br from-red-50 via-red-50/30 to-white">
         <div className="text-center">
-          <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-amber-600 mx-auto"></div>
+          <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-red-600 mx-auto"></div>
           <p className="mt-4 text-gray-600">Loading...</p>
         </div>
       </div>
@@ -63,6 +66,7 @@ export default function DashboardLayout({
           {children}
         </main>
       </div>
+      <PlatformEngineerPanel />
     </div>
   )
 }

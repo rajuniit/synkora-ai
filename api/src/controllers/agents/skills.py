@@ -84,7 +84,7 @@ async def add_predefined_skill(
             error_code = e.response.get("Error", {}).get("Code", "Unknown")
             if error_code == "NoSuchKey":
                 raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=f"Skill '{skill_id}' not found in S3")
-            logger.error(f"S3 error fetching skill: {e}")
+            logger.warning(f"S3 error fetching skill: {e}")
             raise HTTPException(
                 status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail=f"Failed to fetch skill from S3: {error_code}"
             )

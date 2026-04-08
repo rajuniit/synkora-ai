@@ -214,6 +214,7 @@ This is an automated scheduled task. Complete it thoroughly and provide your fin
                             attachments=None,
                             llm_config_id=None,
                             db=async_db,
+                            user_id=str(task.created_by) if task.created_by else None,
                             shared_state=task_shared_state,
                         ):
                             # Parse SSE events
@@ -678,6 +679,7 @@ async def _run_autonomous_agent(
             attachments=None,
             llm_config_id=None,
             db=async_db,
+            user_id=str(task.created_by) if task.created_by else None,
             shared_state=task_shared_state,
         ):
             if sse_event.startswith("data: "):

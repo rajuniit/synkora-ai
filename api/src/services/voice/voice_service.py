@@ -63,7 +63,7 @@ class VoiceService:
             return decrypted_key
 
         except Exception as e:
-            logger.error(f"Error retrieving API key for {provider.value}: {str(e)}")
+            logger.warning(f"Error retrieving API key for {provider.value}: {str(e)}")
             return None
 
     async def _get_stt_provider(self, provider_name: str, config: dict[str, Any] | None = None) -> BaseSTTProvider:
@@ -174,7 +174,7 @@ class VoiceService:
             return result
 
         except Exception as e:
-            logger.error(f"Transcription error with {provider}: {str(e)}")
+            logger.warning(f"Transcription error with {provider}: {str(e)}")
             raise
 
     async def synthesize(
@@ -212,7 +212,7 @@ class VoiceService:
             return audio_data
 
         except Exception as e:
-            logger.error(f"Synthesis error with {provider}: {str(e)}")
+            logger.warning(f"Synthesis error with {provider}: {str(e)}")
             raise
 
     async def get_voices(self, provider: str = "openai_tts", language: str | None = None) -> list[dict[str, Any]]:
@@ -231,7 +231,7 @@ class VoiceService:
             return await tts_provider.get_voices(language)
 
         except Exception as e:
-            logger.error(f"Error getting voices from {provider}: {str(e)}")
+            logger.warning(f"Error getting voices from {provider}: {str(e)}")
             raise
 
     async def get_supported_providers(self) -> dict[str, Any]:

@@ -98,7 +98,7 @@ class GoogleDriveOAuth(BaseOAuthService):
             ) as response:
                 if response.status != 200:
                     error_data = await response.text()
-                    logger.error(f"Google Drive token exchange failed: {error_data}")
+                    logger.warning(f"Google Drive token exchange failed: {error_data}")
                     raise ValueError(f"Failed to exchange code for token: {response.status}")
 
                 token_data = await response.json()
@@ -133,7 +133,7 @@ class GoogleDriveOAuth(BaseOAuthService):
             ) as response:
                 if response.status != 200:
                     error_data = await response.text()
-                    logger.error(f"Google Drive token refresh failed: {error_data}")
+                    logger.warning(f"Google Drive token refresh failed: {error_data}")
                     raise ValueError(f"Failed to refresh token: {response.status}")
 
                 token_data = await response.json()

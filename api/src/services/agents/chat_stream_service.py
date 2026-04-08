@@ -131,12 +131,16 @@ class ChatStreamService:
                             yield await generate_error_event("Conversation not found or access denied")
                             return
 
-                    # Check 2: Verify agent access (tenant-level isolation OR public agent)
+                    # Check 2: Verify agent access (tenant-level isolation OR public agent OR platform agent)
                     if conversation.agent_id and tenant_id:
                         agent_result = await db.execute(
                             select(Agent).filter(
                                 Agent.id == conversation.agent_id,
-                                or_(Agent.tenant_id == tenant_id, Agent.is_public.is_(True)),
+                                or_(
+                                    Agent.tenant_id == tenant_id,
+                                    Agent.is_public.is_(True),
+                                    Agent.agent_metadata["is_platform_agent"].as_boolean().is_(True),
+                                ),
                             )
                         )
                         agent_check = agent_result.scalar_one_or_none()
@@ -227,7 +231,7 @@ class ChatStreamService:
 
             if not agent or not agent.llm_client:
                 error_msg = f"Agent '{agent_name}' LLM client not initialized properly"
-                logger.error(f"❌ {error_msg}")
+                logger.warning(f"❌ {error_msg}")
                 yield await generate_error_event(error_msg)
                 return
 
@@ -295,6 +299,11 @@ class ChatStreamService:
                 # Emit warning as status event (non-blocking)
                 yield await generate_status_event(f"Context usage: {guard_result.remaining_percentage:.0%} remaining")
 
+            # Register platform tools BEFORE _select_tools so their names are included
+            platform_tool_names = self.tool_registry.register_platform_tools_for_agent(db_agent)
+            if platform_tool_names:
+                mcp_tool_names = list(set((mcp_tool_names or []) + platform_tool_names))
+
             final_tool_names = self._select_tools(agent, agent_tools, message, mcp_tool_names)
 
             trace_id = self._create_trace(agent, agent_name, message, final_tool_names)
@@ -314,6 +323,7 @@ class ChatStreamService:
                     db=db,
                     user_id=user_id,
                     shared_state=shared_state,
+                    caller_tenant_id=tenant_id,
                 ):
                     yield event
             else:
@@ -371,7 +381,7 @@ class ChatStreamService:
                         db=db,
                     )
                     self.chat_service.queue_credit_deduction(
-                        tenant_id=db_agent.tenant_id,
+                        tenant_id=tenant_id or db_agent.tenant_id,
                         agent_id=db_agent.id,
                         conversation_id=conversation_uuid,
                         message_id=assistant_message.id,
@@ -429,14 +439,14 @@ class ChatStreamService:
 
         if not sub_agents:
             error_msg = f"Workflow agent '{agent_name}' has no sub-agents configured"
-            logger.error(error_msg)
+            logger.warning(error_msg)
             yield await generate_error_event(error_msg)
             return
 
         executor = WorkflowFactory.create_executor(db_agent, sub_agents)
         if not executor:
             error_msg = f"Failed to create workflow executor for agent '{agent_name}'"
-            logger.error(error_msg)
+            logger.warning(error_msg)
             yield await generate_error_event(error_msg)
             return
 
@@ -823,7 +833,7 @@ class ChatStreamService:
                     pass  # Ignore individual thinking chunks to avoid flooding
 
                 elif event_type == "error":
-                    logger.error(f"Claude Code Agent error: {event.get('error')}")
+                    logger.warning(f"Claude Code Agent error: {event.get('error')}")
                     yield await generate_error_event(event.get("error", "Unknown error"))
                     return
 
@@ -869,7 +879,7 @@ class ChatStreamService:
                 )
 
         except ImportError as e:
-            logger.error(f"Claude Agent SDK not installed: {e}")
+            logger.warning(f"Claude Agent SDK not installed: {e}")
             yield await generate_error_event(
                 "Claude Agent SDK is not installed. Install with: pip install claude-agent-sdk"
             )
@@ -1102,7 +1112,7 @@ class ChatStreamService:
             )
 
         except Exception as e:
-            logger.error(f"Enhanced RAG retrieval failed: {e}")
+            logger.warning(f"Enhanced RAG retrieval failed: {e}")
             # Fall back to empty results on error
             context_text = ""
 
@@ -1395,6 +1405,7 @@ class ChatStreamService:
         db: AsyncSession,
         user_id: str | None = None,
         shared_state: dict[str, Any] | None = None,
+        caller_tenant_id: Any | None = None,
     ) -> AsyncGenerator[str, None]:
         import uuid as uuid_module
 
@@ -1409,8 +1420,12 @@ class ChatStreamService:
             except ValueError:
                 logger.warning(f"Invalid user_id format: {user_id}")
 
+        # For platform engineer agents the agent lives in the platform tenant (UUID zeros),
+        # but all tool queries must use the CALLING tenant's ID.
+        effective_tenant_id = caller_tenant_id if caller_tenant_id else db_agent.tenant_id
+
         runtime_context = RuntimeContext(
-            tenant_id=db_agent.tenant_id,
+            tenant_id=effective_tenant_id,
             agent_id=db_agent.id,
             db_session=db,
             llm_client=agent.llm_client,

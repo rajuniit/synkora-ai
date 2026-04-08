@@ -213,7 +213,7 @@ def validate_url(
         return True, None
 
     except Exception as e:
-        logger.error(f"URL validation error: {e}")
+        logger.warning(f"URL validation error: {e}")
         return False, f"Invalid URL: {str(e)}"
 
 

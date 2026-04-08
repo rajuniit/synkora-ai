@@ -211,7 +211,7 @@ class ClaudeCodeAgent(BaseAgent):
                 "claude-agent-sdk is required for ClaudeCodeAgent. Install with: pip install claude-agent-sdk"
             )
         except Exception as e:
-            logger.error(f"Claude Code Agent execution failed: {e}", exc_info=True)
+            logger.warning(f"Claude Code Agent execution failed: {e}", exc_info=True)
             raise
 
     async def execute_stream(
@@ -578,7 +578,7 @@ class ClaudeCodeAgent(BaseAgent):
                 "error": "claude-agent-sdk is not installed. Install with: pip install claude-agent-sdk",
             }
         except Exception as e:
-            logger.error(f"Claude Code Agent streaming failed: {e}", exc_info=True)
+            logger.warning(f"Claude Code Agent streaming failed: {e}", exc_info=True)
             yield {"type": "error", "error": str(e)}
 
     async def resume_session(

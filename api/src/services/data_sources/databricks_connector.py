@@ -225,10 +225,10 @@ class DatabricksConnector(BaseConnector):
                 return result
 
         except ValueError as e:
-            logger.error(f"Invalid identifier in get_table_schema: {e}")
+            logger.warning(f"Invalid identifier in get_table_schema: {e}")
             return {"success": False, "message": f"Invalid identifier: {str(e)}", "error": str(e)}
         except Exception as e:
-            logger.error(f"Failed to get table schema: {e}")
+            logger.warning(f"Failed to get table schema: {e}")
             return {"success": False, "message": f"Failed to get table schema: {str(e)}", "error": str(e)}
 
     async def sync(self, incremental: bool = True) -> dict[str, Any]:

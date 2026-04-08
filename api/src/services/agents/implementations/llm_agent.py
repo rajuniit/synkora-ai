@@ -84,7 +84,7 @@ class LLMAgent(BaseAgent):
             }
 
         except Exception as e:
-            logger.error(f"LLM agent execution failed: {e}", exc_info=True)
+            logger.warning(f"LLM agent execution failed: {e}", exc_info=True)
             raise
 
 

@@ -139,7 +139,7 @@ class MailgunProvider(BaseEmailProvider):
                     "domain": domain_info.get("domain", {}).get("name"),
                 }
             elif response.status_code == 401:
-                logger.error("Mailgun authentication failed - invalid API key")
+                logger.warning("Mailgun authentication failed - invalid API key")
                 return {"success": False, "message": "Authentication failed - check your API key"}
             elif response.status_code == 404:
                 logger.error(f"Mailgun domain not found: {domain}")

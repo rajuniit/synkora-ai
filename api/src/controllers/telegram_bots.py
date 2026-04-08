@@ -11,7 +11,8 @@ from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from src.core.database import get_async_db
-from src.middleware.auth_middleware import get_current_tenant_id
+from src.middleware.auth_middleware import get_current_account, get_current_tenant_id
+from src.models import Account
 from src.models.agent import Agent
 from src.models.telegram_bot import TelegramBot
 from src.services.telegram.telegram_bot_manager import TelegramBotManager
@@ -183,6 +184,7 @@ def _bot_to_response(bot) -> TelegramBotResponse:
 async def create_telegram_bot(
     request: CreateTelegramBotRequest,
     db: AsyncSession = Depends(get_async_db),
+    current_account: Account = Depends(get_current_account),
     tenant_id: UUID = Depends(get_current_tenant_id),
 ):
     """
@@ -207,6 +209,7 @@ async def create_telegram_bot(
             use_webhook=request.use_webhook,
             webhook_url=request.webhook_url,
             webhook_secret=request.webhook_secret,
+            created_by=current_account.id,
         )
 
         return _bot_to_response(bot)
@@ -241,7 +244,7 @@ async def validate_telegram_token(
             return {"valid": False, "message": result["message"], "bot_info": {}}
 
     except Exception as e:
-        logger.error(f"Error validating Telegram token: {str(e)}")
+        logger.warning(f"Error validating Telegram token: {str(e)}")
         raise HTTPException(status_code=500, detail="Failed to validate token")
 
 

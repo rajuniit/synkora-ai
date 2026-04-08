@@ -331,7 +331,7 @@ class PaddleService:
             }
 
         except Exception as e:
-            logger.error(f"Failed to update subscription: {e}")
+            logger.warning(f"Failed to update subscription: {e}")
             raise Exception(f"Failed to update subscription: {str(e)}")
 
     async def cancel_subscription(self, subscription_id: str, effective_from: str = "next_billing_period") -> bool:
@@ -352,7 +352,7 @@ class PaddleService:
             return True
 
         except Exception as e:
-            logger.error(f"Failed to cancel subscription: {e}")
+            logger.warning(f"Failed to cancel subscription: {e}")
             raise Exception(f"Failed to cancel subscription: {str(e)}")
 
     async def pause_subscription(self, subscription_id: str, effective_from: str = "next_billing_period") -> bool:

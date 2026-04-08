@@ -332,5 +332,5 @@ async def internal_web_fetch(
     except httpx.ConnectError as e:
         return {"url": url, "error": f"Connection error: {str(e)}"}
     except Exception as e:
-        logger.error(f"Error fetching URL {url}: {e}", exc_info=True)
+        logger.warning(f"Error fetching URL {url}: {e}", exc_info=True)
         return {"url": url, "error": f"Failed to fetch URL: {str(e)}"}

@@ -541,5 +541,5 @@ async def internal_get_file_content(
         if "404" in err_str or "Not Found" in err_str:
             logger.warning(f"File not found via GitHub API: {e}")
         else:
-            logger.error(f"Failed to get file content via GitHub API: {e}", exc_info=True)
+            logger.warning(f"Failed to get file content via GitHub API: {e}", exc_info=True)
         return {"success": False, "error": err_str}

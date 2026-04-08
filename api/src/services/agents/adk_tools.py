@@ -1309,10 +1309,10 @@ Supports: Git, GitHub CLI, npm, pip, Docker, file operations (ls, cat, mkdir, et
 
             if missing_params:
                 error_msg = f"Missing required parameter(s) for tool '{name}': {', '.join(missing_params)}"
-                logger.error(f"❌ {error_msg}")
-                logger.error(f"   Tool: {name}")
-                logger.error(f"   Provided arguments: {list(arguments.keys()) if arguments else '(empty)'}")
-                logger.error(f"   Required parameters: {required_params}")
+                logger.info(f"❌ {error_msg}")
+                logger.debug(f"   Tool: {name}")
+                logger.debug(f"   Provided arguments: {list(arguments.keys()) if arguments else '(empty)'}")
+                logger.debug(f"   Required parameters: {required_params}")
 
                 # Return detailed error that will help LLM fix the call
                 properties = tool_params.get("properties", {})
@@ -1397,8 +1397,8 @@ Supports: Git, GitHub CLI, npm, pip, Docker, file operations (ls, cat, mkdir, et
         except TypeError as e:
             # Handle TypeError specifically (usually means wrong arguments)
             error_str = str(e)
-            logger.error(f"❌ TypeError in tool execution ({name}): {error_str}")
-            logger.error(f"   Provided arguments: {list(arguments.keys()) if arguments else '(empty)'}")
+            logger.info(f"TypeError in tool execution ({name}): {error_str}")
+            logger.debug(f"   Provided arguments: {list(arguments.keys()) if arguments else '(empty)'}")
 
             # Extract missing parameter from error message if possible
             if "missing" in error_str and "required positional argument" in error_str:
@@ -1511,7 +1511,7 @@ Supports: Git, GitHub CLI, npm, pip, Docker, file operations (ls, cat, mkdir, et
                                     result = await exec.execute(op_id, kwargs)
                                     return result
                                 except Exception as e:
-                                    logger.error(f"Custom tool execution error ({op_id}): {e}")
+                                    logger.warning(f"Custom tool execution error ({op_id}): {e}")
                                     return {"error": str(e)}
 
                             return custom_tool_wrapper
@@ -1743,7 +1743,7 @@ Supports: Git, GitHub CLI, npm, pip, Docker, file operations (ls, cat, mkdir, et
                                         return {"result": str(result)}
 
                                 except Exception as e:
-                                    logger.error(f"MCP tool execution error ({mcp_server_name}.{mcp_tool_name}): {e}")
+                                    logger.warning(f"MCP tool execution error ({mcp_server_name}.{mcp_tool_name}): {e}")
                                     return {"error": str(e)}
 
                             return mcp_tool_wrapper
@@ -1773,6 +1773,40 @@ Supports: Git, GitHub CLI, npm, pip, Docker, file operations (ls, cat, mkdir, et
         except Exception as e:
             logger.error(f"Failed to load agent MCP tools: {e}", exc_info=True)
             return []
+
+    def register_platform_tools_for_agent(self, agent: Any) -> list[str]:
+        """
+        If agent is a platform engineer agent, load platform management tools.
+
+        Called from ChatStreamService BEFORE _select_tools() so the tool names
+        are included in the final tool list passed to the LLM.
+
+        Returns the list of registered platform tool names (empty for non-platform agents).
+        """
+        is_platform_eng = (agent.agent_metadata or {}).get("is_platform_engineer", False)
+        if not is_platform_eng:
+            return []
+        from src.services.agents.tool_registrations.platform_tools_registry import register_platform_tools
+        from src.services.agents.tool_registrations.scheduler_tools_registry import register_scheduler_tools
+
+        register_platform_tools(self)
+        register_scheduler_tools(self)
+        logger.info("Registered platform engineer tools + scheduler tools for agent '%s'", agent.agent_name)
+        return [
+            "platform_list_agents",
+            "platform_get_available_tools",
+            "platform_check_integration",
+            "platform_create_agent",
+            "platform_update_agent",
+            "platform_create_slack_bot",
+            "platform_create_telegram_bot",
+            "platform_list_agent_channels",
+            "platform_delete_agent_channel",
+            "internal_create_cron_scheduled_task",
+            "internal_create_scheduled_task",
+            "internal_list_scheduled_tasks",
+            "internal_delete_scheduled_task",
+        ]
 
 
 # ---------------------------------------------------------------------------
@@ -2230,7 +2264,7 @@ async def github_list_pull_requests(
 
         return {"repository": f"{owner}/{repo}", "pull_requests": results, "authenticated": bool(token)}
     except Exception as e:
-        logger.error(f"GitHub list pull requests error: {e}")
+        logger.warning(f"GitHub list pull requests error: {e}")
         return {"error": str(e)}
 
 
@@ -2364,7 +2398,7 @@ async def github_list_my_repos(limit: int = 10, config: dict[str, Any] | None = 
         token = config.get("GITHUB_OAUTH_TOKEN")
 
         if not token:
-            logger.error("No GitHub OAuth token found in config")
+            logger.info("No GitHub OAuth token found in config")
             return {"error": "GitHub OAuth token not configured. Please set up GitHub OAuth in OAuth Apps."}
 
         logger.info(f"Using GitHub OAuth token (length: {len(token)})")

@@ -49,7 +49,7 @@ class CronValidator:
             }
 
         except Exception as e:
-            logger.error(f"Error validating cron expression: {str(e)}")
+            logger.warning(f"Error validating cron expression: {str(e)}")
             return {"is_valid": False, "error": str(e)}
 
     @staticmethod

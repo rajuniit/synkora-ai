@@ -400,7 +400,7 @@ class EmailService:
                 }
             else:
                 error_msg = response.text or f"HTTP {response.status_code}"
-                logger.error(f"Mailgun API returned status {response.status_code}: {error_msg}")
+                logger.warning(f"Mailgun API returned status {response.status_code}: {error_msg}")
                 return {
                     "success": False,
                     "message": f"Mailgun API error: {error_msg}",
@@ -409,7 +409,7 @@ class EmailService:
                 }
 
         except requests.exceptions.RequestException as e:
-            logger.error(f"Mailgun API request failed: {str(e)}")
+            logger.warning(f"Mailgun API request failed: {str(e)}")
             return {"success": False, "message": f"Mailgun API request failed: {str(e)}", "provider": "mailgun"}
         except Exception as e:
             logger.error(f"Mailgun send failed: {str(e)}")
@@ -435,7 +435,7 @@ class EmailService:
             api_key = credentials.get("api_key")
 
             if not api_key:
-                logger.error("Brevo API key not found in config.credentials.api_key")
+                logger.warning("Brevo API key not found in config.credentials.api_key")
                 return {"success": False, "message": "Brevo API key is not configured", "provider": "brevo"}
 
             sender_email = from_email or settings.get("from_email")
@@ -476,11 +476,11 @@ class EmailService:
                 }
 
             error_msg = response.text or f"HTTP {response.status_code}"
-            logger.error(f"Brevo API returned status {response.status_code}: {error_msg}")
+            logger.warning(f"Brevo API returned status {response.status_code}: {error_msg}")
             return {"success": False, "message": f"Brevo API error: {error_msg}", "provider": "brevo"}
 
         except requests.exceptions.RequestException as e:
-            logger.error(f"Brevo API request failed: {str(e)}")
+            logger.warning(f"Brevo API request failed: {str(e)}")
             return {"success": False, "message": f"Brevo API request failed: {str(e)}", "provider": "brevo"}
         except Exception as e:
             logger.error(f"Brevo send failed: {str(e)}")

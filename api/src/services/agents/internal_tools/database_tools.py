@@ -74,7 +74,7 @@ async def internal_query_database(
             return {"success": False, "error": f"Unsupported database type: {connection.database_type}"}
 
     except Exception as e:
-        logger.error(f"Error executing database query: {e}", exc_info=True)
+        logger.warning(f"Error executing database query: {e}", exc_info=True)
         return {"success": False, "error": f"Failed to execute query: {str(e)}"}
 
 
@@ -109,7 +109,7 @@ async def _execute_postgresql_query(connection: DatabaseConnection, query: str) 
             await connector.disconnect()
 
     except Exception as e:
-        logger.error(f"PostgreSQL query error: {e}", exc_info=True)
+        logger.warning(f"PostgreSQL query error: {e}", exc_info=True)
         return {
             "success": False,
             "error": f"PostgreSQL query failed: {str(e)}",
@@ -166,7 +166,7 @@ async def _execute_elasticsearch_query(connection: DatabaseConnection, query: st
             await connector.disconnect()
 
     except Exception as e:
-        logger.error(f"Elasticsearch query error: {e}", exc_info=True)
+        logger.warning(f"Elasticsearch query error: {e}", exc_info=True)
         return {
             "success": False,
             "error": f"Elasticsearch query failed: {str(e)}",
@@ -230,7 +230,7 @@ async def internal_list_database_connections(
         return {"success": True, "connections": connection_list, "count": len(connection_list)}
 
     except Exception as e:
-        logger.error(f"Error listing database connections: {e}", exc_info=True)
+        logger.warning(f"Error listing database connections: {e}", exc_info=True)
         return {"success": False, "error": f"Failed to list connections: {str(e)}"}
 
 
@@ -279,7 +279,7 @@ async def internal_get_database_schema(
             return {"success": False, "error": f"Unsupported database type: {connection.database_type}"}
 
     except Exception as e:
-        logger.error(f"Error getting database schema: {e}", exc_info=True)
+        logger.warning(f"Error getting database schema: {e}", exc_info=True)
         return {"success": False, "error": f"Failed to get schema: {str(e)}"}
 
 
@@ -308,7 +308,7 @@ async def _get_postgresql_schema(connection: DatabaseConnection) -> dict[str, An
             await connector.disconnect()
 
     except Exception as e:
-        logger.error(f"PostgreSQL schema error: {e}", exc_info=True)
+        logger.warning(f"PostgreSQL schema error: {e}", exc_info=True)
         return {
             "success": False,
             "error": f"Failed to get PostgreSQL schema: {str(e)}",
@@ -342,7 +342,7 @@ async def _get_elasticsearch_schema(connection: DatabaseConnection) -> dict[str,
             await connector.disconnect()
 
     except Exception as e:
-        logger.error(f"Elasticsearch schema error: {e}", exc_info=True)
+        logger.warning(f"Elasticsearch schema error: {e}", exc_info=True)
         return {
             "success": False,
             "error": f"Failed to get Elasticsearch schema: {str(e)}",
@@ -374,7 +374,7 @@ async def _execute_sqlite_query(connection: DatabaseConnection, query: str) -> d
             await connector.disconnect()
 
     except Exception as e:
-        logger.error(f"SQLite query error: {e}", exc_info=True)
+        logger.warning(f"SQLite query error: {e}", exc_info=True)
         return {
             "success": False,
             "error": f"SQLite query failed: {str(e)}",
@@ -415,7 +415,7 @@ async def _get_sqlite_schema(connection: DatabaseConnection) -> dict[str, Any]:
             await connector.disconnect()
 
     except Exception as e:
-        logger.error(f"SQLite schema error: {e}", exc_info=True)
+        logger.warning(f"SQLite schema error: {e}", exc_info=True)
         return {
             "success": False,
             "error": f"Failed to get SQLite schema: {str(e)}",
@@ -550,7 +550,7 @@ async def internal_generate_chart(
         }
 
     except Exception as e:
-        logger.error(f"Error generating chart: {e}", exc_info=True)
+        logger.warning(f"Error generating chart: {e}", exc_info=True)
         return {"success": False, "error": f"Failed to generate chart: {str(e)}"}
 
 
@@ -646,5 +646,5 @@ async def internal_query_and_chart(
         }
 
     except Exception as e:
-        logger.error(f"Error in query_and_chart: {e}", exc_info=True)
+        logger.warning(f"Error in query_and_chart: {e}", exc_info=True)
         return {"success": False, "error": f"Failed to execute query and generate chart: {str(e)}"}

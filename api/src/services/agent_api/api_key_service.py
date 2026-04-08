@@ -181,7 +181,7 @@ class AgentApiKeyService:
                     matched_record = key_record
                     break  # Found match, no need to continue
             except Exception as e:
-                logger.error(f"Error validating API key: {e}")
+                logger.warning(f"Error validating API key: {e}")
                 continue
 
         if matched_record:

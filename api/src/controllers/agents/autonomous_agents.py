@@ -53,7 +53,7 @@ async def _get_agent(agent_name: str, tenant_id: UUID, db: AsyncSession) -> Agen
 async def _get_task(agent_id: UUID, tenant_id: UUID, db: AsyncSession) -> ScheduledTask | None:
     result = await db.execute(
         select(ScheduledTask).filter(
-            ScheduledTask.config["agent_id"].astext == str(agent_id),
+            ScheduledTask.config["agent_id"].as_string() == str(agent_id),
             ScheduledTask.task_type == "autonomous_agent",
             ScheduledTask.tenant_id == tenant_id,
         )

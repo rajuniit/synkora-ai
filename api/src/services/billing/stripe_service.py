@@ -565,7 +565,7 @@ class StripeService:
                 return False
 
         except Exception as e:
-            logger.error(f"Error checking webhook idempotency: {e}")
+            logger.warning(f"Error checking webhook idempotency: {e}")
             # Allow processing on error - better than missing payments
             return True
 
@@ -839,7 +839,7 @@ class StripeService:
             return False
 
         except stripe.error.StripeError as e:
-            logger.error(f"Error verifying checkout session: {str(e)}")
+            logger.warning(f"Error verifying checkout session: {str(e)}")
             raise Exception(f"Failed to verify checkout session: {str(e)}")
 
     async def _handle_payment_intent_succeeded(self, payment_intent: dict) -> bool:

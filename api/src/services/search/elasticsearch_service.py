@@ -144,7 +144,7 @@ class ElasticsearchService:
             logger.error(f"Elasticsearch connection error: {e}")
             return {"success": False, "error": f"Connection error: {str(e)}", "results": []}
         except AuthenticationException as e:
-            logger.error(f"Elasticsearch authentication error: {e}")
+            logger.warning(f"Elasticsearch authentication error: {e}")
             return {"success": False, "error": f"Authentication failed: {str(e)}", "results": []}
         except Exception as e:
             logger.error(f"Elasticsearch search error: {e}")

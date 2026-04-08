@@ -3,7 +3,7 @@
 import { useState, useEffect } from 'react'
 import Link from 'next/link'
 import { usePathname } from 'next/navigation'
-import { useAuth } from '@/lib/hooks/useAuth'
+import { useAuthStore } from '@/lib/store/authStore'
 import { usePermissions } from '@/hooks/usePermissions'
 import { cn } from '@/lib/utils/cn'
 
@@ -214,7 +214,7 @@ export function Sidebar({ mobileOpen = false, onMobileClose }: SidebarProps) {
   const [isExpanded, setIsExpanded] = useState(false)
   const [isPinned, setIsPinned] = useState(false)
   const pathname = usePathname()
-  const { user } = useAuth()
+  const user = useAuthStore((state) => state.user)
   const { hasPermission } = usePermissions()
 
   // Close mobile sidebar on route change
@@ -332,6 +332,7 @@ export function Sidebar({ mobileOpen = false, onMobileClose }: SidebarProps) {
               <Link
                 key={item.name}
                 href={item.href}
+                prefetch={false}
                 className={cn(
                   'flex items-center gap-3 px-3 py-3 rounded-lg transition-all',
                   isActive
@@ -370,6 +371,7 @@ export function Sidebar({ mobileOpen = false, onMobileClose }: SidebarProps) {
                 <Link
                   key={item.name}
                   href={item.href}
+                  prefetch={false}
                   className={cn(
                     'flex items-center gap-3 px-3 py-3 rounded-lg transition-all',
                     isActive

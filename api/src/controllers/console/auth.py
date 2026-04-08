@@ -118,7 +118,7 @@ async def login(data: LoginRequest, db: AsyncSession = Depends(get_async_db)):
 
             redis_client = get_redis_async()
             if not redis_client:
-                logger.error("SECURITY: Redis unavailable for 2FA token storage")
+                logger.warning("SECURITY: Redis unavailable for 2FA token storage")
                 raise HTTPException(
                     status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
                     detail="Authentication service temporarily unavailable. Please try again later.",
@@ -150,7 +150,7 @@ async def login(data: LoginRequest, db: AsyncSession = Depends(get_async_db)):
 
             redis_client = get_redis_async()
             if not redis_client:
-                logger.error("SECURITY: Redis unavailable for 2FA verification")
+                logger.warning("SECURITY: Redis unavailable for 2FA verification")
                 raise HTTPException(
                     status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
                     detail="Authentication service temporarily unavailable. Please try again later.",

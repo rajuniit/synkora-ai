@@ -232,7 +232,7 @@ class DynamicCORSMiddleware:
                     logger.warning(f"Origin {origin} not allowed for widget {widget.id}")
 
         except Exception as e:
-            logger.error(f"Error validating widget origin: {e}")
+            logger.warning(f"Error validating widget origin: {e}")
             return None
 
         # --- Store result in Redis cache ---

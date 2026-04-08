@@ -74,10 +74,10 @@ class OpenAIWhisperProvider(BaseSTTProvider):
                 }
 
         except httpx.HTTPStatusError as e:
-            logger.error(f"OpenAI Whisper API error: {e.response.status_code} - {e.response.text}")
+            logger.warning(f"OpenAI Whisper API error: {e.response.status_code} - {e.response.text}")
             raise Exception(f"Transcription failed: {e.response.text}")
         except Exception as e:
-            logger.error(f"OpenAI Whisper transcription error: {str(e)}")
+            logger.warning(f"OpenAI Whisper transcription error: {str(e)}")
             raise
 
     def get_supported_languages(self) -> list[str]:
@@ -249,10 +249,10 @@ class OpenAITTSProvider(BaseTTSProvider):
                 return response.content
 
         except httpx.HTTPStatusError as e:
-            logger.error(f"OpenAI TTS API error: {e.response.status_code} - {e.response.text}")
+            logger.warning(f"OpenAI TTS API error: {e.response.status_code} - {e.response.text}")
             raise Exception(f"Speech synthesis failed: {e.response.text}")
         except Exception as e:
-            logger.error(f"OpenAI TTS synthesis error: {str(e)}")
+            logger.warning(f"OpenAI TTS synthesis error: {str(e)}")
             raise
 
     async def get_voices(self, language: str | None = None) -> list[dict[str, Any]]:
