@@ -187,10 +187,10 @@ async def internal_github_get_readme(
     except httpx.HTTPStatusError as e:
         if e.response.status_code == 404:
             return {"success": True, "readme": None, "message": "No README found in repository"}
-        logger.error(f"Failed to get README: {e}", exc_info=True)
+        logger.warning(f"Failed to get README: {e}", exc_info=True)
         return {"success": False, "error": str(e)}
     except Exception as e:
-        logger.error(f"Failed to get README: {e}", exc_info=True)
+        logger.warning(f"Failed to get README: {e}", exc_info=True)
         return {"success": False, "error": str(e)}
 
 

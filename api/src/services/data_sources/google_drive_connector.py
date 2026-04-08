@@ -423,7 +423,7 @@ class GoogleDriveConnector(BaseConnector):
             return True
 
         except Exception as e:
-            logger.error(f"Connection validation failed: {e}", exc_info=True)
+            logger.warning(f"Connection validation failed: {e}", exc_info=True)
             return False
 
     async def _get_oauth_token(self) -> Any:

@@ -107,7 +107,7 @@ class AgentApiAuthMiddleware:
                     break  # Found match, no need to continue
 
             except Exception as e:
-                logger.error(f"[AUTH] Error validating API key record: {e}")
+                logger.warning(f"[AUTH] Error validating API key record: {e}")
                 continue
 
         if matched_record is None:

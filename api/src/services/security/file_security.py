@@ -231,7 +231,7 @@ class FileSecurityService:
             logger.info(f"File validation passed: {filename} ({detected_mime})")
 
         except Exception as e:
-            logger.error(f"File validation error: {str(e)}")
+            logger.warning(f"File validation error: {str(e)}")
             result["is_valid"] = False
             result["errors"].append(f"Validation error: {str(e)}")
 

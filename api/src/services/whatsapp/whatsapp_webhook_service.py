@@ -160,7 +160,10 @@ class WhatsAppWebhookService:
             await self._mark_as_read(bot, message_id)
 
             # Get agent response
-            from ...controllers.agents.chat import stream_agent_response
+            from ...services.agents.agent_loader_service import AgentLoaderService
+            from ...services.agents.agent_manager import AgentManager
+            from ...services.agents.chat_service import ChatService
+            from ...services.agents.chat_stream_service import ChatStreamService
             from ...services.conversation_service import ConversationService
 
             agent = await self.db_session.get(Agent, bot.agent_id)
@@ -172,19 +175,25 @@ class WhatsAppWebhookService:
             conversation_history = await ConversationService.get_conversation_history_cached(
                 db=self.db_session,
                 conversation_id=conversation.id,
-                limit=30,  # Keep recent messages for context
+                limit=30,
             )
             logger.info(f"Loaded {len(conversation_history)} messages from WhatsApp conversation history")
 
+            chat_stream_service = ChatStreamService(
+                agent_loader=AgentLoaderService(AgentManager()), chat_service=ChatService()
+            )
+
             # Collect streamed response
             response_chunks = []
-            async for event_data in stream_agent_response(
+            async for event_data in chat_stream_service.stream_agent_response(
                 agent_name=agent.agent_name,
                 message=text,
-                conversation_history=conversation_history,  # Pass loaded history for memory
+                conversation_history=conversation_history,
                 conversation_id=str(conversation.id),
                 attachments=None,
+                llm_config_id=None,
                 db=self.db_session,
+                user_id=str(bot.created_by) if bot.created_by else None,
             ):
                 if event_data.startswith("data: "):
                     try:

@@ -458,7 +458,7 @@ async def validate_cron_expression(
         return result
 
     except Exception as e:
-        logger.error(f"Error validating cron expression: {str(e)}")
+        logger.warning(f"Error validating cron expression: {str(e)}")
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail="Failed to validate cron expression"
         )

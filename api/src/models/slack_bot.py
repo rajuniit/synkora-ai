@@ -34,6 +34,9 @@ class SlackBot(Base):
     slack_workspace_id = Column(String(255), nullable=True)
     slack_workspace_name = Column(String(255), nullable=True)
 
+    # Ownership — account that created/connected this bot (used to resolve OAuth tokens for scheduled runs)
+    created_by = Column(UUID(as_uuid=True), ForeignKey("accounts.id", ondelete="SET NULL"), nullable=True)
+
     # Status
     is_active = Column(Boolean, default=True, nullable=False)
     connection_status = Column(

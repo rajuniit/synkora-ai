@@ -26,37 +26,62 @@ logger = logging.getLogger(__name__)
 TWITTER_API_BASE = "https://api.twitter.com/2"
 
 
+def _is_token_expired(expires_at: Any) -> bool:
+    """Return True if the token expiry time is in the past."""
+    from datetime import UTC, datetime
+
+    if expires_at is None:
+        return False
+    now = datetime.now(UTC)
+    # Normalise: naive datetimes stored in DB are treated as UTC
+    if expires_at.tzinfo is None:
+        expires_at = expires_at.replace(tzinfo=UTC)
+    return expires_at <= now
+
+
+async def _do_token_refresh(tw_oauth: Any, raw_refresh_token: str) -> dict[str, Any]:
+    """Call TwitterOAuth.refresh_access_token and validate the result."""
+    result = await tw_oauth.refresh_access_token(raw_refresh_token)
+    if not result.get("access_token"):
+        raise ValueError("Twitter token refresh returned no access_token")
+    return result
+
+
 async def _get_twitter_credentials(
-    runtime_context: Any, tool_name: str = "internal_twitter_get_my_profile"
+    runtime_context: Any,
+    tool_name: str = "internal_twitter_get_my_profile",
 ) -> dict[str, Any]:
     """
     Get Twitter API credentials from OAuthApp via runtime context.
 
-    This resolves the token by checking:
-    1. User's personal token (user-first resolution)
-    2. OAuth app token (fallback)
+    Resolution order:
+    1. User's personal UserOAuthToken (filtered by account_id when available)
+    2. OAuth app-level access_token
+    3. App-only api_token (Bearer Token — read-only)
 
-    Args:
-        runtime_context: RuntimeContext with db_session
-        tool_name: Name of the tool requesting access
-
-    Returns:
-        Dict with bearer_token or access_token
+    Automatically refreshes expired tokens if a refresh token is available.
+    Falls back to the stored token when refresh fails (Twitter may still accept
+    it in a short grace window; if not, the API will return 401).
 
     Raises:
-        ValueError: If no token is available
+        ValueError: If no token exists at all.
     """
+    from datetime import UTC, datetime, timedelta
+
     from src.models.agent_tool import AgentTool
     from src.models.oauth_app import OAuthApp
     from src.models.user_oauth_token import UserOAuthToken
-    from src.services.agents.security import decrypt_value
+    from src.services.agents.security import decrypt_value, encrypt_value
+    from src.services.oauth.twitter_oauth import TwitterOAuth
 
     db = runtime_context.db_session
 
     # Get agent tool configuration
     result = await db.execute(
         select(AgentTool).filter(
-            AgentTool.agent_id == runtime_context.agent_id, AgentTool.tool_name == tool_name, AgentTool.enabled
+            AgentTool.agent_id == runtime_context.agent_id,
+            AgentTool.tool_name == tool_name,
+            AgentTool.enabled,
         )
     )
     agent_tool = result.scalar_one_or_none()
@@ -64,10 +89,12 @@ async def _get_twitter_credentials(
     if not agent_tool or not agent_tool.oauth_app_id:
         raise ValueError(f"No OAuth app configured for tool {tool_name}")
 
-    # Get OAuth app (case-insensitive provider check)
+    # Get OAuth app
     result = await db.execute(
         select(OAuthApp).filter(
-            OAuthApp.id == agent_tool.oauth_app_id, OAuthApp.provider.ilike("twitter"), OAuthApp.is_active
+            OAuthApp.id == agent_tool.oauth_app_id,
+            OAuthApp.provider.ilike("twitter"),
+            OAuthApp.is_active,
         )
     )
     oauth_app = result.scalar_one_or_none()
@@ -75,116 +102,107 @@ async def _get_twitter_credentials(
     if not oauth_app:
         raise ValueError("No active Twitter OAuth app found")
 
-    credentials = {}
+    credentials: dict[str, Any] = {}
 
-    # Try user token first (user-first resolution)
-    result = await db.execute(select(UserOAuthToken).filter(UserOAuthToken.oauth_app_id == oauth_app.id))
+    # ------------------------------------------------------------------ #
+    # 1. User-level token (preferred — has user context for write ops)
+    # ------------------------------------------------------------------ #
+    token_query = select(UserOAuthToken).filter(UserOAuthToken.oauth_app_id == oauth_app.id)
+    if runtime_context.user_id:
+        token_query = token_query.filter(UserOAuthToken.account_id == runtime_context.user_id)
+    result = await db.execute(token_query.limit(1))
     user_token = result.scalar_one_or_none()
 
     if user_token and user_token.access_token:
-        from datetime import UTC, datetime
-
-        user_token_expired = user_token.token_expires_at is not None and user_token.token_expires_at.replace(
-            tzinfo=UTC
-        ) < datetime.now(UTC)
-        if user_token_expired and user_token.refresh_token:
+        if _is_token_expired(user_token.token_expires_at) and user_token.refresh_token:
             try:
-                from src.services.oauth.twitter_oauth import TwitterOAuth
-
-                client_secret = decrypt_value(oauth_app.client_secret)
                 tw_oauth = TwitterOAuth(
                     client_id=oauth_app.client_id,
-                    client_secret=client_secret,
+                    client_secret=decrypt_value(oauth_app.client_secret),
                     redirect_uri=oauth_app.redirect_uri,
                 )
-                refreshed = await tw_oauth.refresh_access_token(decrypt_value(user_token.refresh_token))
-                new_access = refreshed.get("access_token")
-                new_refresh = refreshed.get("refresh_token")
-                new_expires_in = refreshed.get("expires_in")
-                if new_access:
-                    from datetime import timedelta
-
-                    from src.services.agents.security import encrypt_value as _enc
-
-                    user_token.access_token = _enc(new_access)
-                    if new_refresh:
-                        user_token.refresh_token = _enc(new_refresh)
-                    if new_expires_in:
-                        user_token.token_expires_at = datetime.now(UTC) + timedelta(seconds=int(new_expires_in))
-                    await db.commit()
-                    logger.info(f"✅ Refreshed user Twitter token (OAuth app: '{oauth_app.app_name}')")
-                    credentials["access_token"] = new_access
-                    credentials["bearer_token"] = new_access
-                    credentials["token_type"] = "user"
+                refreshed = await _do_token_refresh(tw_oauth, decrypt_value(user_token.refresh_token))
+                new_access = refreshed["access_token"]
+                user_token.access_token = encrypt_value(new_access)
+                if refreshed.get("refresh_token"):
+                    user_token.refresh_token = encrypt_value(refreshed["refresh_token"])
+                if refreshed.get("expires_in"):
+                    user_token.token_expires_at = datetime.now(UTC) + timedelta(seconds=int(refreshed["expires_in"]))
+                await db.commit()
+                logger.info("Refreshed user Twitter token (OAuth app: '%s')", oauth_app.app_name)
+                credentials = {"access_token": new_access, "bearer_token": new_access, "token_type": "user"}
             except Exception as refresh_err:
-                logger.warning(f"User Twitter token refresh failed: {refresh_err} — using stored token")
-                decrypted_token = decrypt_value(user_token.access_token)
-                credentials["access_token"] = decrypted_token
-                credentials["bearer_token"] = decrypted_token
-                credentials["token_type"] = "user"
+                # Refresh failed — fall back to stored token and let the API decide.
+                # If the token is truly dead, the API returns 401 with a clear message.
+                logger.warning("User Twitter token refresh failed: %s", refresh_err)
+                raw = decrypt_value(user_token.access_token)
+                credentials = {"access_token": raw, "bearer_token": raw, "token_type": "user"}
         else:
-            decrypted_token = decrypt_value(user_token.access_token)
-            credentials["access_token"] = decrypted_token
-            credentials["bearer_token"] = decrypted_token  # Use same token for both
-            credentials["token_type"] = "user"  # OAuth 2.0 user context — can read AND write
-        logger.info(f"✅ Using user's Twitter token (OAuth app: '{oauth_app.app_name}')")
+            raw = decrypt_value(user_token.access_token)
+            credentials = {"access_token": raw, "bearer_token": raw, "token_type": "user"}
+
+        logger.info("Using user Twitter token (OAuth app: '%s')", oauth_app.app_name)
+
+    # ------------------------------------------------------------------ #
+    # 2. OAuth app-level access token
+    # ------------------------------------------------------------------ #
     elif oauth_app.access_token:
-        # Fall back to OAuth app access token (user context)
-        # Try to refresh if expired and refresh_token is available
-        from datetime import UTC, datetime
-
-        token_expired = oauth_app.token_expires_at is not None and oauth_app.token_expires_at.replace(
-            tzinfo=UTC
-        ) < datetime.now(UTC)
-        if token_expired and oauth_app.refresh_token:
+        if _is_token_expired(oauth_app.token_expires_at) and oauth_app.refresh_token:
             try:
-                from src.services.oauth.twitter_oauth import TwitterOAuth
-
-                client_secret = decrypt_value(oauth_app.client_secret)
                 tw_oauth = TwitterOAuth(
                     client_id=oauth_app.client_id,
-                    client_secret=client_secret,
+                    client_secret=decrypt_value(oauth_app.client_secret),
                     redirect_uri=oauth_app.redirect_uri,
                 )
-                refreshed = await tw_oauth.refresh_access_token(decrypt_value(oauth_app.refresh_token))
-                new_access = refreshed.get("access_token")
-                new_refresh = refreshed.get("refresh_token")
-                new_expires_in = refreshed.get("expires_in")
-                if new_access:
-                    from src.services.agents.security import encrypt_value as _enc
-
-                    oauth_app.access_token = _enc(new_access)
-                    if new_refresh:
-                        oauth_app.refresh_token = _enc(new_refresh)
-                    if new_expires_in:
-                        from datetime import timedelta
-
-                        oauth_app.token_expires_at = datetime.now(UTC) + timedelta(seconds=int(new_expires_in))
-                    await db.commit()
-                    logger.info(f"✅ Refreshed Twitter token for app '{oauth_app.app_name}'")
-                    credentials["access_token"] = new_access
-                    credentials["bearer_token"] = new_access
-                    credentials["token_type"] = "user"
+                refreshed = await _do_token_refresh(tw_oauth, decrypt_value(oauth_app.refresh_token))
+                new_access = refreshed["access_token"]
+                oauth_app.access_token = encrypt_value(new_access)
+                if refreshed.get("refresh_token"):
+                    oauth_app.refresh_token = encrypt_value(refreshed["refresh_token"])
+                if refreshed.get("expires_in"):
+                    oauth_app.token_expires_at = datetime.now(UTC) + timedelta(seconds=int(refreshed["expires_in"]))
+                await db.commit()
+                logger.info("Refreshed Twitter app token (OAuth app: '%s')", oauth_app.app_name)
+                credentials = {"access_token": new_access, "bearer_token": new_access, "token_type": "user"}
             except Exception as refresh_err:
-                logger.warning(f"Twitter token refresh failed: {refresh_err} — falling back to stored token")
-                credentials["access_token"] = decrypt_value(oauth_app.access_token)
-                credentials["bearer_token"] = credentials["access_token"]
-                credentials["token_type"] = "user"
+                logger.warning("Twitter app token refresh failed: %s", refresh_err)
+                raw = decrypt_value(oauth_app.access_token)
+                credentials = {"access_token": raw, "bearer_token": raw, "token_type": "user"}
         else:
-            credentials["access_token"] = decrypt_value(oauth_app.access_token)
-            credentials["bearer_token"] = credentials["access_token"]
-            credentials["token_type"] = "user"
-        logger.info(f"✅ Using Twitter OAuth app token '{oauth_app.app_name}'")
+            raw = decrypt_value(oauth_app.access_token)
+            credentials = {"access_token": raw, "bearer_token": raw, "token_type": "user"}
+
+        logger.info("Using Twitter OAuth app token '%s'", oauth_app.app_name)
+
+    # ------------------------------------------------------------------ #
+    # 3. App-only Bearer Token (read-only)
+    # ------------------------------------------------------------------ #
     elif oauth_app.api_token:
-        # App-only Bearer Token — READ ONLY. Cannot post tweets or access user-context endpoints.
-        credentials["bearer_token"] = decrypt_value(oauth_app.api_token)
-        credentials["token_type"] = "app_only"
-        logger.info(f"✅ Using Twitter API token '{oauth_app.app_name}' (app-only, read-only)")
+        credentials = {"bearer_token": decrypt_value(oauth_app.api_token), "token_type": "app_only"}
+        logger.info("Using Twitter API token '%s' (app-only, read-only)", oauth_app.app_name)
 
     if not credentials.get("bearer_token") and not credentials.get("access_token"):
-        raise ValueError("No Twitter access token available. Please connect Twitter.")
+        raise ValueError("No Twitter access token available. Please connect Twitter in Settings → Integrations.")
 
     return credentials
+
+
+async def _execute_request(
+    client: httpx.AsyncClient,
+    method: str,
+    url: str,
+    headers: dict,
+    params: dict | None,
+    json_data: dict | None,
+) -> httpx.Response:
+    """Send the HTTP request for the given method."""
+    if method == "GET":
+        return await client.get(url, headers=headers, params=params, timeout=30.0)
+    if method == "POST":
+        return await client.post(url, headers=headers, json=json_data, timeout=30.0)
+    if method == "DELETE":
+        return await client.delete(url, headers=headers, timeout=30.0)
+    raise ValueError(f"Unsupported HTTP method: {method}")
 
 
 async def _make_twitter_request(
@@ -194,27 +212,23 @@ async def _make_twitter_request(
     params: dict[str, Any] = None,
     json_data: dict[str, Any] = None,
 ) -> dict[str, Any]:
-    """Make authenticated request to Twitter API."""
+    """Make an authenticated request to the Twitter API v2."""
+    url = f"{TWITTER_API_BASE}{endpoint}"
     headers = {
         "Authorization": f"Bearer {credentials.get('bearer_token')}",
         "Content-Type": "application/json",
     }
 
-    url = f"{TWITTER_API_BASE}{endpoint}"
-
     async with httpx.AsyncClient() as client:
-        if method == "GET":
-            response = await client.get(url, headers=headers, params=params, timeout=30.0)
-        elif method == "POST":
-            response = await client.post(url, headers=headers, json=json_data, timeout=30.0)
-        elif method == "DELETE":
-            response = await client.delete(url, headers=headers, timeout=30.0)
-        else:
-            raise ValueError(f"Unsupported HTTP method: {method}")
+        response = await _execute_request(client, method, url, headers, params, json_data)
 
         if response.status_code == 401:
-            raise ValueError("Twitter authentication failed. Check your API credentials.")
-        elif response.status_code == 403:
+            raise ValueError(
+                "Twitter authentication failed — your access token has expired or been revoked. "
+                "Please go to Settings → Integrations → Twitter, disconnect, and reconnect your account."
+            )
+
+        if response.status_code == 403:
             is_write = method in ("POST", "DELETE")
             token_type = (credentials or {}).get("token_type", "unknown")
             if is_write and token_type == "app_only":
@@ -355,7 +369,10 @@ async def internal_twitter_get_bookmarks(
         credentials = await _get_twitter_credentials(runtime_context, tool_name)
 
         # First get the authenticated user's ID
-        me_result = await _make_twitter_request("/users/me", credentials=credentials)
+        me_result = await _make_twitter_request(
+            "/users/me",
+            credentials=credentials,
+        )
         user_id = me_result.get("data", {}).get("id")
 
         if not user_id:

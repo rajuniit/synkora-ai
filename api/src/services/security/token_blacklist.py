@@ -189,7 +189,7 @@ class TokenBlacklistService:
             return stored_hash == refresh_token_hash
 
         except Exception as e:
-            logger.error(f"Failed to validate refresh token family: {e}")
+            logger.warning(f"Failed to validate refresh token family: {e}")
             return False
 
     def invalidate_refresh_token_family(self, account_id: uuid.UUID, family_id: str) -> bool:
@@ -210,7 +210,7 @@ class TokenBlacklistService:
             return True
 
         except Exception as e:
-            logger.error(f"Failed to invalidate refresh token family: {e}")
+            logger.warning(f"Failed to invalidate refresh token family: {e}")
             return False
 
 

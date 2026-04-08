@@ -38,6 +38,7 @@ class SlackBotManager:
         slack_workspace_name: str | None = None,
         connection_mode: str = "socket",
         signing_secret: str | None = None,
+        created_by: UUID | None = None,
     ) -> SlackBot:
         """
         Create a new Slack bot configuration.
@@ -88,6 +89,7 @@ class SlackBotManager:
                 signing_secret=encrypted_signing_secret,
                 is_active=True,
                 connection_status="connected" if connection_mode == "event" else "disconnected",
+                created_by=created_by,
             )
 
             self.db_session.add(slack_bot)

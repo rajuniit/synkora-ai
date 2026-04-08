@@ -360,6 +360,12 @@ ROUTER_REGISTRY: list[RouteConfig] = [
     ),
     # ===== Platform & Billing =====
     RouteConfig(
+        module="src.controllers.platform_agent",
+        attribute="router",
+        prefix="/api/v1/platform-agent",
+        tags=["platform-agent"],
+    ),
+    RouteConfig(
         module="src.controllers.platform_settings",
         attribute="router",
         prefix="/api/v1",

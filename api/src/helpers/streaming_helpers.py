@@ -82,17 +82,21 @@ def extract_user_friendly_error(error: Exception) -> str:
         if re.search(pattern, error_str, re.IGNORECASE):
             return "API key is invalid or expired. Please check your LLM configuration."
 
-    # Check for rate limit errors
+    # Check for rate limit / service unavailable errors
     rate_limit_patterns = [
         r"RateLimitError",
         r"rate.?limit",
         r"429",
         r"too many requests",
         r"quota exceeded",
+        r"ServiceUnavailableError",
+        r"503",
+        r"Too many connections",
+        r"No deployments available",
     ]
     for pattern in rate_limit_patterns:
         if re.search(pattern, error_str, re.IGNORECASE):
-            return "Rate limit exceeded. Please try again in a moment."
+            return "The AI service is busy. Please try again in a few seconds."
 
     # Check for payload too large errors
     payload_patterns = [
@@ -174,7 +178,7 @@ def extract_user_friendly_error(error: Exception) -> str:
 
     # Default: return a generic but helpful message
     # Don't expose raw technical details to users
-    logger.error(f"Unhandled LLM error ({error_type}): {error_str}")
+    logger.warning(f"Unhandled LLM error ({error_type}): {error_str}")
     return "An error occurred while processing your request. Please try again."
 
 
@@ -184,6 +188,10 @@ _EXPECTED_ERROR_PATTERNS = [
     r"RateLimitError",
     r"too many requests",
     r"quota exceeded",
+    r"ServiceUnavailableError",
+    r"503",
+    r"Too many connections",
+    r"No deployments available",
     r"AuthenticationError",
     r"Invalid.*api.?key",
     r"invalid.*token",

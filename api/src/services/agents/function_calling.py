@@ -759,6 +759,7 @@ class FunctionCallingHandler:
                     "tool_choice": "auto",
                     "api_key": self.llm_client.config.api_key,
                     "timeout": 300,  # 5 minute timeout for LLM calls
+                    "num_retries": 3,  # Retry on 429/503 with exponential backoff
                 }
 
                 # Add base URL if provided
@@ -830,7 +831,7 @@ class FunctionCallingHandler:
         except Exception as e:
             # Log error to Langfuse if tracing is enabled
             if should_trace and self.trace_id:
-                logger.error(f"❌ LLM generation failed: {e}")
+                logger.warning(f"LLM generation failed: {e}")
                 self.langfuse_service.create_generation(
                     name="llm_generation_with_tools",
                     model=self.llm_client.config.model_name,
@@ -874,6 +875,7 @@ class FunctionCallingHandler:
                 "tools": tools,
                 "api_key": self.llm_client.config.api_key,
                 "timeout": 300,  # 5 minute timeout for LLM calls
+                "num_retries": 3,  # Retry on 429/503 with exponential backoff
             }
 
             # Add base URL if provided
@@ -1017,7 +1019,7 @@ class FunctionCallingHandler:
 
                 # Check if result contains a non-empty error (key existence is not enough)
                 if isinstance(result, dict) and result.get("error"):
-                    logger.error(f"Function {func_name} returned error: {result.get('error')}")
+                    logger.info(f"Function {func_name} returned error: {result.get('error')}")
                     last_result = result
                     last_error = result.get("error", "")
 
@@ -1080,7 +1082,7 @@ class FunctionCallingHandler:
 
             except Exception as e:
                 duration_ms = int((time.time() - start_time) * 1000)
-                logger.error(f"Function {func_name} failed: {e}")
+                logger.warning(f"Function {func_name} failed: {e}")
                 last_error = str(e)
                 last_result = {"error": str(e)}
 
@@ -1170,7 +1172,7 @@ class FunctionCallingHandler:
             for i, exec_result in enumerate(raw_results):
                 if isinstance(exec_result, Exception):
                     func_name = function_calls[i]["name"]
-                    logger.error(f"Parallel execution failed for {func_name}: {exec_result}")
+                    logger.warning(f"Parallel execution failed for {func_name}: {exec_result}")
                     results.append(
                         ToolExecutionResult(
                             name=func_name,

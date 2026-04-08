@@ -176,9 +176,9 @@ async def chat_stream(
 
     # Block if threat detected
     if not scan_result["is_safe"]:
-        # Log security violation
-        logger.error(
-            f"SECURITY VIOLATION: Prompt injection blocked in agent chat stream. "
+        # Log security violation — expected user-input event, not a server error
+        logger.warning(
+            f"SECURITY: Prompt injection blocked in agent chat stream. "
             f"Agent: {request.agent_name}, Tenant: {tenant_id}, "
             f"Risk Score: {scan_result['risk_score']}, "
             f"Threat Level: {scan_result['threat_level']}, "
@@ -332,7 +332,7 @@ async def chat_stream(
         raise
     except Exception as e:
         # Log but don't block chat if billing validation fails (fail open for non-critical errors)
-        logger.error(f"Billing validation failed, allowing chat to proceed: {e}")
+        logger.warning(f"Billing validation failed, allowing chat to proceed: {e}")
 
     # SECURITY: Pass tenant_id to verify conversation ownership
     return StreamingResponse(
@@ -399,8 +399,8 @@ async def _ws_chat_pipeline(
         context="agent_chat_ws",
     )
     if not scan_result["is_safe"]:
-        logger.error(
-            "SECURITY VIOLATION: Prompt injection blocked in WS chat. Agent: %s, Tenant: %s, Risk: %s",
+        logger.warning(
+            "SECURITY: Prompt injection blocked in WS chat. Agent: %s, Tenant: %s, Risk: %s",
             agent_name,
             tenant_id,
             scan_result["risk_score"],
@@ -500,7 +500,7 @@ async def _ws_chat_pipeline(
                 return
     except Exception as _billing_err:
         # Fail open for non-critical billing errors (same behaviour as SSE endpoint)
-        logger.error("WS billing validation error: %s", _billing_err)
+        logger.warning("WS billing validation error: %s", _billing_err)
 
     # ── Stream agent response ────────────────────────────────────────────────
     async for sse_frame in chat_stream_service.stream_agent_response(
@@ -589,7 +589,7 @@ async def chat_websocket(websocket: WebSocket) -> None:
         is_blacklisted = bool(results[0])
         current_version = int(results[1]) if results[1] else 0
     except Exception as exc:
-        logger.error("WS Redis auth check failed: %s", exc)
+        logger.warning("WS Redis auth check failed: %s", exc)
         await websocket.send_json({"type": "auth_error", "message": "Auth service unavailable"})
         await websocket.close(code=1008)
         return

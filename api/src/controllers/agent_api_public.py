@@ -76,8 +76,8 @@ async def chat_with_agent_stream(
     # Block if threat detected
     if not scan_result["is_safe"]:
         # Log security violation
-        logger.error(
-            f"SECURITY VIOLATION: Prompt injection blocked in Agent API chat. "
+        logger.warning(
+            f"SECURITY: Prompt injection blocked in Agent API chat. "
             f"Agent: {agent.agent_name}, API Key: {api_key.id}, "
             f"Risk Score: {scan_result['risk_score']}, "
             f"Threat Level: {scan_result['threat_level']}, "

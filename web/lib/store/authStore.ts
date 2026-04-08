@@ -13,6 +13,9 @@ interface AuthState {
   fetchUser: () => Promise<void>
 }
 
+// In-flight guard: concurrent fetchUser() calls share one network request
+let _fetchInFlight: Promise<void> | null = null
+
 export const useAuthStore = create<AuthState>((set) => ({
   user: null,
   isAuthenticated: false,
@@ -57,27 +60,31 @@ export const useAuthStore = create<AuthState>((set) => ({
     set({ user: null, isAuthenticated: false })
   },
 
-  fetchUser: async () => {
-    try {
-      // If the access token is absent (e.g. after a page refresh or new tab),
-      // proactively restore it via the HttpOnly refresh token cookie.
-      // We cannot read the cookie from JS — just attempt the refresh and see if
-      // the backend accepts it (it will if the cookie is present and valid).
-      if (!secureStorage.getAccessToken()) {
-        const refreshed = await secureStorage.refreshAccessToken()
-        if (!refreshed) {
-          set({ user: null, isAuthenticated: false, isLoading: false })
-          return
+  fetchUser: () => {
+    // Deduplicate concurrent calls — all callers share one in-flight request
+    if (_fetchInFlight) return _fetchInFlight
+    _fetchInFlight = (async () => {
+      try {
+        // If the access token is absent (e.g. after a page refresh or new tab),
+        // proactively restore it via the HttpOnly refresh token cookie.
+        if (!secureStorage.getAccessToken()) {
+          const refreshed = await secureStorage.refreshAccessToken()
+          if (!refreshed) {
+            set({ user: null, isAuthenticated: false, isLoading: false })
+            return
+          }
         }
+        const data = await apiClient.getCurrentUser()
+        set({ user: data, isAuthenticated: true, isLoading: false })
+      } catch {
+        if (typeof window !== 'undefined') {
+          secureStorage.clearTokens()
+        }
+        set({ user: null, isAuthenticated: false, isLoading: false })
+      } finally {
+        _fetchInFlight = null
       }
-      const data = await apiClient.getCurrentUser()
-      set({ user: data, isAuthenticated: true, isLoading: false })
-    } catch {
-      // Only clear auth if token is invalid, not on network errors
-      if (typeof window !== 'undefined') {
-        secureStorage.clearTokens()
-      }
-      set({ user: null, isAuthenticated: false, isLoading: false })
-    }
+    })()
+    return _fetchInFlight
   },
 }))

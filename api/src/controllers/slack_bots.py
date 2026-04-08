@@ -104,6 +104,7 @@ async def create_slack_bot(
             slack_workspace_name=bot_data.slack_workspace_name,
             connection_mode=bot_data.connection_mode,
             signing_secret=bot_data.signing_secret,
+            created_by=current_account.id,
         )
 
         return SlackBotResponse(

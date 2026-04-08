@@ -143,7 +143,7 @@ async def upload_context_file(
     except HTTPException:
         raise
     except Exception as e:
-        logger.error(f"Failed to upload context file: {e}", exc_info=True)
+        logger.warning(f"Failed to upload context file: {e}", exc_info=True)
         raise HTTPException(status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail="Failed to upload file")
 
 

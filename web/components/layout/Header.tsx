@@ -1,6 +1,6 @@
 'use client'
 
-import { useAuth } from '@/lib/hooks/useAuth'
+import { useAuthStore } from '@/lib/store/authStore'
 import { useRouter } from 'next/navigation'
 import { useSubscription, useCredits } from '@/hooks/useBilling'
 
@@ -9,7 +9,8 @@ interface HeaderProps {
 }
 
 export function Header({ onMobileMenuToggle }: HeaderProps) {
-  const { user, signOut } = useAuth()
+  const user = useAuthStore((state) => state.user)
+  const signOut = useAuthStore((state) => state.signOut)
   const router = useRouter()
   const { subscription, loading: subscriptionLoading } = useSubscription()
   const { balance, loading: balanceLoading } = useCredits()

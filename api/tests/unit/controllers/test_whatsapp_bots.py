@@ -10,7 +10,7 @@ from fastapi.testclient import TestClient
 
 from src.controllers.whatsapp_bots import whatsapp_router as router
 from src.core.database import get_async_db
-from src.middleware.auth_middleware import get_current_tenant_id
+from src.middleware.auth_middleware import get_current_account, get_current_tenant_id
 
 
 @pytest.fixture
@@ -28,8 +28,13 @@ def client(mock_db_session):
     async def mock_db():
         yield mock_db_session
 
+    mock_account = MagicMock()
+    mock_account.id = uuid.uuid4()
+    mock_account.email = "test@example.com"
+
     app.dependency_overrides[get_async_db] = mock_db
     app.dependency_overrides[get_current_tenant_id] = lambda: tenant_id
+    app.dependency_overrides[get_current_account] = lambda: mock_account
 
     yield TestClient(app), tenant_id, mock_db_session
 

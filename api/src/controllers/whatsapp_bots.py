@@ -13,7 +13,8 @@ from sqlalchemy.orm import joinedload
 
 from ..core.database import get_async_db
 from ..helpers.streaming_helpers import generate_sse_event
-from ..middleware.auth_middleware import get_current_tenant_id
+from ..middleware.auth_middleware import get_current_account, get_current_tenant_id
+from ..models import Account
 from ..models.agent import Agent
 from ..models.whatsapp_bot import WhatsAppBot
 from ..services.agents.security import encrypt_value
@@ -58,6 +59,7 @@ class WhatsAppBotResponse(BaseModel):
 @whatsapp_router.post("/whatsapp-bots", response_model=WhatsAppBotResponse, status_code=status.HTTP_201_CREATED)
 async def create_whatsapp_bot(
     request: CreateWhatsAppBotRequest,
+    current_account: Account = Depends(get_current_account),
     tenant_id: uuid.UUID = Depends(get_current_tenant_id),
     db: AsyncSession = Depends(get_async_db),
 ):
@@ -87,6 +89,7 @@ async def create_whatsapp_bot(
             verify_token=request.verify_token,
             webhook_url=request.webhook_url,
             is_active=True,
+            created_by=current_account.id,
         )
 
         db.add(bot)

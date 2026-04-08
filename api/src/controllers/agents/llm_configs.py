@@ -178,7 +178,7 @@ async def create_llm_config(
         )
     except Exception as e:
         await db.rollback()
-        logger.error(f"Failed to create LLM config: {e}", exc_info=True)
+        logger.warning(f"Failed to create LLM config: {e}")
         raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Failed to create LLM configuration")
 
 
@@ -393,7 +393,7 @@ async def update_llm_config(
         )
     except Exception as e:
         await db.rollback()
-        logger.error(f"Failed to update LLM config: {e}", exc_info=True)
+        logger.warning(f"Failed to update LLM config: {e}")
         raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Failed to update LLM configuration")
 
 
@@ -423,7 +423,7 @@ async def delete_llm_config(
         invalidate_agent_llm_cache(agent.agent_name)
     except ValueError as e:
         await db.rollback()
-        logger.error(f"Failed to delete LLM config (ValueError): {e}", exc_info=True)
+        logger.warning(f"Failed to delete LLM config (ValueError): {e}")
         raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Failed to delete LLM configuration")
     except Exception as e:
         await db.rollback()
@@ -479,7 +479,7 @@ async def set_default_config(
         )
     except Exception as e:
         await db.rollback()
-        logger.error(f"Failed to set default LLM config: {e}", exc_info=True)
+        logger.warning(f"Failed to set default LLM config: {e}")
         raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Failed to set default LLM configuration")
 
 
@@ -526,5 +526,5 @@ async def reorder_configs(
         ]
     except Exception as e:
         await db.rollback()
-        logger.error(f"Failed to reorder LLM configs: {e}", exc_info=True)
+        logger.warning(f"Failed to reorder LLM configs: {e}")
         raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Failed to reorder LLM configurations")

@@ -304,7 +304,7 @@ class AppleOAuth(BaseOAuthService):
             logger.error("Apple ID token signature verification failed")
             raise ValueError("ID token signature verification failed")
         except Exception as e:
-            logger.error(f"Failed to decode Apple ID token: {e}")
+            logger.warning(f"Failed to decode Apple ID token: {e}")
             raise ValueError(f"Invalid ID token: {e}")
 
     async def refresh_token(self, refresh_token: str) -> dict[str, Any]:

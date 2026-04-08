@@ -1,0 +1,1048 @@
+"""
+Platform Engineer Agent Tools
+
+Provides tools that allow the platform engineer agent to operate the platform:
+create agents, list agents, check integration status, get available tools.
+
+Phase 1: Agents
+Phase 2 (future): Knowledge bases, data sources
+Phase 3 (future): Integrations, MCP servers, billing
+"""
+
+import logging
+from typing import Any
+from uuid import uuid4
+
+from sqlalchemy import select
+
+logger = logging.getLogger(__name__)
+
+# All tool categories available on the platform with OAuth requirements
+PLATFORM_TOOL_CATALOG = {
+    "web_search": {
+        "description": "Search the web and fetch/scrape URL content (lightweight HTTP fetch)",
+        "requires_oauth": [],
+    },
+    "browser_tools": {
+        "description": (
+            "Full Playwright browser automation: navigate pages, take screenshots, click buttons, "
+            "fill forms, extract structured data, handle dialogs, manage cookies/storage. "
+            "Use this when you need screenshots, JS-rendered pages, or interactive browser sessions."
+        ),
+        "requires_oauth": [],
+    },
+    "scheduler_tools": {
+        "description": (
+            "Schedule the agent to run automatically. Supports cron expressions (specific time daily/weekly) "
+            "and interval-based scheduling. The agent will self-schedule using internal_create_cron_scheduled_task "
+            "or internal_create_scheduled_task. Timezone-aware: cron times are written in user's local time."
+        ),
+        "requires_oauth": [],
+    },
+    "email_tools": {
+        "description": "Send emails via SMTP (no OAuth needed — uses platform SMTP config)",
+        "requires_oauth": [],
+    },
+    "file_tools": {
+        "description": "Read, write, and edit files in the agent workspace",
+        "requires_oauth": [],
+    },
+    "command_tools": {
+        "description": "Run shell commands (git, npm, pip, bash, etc.) in a sandboxed environment",
+        "requires_oauth": [],
+    },
+    "database_tools": {
+        "description": "Query attached database connections (PostgreSQL, MySQL, SQLite, etc.)",
+        "requires_oauth": [],
+    },
+    "elasticsearch_tools": {
+        "description": "Search and index documents in Elasticsearch",
+        "requires_oauth": [],
+    },
+    "data_analysis_tools": {
+        "description": "Analyze datasets, run statistical analysis, and generate charts/reports",
+        "requires_oauth": [],
+    },
+    "storage_tools": {
+        "description": "Upload and retrieve files from S3/MinIO storage",
+        "requires_oauth": [],
+    },
+    "news_tools": {
+        "description": "Search latest news articles (NewsAPI and HackerNews). NewsAPI requires an API key integration.",
+        "requires_oauth": [],
+        "requires_integration": ["newsapi"],
+    },
+    "document_tools": {
+        "description": "Parse and extract text from PDFs, Word docs, Excel files",
+        "requires_oauth": [],
+    },
+    "github_tools": {
+        "description": "Full GitHub: search repos, read/create issues, open PRs, manage branches and commits",
+        "requires_oauth": ["github"],
+    },
+    "gitlab_tools": {
+        "description": "Manage GitLab repos, issues, and merge requests",
+        "requires_oauth": ["gitlab"],
+    },
+    "gmail_tools": {
+        "description": "Read, send, search, and manage Gmail messages and labels",
+        "requires_oauth": ["gmail"],
+    },
+    "google_calendar_tools": {
+        "description": "Create, update, query, and delete Google Calendar events",
+        "requires_oauth": ["google_calendar"],
+    },
+    "google_drive_tools": {
+        "description": "Read, upload, search, and manage Google Drive files and folders",
+        "requires_oauth": ["google_drive"],
+    },
+    "slack_tools": {
+        "description": "Send messages to channels/users, read channel history, manage Slack workspaces",
+        "requires_oauth": ["slack"],
+    },
+    "jira_tools": {
+        "description": "Create and manage Jira issues, transitions, sprints, and projects",
+        "requires_oauth": ["jira"],
+    },
+    "zoom_tools": {
+        "description": "Schedule Zoom meetings and access recordings",
+        "requires_oauth": ["zoom"],
+    },
+    "twitter_tools": {
+        "description": "Post tweets, search Twitter/X, and manage engagement",
+        "requires_oauth": ["twitter"],
+    },
+    "linkedin_tools": {
+        "description": "Post to LinkedIn and search professional content",
+        "requires_oauth": ["linkedin"],
+    },
+    "youtube_tools": {
+        "description": "Search YouTube videos, fetch transcripts, and get channel info",
+        "requires_oauth": [],
+    },
+    "clickup_tools": {
+        "description": "Create and manage ClickUp tasks and projects",
+        "requires_oauth": ["clickup"],
+    },
+    "spawn_agent_tool": {
+        "description": "Spawn another agent as a sub-task (multi-agent orchestration)",
+        "requires_oauth": [],
+    },
+}
+
+
+async def platform_list_agents(runtime_context: Any = None) -> dict:
+    """
+    List all agents for the current tenant.
+
+    Returns a summary of each agent including name, description, status,
+    agent type, and tool count.
+    """
+    if not runtime_context or not runtime_context.tenant_id:
+        return {"error": "No tenant context available"}
+
+    try:
+        from src.models.agent import Agent
+
+        db = runtime_context.db_session
+        result = await db.execute(
+            select(Agent)
+            .where(Agent.tenant_id == runtime_context.tenant_id)
+            .order_by(Agent.created_at.desc())
+            .limit(100)
+        )
+        all_agents = result.scalars().all()
+        # Filter out platform-level agents in Python to avoid JSON operator complexity
+        agents = [a for a in all_agents if not (a.agent_metadata or {}).get("is_platform_agent")]
+
+        agent_list = []
+        for a in agents:
+            tool_count = len(a.tools_config) if isinstance(a.tools_config, list) else 0
+            agent_list.append(
+                {
+                    "name": a.agent_name,
+                    "description": a.description,
+                    "status": a.status,
+                    "agent_type": a.agent_type,
+                    "tool_count": tool_count,
+                    "is_public": a.is_public,
+                    "category": a.category,
+                    "tags": a.tags or [],
+                    "created_at": a.created_at.isoformat() if a.created_at else None,
+                }
+            )
+
+        return {"agents": agent_list, "count": len(agent_list)}
+
+    except Exception as e:
+        logger.exception("Error listing agents")
+        return {"error": str(e)}
+
+
+async def platform_get_available_tools(runtime_context: Any = None) -> dict:
+    """
+    Return all tool categories available on this platform with their
+    descriptions and integration requirements.
+    """
+    return {
+        "tool_categories": PLATFORM_TOOL_CATALOG,
+        "note": (
+            "Tools with non-empty 'requires_oauth' need the user to connect a personal OAuth integration. "
+            "Tools with non-empty 'requires_integration' need a platform API-key integration configured in "
+            "Settings → Integrations. Use platform_check_integration(provider) to verify both types."
+        ),
+    }
+
+
+async def platform_check_integration(provider: str, runtime_context: Any = None) -> dict:
+    """
+    Check whether a specific integration is available for use.
+
+    Checks two sources in order:
+    1. Personal OAuth token (UserOAuthToken) — for OAuth flows (github, slack, gmail, etc.)
+    2. Platform/tenant API-key OAuth app (OAuthApp.api_token) — for API-key integrations (newsapi, etc.)
+
+    Args:
+        provider: Integration provider name (e.g. 'github', 'slack', 'gmail', 'newsapi')
+
+    Returns:
+        dict with keys: connected (bool), auth_method, provider_email, provider_username
+    """
+    if not runtime_context or not runtime_context.tenant_id:
+        return {"connected": False, "auth_method": None, "provider_email": None, "provider_username": None}
+
+    try:
+        from sqlalchemy import func, or_
+
+        from src.models.oauth_app import OAuthApp
+        from src.models.user_oauth_token import UserOAuthToken
+
+        db = runtime_context.db_session
+
+        # 1. Check personal OAuth token
+        if runtime_context.user_id:
+            result = await db.execute(
+                select(UserOAuthToken.provider_email, UserOAuthToken.provider_username)
+                .join(OAuthApp, OAuthApp.id == UserOAuthToken.oauth_app_id)
+                .where(UserOAuthToken.account_id == runtime_context.user_id)
+                .where(func.lower(OAuthApp.provider) == provider.lower())
+                .limit(1)
+            )
+            row = result.first()
+            if row:
+                return {
+                    "connected": True,
+                    "auth_method": "oauth",
+                    "provider_email": row.provider_email,
+                    "provider_username": row.provider_username,
+                }
+
+        # 2. Check platform/tenant API-key OAuth app
+        result = await db.execute(
+            select(OAuthApp)
+            .where(
+                or_(
+                    OAuthApp.tenant_id == runtime_context.tenant_id,
+                    OAuthApp.is_platform_app.is_(True),
+                ),
+                func.lower(OAuthApp.provider) == provider.lower(),
+                OAuthApp.is_active.is_(True),
+                OAuthApp.api_token.isnot(None),
+            )
+            .limit(1)
+        )
+        api_app = result.scalar_one_or_none()
+        if api_app:
+            return {
+                "connected": True,
+                "auth_method": "api_token",
+                "provider_email": None,
+                "provider_username": api_app.app_name,
+            }
+
+        return {"connected": False, "auth_method": None, "provider_email": None, "provider_username": None}
+
+    except Exception as e:
+        logger.exception("Error checking integration")
+        return {"error": str(e), "connected": False}
+
+
+async def platform_create_agent(
+    name: str,
+    description: str,
+    system_prompt: str,
+    agent_type: str = "LLM",
+    llm_provider: str = "openai",
+    llm_model: str = "gpt-4o",
+    api_key: str = "",
+    tools_list: list[str] | None = None,
+    category: str | None = None,
+    tags: list[str] | None = None,
+    runtime_context: Any = None,
+) -> dict:
+    """
+    Create a new AI agent for the current tenant.
+
+    IMPORTANT: Before calling this tool, you MUST output the marker:
+    __ACTION__{"type":"create_agent","config":{...}}__ACTION__
+    and wait for the user to confirm. Only call this tool after the user
+    sends __CONFIRMED__ in their next message.
+
+    Args:
+        name: Agent name (will be slugified for storage)
+        description: Short description of what the agent does
+        system_prompt: The agent's system instructions
+        agent_type: One of LLM, research, code (default: LLM)
+        llm_provider: LLM provider name (openai, anthropic, google, groq)
+        llm_model: Model identifier (e.g. gpt-4o, claude-3-5-sonnet-20241022)
+        api_key: Provider API key (stored encrypted)
+        tools_list: List of tool category names to enable
+        category: Agent category for organization
+        tags: List of tags for discovery
+
+    Returns:
+        dict with success, agent_name, agent_id, message
+    """
+    if not runtime_context or not runtime_context.tenant_id:
+        return {"success": False, "message": "No tenant context available"}
+
+    try:
+        from src.models.agent import Agent
+        from src.models.agent_llm_config import AgentLLMConfig
+        from src.services.agents.security import encrypt_value
+        from src.services.billing.plan_restriction_service import PlanRestrictionError, PlanRestrictionService
+
+        db = runtime_context.db_session
+        tenant_id = runtime_context.tenant_id
+
+        # Check plan limit before creating
+        restriction_service = PlanRestrictionService(db)
+        try:
+            await restriction_service.enforce_agent_limit(tenant_id)
+        except PlanRestrictionError as e:
+            return {"success": False, "message": str(e)}
+
+        # Slugify agent name
+        import re
+
+        agent_name_slug = re.sub(r"[^a-z0-9_-]", "_", name.lower().strip()).strip("_")
+        if not agent_name_slug:
+            agent_name_slug = "agent"
+
+        # Check uniqueness within tenant
+        existing = await db.execute(
+            select(Agent).where(
+                Agent.tenant_id == tenant_id,
+                Agent.agent_name == agent_name_slug,
+            )
+        )
+        if existing.scalar_one_or_none():
+            # Append a short suffix
+            agent_name_slug = f"{agent_name_slug}_{uuid4().hex[:4]}"
+
+        # Inherit full LLM config from PE's per-tenant config when no api_key supplied
+        llm_temperature: float = 0.7
+        llm_max_tokens: int = 4096
+        llm_top_p: float = 1.0
+        llm_api_base: str | None = None
+        llm_additional_params: dict = {}
+
+        if not api_key:
+            from uuid import UUID as _UUID
+
+            from src.models.agent_llm_config import AgentLLMConfig as _LLMCfg
+
+            _platform_tenant_id = _UUID("00000000-0000-0000-0000-000000000000")
+            _pe_agent = (
+                await db.execute(
+                    select(Agent).where(
+                        Agent.agent_name == "platform_engineer_agent",
+                        Agent.tenant_id == _platform_tenant_id,
+                    )
+                )
+            ).scalar_one_or_none()
+            if _pe_agent:
+                _pe_cfg = (
+                    await db.execute(
+                        select(_LLMCfg)
+                        .where(
+                            _LLMCfg.agent_id == _pe_agent.id,
+                            _LLMCfg.tenant_id == tenant_id,
+                        )
+                        .limit(1)
+                    )
+                ).scalar_one_or_none()
+                if _pe_cfg and _pe_cfg.api_key:
+                    llm_provider = _pe_cfg.provider
+                    llm_model = _pe_cfg.model_name
+                    encrypted_key = _pe_cfg.api_key  # already encrypted
+                    llm_api_base = _pe_cfg.api_base
+                    llm_temperature = _pe_cfg.temperature if _pe_cfg.temperature is not None else 0.7
+                    llm_max_tokens = _pe_cfg.max_tokens if _pe_cfg.max_tokens is not None else 4096
+                    llm_top_p = _pe_cfg.top_p if _pe_cfg.top_p is not None else 1.0
+                    llm_additional_params = _pe_cfg.additional_params or {}
+                    logger.info(f"platform_create_agent: inherited LLM config from PE ({llm_provider}/{llm_model})")
+                else:
+                    encrypted_key = ""
+            else:
+                encrypted_key = ""
+        else:
+            encrypted_key = encrypt_value(api_key)
+
+        # Build llm_config
+        llm_config_data = {
+            "provider": llm_provider,
+            "model_name": llm_model,
+            "temperature": llm_temperature,
+            "max_tokens": llm_max_tokens,
+            "api_key": encrypted_key,
+            "api_base": llm_api_base,
+        }
+
+        # Build tools_config from tools_list
+        tools_config: list[dict] = []
+        if tools_list:
+            for tool_name in tools_list:
+                tools_config.append({"name": tool_name, "enabled": True, "config": {}})
+
+        agent = Agent(
+            id=uuid4(),
+            tenant_id=tenant_id,
+            agent_name=agent_name_slug,
+            agent_type=agent_type,
+            description=description,
+            system_prompt=system_prompt,
+            llm_config=llm_config_data,
+            tools_config=tools_config,
+            agent_metadata={},
+            status="ACTIVE",
+            is_public=False,
+            category=category,
+            tags=tags or [],
+            execution_count=0,
+            success_count=0,
+        )
+        db.add(agent)
+        await db.flush()
+
+        # Create default AgentLLMConfig row
+        llm_cfg = AgentLLMConfig(
+            id=uuid4(),
+            agent_id=agent.id,
+            tenant_id=tenant_id,
+            name=f"Primary {llm_model}",
+            provider=llm_provider,
+            model_name=llm_model,
+            api_key=encrypted_key,
+            api_base=llm_api_base,
+            temperature=llm_temperature,
+            max_tokens=llm_max_tokens,
+            top_p=llm_top_p,
+            additional_params=llm_additional_params,
+            is_default=True,
+            display_order=0,
+            enabled=True,
+        )
+        db.add(llm_cfg)
+
+        # Enable AgentTool records from tool categories
+        if tools_list:
+            import fnmatch
+
+            from src.controllers.agents.tools import CAPABILITIES
+            from src.models.agent_tool import AgentTool
+            from src.services.agents.adk_tools import tool_registry
+
+            available_tool_names = [t["name"] for t in tool_registry.list_tools()]
+            capability_ids = list(
+                {TOOL_CATEGORY_TO_CAPABILITY_ID[cat] for cat in tools_list if cat in TOOL_CATEGORY_TO_CAPABILITY_ID}
+            )
+            for cap_id in capability_ids:
+                capability = next((c for c in CAPABILITIES if c["id"] == cap_id), None)
+                if not capability:
+                    continue
+                for tool_name in available_tool_names:
+                    if any(fnmatch.fnmatch(tool_name, p) for p in capability["tool_patterns"]):
+                        db.add(AgentTool(agent_id=agent.id, tool_name=tool_name, config={}, enabled=True))
+
+        await db.commit()
+
+        return {
+            "success": True,
+            "agent_name": agent_name_slug,
+            "agent_id": str(agent.id),
+            "message": f"Agent '{agent_name_slug}' created successfully.",
+        }
+
+    except Exception as e:
+        logger.exception("Error creating agent")
+        try:
+            await runtime_context.db_session.rollback()
+        except Exception:
+            pass
+        return {"success": False, "message": str(e)}
+
+
+# Maps platform tool category names → capability IDs (used by enable_capabilities_bulk)
+TOOL_CATEGORY_TO_CAPABILITY_ID: dict[str, str] = {
+    "browser_tools": "browser-web",
+    "scheduler_tools": "scheduling",
+    "email_tools": "email",
+    "gmail_tools": "email",
+    "file_tools": "files-storage",
+    "storage_tools": "files-storage",
+    "google_drive_tools": "files-storage",
+    "command_tools": "system-commands",
+    "database_tools": "database-analytics",
+    "elasticsearch_tools": "database-analytics",
+    "data_analysis_tools": "database-analytics",
+    "document_tools": "documents",
+    "github_tools": "code-github",
+    "gitlab_tools": "code-github",
+    "slack_tools": "communication",
+    "jira_tools": "project-mgmt",
+    "clickup_tools": "project-mgmt",
+    "zoom_tools": "meetings-calendar",
+    "google_calendar_tools": "meetings-calendar",
+    "twitter_tools": "social-media",
+    "linkedin_tools": "social-media",
+    "youtube_tools": "social-media",
+    "news_tools": "social-media",
+}
+
+
+async def platform_update_agent(
+    agent_name: str,
+    description: str | None = None,
+    system_prompt: str | None = None,
+    status: str | None = None,
+    tools_list: list[str] | None = None,
+    runtime_context: Any = None,
+) -> dict:
+    """
+    Update an existing agent's description, system prompt, status, or tools.
+
+    Only updates fields that are explicitly provided (not None).
+    Security: always scoped to the current tenant.
+
+    Args:
+        agent_name: The agent's name/slug to update
+        description: New description (optional)
+        system_prompt: New system prompt (optional)
+        status: New status: ACTIVE or INACTIVE (optional)
+        tools_list: List of tool category names to enable (optional).
+                    Uses the same categories as platform_create_agent.
+                    Adds tools without removing existing ones.
+
+    Returns:
+        dict with success and message
+    """
+    if not runtime_context or not runtime_context.tenant_id:
+        return {"success": False, "message": "No tenant context available"}
+
+    try:
+        from src.models.agent import Agent
+
+        db = runtime_context.db_session
+        result = await db.execute(
+            select(Agent).where(
+                Agent.tenant_id == runtime_context.tenant_id,
+                Agent.agent_name == agent_name,
+            )
+        )
+        agent = result.scalar_one_or_none()
+        if not agent:
+            return {"success": False, "message": f"Agent '{agent_name}' not found"}
+
+        if description is not None:
+            agent.description = description
+        if system_prompt is not None:
+            agent.system_prompt = system_prompt
+        if status is not None:
+            if status.upper() not in ("ACTIVE", "INACTIVE"):
+                return {"success": False, "message": "status must be ACTIVE or INACTIVE"}
+            agent.status = status.upper()
+
+        # Enable tools via AgentTool rows (same as capabilities/bulk endpoint)
+        tools_enabled: list[str] = []
+        if tools_list:
+            import fnmatch
+
+            from src.controllers.agents.tools import CAPABILITIES
+            from src.models.agent_tool import AgentTool
+            from src.services.agents.adk_tools import tool_registry
+
+            available_tool_names = [t["name"] for t in tool_registry.list_tools()]
+
+            # Collect unique capability IDs from the requested tool categories
+            capability_ids = list(
+                {TOOL_CATEGORY_TO_CAPABILITY_ID[cat] for cat in tools_list if cat in TOOL_CATEGORY_TO_CAPABILITY_ID}
+            )
+
+            # For each capability, match and enable tools
+            for cap_id in capability_ids:
+                capability = next((c for c in CAPABILITIES if c["id"] == cap_id), None)
+                if not capability:
+                    continue
+                for tool_name in available_tool_names:
+                    if any(fnmatch.fnmatch(tool_name, p) for p in capability["tool_patterns"]):
+                        existing = (
+                            await db.execute(
+                                select(AgentTool).where(
+                                    AgentTool.agent_id == agent.id,
+                                    AgentTool.tool_name == tool_name,
+                                )
+                            )
+                        ).scalar_one_or_none()
+                        if existing:
+                            existing.enabled = True
+                        else:
+                            db.add(AgentTool(agent_id=agent.id, tool_name=tool_name, config={}, enabled=True))
+                        tools_enabled.append(tool_name)
+
+        # Ensure LLM config is set — inherit from PE's per-tenant AgentLLMConfig if missing
+        from uuid import UUID as _UUID
+
+        from src.models.agent_llm_config import AgentLLMConfig
+
+        tenant_id = runtime_context.tenant_id
+        platform_tenant_id = _UUID("00000000-0000-0000-0000-000000000000")
+
+        # Check if this agent already has an LLM config for this tenant
+        existing_llm = (
+            await db.execute(
+                select(AgentLLMConfig)
+                .where(
+                    AgentLLMConfig.agent_id == agent.id,
+                    AgentLLMConfig.tenant_id == tenant_id,
+                )
+                .limit(1)
+            )
+        ).scalar_one_or_none()
+
+        if not existing_llm or not existing_llm.api_key:
+            # Look up PE agent and its per-tenant config
+            from src.models.agent import Agent as _Agent
+
+            pe_agent = (
+                await db.execute(
+                    select(_Agent).where(
+                        _Agent.agent_name == "platform_engineer_agent",
+                        _Agent.tenant_id == platform_tenant_id,
+                    )
+                )
+            ).scalar_one_or_none()
+
+            if pe_agent:
+                pe_cfg = (
+                    await db.execute(
+                        select(AgentLLMConfig)
+                        .where(
+                            AgentLLMConfig.agent_id == pe_agent.id,
+                            AgentLLMConfig.tenant_id == tenant_id,
+                        )
+                        .limit(1)
+                    )
+                ).scalar_one_or_none()
+
+                if pe_cfg and pe_cfg.api_key:
+                    if existing_llm:
+                        existing_llm.api_key = pe_cfg.api_key
+                        existing_llm.provider = pe_cfg.provider
+                        existing_llm.model_name = pe_cfg.model_name
+                    else:
+                        db.add(
+                            AgentLLMConfig(
+                                id=uuid4(),
+                                agent_id=agent.id,
+                                tenant_id=tenant_id,
+                                name="Default",
+                                provider=pe_cfg.provider,
+                                model_name=pe_cfg.model_name,
+                                api_key=pe_cfg.api_key,
+                                temperature=0.7,
+                                max_tokens=4096,
+                                top_p=1.0,
+                                is_default=True,
+                                display_order=0,
+                                enabled=True,
+                            )
+                        )
+
+        await db.commit()
+
+        msg = f"Agent '{agent_name}' updated successfully."
+        if tools_enabled:
+            msg += f" Enabled {len(tools_enabled)} tools."
+        return {"success": True, "message": msg, "tools_enabled": tools_enabled}
+
+    except Exception as e:
+        logger.exception("Error updating agent")
+        return {"success": False, "message": str(e)}
+
+
+# ---------------------------------------------------------------------------
+# Channel management helpers
+# ---------------------------------------------------------------------------
+
+
+async def _scrub_tokens_from_conversation(
+    db: Any,
+    conversation_id: str | None,
+    sensitive_values: list[str],
+) -> None:
+    """Redact sensitive token values from the last 20 messages of a conversation."""
+    from src.models.message import Message
+
+    if not conversation_id:
+        return
+    sensitive_values = [v for v in sensitive_values if v]
+    if not sensitive_values:
+        return
+
+    try:
+        result = await db.execute(
+            select(Message)
+            .where(Message.conversation_id == conversation_id)
+            .order_by(Message.created_at.desc())
+            .limit(20)
+        )
+        messages = result.scalars().all()
+
+        for msg in messages:
+            original = msg.content or ""
+            scrubbed = original
+            for val in sensitive_values:
+                if val in scrubbed:
+                    scrubbed = scrubbed.replace(val, "[REDACTED]")
+            if scrubbed != original:
+                msg.content = scrubbed
+
+        await db.commit()
+    except Exception:
+        logger.exception("Error scrubbing tokens from conversation")
+
+
+async def _resolve_target_agent(db: Any, agent_name: str, tenant_id: Any) -> Any:
+    """Look up an agent by name for the calling tenant, with a fallback to the platform tenant for PE."""
+    from uuid import UUID
+
+    from src.models.agent import Agent
+
+    result = await db.execute(
+        select(Agent).where(
+            Agent.tenant_id == tenant_id,
+            Agent.agent_name == agent_name,
+        )
+    )
+    agent = result.scalar_one_or_none()
+    if agent:
+        return agent
+
+    if agent_name == "platform_engineer_agent":
+        platform_tenant_id = UUID("00000000-0000-0000-0000-000000000000")
+        result = await db.execute(
+            select(Agent).where(
+                Agent.tenant_id == platform_tenant_id,
+                Agent.agent_name == "platform_engineer_agent",
+            )
+        )
+        return result.scalar_one_or_none()
+
+    return None
+
+
+async def platform_create_slack_bot(
+    agent_name: str,
+    bot_name: str,
+    bot_token: str,
+    connection_mode: str = "socket",
+    app_token: str | None = None,
+    signing_secret: str | None = None,
+    app_id: str = "",
+    runtime_context: Any = None,
+) -> dict:
+    """
+    Create a Slack bot for an agent and activate it.
+
+    Args:
+        agent_name: Slug name of the target agent (or 'platform_engineer_agent' for the PE itself)
+        bot_name: Display name for the bot in Slack
+        bot_token: Bot user OAuth token (xoxb-...)
+        connection_mode: 'socket' (default, needs app_token) or 'event' (needs signing_secret)
+        app_token: App-level token for Socket Mode (xapp-...)
+        signing_secret: Signing secret for Event Mode
+        app_id: Slack App ID (optional — shown in app settings at api.slack.com)
+
+    Returns:
+        dict with success, bot_id, workspace_name, and webhook_url (Event Mode only)
+    """
+    if not runtime_context or not runtime_context.tenant_id:
+        return {"success": False, "message": "No tenant context available"}
+
+    try:
+        from src.services.slack.slack_bot_manager import SlackBotManager
+
+        db = runtime_context.db_session
+        tenant_id = runtime_context.tenant_id
+
+        agent = await _resolve_target_agent(db, agent_name, tenant_id)
+        if not agent:
+            return {"success": False, "message": f"Agent '{agent_name}' not found"}
+
+        manager = SlackBotManager(db)
+        slack_bot = await manager.create_bot(
+            agent_id=agent.id,
+            tenant_id=tenant_id,
+            bot_name=bot_name,
+            slack_app_id=app_id or "auto",
+            slack_bot_token=bot_token,
+            slack_app_token=app_token,
+            connection_mode=connection_mode,
+            signing_secret=signing_secret,
+            created_by=runtime_context.user_id if runtime_context.user_id else None,
+        )
+
+        await manager.start_bot(slack_bot.id)
+
+        conv_id = str(runtime_context.conversation_id) if runtime_context.conversation_id else None
+        await _scrub_tokens_from_conversation(
+            db=db,
+            conversation_id=conv_id,
+            sensitive_values=[bot_token, app_token or "", signing_secret or ""],
+        )
+
+        result: dict[str, Any] = {
+            "success": True,
+            "bot_id": str(slack_bot.id),
+            "workspace_name": slack_bot.slack_workspace_name,
+        }
+        if slack_bot.webhook_url:
+            result["webhook_url"] = slack_bot.webhook_url
+        return result
+
+    except Exception as e:
+        logger.exception("Error creating Slack bot")
+        try:
+            await runtime_context.db_session.rollback()
+        except Exception:
+            pass
+        return {"success": False, "message": str(e)}
+
+
+async def platform_create_telegram_bot(
+    agent_name: str,
+    bot_name: str,
+    bot_token: str,
+    runtime_context: Any = None,
+) -> dict:
+    """
+    Create a Telegram bot for an agent and start long polling.
+
+    Args:
+        agent_name: Slug name of the target agent (or 'platform_engineer_agent' for the PE itself)
+        bot_name: Display name for the bot
+        bot_token: Bot token from @BotFather
+
+    Returns:
+        dict with success, bot_id, bot_username
+    """
+    if not runtime_context or not runtime_context.tenant_id:
+        return {"success": False, "message": "No tenant context available"}
+
+    try:
+        from src.services.telegram.telegram_bot_manager import TelegramBotManager
+
+        db = runtime_context.db_session
+        tenant_id = runtime_context.tenant_id
+
+        agent = await _resolve_target_agent(db, agent_name, tenant_id)
+        if not agent:
+            return {"success": False, "message": f"Agent '{agent_name}' not found"}
+
+        manager = TelegramBotManager(db)
+        telegram_bot = await manager.create_bot(
+            agent_id=agent.id,
+            tenant_id=tenant_id,
+            bot_name=bot_name,
+            bot_token=bot_token,
+            created_by=runtime_context.user_id if runtime_context.user_id else None,
+        )
+
+        await manager.start_bot(telegram_bot.id)
+
+        conv_id = str(runtime_context.conversation_id) if runtime_context.conversation_id else None
+        await _scrub_tokens_from_conversation(
+            db=db,
+            conversation_id=conv_id,
+            sensitive_values=[bot_token],
+        )
+
+        return {
+            "success": True,
+            "bot_id": str(telegram_bot.id),
+            "bot_username": telegram_bot.bot_username,
+        }
+
+    except Exception as e:
+        logger.exception("Error creating Telegram bot")
+        try:
+            await runtime_context.db_session.rollback()
+        except Exception:
+            pass
+        return {"success": False, "message": str(e)}
+
+
+async def platform_list_agent_channels(
+    agent_name: str,
+    runtime_context: Any = None,
+) -> dict:
+    """
+    List all Slack and Telegram bots connected to a given agent.
+
+    Args:
+        agent_name: Slug name of the agent
+
+    Returns:
+        dict with slack (list) and telegram (list) channel summaries
+    """
+    if not runtime_context or not runtime_context.tenant_id:
+        return {"error": "No tenant context available"}
+
+    try:
+        from src.models.slack_bot import SlackBot
+        from src.models.telegram_bot import TelegramBot
+
+        db = runtime_context.db_session
+        tenant_id = runtime_context.tenant_id
+
+        agent = await _resolve_target_agent(db, agent_name, tenant_id)
+        if not agent:
+            return {"error": f"Agent '{agent_name}' not found"}
+
+        slack_result = await db.execute(
+            select(SlackBot).where(
+                SlackBot.agent_id == agent.id,
+                SlackBot.tenant_id == tenant_id,
+                SlackBot.deleted_at.is_(None),
+            )
+        )
+        slack_bots = slack_result.scalars().all()
+
+        telegram_result = await db.execute(
+            select(TelegramBot).where(
+                TelegramBot.agent_id == agent.id,
+                TelegramBot.tenant_id == tenant_id,
+                TelegramBot.deleted_at.is_(None),
+            )
+        )
+        telegram_bots = telegram_result.scalars().all()
+
+        return {
+            "agent_name": agent_name,
+            "slack": [
+                {
+                    "bot_id": str(b.id),
+                    "bot_name": b.bot_name,
+                    "workspace_name": b.slack_workspace_name,
+                    "status": b.connection_status,
+                    "is_active": b.is_active,
+                    "connection_mode": b.connection_mode,
+                }
+                for b in slack_bots
+            ],
+            "telegram": [
+                {
+                    "bot_id": str(b.id),
+                    "bot_name": b.bot_name,
+                    "bot_username": b.bot_username,
+                    "status": b.connection_status,
+                    "is_active": b.is_active,
+                }
+                for b in telegram_bots
+            ],
+        }
+
+    except Exception as e:
+        logger.exception("Error listing agent channels")
+        return {"error": str(e)}
+
+
+async def platform_delete_agent_channel(
+    channel: str,
+    bot_id: str,
+    runtime_context: Any = None,
+) -> dict:
+    """
+    Disconnect a Slack or Telegram bot from an agent (soft-delete).
+
+    Args:
+        channel: 'slack' or 'telegram'
+        bot_id: UUID of the bot to remove
+
+    Returns:
+        dict with success and message
+    """
+    if not runtime_context or not runtime_context.tenant_id:
+        return {"success": False, "message": "No tenant context available"}
+
+    if channel not in ("slack", "telegram"):
+        return {"success": False, "message": "channel must be 'slack' or 'telegram'"}
+
+    try:
+        from datetime import UTC, datetime
+        from uuid import UUID
+
+        db = runtime_context.db_session
+        tenant_id = runtime_context.tenant_id
+        bot_uuid = UUID(bot_id)
+
+        if channel == "slack":
+            from src.models.slack_bot import SlackBot
+            from src.services.slack.slack_bot_manager import SlackBotManager
+
+            bot = (
+                await db.execute(
+                    select(SlackBot).where(
+                        SlackBot.id == bot_uuid,
+                        SlackBot.tenant_id == tenant_id,
+                    )
+                )
+            ).scalar_one_or_none()
+            if not bot:
+                return {"success": False, "message": "Slack bot not found"}
+
+            manager = SlackBotManager(db)
+            await manager.stop_bot(bot.id)
+            bot.is_active = False
+            bot.deleted_at = datetime.now(UTC)
+            await db.commit()
+
+        else:
+            from src.models.telegram_bot import TelegramBot
+            from src.services.telegram.telegram_bot_manager import TelegramBotManager
+
+            bot = (
+                await db.execute(
+                    select(TelegramBot).where(
+                        TelegramBot.id == bot_uuid,
+                        TelegramBot.tenant_id == tenant_id,
+                    )
+                )
+            ).scalar_one_or_none()
+            if not bot:
+                return {"success": False, "message": "Telegram bot not found"}
+
+            manager = TelegramBotManager(db)
+            await manager.stop_bot(bot.id)
+            bot.is_active = False
+            bot.deleted_at = datetime.now(UTC)
+            await db.commit()
+
+        return {"success": True, "message": f"{channel.capitalize()} bot disconnected"}
+
+    except ValueError as e:
+        return {"success": False, "message": f"Invalid bot_id: {e}"}
+    except Exception as e:
+        logger.exception("Error deleting agent channel")
+        return {"success": False, "message": str(e)}

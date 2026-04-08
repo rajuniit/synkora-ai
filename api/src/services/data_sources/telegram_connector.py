@@ -396,5 +396,5 @@ class TelegramConnector(BaseConnector):
                 return {"success": False, "message": result.get("error", "Token validation failed")}
 
         except Exception as e:
-            logger.error(f"Token validation error: {e}")
+            logger.warning(f"Token validation error: {e}")
             return {"success": False, "message": f"Failed to validate token: {str(e)}"}

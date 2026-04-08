@@ -229,6 +229,7 @@ class SlackMessageHandler:
                 attachments=None,
                 llm_config_id=None,
                 db=self.db_session,
+                user_id=str(slack_bot.created_by) if slack_bot.created_by else None,
                 shared_state={
                     "slack_message_ts": message_ts,
                     "slack_channel_id": channel_id,

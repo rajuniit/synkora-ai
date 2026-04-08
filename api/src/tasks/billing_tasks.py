@@ -616,4 +616,4 @@ def _store_reconciliation_report(report: dict) -> None:
             key = f"billing:reconciliation:{datetime.now(UTC).strftime('%Y-%m-%d')}"
             redis.set(key, json.dumps(report), ex=86400 * 30)  # Keep for 30 days
     except Exception as e:
-        logger.error(f"Failed to store reconciliation report: {e}")
+        logger.warning(f"Failed to store reconciliation report: {e}")

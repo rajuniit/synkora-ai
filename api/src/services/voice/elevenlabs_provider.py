@@ -73,10 +73,10 @@ class ElevenLabsProvider(BaseTTSProvider):
                 return response.content
 
         except httpx.HTTPStatusError as e:
-            logger.error(f"ElevenLabs API error: {e.response.status_code} - {e.response.text}")
+            logger.warning(f"ElevenLabs API error: {e.response.status_code} - {e.response.text}")
             raise Exception(f"Speech synthesis failed: {e.response.text}")
         except Exception as e:
-            logger.error(f"ElevenLabs synthesis error: {str(e)}")
+            logger.warning(f"ElevenLabs synthesis error: {str(e)}")
             raise
 
     async def get_voices(self, language: str | None = None) -> list[dict[str, Any]]:
@@ -125,10 +125,10 @@ class ElevenLabsProvider(BaseTTSProvider):
                 return voices
 
         except httpx.HTTPStatusError as e:
-            logger.error(f"ElevenLabs API error: {e.response.status_code} - {e.response.text}")
+            logger.warning(f"ElevenLabs API error: {e.response.status_code} - {e.response.text}")
             raise Exception(f"Failed to fetch voices: {e.response.text}")
         except Exception as e:
-            logger.error(f"ElevenLabs get voices error: {str(e)}")
+            logger.warning(f"ElevenLabs get voices error: {str(e)}")
             raise
 
     def get_supported_languages(self) -> list[str]:
@@ -208,10 +208,10 @@ class ElevenLabsProvider(BaseTTSProvider):
                 return models
 
         except httpx.HTTPStatusError as e:
-            logger.error(f"ElevenLabs API error: {e.response.status_code} - {e.response.text}")
+            logger.warning(f"ElevenLabs API error: {e.response.status_code} - {e.response.text}")
             raise Exception(f"Failed to fetch models: {e.response.text}")
         except Exception as e:
-            logger.error(f"ElevenLabs get models error: {str(e)}")
+            logger.warning(f"ElevenLabs get models error: {str(e)}")
             raise
 
     async def get_user_info(self) -> dict[str, Any]:
@@ -244,8 +244,8 @@ class ElevenLabsProvider(BaseTTSProvider):
                 }
 
         except httpx.HTTPStatusError as e:
-            logger.error(f"ElevenLabs API error: {e.response.status_code} - {e.response.text}")
+            logger.warning(f"ElevenLabs API error: {e.response.status_code} - {e.response.text}")
             raise Exception(f"Failed to fetch user info: {e.response.text}")
         except Exception as e:
-            logger.error(f"ElevenLabs get user info error: {str(e)}")
+            logger.warning(f"ElevenLabs get user info error: {str(e)}")
             raise

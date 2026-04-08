@@ -570,6 +570,7 @@ class MultiProviderLLMClient:
             "temperature": temperature,
             "max_tokens": max_tokens,
             "api_key": self.config.api_key,
+            "num_retries": 3,
         }
 
         # Add base URL if provided
@@ -821,6 +822,7 @@ class MultiProviderLLMClient:
             "max_tokens": max_tokens,
             "api_key": self.config.api_key,
             "stream": True,
+            "num_retries": 3,
         }
 
         if self.config.api_base:
@@ -926,6 +928,7 @@ class MultiProviderLLMClient:
             "max_tokens": max_tokens,
             "api_key": self.config.api_key,
             "stream": True,
+            "num_retries": 3,
         }
 
         if self.config.api_base:

@@ -36,6 +36,9 @@ class WhatsAppBot(Base):
     # Webhook Configuration
     webhook_url = Column(String(500), nullable=True, comment="Webhook callback URL")
 
+    # Ownership — account that created/connected this bot (used to resolve OAuth tokens for scheduled runs)
+    created_by = Column(UUID(as_uuid=True), ForeignKey("accounts.id", ondelete="SET NULL"), nullable=True)
+
     # Status
     is_active = Column(Boolean, default=True, nullable=False)
     connection_status = Column(

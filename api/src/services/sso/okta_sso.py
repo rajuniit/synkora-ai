@@ -324,7 +324,7 @@ class OktaSSOService:
                 response = await client.get(f"https://{self.domain}/.well-known/openid-configuration")
                 return response.status_code == 200
         except Exception as e:
-            logger.error(f"Failed to validate Okta domain: {e}")
+            logger.warning(f"Failed to validate Okta domain: {e}")
             return False
 
     async def get_oidc_configuration(self) -> dict[str, Any]:

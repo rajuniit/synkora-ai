@@ -165,5 +165,5 @@ class GitHubOAuth:
             )
             return response.status_code == 204
         except Exception as e:
-            logger.error(f"Failed to revoke token: {e}")
+            logger.warning(f"Failed to revoke token: {e}")
             return False

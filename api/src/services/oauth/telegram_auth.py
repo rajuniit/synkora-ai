@@ -49,10 +49,10 @@ class TelegramAuth:
                 return {"success": False, "error": f"Telegram API returned status {response.status_code}"}
 
         except httpx.TimeoutException:
-            logger.error("Timeout while validating Telegram token")
+            logger.warning("Timeout while validating Telegram token")
             return {"success": False, "error": "Connection timeout while validating token"}
         except Exception as e:
-            logger.error(f"Error validating Telegram token: {str(e)}")
+            logger.warning(f"Error validating Telegram token: {str(e)}")
             return {"success": False, "error": f"Failed to validate token: {str(e)}"}
 
     @staticmethod

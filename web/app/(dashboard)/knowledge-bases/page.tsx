@@ -315,6 +315,7 @@ export default function KnowledgeBasesPage() {
                   <div className="flex gap-2">
                     <Link
                       href={`/knowledge-bases/${kb.id}`}
+                      prefetch={false}
                       className="flex-1 inline-flex items-center justify-center gap-2 px-4 py-2.5 text-sm font-medium text-white bg-red-600 rounded-lg hover:bg-red-700 transition-colors"
                     >
                       <Eye className="w-4 h-4" />
@@ -322,6 +323,7 @@ export default function KnowledgeBasesPage() {
                     </Link>
                     <Link
                       href={`/knowledge-bases/${kb.id}/edit`}
+                      prefetch={false}
                       className="inline-flex items-center justify-center px-3 py-2.5 text-sm font-medium text-gray-700 bg-gray-100 rounded-lg hover:bg-gray-200 transition-colors"
                     >
                       <Edit className="w-4 h-4" />

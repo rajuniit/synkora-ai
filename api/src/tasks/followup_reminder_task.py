@@ -293,7 +293,7 @@ def process_due_followups() -> dict[str, Any]:
                         db.query(ScheduledTask)
                         .filter(
                             ScheduledTask.task_type == "followup_reminder",
-                            ScheduledTask.task_config["followup_item_id"].astext == str(followup.id),
+                            ScheduledTask.task_config["followup_item_id"].as_string() == str(followup.id),
                             ScheduledTask.is_active,
                         )
                         .first()

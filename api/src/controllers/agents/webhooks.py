@@ -359,7 +359,7 @@ async def receive_webhook(webhook_token: str, request: Request, db: AsyncSession
         else:
             payload_dict = json.loads(payload)
     except json.JSONDecodeError as e:
-        logger.error(f"Failed to parse JSON: {e}, body: {payload[:200]}")
+        logger.warning(f"Failed to parse JSON: {e}, body: {payload[:200]}")
         raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=f"Invalid JSON: {str(e)}")
 
     # Process webhook

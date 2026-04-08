@@ -126,6 +126,7 @@ async def seed_subscription_plans(db: AsyncSession, update: bool = False) -> Non
                 "audit_logs": False,
                 "overage_allowed": False,
                 "grace_period_days": 3,
+                "platform_engineer_agent": True,
             },
             "is_active": True,
         },
@@ -169,6 +170,7 @@ async def seed_subscription_plans(db: AsyncSession, update: bool = False) -> Non
                 "overage_allowed": True,
                 "overage_rate_per_credit": 0.01,  # $0.01 per credit overage
                 "grace_period_days": 7,
+                "platform_engineer_agent": True,
             },
             "is_active": True,
         },
@@ -213,6 +215,7 @@ async def seed_subscription_plans(db: AsyncSession, update: bool = False) -> Non
                 "overage_rate_per_credit": 0.008,  # $0.008 per credit (better rate)
                 "grace_period_days": 14,
                 "max_rollover_credits": 30000,  # Can accumulate up to 2 months
+                "platform_engineer_agent": True,
             },
             "is_active": True,
         },
@@ -260,6 +263,7 @@ async def seed_subscription_plans(db: AsyncSession, update: bool = False) -> Non
                 "overage_rate_per_credit": 0.005,  # $0.005 per credit (best rate)
                 "grace_period_days": 30,
                 "max_rollover_credits": 300000,  # Can accumulate up to 3 months
+                "platform_engineer_agent": True,
             },
             "is_active": True,
         },

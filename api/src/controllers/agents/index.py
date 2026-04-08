@@ -183,27 +183,123 @@ async def create_agent(
         await db.commit()
         await db.refresh(db_agent)
 
+        # Enable AgentTool records for any tool categories in the request
+        # (category names like "news_tools" must be mapped to real tool names)
+        if request.config.tools:
+            try:
+                import fnmatch
+
+                from src.controllers.agents.tools import CAPABILITIES
+                from src.models.agent_tool import AgentTool
+                from src.services.agents.adk_tools import tool_registry
+                from src.services.agents.internal_tools.platform_tools import TOOL_CATEGORY_TO_CAPABILITY_ID
+
+                available_tool_names = [t["name"] for t in tool_registry.list_tools()]
+                requested_categories = [t.name for t in request.config.tools]
+
+                capability_ids = list(
+                    {
+                        TOOL_CATEGORY_TO_CAPABILITY_ID[cat]
+                        for cat in requested_categories
+                        if cat in TOOL_CATEGORY_TO_CAPABILITY_ID
+                    }
+                )
+
+                for cap_id in capability_ids:
+                    capability = next((c for c in CAPABILITIES if c["id"] == cap_id), None)
+                    if not capability:
+                        continue
+                    for tool_name in available_tool_names:
+                        if any(fnmatch.fnmatch(tool_name, p) for p in capability["tool_patterns"]):
+                            db.add(AgentTool(agent_id=db_agent.id, tool_name=tool_name, config={}, enabled=True))
+
+                await db.commit()
+            except Exception as tool_err:
+                logger.warning(f"Failed to enable AgentTool records: {tool_err}")
+
         # Also create an entry in the agent_llm_configs table for the LLM config
         # This is required because the edit page and chat use that table
         try:
+            from sqlalchemy import select as sa_select
+
             from src.models.agent_llm_config import AgentLLMConfig
             from src.services.agents.security import encrypt_value
 
             llm_data = request.config.llm_config
-            # Encrypt the API key before storing
-            encrypted_api_key = encrypt_value(llm_data.api_key) if llm_data.api_key else ""
+
+            # --- Inherit full LLM config from Platform Engineer when no API key provided ---
+            pe_cfg_inherited: AgentLLMConfig | None = None
+            if not llm_data.api_key:
+                platform_tenant_id = uuid.UUID("00000000-0000-0000-0000-000000000000")
+                pe_agent_row = (
+                    await db.execute(
+                        sa_select(Agent).where(
+                            Agent.agent_name == "platform_engineer_agent",
+                            Agent.tenant_id == platform_tenant_id,
+                        )
+                    )
+                ).scalar_one_or_none()
+                if pe_agent_row:
+                    _pe_cfg = (
+                        await db.execute(
+                            sa_select(AgentLLMConfig)
+                            .where(
+                                AgentLLMConfig.agent_id == pe_agent_row.id,
+                                AgentLLMConfig.tenant_id == tenant_id,
+                            )
+                            .limit(1)
+                        )
+                    ).scalar_one_or_none()
+                    if _pe_cfg and _pe_cfg.api_key:
+                        pe_cfg_inherited = _pe_cfg
+                        logger.info(
+                            f"Agent '{request.config.name}': inherited LLM config from platform_engineer_agent"
+                            f" ({_pe_cfg.provider}/{_pe_cfg.model_name})"
+                        )
+
+            if llm_data.api_key:
+                # User supplied a key — encrypt it and use request values as-is
+                encrypted_api_key = encrypt_value(llm_data.api_key)
+                effective_provider = llm_data.provider
+                effective_model = llm_data.model_name
+                effective_api_base = llm_data.api_base
+                effective_temperature = llm_data.temperature
+                effective_max_tokens = llm_data.max_tokens
+                effective_top_p = llm_data.top_p
+                effective_additional_params = llm_data.additional_params or {}
+            elif pe_cfg_inherited:
+                # No key supplied — copy everything from PE config
+                encrypted_api_key = pe_cfg_inherited.api_key
+                effective_provider = pe_cfg_inherited.provider
+                effective_model = pe_cfg_inherited.model_name
+                effective_api_base = pe_cfg_inherited.api_base
+                effective_temperature = pe_cfg_inherited.temperature
+                effective_max_tokens = pe_cfg_inherited.max_tokens
+                effective_top_p = pe_cfg_inherited.top_p
+                effective_additional_params = pe_cfg_inherited.additional_params or {}
+            else:
+                # Fallback: no key, no PE config
+                encrypted_api_key = ""
+                effective_provider = llm_data.provider
+                effective_model = llm_data.model_name
+                effective_api_base = llm_data.api_base
+                effective_temperature = llm_data.temperature
+                effective_max_tokens = llm_data.max_tokens
+                effective_top_p = llm_data.top_p
+                effective_additional_params = llm_data.additional_params or {}
+
             llm_config_entry = AgentLLMConfig(
                 tenant_id=tenant_id,
                 agent_id=db_agent.id,
-                name=f"Primary {llm_data.model_name}",
-                provider=llm_data.provider,
-                model_name=llm_data.model_name,
+                name=f"Primary {effective_model}",
+                provider=effective_provider,
+                model_name=effective_model,
                 api_key=encrypted_api_key,
-                api_base=llm_data.api_base,
-                temperature=llm_data.temperature,
-                max_tokens=llm_data.max_tokens,
-                top_p=llm_data.top_p,
-                additional_params=llm_data.additional_params or {},
+                api_base=effective_api_base,
+                temperature=effective_temperature,
+                max_tokens=effective_max_tokens,
+                top_p=effective_top_p,
+                additional_params=effective_additional_params,
                 is_default=True,
                 display_order=0,
                 enabled=True,
@@ -246,7 +342,7 @@ async def create_agent(
 
         # Handle other integrity errors
         elif isinstance(e, IntegrityError):
-            logger.error(f"Database integrity error: {e}", exc_info=True)
+            logger.warning(f"Database integrity error: {e}")
             raise HTTPException(
                 status_code=status.HTTP_400_BAD_REQUEST,
                 detail="Invalid data provided. Please check your input and try again.",
