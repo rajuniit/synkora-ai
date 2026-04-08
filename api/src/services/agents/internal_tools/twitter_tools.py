@@ -182,10 +182,7 @@ async def _get_twitter_credentials(
         logger.info("Using Twitter API token '%s' (app-only, read-only)", oauth_app.app_name)
 
     if not credentials.get("bearer_token") and not credentials.get("access_token"):
-        raise ValueError(
-            "No Twitter access token available. "
-            "Please connect Twitter in Settings → Integrations."
-        )
+        raise ValueError("No Twitter access token available. Please connect Twitter in Settings → Integrations.")
 
     return credentials
 

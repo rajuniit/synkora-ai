@@ -197,11 +197,13 @@ async def create_agent(
                 available_tool_names = [t["name"] for t in tool_registry.list_tools()]
                 requested_categories = [t.name for t in request.config.tools]
 
-                capability_ids = list({
-                    TOOL_CATEGORY_TO_CAPABILITY_ID[cat]
-                    for cat in requested_categories
-                    if cat in TOOL_CATEGORY_TO_CAPABILITY_ID
-                })
+                capability_ids = list(
+                    {
+                        TOOL_CATEGORY_TO_CAPABILITY_ID[cat]
+                        for cat in requested_categories
+                        if cat in TOOL_CATEGORY_TO_CAPABILITY_ID
+                    }
+                )
 
                 for cap_id in capability_ids:
                     capability = next((c for c in CAPABILITIES if c["id"] == cap_id), None)
@@ -229,19 +231,25 @@ async def create_agent(
             pe_cfg_inherited: AgentLLMConfig | None = None
             if not llm_data.api_key:
                 platform_tenant_id = uuid.UUID("00000000-0000-0000-0000-000000000000")
-                pe_agent_row = (await db.execute(
-                    sa_select(Agent).where(
-                        Agent.agent_name == "platform_engineer_agent",
-                        Agent.tenant_id == platform_tenant_id,
+                pe_agent_row = (
+                    await db.execute(
+                        sa_select(Agent).where(
+                            Agent.agent_name == "platform_engineer_agent",
+                            Agent.tenant_id == platform_tenant_id,
+                        )
                     )
-                )).scalar_one_or_none()
+                ).scalar_one_or_none()
                 if pe_agent_row:
-                    _pe_cfg = (await db.execute(
-                        sa_select(AgentLLMConfig).where(
-                            AgentLLMConfig.agent_id == pe_agent_row.id,
-                            AgentLLMConfig.tenant_id == tenant_id,
-                        ).limit(1)
-                    )).scalar_one_or_none()
+                    _pe_cfg = (
+                        await db.execute(
+                            sa_select(AgentLLMConfig)
+                            .where(
+                                AgentLLMConfig.agent_id == pe_agent_row.id,
+                                AgentLLMConfig.tenant_id == tenant_id,
+                            )
+                            .limit(1)
+                        )
+                    ).scalar_one_or_none()
                     if _pe_cfg and _pe_cfg.api_key:
                         pe_cfg_inherited = _pe_cfg
                         logger.info(
