@@ -145,10 +145,13 @@ class ExecutionRegistry:
             tools.append(tool_name)
 
         pipe = redis.pipeline()
-        pipe.hset(key, mapping={
-            "tools_used": json.dumps(tools),
-            "total_tools": str(len(tools)),
-        })
+        pipe.hset(
+            key,
+            mapping={
+                "tools_used": json.dumps(tools),
+                "total_tools": str(len(tools)),
+            },
+        )
         await pipe.execute()
 
     @staticmethod

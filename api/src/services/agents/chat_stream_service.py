@@ -263,6 +263,7 @@ class ChatStreamService:
                 if _execution_id:
                     try:
                         from src.services.agents.execution_registry import execution_registry
+
                         await execution_registry.append_event(_execution_id, event_data)
                     except Exception:
                         pass
@@ -1612,7 +1613,9 @@ class ChatStreamService:
                     status="completed",
                     duration_ms=duration_ms,
                 )
-                await _track({"type": "tool_status", "tool_name": tool_name, "status": "completed", "duration_ms": duration_ms})
+                await _track(
+                    {"type": "tool_status", "tool_name": tool_name, "status": "completed", "duration_ms": duration_ms}
+                )
 
             elif event["type"] == "chart":
                 # Two event shapes:

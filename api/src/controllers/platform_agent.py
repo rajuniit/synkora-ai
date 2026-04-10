@@ -128,9 +128,7 @@ async def get_platform_agent_llm_config(
     if not agent:
         return None
 
-    configs = await LLMConfigService.get_agent_configs(
-        session=db, agent_id=agent.id, tenant_id=tenant_id
-    )
+    configs = await LLMConfigService.get_agent_configs(session=db, agent_id=agent.id, tenant_id=tenant_id)
     return configs[0] if configs else None
 
 
@@ -160,9 +158,7 @@ async def upsert_platform_agent_llm_config(
         )
 
     # Check for existing config — update if present, create if not
-    configs = await LLMConfigService.get_agent_configs(
-        session=db, agent_id=agent.id, tenant_id=tenant_id
-    )
+    configs = await LLMConfigService.get_agent_configs(session=db, agent_id=agent.id, tenant_id=tenant_id)
 
     if configs:
         existing = configs[0]
@@ -178,9 +174,7 @@ async def upsert_platform_agent_llm_config(
         }
         if config_data.api_key:
             updates["api_key"] = config_data.api_key
-        config = await LLMConfigService.update_config(
-            session=db, config_id=existing.id, tenant_id=tenant_id, **updates
-        )
+        config = await LLMConfigService.update_config(session=db, config_id=existing.id, tenant_id=tenant_id, **updates)
     else:
         config = await LLMConfigService.create_config(
             session=db,

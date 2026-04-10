@@ -19,43 +19,60 @@ class WikiArticle(BaseModel, TenantMixin):
     __tablename__ = "wiki_articles"
 
     knowledge_base_id = Column(
-        Integer, nullable=False, index=True,
+        Integer,
+        nullable=False,
+        index=True,
         comment="Knowledge base this article belongs to",
     )
     title = Column(String(500), nullable=False, comment="Article title")
     slug = Column(String(500), nullable=False, index=True, comment="URL-friendly slug")
     content = Column(Text, nullable=False, default="", comment="Markdown content")
     category = Column(
-        String(100), nullable=False, default="general",
+        String(100),
+        nullable=False,
+        default="general",
         comment="Category: projects, people, decisions, processes, architecture, general",
     )
     summary = Column(Text, nullable=True, comment="Brief summary for index pages")
     source_documents = Column(
-        JSON, nullable=False, default=list,
+        JSON,
+        nullable=False,
+        default=list,
         comment="Source doc refs [{doc_id, doc_title, relevance}]",
     )
     backlinks = Column(
-        JSON, nullable=False, default=list,
+        JSON,
+        nullable=False,
+        default=list,
         comment="Article IDs that link to this article",
     )
     forward_links = Column(
-        JSON, nullable=False, default=list,
+        JSON,
+        nullable=False,
+        default=list,
         comment="Article IDs this article links to",
     )
     auto_generated = Column(
-        Boolean, nullable=False, default=True,
+        Boolean,
+        nullable=False,
+        default=True,
         comment="Whether this was auto-generated (vs manually edited)",
     )
     last_compiled_at = Column(
-        DateTime(timezone=True), nullable=True,
+        DateTime(timezone=True),
+        nullable=True,
         comment="When this article was last compiled/updated",
     )
     staleness_score = Column(
-        Float, nullable=False, default=0.0,
+        Float,
+        nullable=False,
+        default=0.0,
         comment="0 = fresh, 1 = stale (based on newer source data)",
     )
     status = Column(
-        String(50), nullable=False, default="published",
+        String(50),
+        nullable=False,
+        default="published",
         comment="draft, published, stale, archived",
     )
 
@@ -66,11 +83,15 @@ class WikiCompilationJob(BaseModel, TenantMixin):
     __tablename__ = "wiki_compilation_jobs"
 
     knowledge_base_id = Column(
-        Integer, nullable=False, index=True,
+        Integer,
+        nullable=False,
+        index=True,
         comment="Knowledge base being compiled",
     )
     status = Column(
-        String(50), nullable=False, default="running",
+        String(50),
+        nullable=False,
+        default="running",
         comment="running, completed, failed",
     )
     started_at = Column(DateTime(timezone=True), nullable=True, comment="When compilation started")
@@ -79,6 +100,8 @@ class WikiCompilationJob(BaseModel, TenantMixin):
     articles_updated = Column(Integer, nullable=False, default=0, comment="Number of updated articles")
     errors = Column(JSON, nullable=False, default=list, comment="Any errors during compilation")
     compilation_metadata = Column(
-        JSON, nullable=True, default=dict,
+        JSON,
+        nullable=True,
+        default=dict,
         comment="Additional stats: tokens_used, documents_processed, etc.",
     )

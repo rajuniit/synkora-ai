@@ -54,9 +54,7 @@ class DebateCreateRequest(BaseModel):
     participants: list[DebateParticipantConfig] = Field(
         ..., min_length=2, max_length=8, description="Internal agents participating"
     )
-    synthesizer_agent_id: UUID | None = Field(
-        None, description="Optional agent to synthesize the final verdict"
-    )
+    synthesizer_agent_id: UUID | None = Field(None, description="Optional agent to synthesize the final verdict")
     is_public: bool = Field(False, description="Whether the debate is publicly viewable")
     allow_external: bool = Field(False, description="Whether external agents can join")
     context: DebateContext | None = Field(None, description="Optional context (e.g., GitHub PR to review)")

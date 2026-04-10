@@ -85,7 +85,13 @@ DEBATE_TEMPLATES = [
         "name": "Rate My Life",
         "description": "5 specialist AI agents score your life across 6 dimensions and debate disagreements",
         "topic_template": "Rate My Life: AI Life Audit",
-        "suggested_roles": ["Career Strategist", "Wellness Coach", "Relationship Counselor", "Life Philosopher", "The Synthesizer"],
+        "suggested_roles": [
+            "Career Strategist",
+            "Wellness Coach",
+            "Relationship Counselor",
+            "Life Philosopher",
+            "The Synthesizer",
+        ],
         "context_type": "life-audit",
     },
 ]
@@ -190,28 +196,26 @@ async def create_debate(
     # Verify all participant agents exist and belong to tenant
     participants = []
     for i, p in enumerate(request.participants):
-        result = await db.execute(
-            select(Agent).filter(Agent.id == p.agent_id, Agent.tenant_id == tenant_id)
-        )
+        result = await db.execute(select(Agent).filter(Agent.id == p.agent_id, Agent.tenant_id == tenant_id))
         agent = result.scalar_one_or_none()
         if not agent:
             raise HTTPException(status_code=404, detail=f"Agent {p.agent_id} not found")
 
-        participants.append({
-            "id": str(uuid.uuid4()),
-            "agent_id": str(p.agent_id),
-            "agent_name": agent.agent_name,
-            "role": p.role,
-            "is_external": False,
-            "color": PARTICIPANT_COLORS[i % len(PARTICIPANT_COLORS)],
-        })
+        participants.append(
+            {
+                "id": str(uuid.uuid4()),
+                "agent_id": str(p.agent_id),
+                "agent_name": agent.agent_name,
+                "role": p.role,
+                "is_external": False,
+                "color": PARTICIPANT_COLORS[i % len(PARTICIPANT_COLORS)],
+            }
+        )
 
     # Verify synthesizer if specified
     if request.synthesizer_agent_id:
         result = await db.execute(
-            select(Agent).filter(
-                Agent.id == request.synthesizer_agent_id, Agent.tenant_id == tenant_id
-            )
+            select(Agent).filter(Agent.id == request.synthesizer_agent_id, Agent.tenant_id == tenant_id)
         )
         if not result.scalar_one_or_none():
             raise HTTPException(status_code=404, detail="Synthesizer agent not found")
@@ -321,27 +325,25 @@ async def update_debate(
     if request.participants is not None:
         participants = []
         for i, p in enumerate(request.participants):
-            result = await db.execute(
-                select(Agent).filter(Agent.id == p.agent_id, Agent.tenant_id == tenant_id)
-            )
+            result = await db.execute(select(Agent).filter(Agent.id == p.agent_id, Agent.tenant_id == tenant_id))
             agent = result.scalar_one_or_none()
             if not agent:
                 raise HTTPException(status_code=404, detail=f"Agent {p.agent_id} not found")
-            participants.append({
-                "id": str(uuid.uuid4()),
-                "agent_id": str(p.agent_id),
-                "agent_name": agent.agent_name,
-                "role": p.role,
-                "is_external": False,
-                "color": PARTICIPANT_COLORS[i % len(PARTICIPANT_COLORS)],
-            })
+            participants.append(
+                {
+                    "id": str(uuid.uuid4()),
+                    "agent_id": str(p.agent_id),
+                    "agent_name": agent.agent_name,
+                    "role": p.role,
+                    "is_external": False,
+                    "color": PARTICIPANT_COLORS[i % len(PARTICIPANT_COLORS)],
+                }
+            )
         session.participants = participants
 
     if request.synthesizer_agent_id is not None:
         result = await db.execute(
-            select(Agent).filter(
-                Agent.id == request.synthesizer_agent_id, Agent.tenant_id == tenant_id
-            )
+            select(Agent).filter(Agent.id == request.synthesizer_agent_id, Agent.tenant_id == tenant_id)
         )
         if not result.scalar_one_or_none():
             raise HTTPException(status_code=404, detail="Synthesizer agent not found")
@@ -644,7 +646,7 @@ def _generate_agent_script(
     if provider == "anthropic":
         pip_package = "anthropic"
         env_instruction = "export ANTHROPIC_API_KEY=sk-ant-..."
-        llm_block = '''
+        llm_block = """
     # -- Anthropic (Claude) --
     from anthropic import Anthropic
     client = Anthropic()  # uses ANTHROPIC_API_KEY env var
@@ -653,11 +655,11 @@ def _generate_agent_script(
         max_tokens=1500,
         messages=[{"role": "user", "content": prompt}],
     )
-    return response.content[0].text'''
+    return response.content[0].text"""
     elif provider == "openai":
         pip_package = "openai"
         env_instruction = "export OPENAI_API_KEY=sk-..."
-        llm_block = '''
+        llm_block = """
     # -- OpenAI (GPT) --
     from openai import OpenAI
     client = OpenAI()  # uses OPENAI_API_KEY env var
@@ -666,11 +668,11 @@ def _generate_agent_script(
         max_tokens=1500,
         messages=[{"role": "user", "content": prompt}],
     )
-    return response.choices[0].message.content'''
+    return response.choices[0].message.content"""
     else:  # ollama
         pip_package = "requests"
         env_instruction = "# Ollama runs locally, no API key needed"
-        llm_block = '''
+        llm_block = """
     # -- Ollama (local) --
     import urllib.request
     data = json.dumps({
@@ -685,10 +687,10 @@ def _generate_agent_script(
     )
     with urllib.request.urlopen(req, timeout=120) as resp:
         result = json.loads(resp.read())
-    return result.get("response", "")'''
+    return result.get("response", "")"""
 
     # Escape the topic for embedding in the script
-    safe_topic = topic.replace('\\', '\\\\').replace('"', '\\"').replace("'", "\\'")
+    safe_topic = topic.replace("\\", "\\\\").replace('"', '\\"').replace("'", "\\'")
 
     return f'''#!/usr/bin/env python3
 """
@@ -863,9 +865,7 @@ if __name__ == "__main__":
 # ── Helpers ───────────────────────────────────────────────────────────────────
 
 
-async def _get_debate_session(
-    db: AsyncSession, debate_id: uuid.UUID, tenant_id: uuid.UUID
-) -> DebateSession:
+async def _get_debate_session(db: AsyncSession, debate_id: uuid.UUID, tenant_id: uuid.UUID) -> DebateSession:
     """Fetch a debate session with tenant check."""
     result = await db.execute(
         select(DebateSession).filter(
@@ -897,9 +897,7 @@ async def _get_public_session(db: AsyncSession, share_token: str) -> DebateSessi
     return session
 
 
-async def _join_debate_internal(
-    session: DebateSession, request: DebateJoinRequest, db: AsyncSession
-) -> dict[str, Any]:
+async def _join_debate_internal(session: DebateSession, request: DebateJoinRequest, db: AsyncSession) -> dict[str, Any]:
     """
     Add an external agent to a debate.
 
@@ -930,16 +928,18 @@ async def _join_debate_internal(
     participant_id = str(uuid.uuid4())
     color_idx = len(participants) % len(PARTICIPANT_COLORS)
 
-    participants.append({
-        "id": participant_id,
-        "agent_id": None,
-        "agent_name": request.agent_name,
-        "role": None,
-        "is_external": True,
-        "callback_url": request.callback_url,
-        "auth_token": request.auth_token,
-        "color": PARTICIPANT_COLORS[color_idx],
-    })
+    participants.append(
+        {
+            "id": participant_id,
+            "agent_id": None,
+            "agent_name": request.agent_name,
+            "role": None,
+            "is_external": True,
+            "callback_url": request.callback_url,
+            "auth_token": request.auth_token,
+            "color": PARTICIPANT_COLORS[color_idx],
+        }
+    )
     session.participants = participants
     await db.commit()
 
@@ -950,24 +950,22 @@ async def _join_debate_internal(
         "total_rounds": session.rounds,
         "status": session.status,
         "participants": [
-            {"agent_name": p.get("agent_name"), "is_external": p.get("is_external", False)}
-            for p in participants
+            {"agent_name": p.get("agent_name"), "is_external": p.get("is_external", False)} for p in participants
         ],
         "instructions": (
             "You have joined the debate. "
-            + ("Your callback_url will receive POST requests with round context. "
-               "Return {\"content\": \"your argument\"} in the response body."
-               if request.callback_url
-               else "Poll GET /rounds/{round_num} for context, then POST /respond with "
-                    "{\"participant_id\": \"...\", \"round\": N, \"content\": \"your argument\"}."
-               )
+            + (
+                "Your callback_url will receive POST requests with round context. "
+                'Return {"content": "your argument"} in the response body.'
+                if request.callback_url
+                else "Poll GET /rounds/{round_num} for context, then POST /respond with "
+                '{"participant_id": "...", "round": N, "content": "your argument"}.'
+            )
         ),
     }
 
 
-async def _respond_internal(
-    session: DebateSession, request: DebateRespondRequest, db: AsyncSession
-) -> dict[str, Any]:
+async def _respond_internal(session: DebateSession, request: DebateRespondRequest, db: AsyncSession) -> dict[str, Any]:
     """Record an external agent's debate response."""
     participants = session.participants or []
     participant = next((p for p in participants if p["id"] == request.participant_id), None)
@@ -979,8 +977,7 @@ async def _respond_internal(
     # Check for duplicate response in same round
     existing_messages = session.messages or []
     already_responded = any(
-        m.get("participant_id") == request.participant_id and m.get("round") == request.round
-        for m in existing_messages
+        m.get("participant_id") == request.participant_id and m.get("round") == request.round for m in existing_messages
     )
     if already_responded:
         raise HTTPException(status_code=409, detail="Already responded for this round")

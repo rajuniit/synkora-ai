@@ -116,9 +116,7 @@ async def get_wiki_article(
     linked_ids = list(set((article.forward_links or []) + (article.backlinks or [])))
     linked_articles = []
     if linked_ids:
-        linked_result = await db.execute(
-            select(WikiArticle).filter(WikiArticle.id.in_(linked_ids))
-        )
+        linked_result = await db.execute(select(WikiArticle).filter(WikiArticle.id.in_(linked_ids)))
         linked_articles = [
             {"id": str(a.id), "title": a.title, "slug": a.slug, "category": a.category}
             for a in linked_result.scalars().all()
@@ -150,19 +148,23 @@ async def get_wiki_graph(
     links = []
 
     for article in articles:
-        nodes.append({
-            "id": str(article.id),
-            "title": article.title,
-            "slug": article.slug,
-            "category": article.category,
-            "staleness": article.staleness_score,
-        })
+        nodes.append(
+            {
+                "id": str(article.id),
+                "title": article.title,
+                "slug": article.slug,
+                "category": article.category,
+                "staleness": article.staleness_score,
+            }
+        )
 
-        for target_id in (article.forward_links or []):
-            links.append({
-                "source": str(article.id),
-                "target": target_id,
-            })
+        for target_id in article.forward_links or []:
+            links.append(
+                {
+                    "source": str(article.id),
+                    "target": target_id,
+                }
+            )
 
     return {"nodes": nodes, "links": links}
 
@@ -258,7 +260,9 @@ async def get_autopilot_status(
             "completed_at": last_job.completed_at.isoformat() if last_job and last_job.completed_at else None,
             "articles_created": last_job.articles_created if last_job else 0,
             "articles_updated": last_job.articles_updated if last_job else 0,
-        } if last_job else None,
+        }
+        if last_job
+        else None,
     }
 
 

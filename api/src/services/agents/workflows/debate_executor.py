@@ -104,11 +104,14 @@ class DebateExecutor:
         elif ctx.get("type") == "text" and ctx.get("text"):
             debate_context = ctx["text"]
 
-        yield await generate_sse_event("debate_start", {
-            "topic": topic,
-            "participants": participants,
-            "rounds": total_rounds,
-        })
+        yield await generate_sse_event(
+            "debate_start",
+            {
+                "topic": topic,
+                "participants": participants,
+                "rounds": total_rounds,
+            },
+        )
 
         # Initialize chat stream service
         agent_manager = AgentManager()
@@ -131,10 +134,7 @@ class DebateExecutor:
             yield await generate_sse_event("round_start", {"round": round_num})
 
             # Collect prior messages for context
-            prior_messages = [
-                f"[{m['agent_name']}] (Round {m['round']}): {m['content']}"
-                for m in messages
-            ]
+            prior_messages = [f"[{m['agent_name']}] (Round {m['round']}): {m['content']}" for m in messages]
             context_block = "\n\n".join(prior_messages) if prior_messages else "(No prior messages)"
 
             # Each participant responds in this round
@@ -146,8 +146,13 @@ class DebateExecutor:
                 if participant.get("is_external"):
                     # ── External agent: callback webhook or wait for push ──
                     async for event in self._handle_external_participant(
-                        session, participant, round_num, total_rounds,
-                        topic, context_block, messages,
+                        session,
+                        participant,
+                        round_num,
+                        total_rounds,
+                        topic,
+                        context_block,
+                        messages,
                     ):
                         yield event
                     continue
@@ -158,9 +163,8 @@ class DebateExecutor:
 
                 # Load the agent from DB
                 from sqlalchemy import select
-                result = await self.db.execute(
-                    select(Agent).filter(Agent.id == agent_id)
-                )
+
+                result = await self.db.execute(select(Agent).filter(Agent.id == agent_id))
                 agent = result.scalar_one_or_none()
                 if not agent:
                     logger.warning(f"Debate agent {agent_id} not found, skipping")
@@ -168,12 +172,15 @@ class DebateExecutor:
 
                 agent_name = participant.get("agent_name") or agent.agent_name
 
-                yield await generate_sse_event("participant_start", {
-                    "participant_id": participant_id,
-                    "agent_name": agent_name,
-                    "round": round_num,
-                    "color": participant.get("color", "#6366f1"),
-                })
+                yield await generate_sse_event(
+                    "participant_start",
+                    {
+                        "participant_id": participant_id,
+                        "agent_name": agent_name,
+                        "round": round_num,
+                        "color": participant.get("color", "#6366f1"),
+                    },
+                )
 
                 # Build the debate prompt
                 role_instruction = f"Your role in this debate: {role_label}. " if role_label else ""
@@ -195,8 +202,7 @@ class DebateExecutor:
                 response_chunks: list[str] = []
 
                 logger.info(
-                    f"[Debate] Streaming agent '{agent.agent_name}' for participant "
-                    f"'{agent_name}' (round {round_num})"
+                    f"[Debate] Streaming agent '{agent.agent_name}' for participant '{agent_name}' (round {round_num})"
                 )
                 event_count = 0
                 chunk_count = 0
@@ -228,16 +234,17 @@ class DebateExecutor:
                                 chunk = event_data.get("content", "")
                                 response_chunks.append(chunk)
                                 chunk_count += 1
-                                yield await generate_sse_event("participant_chunk", {
-                                    "participant_id": participant_id,
-                                    "content": chunk,
-                                })
+                                yield await generate_sse_event(
+                                    "participant_chunk",
+                                    {
+                                        "participant_id": participant_id,
+                                        "content": chunk,
+                                    },
+                                )
                         except json.JSONDecodeError:
                             logger.warning(f"[Debate] Failed to parse SSE event: {sse_event[:200]}")
                 except Exception as stream_err:
-                    logger.exception(
-                        f"[Debate] Exception streaming agent '{agent.agent_name}': {stream_err}"
-                    )
+                    logger.exception(f"[Debate] Exception streaming agent '{agent.agent_name}': {stream_err}")
 
                 logger.info(
                     f"[Debate] Agent '{agent.agent_name}' finished: "
@@ -263,13 +270,16 @@ class DebateExecutor:
                 session.messages = messages
                 await self.db.commit()
 
-                yield await generate_sse_event("participant_done", {
-                    "participant_id": participant_id,
-                    "agent_name": agent_name,
-                    "round": round_num,
-                    "content": full_response,
-                    "color": participant.get("color", "#6366f1"),
-                })
+                yield await generate_sse_event(
+                    "participant_done",
+                    {
+                        "participant_id": participant_id,
+                        "agent_name": agent_name,
+                        "round": round_num,
+                        "content": full_response,
+                        "color": participant.get("color", "#6366f1"),
+                    },
+                )
 
             yield await generate_sse_event("round_end", {"round": round_num})
 
@@ -279,16 +289,13 @@ class DebateExecutor:
             session.status = "synthesizing"
             await self.db.commit()
 
-            result = await self.db.execute(
-                select(Agent).filter(Agent.id == session.synthesizer_agent_id)
-            )
+            result = await self.db.execute(select(Agent).filter(Agent.id == session.synthesizer_agent_id))
             synth_agent = result.scalar_one_or_none()
 
             if synth_agent:
-                all_messages = "\n\n".join([
-                    f"[{m['agent_name']}] (Round {m['round']}): {m['content']}"
-                    for m in messages
-                ])
+                all_messages = "\n\n".join(
+                    [f"[{m['agent_name']}] (Round {m['round']}): {m['content']}" for m in messages]
+                )
                 context_for_synth = f"\n[Context]\n{debate_context}\n\n" if debate_context else ""
                 synth_prompt = (
                     f"You are the debate synthesizer. Analyze the following debate and provide "
@@ -319,9 +326,12 @@ class DebateExecutor:
                         if event_data.get("type") == "chunk":
                             chunk = event_data.get("content", "")
                             verdict_chunks.append(chunk)
-                            yield await generate_sse_event("synthesis_chunk", {
-                                "content": chunk,
-                            })
+                            yield await generate_sse_event(
+                                "synthesis_chunk",
+                                {
+                                    "content": chunk,
+                                },
+                            )
                     except json.JSONDecodeError:
                         pass
 
@@ -376,13 +386,16 @@ class DebateExecutor:
         auth_token = participant.get("auth_token")
         color = participant.get("color", "#8b5cf6")
 
-        yield await generate_sse_event("participant_start", {
-            "participant_id": participant_id,
-            "agent_name": agent_name,
-            "round": round_num,
-            "color": color,
-            "is_external": True,
-        })
+        yield await generate_sse_event(
+            "participant_start",
+            {
+                "participant_id": participant_id,
+                "agent_name": agent_name,
+                "round": round_num,
+                "color": color,
+                "is_external": True,
+            },
+        )
 
         response_content: str | None = None
 
@@ -408,10 +421,13 @@ class DebateExecutor:
             response_content = f"[{agent_name} did not respond in time for round {round_num}]"
 
         # Emit the full response as a single chunk + done event
-        yield await generate_sse_event("participant_chunk", {
-            "participant_id": participant_id,
-            "content": response_content,
-        })
+        yield await generate_sse_event(
+            "participant_chunk",
+            {
+                "participant_id": participant_id,
+                "content": response_content,
+            },
+        )
 
         msg = {
             "id": str(uuid.uuid4()),
@@ -428,14 +444,17 @@ class DebateExecutor:
         session.messages = messages
         await self.db.commit()
 
-        yield await generate_sse_event("participant_done", {
-            "participant_id": participant_id,
-            "agent_name": agent_name,
-            "round": round_num,
-            "content": response_content,
-            "color": color,
-            "is_external": True,
-        })
+        yield await generate_sse_event(
+            "participant_done",
+            {
+                "participant_id": participant_id,
+                "agent_name": agent_name,
+                "round": round_num,
+                "content": response_content,
+                "color": color,
+                "is_external": True,
+            },
+        )
 
     async def _call_external_callback(
         self,

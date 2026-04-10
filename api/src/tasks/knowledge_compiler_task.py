@@ -33,8 +33,9 @@ async def _compile_all_wikis():
     async with async_session_factory() as db:
         # Find all knowledge bases that have at least one wiki article (autopilot active)
         result = await db.execute(
-            select(WikiArticle.knowledge_base_id, WikiArticle.tenant_id)
-            .group_by(WikiArticle.knowledge_base_id, WikiArticle.tenant_id)
+            select(WikiArticle.knowledge_base_id, WikiArticle.tenant_id).group_by(
+                WikiArticle.knowledge_base_id, WikiArticle.tenant_id
+            )
         )
         kb_tenants = result.all()
 

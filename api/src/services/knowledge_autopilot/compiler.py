@@ -21,6 +21,7 @@ logger = logging.getLogger(__name__)
 # Default categories for auto-generated articles
 WIKI_CATEGORIES = ["projects", "people", "decisions", "processes", "architecture", "general"]
 
+
 # Slug generation
 def _slugify(text: str) -> str:
     """Convert text to URL-friendly slug."""
@@ -128,9 +129,7 @@ class KnowledgeCompiler:
             resolved_llm = await self._resolve_llm_config(knowledge_base_id, tenant_id, llm_config)
 
             # Extract entities and generate articles via LLM
-            article_proposals = await self._extract_entities(
-                documents, doc_content, resolved_llm
-            )
+            article_proposals = await self._extract_entities(documents, doc_content, resolved_llm)
 
             # Create or update articles
             for proposal in article_proposals:
@@ -185,6 +184,7 @@ class KnowledgeCompiler:
             # Update staleness scores
             try:
                 from src.services.knowledge_autopilot.staleness_detector import StalenessDetector
+
                 detector = StalenessDetector(self.db)
                 await detector.update_staleness(knowledge_base_id)
             except Exception as e:
@@ -257,9 +257,7 @@ class KnowledgeCompiler:
         agent_config = result.scalar_one_or_none()
 
         if not agent_config:
-            raise ValueError(
-                "No LLM configuration found. Please configure an LLM provider on any agent first."
-            )
+            raise ValueError("No LLM configuration found. Please configure an LLM provider on any agent first.")
 
         provider = agent_config.provider
         model = agent_config.model_name
@@ -268,9 +266,7 @@ class KnowledgeCompiler:
 
         # Try KB's embedding_config API key first (user updates this via KB edit page)
         api_key = ""
-        kb_result = await self.db.execute(
-            select(KnowledgeBase).filter(KnowledgeBase.id == knowledge_base_id)
-        )
+        kb_result = await self.db.execute(select(KnowledgeBase).filter(KnowledgeBase.id == knowledge_base_id))
         kb = kb_result.scalar_one_or_none()
 
         if kb and kb.embedding_config and kb.embedding_config.get("api_key"):
