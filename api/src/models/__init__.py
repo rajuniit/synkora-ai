@@ -6,8 +6,6 @@ from .agent_api_key import AgentApiKey
 from .agent_api_usage import AgentApiUsage
 from .agent_approval import AgentApprovalRequest, ApprovalStatus
 from .agent_context_file import AgentContextFile
-from .debate_session import DebateSession
-from .wiki_article import WikiArticle, WikiCompilationJob
 from .agent_domain import AgentDomain
 from .agent_knowledge_base import AgentKnowledgeBase
 from .agent_llm_config import AgentLLMConfig
@@ -49,6 +47,7 @@ from .data_source import (
 )
 from .database_connection import DatabaseConnection, DatabaseConnectionType
 from .dataset import Dataset
+from .debate_session import DebateSession
 from .document import Document, DocumentStatus
 from .document_segment import DocumentSegment
 from .followup import FollowupConfig, FollowupItem, FollowupPriority, FollowupStatus
@@ -108,6 +107,7 @@ from .user_oauth_token import UserOAuthToken
 from .voice_api_key import VoiceApiKey
 from .voice_usage import VoiceUsage
 from .whatsapp_bot import WhatsAppBot
+from .wiki_article import WikiArticle, WikiCompilationJob
 from .workflow_execution import (
     WorkflowExecution,
     WorkflowExecutionStatus,

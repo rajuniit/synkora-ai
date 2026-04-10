@@ -280,7 +280,7 @@ class KnowledgeCompiler:
                     # Also use KB's api_base if the agent config doesn't have one
                     if not api_base and kb.embedding_config.get("api_base"):
                         api_base = kb.embedding_config["api_base"]
-                    logger.info(f"Using KB embedding API key for compilation")
+                    logger.info("Using KB embedding API key for compilation")
             except Exception as e:
                 logger.warning(f"Failed to decrypt KB embedding key: {e}")
                 api_key = ""

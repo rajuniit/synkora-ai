@@ -245,7 +245,7 @@ async def get_autopilot_status(
         )
         .group_by(WikiArticle.category)
     )
-    category_counts = {cat: count for cat, count in cat_result.all()}
+    category_counts = dict(cat_result.all())
 
     return {
         "total_articles": total_articles,

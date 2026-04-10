@@ -54,7 +54,7 @@ class HealthReporter:
             )
             .group_by(WikiArticle.category)
         )
-        categories = {cat: count for cat, count in cat_result.all()}
+        categories = dict(cat_result.all())
 
         # Staleness distribution
         now = datetime.now(UTC)

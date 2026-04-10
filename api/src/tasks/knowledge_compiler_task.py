@@ -24,7 +24,7 @@ def compile_knowledge_wikis(self):
 
 
 async def _compile_all_wikis():
-    from sqlalchemy import select, func
+    from sqlalchemy import func, select
 
     from src.core.database import async_session_factory
     from src.models.wiki_article import WikiArticle
