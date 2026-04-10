@@ -51,6 +51,7 @@ celery_app = Celery(
         "src.tasks.file_tasks",  # File handling
         "src.tasks.load_testing_tasks",  # Load test execution
         "src.tasks.followup_reminder_task",  # Follow-up reminders
+        "src.tasks.knowledge_compiler_task",  # Knowledge wiki compilation
     ],
 )
 
@@ -95,6 +96,8 @@ celery_app.conf.update(
         # Uses the actual registered task name from @celery_app.task(name=...).
         # tasks.check_scheduled_tasks is lightweight (beat dispatcher) → default queue.
         "tasks.execute_scheduled_task": {"queue": "agents"},
+        # Knowledge compilation to agents queue
+        "tasks.compile_knowledge_wikis": {"queue": "agents"},
         # Billing tasks to billing queue
         "billing.flush_usage_analytics": {"queue": "billing"},
         "billing.deduct_credits_async": {"queue": "billing"},
@@ -127,6 +130,11 @@ celery_app.conf.update(
             "task": "tasks.cleanup_expired_workspaces",
             "schedule": crontab(minute=0, hour="*/6"),  # Every 6 hours
             "args": (24,),  # 24-hour TTL
+        },
+        # Compile knowledge wikis daily at 3 AM
+        "compile-knowledge-wikis-daily": {
+            "task": "tasks.compile_knowledge_wikis",
+            "schedule": crontab(hour=3, minute=0),
         },
         # Recover webhook events stuck in 'processing' (worker killed mid-task) every 15 minutes
         "cleanup-stale-webhook-events": {

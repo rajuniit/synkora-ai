@@ -220,11 +220,11 @@ function BillingContent() {
   return (
     <>
       <Toaster position="top-right" />
-      <div className="min-h-screen bg-gradient-to-br from-primary-50 via-primary-50/30 to-white p-4 md:p-6">
+      <div className="min-h-screen bg-gradient-to-br from-red-50/60 via-white to-rose-50/40 p-4 md:p-6">
         <div className="max-w-7xl mx-auto">
           {/* Header - More Compact */}
           <div className="mb-6">
-            <h1 className="text-2xl font-bold text-gray-900">Billing & Usage</h1>
+            <h1 className="text-2xl md:text-3xl font-extrabold text-gray-900 tracking-tight">Billing & Usage</h1>
             <p className="mt-1 text-sm text-gray-600">
               Manage your subscription, credits, and view usage analytics
             </p>
@@ -412,7 +412,7 @@ function BillingContent() {
 export default function BillingPage() {
   return (
     <Suspense fallback={
-      <div className="min-h-screen bg-gradient-to-br from-primary-50 via-primary-50/30 to-white p-4 md:p-6">
+      <div className="min-h-screen bg-gradient-to-br from-red-50/60 via-white to-rose-50/40 p-4 md:p-6">
         <div className="flex items-center justify-center py-12">
           <Loader2 className="h-8 w-8 animate-spin text-primary-500" />
         </div>

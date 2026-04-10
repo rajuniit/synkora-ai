@@ -201,7 +201,7 @@ export default function BrowsePage() {
   const displayCategories = mainCategories
 
   return (
-    <div className="min-h-screen bg-gray-50">
+    <div className="min-h-screen bg-gradient-to-br from-red-50/60 via-white to-rose-50/40">
       {/* Breadcrumb */}
       <div className="bg-white border-b border-gray-200">
         <div className="max-w-7xl mx-auto px-6 py-3">
@@ -228,7 +228,7 @@ export default function BrowsePage() {
         <div className="max-w-7xl mx-auto px-6 py-8">
           <div className="flex items-start justify-between">
             <div>
-              <h1 className="text-xl sm:text-3xl font-bold text-gray-900">
+              <h1 className="text-2xl md:text-3xl font-extrabold text-gray-900 tracking-tight">
                 {selectedCategory ? `${selectedCategory} AI Agents` : 'AI Agents Marketplace'}
               </h1>
               <p className="mt-2 text-gray-600 max-w-2xl">

@@ -190,7 +190,7 @@ export default function ScheduledTaskDetailsPage() {
   }
 
   return (
-    <div className="min-h-screen bg-gray-50 p-4 md:p-8">
+    <div className="min-h-screen bg-gradient-to-br from-red-50/60 via-white to-rose-50/40 p-4 md:p-8">
       <div className="max-w-5xl mx-auto">
         <div className="mb-6">
           <Link
@@ -207,7 +207,7 @@ export default function ScheduledTaskDetailsPage() {
                 {getTypeIcon(task.task_type)}
               </div>
               <div>
-                <h1 className="text-xl sm:text-3xl font-bold text-gray-900">{task.name}</h1>
+                <h1 className="text-2xl md:text-3xl font-extrabold text-gray-900 tracking-tight">{task.name}</h1>
                 <p className="text-gray-600 mt-1">{task.task_type}</p>
               </div>
             </div>

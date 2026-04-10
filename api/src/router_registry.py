@@ -119,6 +119,36 @@ ROUTER_REGISTRY: list[RouteConfig] = [
         tags=["autonomous-agents"],
     ),
     RouteConfig(
+        module="src.controllers.agents.live_lab",
+        attribute="router",
+        prefix="/api/v1",
+        tags=["live-lab"],
+    ),
+    RouteConfig(
+        module="src.controllers.agents.war_room",
+        attribute="router",
+        prefix="/api/v1",
+        tags=["war-room"],
+    ),
+    RouteConfig(
+        module="src.controllers.agents.war_room",
+        attribute="public_router",
+        prefix="",
+        tags=["war-room-public"],
+    ),
+    RouteConfig(
+        module="src.controllers.knowledge_autopilot",
+        attribute="router",
+        prefix="/api/v1",
+        tags=["knowledge-autopilot"],
+    ),
+    RouteConfig(
+        module="src.controllers.rate_my_life",
+        attribute="router",
+        prefix="/api/v1",
+        tags=["rate-my-life"],
+    ),
+    RouteConfig(
         module="src.controllers.agent_subscriptions",
         attribute="router",
         prefix="/api/v1/agents",

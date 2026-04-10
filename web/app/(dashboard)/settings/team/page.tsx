@@ -107,12 +107,12 @@ export default function TeamSettingsPage() {
   }
 
   return (
-    <div className="min-h-screen bg-gradient-to-br from-red-50 via-red-50/30 to-red-50">
+    <div className="min-h-screen bg-gradient-to-br from-red-50/60 via-white to-rose-50/40">
       <div className="max-w-7xl mx-auto px-4 md:px-6 py-4 md:py-6">
         <div className="mb-6">
           <div className="flex items-center justify-between">
             <div>
-              <h1 className="text-2xl font-bold text-gray-900">Team Management</h1>
+              <h1 className="text-2xl md:text-3xl font-extrabold text-gray-900 tracking-tight">Team Management</h1>
               <p className="mt-1 text-sm text-gray-600">
                 Manage your team members and their roles
               </p>

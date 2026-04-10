@@ -281,7 +281,7 @@ export default function EditKnowledgeBasePage() {
 
   if (loading) {
     return (
-      <div className="flex items-center justify-center h-screen bg-gradient-to-br from-red-50 via-white to-red-50/30">
+      <div className="flex items-center justify-center h-screen bg-gradient-to-br from-red-50/60 via-white to-rose-50/40">
         <div className="text-center">
           <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-red-600 mx-auto mb-4"></div>
           <p className="text-gray-600">Loading knowledge base...</p>
@@ -291,7 +291,7 @@ export default function EditKnowledgeBasePage() {
   }
 
   return (
-    <div className="min-h-screen bg-gradient-to-br from-red-50 via-white to-red-50/30">
+    <div className="min-h-screen bg-gradient-to-br from-red-50/60 via-white to-rose-50/40">
       <div className="max-w-4xl mx-auto p-6">
         {/* Header */}
         <div className="mb-8">
@@ -305,7 +305,7 @@ export default function EditKnowledgeBasePage() {
 
           <div className="flex items-start justify-between">
             <div>
-              <h1 className="text-2xl font-bold text-gray-900">Edit Knowledge Base</h1>
+              <h1 className="text-2xl md:text-3xl font-extrabold text-gray-900 tracking-tight">Edit Knowledge Base</h1>
               <p className="text-gray-600 mt-1">
                 Update the settings for your knowledge base
               </p>

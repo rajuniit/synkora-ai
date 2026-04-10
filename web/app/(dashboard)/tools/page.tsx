@@ -195,12 +195,12 @@ export default function ToolsPage() {
   };
 
   return (
-    <div className="min-h-screen bg-gray-50 p-4 md:p-8">
+    <div className="min-h-screen bg-gradient-to-br from-red-50/60 via-white to-rose-50/40 p-4 md:p-8">
       <div className="max-w-6xl mx-auto">
         <div className="mb-8">
           <div className="flex items-center gap-3 mb-2">
             <Settings className="w-8 h-8 text-teal-600" />
-            <h1 className="text-xl sm:text-3xl font-bold text-gray-900">Tool Configuration</h1>
+            <h1 className="text-2xl md:text-3xl font-extrabold text-gray-900 tracking-tight">Tool Configuration</h1>
           </div>
           <p className="text-gray-600">
             Configure API keys and settings for agent tools. These configurations are stored securely

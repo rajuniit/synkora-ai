@@ -680,7 +680,10 @@ async def _run_autonomous_agent(
             llm_config_id=None,
             db=async_db,
             user_id=str(task.created_by) if task.created_by else None,
+            tenant_id=task.tenant_id,
             shared_state=task_shared_state,
+            trigger_source="scheduler",
+            trigger_detail=task.name,
         ):
             if sse_event.startswith("data: "):
                 try:

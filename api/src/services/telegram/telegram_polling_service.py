@@ -317,6 +317,8 @@ class TelegramPollingService:
                 llm_config_id=None,
                 db=self.db_session,
                 user_id=str(telegram_bot.created_by) if telegram_bot.created_by else None,
+                tenant_id=telegram_bot.tenant_id,
+                trigger_source="telegram",
             ):
                 if event_data.startswith("data: "):
                     try:

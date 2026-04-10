@@ -77,6 +77,8 @@ class ChatStreamService:
         llm_config_id: str | None,
         db: AsyncSession,
         user_id: str | None = None,
+        trigger_source: str = "chat",
+        trigger_detail: str | None = None,
         tenant_id: Any | None = None,
         shared_state: dict[str, Any] | None = None,
     ) -> AsyncGenerator[str, None]:
@@ -238,6 +240,37 @@ class ChatStreamService:
             start_time = time.time()
             yield await generate_start_event(agent_name, start_time)
 
+            # Register execution for Live Lab observability
+            _execution_id = None
+            if tenant_id and db_agent:
+                try:
+                    from src.services.agents.execution_registry import execution_registry
+
+                    _execution_id = await execution_registry.register(
+                        tenant_id=tenant_id,
+                        agent_id=db_agent.id,
+                        agent_name=agent_name,
+                        trigger_source=trigger_source,
+                        trigger_detail=trigger_detail,
+                        conversation_id=conversation_id,
+                        message_preview=message,
+                    )
+                except Exception as reg_err:
+                    logger.debug(f"Failed to register execution: {reg_err}")
+
+            # Helper to store important events for Live Lab replay
+            async def _track(event_data: dict) -> None:
+                if _execution_id:
+                    try:
+                        from src.services.agents.execution_registry import execution_registry
+
+                        await execution_registry.append_event(_execution_id, event_data)
+                    except Exception:
+                        pass
+
+            # Store the start event
+            await _track({"type": "start", "agent": agent_name})
+
             attachment_context = ""
             if attachments:
                 yield await generate_status_event(f"📎 Processing {len(attachments)} attachment(s)...")
@@ -256,6 +289,7 @@ class ChatStreamService:
             )
             if should_perform_rag:
                 yield await generate_status_event("📚 Searching knowledge bases...")
+                await _track({"type": "status", "content": "Searching knowledge bases..."})
 
             context_text, retrieved_sources = await self._retrieve_rag_context(
                 message=message,
@@ -346,6 +380,22 @@ class ChatStreamService:
                 "total_tokens": total_input_tokens + state.total_output_tokens,
             }
             yield await generate_done_event(sources=retrieved_sources, metadata=metadata)
+            final_content = "".join(state.assistant_chunks) if hasattr(state, "assistant_chunks") else ""
+            await _track({"type": "done", "content": final_content[:5000], "metadata": metadata})
+
+            # Mark execution complete in Live Lab
+            if _execution_id and tenant_id:
+                try:
+                    from src.services.agents.execution_registry import execution_registry
+
+                    await execution_registry.update_status(
+                        tenant_id=tenant_id,
+                        execution_id=_execution_id,
+                        status="complete",
+                        total_tokens=total_input_tokens + state.total_output_tokens,
+                    )
+                except Exception as reg_err:
+                    logger.debug(f"Failed to update execution status: {reg_err}")
 
             if trace_id:
                 try:
@@ -399,6 +449,21 @@ class ChatStreamService:
             error_event = await generate_error_event(user_friendly_error)
             logger.info(f"🚨 Yielding error event to client: {user_friendly_error}")
             yield error_event
+            await _track({"type": "error", "error": user_friendly_error})
+
+            # Mark execution as error in Live Lab
+            if _execution_id and tenant_id:
+                try:
+                    from src.services.agents.execution_registry import execution_registry
+
+                    await execution_registry.update_status(
+                        tenant_id=tenant_id,
+                        execution_id=_execution_id,
+                        status="error",
+                        error=user_friendly_error,
+                    )
+                except Exception:
+                    pass
 
             if user_message_saved:
                 await self.chat_service.mark_message_failed(
@@ -546,6 +611,7 @@ class ChatStreamService:
                                 "input_preview": data.get("input_preview", ""),
                             },
                         )
+                        await _track({"type": "status", "content": f"Starting: {data.get('agent_name', 'Unknown')}"})
 
                     elif event_type == "done":
                         # Sub-agent completed
@@ -559,6 +625,7 @@ class ChatStreamService:
                                 "output_preview": data.get("output_preview", ""),
                             },
                         )
+                        await _track({"type": "status", "content": f"Completed: {data.get('agent_name', 'Unknown')}"})
 
                     elif event_type == "error":
                         # Sub-agent error
@@ -807,17 +874,21 @@ class ChatStreamService:
                         yield await generate_chunk_event(sanitization_result.sanitized_content)
 
                 elif event_type == "function_call":
+                    _tool = event.get("name", "unknown")
                     yield await generate_tool_status_event(
-                        tool_name=event.get("name", "unknown"),
+                        tool_name=_tool,
                         status="started",
                         arguments=event.get("arguments"),
                     )
+                    await _track({"type": "tool_status", "tool_name": _tool, "status": "started"})
 
                 elif event_type == "function_result":
+                    _tool = event.get("name", "unknown")
                     yield await generate_tool_status_event(
-                        tool_name=event.get("name", "unknown"),
+                        tool_name=_tool,
                         status="completed",
                     )
+                    await _track({"type": "tool_status", "tool_name": _tool, "status": "completed"})
 
                 elif event_type == "thinking_start":
                     # Extended thinking started - emit single status event

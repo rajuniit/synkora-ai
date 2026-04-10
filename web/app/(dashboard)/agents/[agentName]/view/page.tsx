@@ -122,7 +122,7 @@ export default function AgentViewPage() {
 
   if (loading) {
     return (
-      <div className="flex items-center justify-center min-h-screen bg-gradient-to-br from-red-50 to-pink-50">
+      <div className="flex items-center justify-center min-h-screen bg-gradient-to-br from-red-50/60 via-white to-rose-50/40">
         <div className="text-center">
           <div className="relative">
             <div className="animate-spin rounded-full h-16 w-16 border-4 border-slate-200 border-t-primary-500 mx-auto"></div>
@@ -136,7 +136,7 @@ export default function AgentViewPage() {
 
   if (error || !agent) {
     return (
-      <div className="flex items-center justify-center min-h-screen bg-gradient-to-br from-red-50 to-pink-50">
+      <div className="flex items-center justify-center min-h-screen bg-gradient-to-br from-red-50/60 via-white to-rose-50/40">
         <div className="text-center bg-white rounded-2xl shadow-xl p-8 max-w-md">
           <div className="w-16 h-16 bg-red-100 rounded-full flex items-center justify-center mx-auto mb-4">
             <XCircle className="w-8 h-8 text-red-600" />
@@ -159,7 +159,7 @@ export default function AgentViewPage() {
     : 0
 
   return (
-    <div className="min-h-screen bg-gradient-to-br from-gray-50 via-blue-50/30 to-gray-50">
+    <div className="min-h-screen bg-gradient-to-br from-red-50/60 via-white to-rose-50/40">
       <div className="container mx-auto px-4 sm:px-6 lg:px-8 py-8 max-w-7xl">
         {/* Back Button */}
         <button
@@ -198,7 +198,7 @@ export default function AgentViewPage() {
                   )}
                 </div>
                 <div>
-                  <h1 className="text-2xl font-bold text-gray-900">{agent.agent_name}</h1>
+                  <h1 className="text-2xl md:text-3xl font-extrabold text-gray-900 tracking-tight">{agent.agent_name}</h1>
                   <div className="flex items-center gap-2 mt-0.5">
                     <span className={`inline-flex items-center px-2.5 py-1 rounded-full text-xs font-semibold ${
                       agent.status === 'active' 

@@ -168,7 +168,7 @@ export default function CreatePaymentIntegrationPage() {
       : false
 
   return (
-    <div className="min-h-screen bg-gray-50 p-4 md:p-6">
+    <div className="min-h-screen bg-gradient-to-br from-red-50/60 via-white to-rose-50/40 p-4 md:p-6">
       <div className="max-w-4xl mx-auto">
         <div className="mb-5">
           <button
@@ -178,7 +178,7 @@ export default function CreatePaymentIntegrationPage() {
             <ArrowLeft size={16} />
             Back
           </button>
-          <h1 className="text-2xl font-bold text-gray-900">Add Payment Integration</h1>
+          <h1 className="text-2xl md:text-3xl font-extrabold text-gray-900 tracking-tight">Add Payment Integration</h1>
           <p className="text-gray-600 mt-0.5 text-sm">
             Configure a payment provider to accept payments
           </p>

@@ -175,14 +175,14 @@ export default function DataSourcesPage() {
 
   if (loading) {
     return (
-      <div className="flex items-center justify-center h-screen bg-gradient-to-br from-red-50 via-red-50/30 to-red-50">
+      <div className="flex items-center justify-center h-screen bg-gradient-to-br from-red-50/60 via-white to-rose-50/40">
         <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-red-600"></div>
       </div>
     )
   }
 
   return (
-    <div className="min-h-screen bg-gradient-to-br from-red-50 via-red-50/30 to-red-50 p-4 md:p-6">
+    <div className="min-h-screen bg-gradient-to-br from-red-50/60 via-white to-rose-50/40 p-4 md:p-6">
       <div className="max-w-7xl mx-auto">
         {/* Header - More Compact */}
         <div className="mb-6">
@@ -192,7 +192,7 @@ export default function DataSourcesPage() {
                 <Database className="w-6 h-6 text-white" />
               </div>
               <div>
-                <h1 className="text-2xl font-bold text-gray-900">Data Sources</h1>
+                <h1 className="text-2xl md:text-3xl font-extrabold text-gray-900 tracking-tight">Data Sources</h1>
                 <p className="text-gray-600 mt-0.5 text-sm">
                   Connect and manage data sources for your knowledge bases
                 </p>

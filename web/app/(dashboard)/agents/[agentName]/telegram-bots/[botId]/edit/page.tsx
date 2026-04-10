@@ -107,7 +107,7 @@ export default function EditTelegramBotPage() {
 
   if (!bot) {
     return (
-      <div className="min-h-screen bg-gradient-to-br from-gray-50 via-primary-50/30 to-gray-50 p-4 md:p-6">
+      <div className="min-h-screen bg-gradient-to-br from-red-50/60 via-white to-rose-50/40 p-4 md:p-6">
         <div className="max-w-2xl mx-auto">
           <div className="bg-red-50 border border-red-200 rounded-lg p-4">
             <p className="text-red-800">Bot not found</p>
@@ -118,7 +118,7 @@ export default function EditTelegramBotPage() {
   }
 
   return (
-    <div className="min-h-screen bg-gradient-to-br from-gray-50 via-primary-50/30 to-gray-50 p-4 md:p-6">
+    <div className="min-h-screen bg-gradient-to-br from-red-50/60 via-white to-rose-50/40 p-4 md:p-6">
       <div className="max-w-2xl mx-auto">
         {/* Header */}
         <div className="mb-6">
@@ -129,7 +129,7 @@ export default function EditTelegramBotPage() {
             <ArrowLeft className="h-4 w-4 mr-1" />
             Back to Telegram Bots
           </Link>
-          <h1 className="text-2xl font-bold text-gray-900">Edit Telegram Bot</h1>
+          <h1 className="text-2xl md:text-3xl font-extrabold text-gray-900 tracking-tight">Edit Telegram Bot</h1>
           <p className="text-gray-600 mt-1 text-sm">
             Update settings for <span className="font-semibold">{bot.bot_name}</span>
             {bot.bot_username && <span className="text-gray-500"> (@{bot.bot_username})</span>}

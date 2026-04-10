@@ -255,7 +255,7 @@ export default function SubAgentsPage() {
 
   if (loading) {
     return (
-      <div className="min-h-screen bg-gradient-to-br from-gray-50 via-red-50/30 to-gray-50 flex items-center justify-center">
+      <div className="min-h-screen bg-gradient-to-br from-red-50/60 via-white to-rose-50/40 flex items-center justify-center">
         <div className="text-center">
           <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-red-600 mx-auto"></div>
           <p className="mt-4 text-gray-600 text-sm">Loading sub-agents...</p>
@@ -265,7 +265,7 @@ export default function SubAgentsPage() {
   }
 
   return (
-    <div className="min-h-screen bg-gray-50">
+    <div className="min-h-screen bg-gradient-to-br from-red-50/60 via-white to-rose-50/40">
       {/* Header */}
       <div className="max-w-7xl mx-auto px-4 md:px-6 py-4 md:py-6">
         <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4 mb-6">
@@ -277,7 +277,7 @@ export default function SubAgentsPage() {
               <ArrowLeft className="w-5 h-5" />
             </button>
             <div>
-              <h1 className="text-xl sm:text-3xl font-bold text-gray-900">Sub-Agents Configuration</h1>
+              <h1 className="text-2xl md:text-3xl font-extrabold text-gray-900 tracking-tight">Sub-Agents Configuration</h1>
               <p className="text-sm text-gray-600 mt-1">
                 Configure sub-agents for <span className="font-semibold">{agent?.agent_name || agentName}</span>
               </p>

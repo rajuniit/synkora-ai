@@ -35,7 +35,7 @@ export default function AppsPage() {
     <div className="p-4 md:p-8">
       {/* Header */}
       <div className="mb-8">
-        <h1 className="text-2xl font-bold text-gray-900 mb-2">Apps</h1>
+        <h1 className="text-2xl md:text-3xl font-extrabold text-gray-900 tracking-tight mb-2">Apps</h1>
         <p className="text-gray-600">Create and manage your AI applications</p>
       </div>
 

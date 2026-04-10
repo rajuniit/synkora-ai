@@ -230,6 +230,9 @@ class SlackMessageHandler:
                 llm_config_id=None,
                 db=self.db_session,
                 user_id=str(slack_bot.created_by) if slack_bot.created_by else None,
+                tenant_id=slack_bot.tenant_id,
+                trigger_source="slack",
+                trigger_detail=f"#{channel_name}" if channel_name else f"#{channel_id}",
                 shared_state={
                     "slack_message_ts": message_ts,
                     "slack_channel_id": channel_id,

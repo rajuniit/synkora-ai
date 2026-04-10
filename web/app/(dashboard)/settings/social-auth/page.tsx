@@ -60,7 +60,7 @@ export default function SocialAuthPage() {
     <div className="space-y-6">
       {/* Header */}
       <div>
-        <h1 className="text-2xl font-bold text-gray-900">Social Authentication</h1>
+        <h1 className="text-2xl md:text-3xl font-extrabold text-gray-900 tracking-tight">Social Authentication</h1>
         <p className="mt-2 text-sm text-gray-600">
           Link your social accounts to enable quick sign-in and account recovery.
         </p>

@@ -47,6 +47,7 @@ from .data_source import (
 )
 from .database_connection import DatabaseConnection, DatabaseConnectionType
 from .dataset import Dataset
+from .debate_session import DebateSession
 from .document import Document, DocumentStatus
 from .document_segment import DocumentSegment
 from .followup import FollowupConfig, FollowupItem, FollowupPriority, FollowupStatus
@@ -106,6 +107,7 @@ from .user_oauth_token import UserOAuthToken
 from .voice_api_key import VoiceApiKey
 from .voice_usage import VoiceUsage
 from .whatsapp_bot import WhatsAppBot
+from .wiki_article import WikiArticle, WikiCompilationJob
 from .workflow_execution import (
     WorkflowExecution,
     WorkflowExecutionStatus,
@@ -206,6 +208,11 @@ __all__ = [
     # HITL Approval models
     "AgentApprovalRequest",
     "ApprovalStatus",
+    # Debate Session models
+    "DebateSession",
+    # Wiki / Knowledge Autopilot models
+    "WikiArticle",
+    "WikiCompilationJob",
     # Profile and Role Management models
     "Permission",
     "Role",

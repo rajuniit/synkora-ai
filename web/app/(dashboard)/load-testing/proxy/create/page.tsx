@@ -94,14 +94,14 @@ export default function CreateProxyConfigPage() {
 
   if (showApiKey && createdApiKey) {
     return (
-      <div className="min-h-screen bg-gradient-to-br from-primary-50 via-white to-primary-50/30 p-4 md:p-6">
+      <div className="min-h-screen bg-gradient-to-br from-red-50/60 via-white to-rose-50/40 p-4 md:p-6">
         <div className="max-w-2xl mx-auto">
           <div className="bg-white rounded-2xl shadow-sm border border-gray-100 p-8 text-center">
             <div className="w-16 h-16 bg-green-100 rounded-full flex items-center justify-center mx-auto mb-6">
               <CheckCircle className="w-8 h-8 text-green-600" />
             </div>
 
-            <h1 className="text-2xl font-bold text-gray-900 mb-2">Proxy Configuration Created!</h1>
+            <h1 className="text-2xl md:text-3xl font-extrabold text-gray-900 tracking-tight mb-2">Proxy Configuration Created!</h1>
             <p className="text-gray-600 mb-8">
               Save your API key now - it won't be shown again.
             </p>
@@ -191,7 +191,7 @@ export default function CreateProxyConfigPage() {
   }
 
   return (
-    <div className="min-h-screen bg-gradient-to-br from-primary-50 via-white to-primary-50/30 p-4 md:p-6">
+    <div className="min-h-screen bg-gradient-to-br from-red-50/60 via-white to-rose-50/40 p-4 md:p-6">
       <div className="max-w-3xl mx-auto">
         {/* Header */}
         <div className="mb-8">
@@ -202,7 +202,7 @@ export default function CreateProxyConfigPage() {
             <ArrowLeft className="w-4 h-4" />
             Back to Proxy Configs
           </Link>
-          <h1 className="text-2xl font-bold text-gray-900">Create Proxy Configuration</h1>
+          <h1 className="text-2xl md:text-3xl font-extrabold text-gray-900 tracking-tight">Create Proxy Configuration</h1>
           <p className="text-gray-600 mt-1">
             Configure a mock LLM endpoint for load testing
           </p>

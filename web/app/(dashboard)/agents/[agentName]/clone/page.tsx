@@ -116,7 +116,7 @@ export default function CloneAgentPage() {
   }
 
   return (
-    <div className="min-h-screen bg-gradient-to-br from-red-50 via-pink-50/30 to-red-50 p-4 md:p-8">
+    <div className="min-h-screen bg-gradient-to-br from-red-50/60 via-white to-rose-50/40 p-4 md:p-8">
       <div className="max-w-4xl mx-auto">
         {/* Header */}
         <div className="mb-8">
@@ -127,7 +127,7 @@ export default function CloneAgentPage() {
             <ArrowLeft size={20} />
             Back
           </button>
-          <h1 className="text-xl sm:text-3xl font-bold text-gray-900">Clone Agent</h1>
+          <h1 className="text-2xl md:text-3xl font-extrabold text-gray-900 tracking-tight">Clone Agent</h1>
           <p className="text-gray-600 mt-2">
             Create a copy of "{decodeURIComponent(agentName)}" with customizable settings
           </p>

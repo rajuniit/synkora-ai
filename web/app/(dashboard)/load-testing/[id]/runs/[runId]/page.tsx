@@ -223,7 +223,7 @@ export default function TestRunDashboardPage({ params }: { params: Promise<{ id:
 
   if (loading) {
     return (
-      <div className="flex items-center justify-center h-screen bg-gradient-to-br from-primary-50 via-white to-primary-50/30">
+      <div className="flex items-center justify-center h-screen bg-gradient-to-br from-red-50/60 via-white to-rose-50/40">
         <div className="text-center">
           <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-primary-600 mx-auto mb-4"></div>
           <p className="text-gray-600">Loading test results...</p>
@@ -234,7 +234,7 @@ export default function TestRunDashboardPage({ params }: { params: Promise<{ id:
 
   if (!testRun) {
     return (
-      <div className="min-h-screen bg-gradient-to-br from-primary-50 via-white to-primary-50/30 p-4 md:p-6">
+      <div className="min-h-screen bg-gradient-to-br from-red-50/60 via-white to-rose-50/40 p-4 md:p-6">
         <div className="max-w-4xl mx-auto text-center py-12">
           <AlertCircle className="w-16 h-16 text-gray-300 mx-auto mb-4" />
           <h2 className="text-xl font-semibold text-gray-900 mb-2">Test Run Not Found</h2>
@@ -249,7 +249,7 @@ export default function TestRunDashboardPage({ params }: { params: Promise<{ id:
   const isActive = ['pending', 'initializing', 'running', 'stopping'].includes(testRun.status)
 
   return (
-    <div className="min-h-screen bg-gradient-to-br from-primary-50 via-white to-primary-50/30 p-4 md:p-6">
+    <div className="min-h-screen bg-gradient-to-br from-red-50/60 via-white to-rose-50/40 p-4 md:p-6">
       <div className="max-w-7xl mx-auto">
         {/* Header */}
         <div className="mb-8">
@@ -265,7 +265,7 @@ export default function TestRunDashboardPage({ params }: { params: Promise<{ id:
             <div>
               <div className="flex items-center gap-3 mb-2">
                 {getStatusIcon(testRun.status)}
-                <h1 className="text-2xl font-bold text-gray-900">Test Run Results</h1>
+                <h1 className="text-2xl md:text-3xl font-extrabold text-gray-900 tracking-tight">Test Run Results</h1>
                 <span className={`px-3 py-1 rounded-full text-sm font-medium ${getStatusBadge(testRun.status)}`}>
                   {testRun.status.charAt(0).toUpperCase() + testRun.status.slice(1)}
                 </span>

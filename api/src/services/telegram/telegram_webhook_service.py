@@ -286,6 +286,7 @@ class TelegramWebhookService:
                     attachments=None,
                     llm_config_id=None,
                     db=self.db_session,
+                    trigger_source="telegram",
                 ):
                     if event_data.startswith("data: "):
                         try:

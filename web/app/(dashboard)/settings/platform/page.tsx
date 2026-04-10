@@ -78,7 +78,7 @@ export default function PlatformSettingsPage() {
   return (
     <div className="max-w-4xl mx-auto p-6">
       <div className="mb-8">
-        <h1 className="text-xl sm:text-3xl font-bold text-gray-900">Platform Settings</h1>
+        <h1 className="text-2xl md:text-3xl font-extrabold text-gray-900 tracking-tight">Platform Settings</h1>
         <p className="mt-2 text-gray-600">Configure Stripe payment integration for the platform</p>
       </div>
 
