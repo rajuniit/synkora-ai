@@ -1597,7 +1597,6 @@ class ChatStreamService:
                     status="started",
                     arguments=event.get("arguments"),
                 )
-                await _track({"type": "tool_status", "tool_name": tool_name, "status": "started"})
 
             elif event["type"] == "function_result":
                 tool_name = event["name"]
@@ -1612,9 +1611,6 @@ class ChatStreamService:
                     tool_name=tool_name,
                     status="completed",
                     duration_ms=duration_ms,
-                )
-                await _track(
-                    {"type": "tool_status", "tool_name": tool_name, "status": "completed", "duration_ms": duration_ms}
                 )
 
             elif event["type"] == "chart":
