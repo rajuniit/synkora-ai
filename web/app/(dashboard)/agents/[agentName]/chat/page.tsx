@@ -877,7 +877,7 @@ export default function AdvancedChatPage() {
   const rightWidgets = activeConfig?.sidebar_widgets?.filter((w: any) => w.position === 'right').sort((a: any, b: any) => (a.order || 0) - (b.order || 0)) || []
 
   return (
-    <div style={getChatStyles()} className="min-h-screen bg-gradient-to-br from-gray-50 via-white to-gray-50 custom-scrollbar-container">
+    <div style={getChatStyles()} className="min-h-screen bg-gradient-to-br from-red-50/60 via-white to-rose-50/40 custom-scrollbar-container">
       <style jsx global>{`
         /* Custom scrollbar styling */
         .custom-scrollbar-container ::-webkit-scrollbar {

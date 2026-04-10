@@ -120,7 +120,7 @@ export default function EditSlackBotPage() {
   const isEventMode = bot?.connection_mode === "event";
 
   return (
-    <div className="min-h-screen bg-gradient-to-br from-gray-50 via-red-50/30 to-gray-50 p-4 md:p-6">
+    <div className="min-h-screen bg-gradient-to-br from-red-50/60 via-white to-rose-50/40 p-4 md:p-6">
       <div className="max-w-3xl mx-auto">
         {/* Header */}
         <div className="flex items-center gap-4 mb-6">
@@ -131,7 +131,7 @@ export default function EditSlackBotPage() {
             <ArrowLeft className="h-5 w-5 text-gray-600" />
           </button>
           <div>
-            <h1 className="text-2xl font-bold text-gray-900">Edit Slack Bot</h1>
+            <h1 className="text-2xl md:text-3xl font-extrabold text-gray-900 tracking-tight">Edit Slack Bot</h1>
             <p className="text-sm text-gray-600">
               Update configuration for <span className="font-medium">{bot?.bot_name}</span>
             </p>

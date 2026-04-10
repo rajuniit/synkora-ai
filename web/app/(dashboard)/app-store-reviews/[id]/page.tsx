@@ -92,7 +92,7 @@ export default function AppStoreSourceDetailsPage() {
 
   if (loading) {
     return (
-      <div className="min-h-screen bg-gray-50 flex items-center justify-center">
+      <div className="min-h-screen bg-gradient-to-br from-red-50/60 via-white to-rose-50/40 flex items-center justify-center">
         <div className="text-center">
           <div className="w-16 h-16 border-4 border-blue-600 border-t-transparent rounded-full animate-spin mx-auto mb-4" />
           <p className="text-gray-600">Loading app source details...</p>
@@ -103,7 +103,7 @@ export default function AppStoreSourceDetailsPage() {
 
   if (!source) {
     return (
-      <div className="min-h-screen bg-gray-50 flex items-center justify-center">
+      <div className="min-h-screen bg-gradient-to-br from-red-50/60 via-white to-rose-50/40 flex items-center justify-center">
         <div className="text-center">
           <AlertCircle className="w-16 h-16 text-gray-400 mx-auto mb-4" />
           <p className="text-gray-600">App source not found</p>
@@ -119,7 +119,7 @@ export default function AppStoreSourceDetailsPage() {
   }
 
   return (
-    <div className="min-h-screen bg-gray-50 p-4 md:p-8">
+    <div className="min-h-screen bg-gradient-to-br from-red-50/60 via-white to-rose-50/40 p-4 md:p-8">
       <div className="max-w-7xl mx-auto">
         {/* Header */}
         <div className="mb-8">
@@ -137,7 +137,7 @@ export default function AppStoreSourceDetailsPage() {
                 <Smartphone className="w-8 h-8 text-white" />
               </div>
               <div>
-                <h1 className="text-xl sm:text-3xl font-bold text-gray-900">{source.app_name}</h1>
+                <h1 className="text-2xl md:text-3xl font-extrabold text-gray-900 tracking-tight">{source.app_name}</h1>
                 <div className="flex items-center gap-4 mt-2 text-sm text-gray-600">
                   <span className="flex items-center gap-1">
                     {source.store_type === 'google_play' ? '🤖' : '🍎'}

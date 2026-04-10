@@ -131,7 +131,7 @@ def register_platform_tools(registry) -> None:
         description=(
             "Create a new AI agent for the current tenant. "
             "IMPORTANT: Before calling this tool you MUST first output the marker: "
-            '__ACTION__{"type":"create_agent","config":{...}}__ACTION__ '
+            "__ACTION__{\"type\":\"create_agent\",\"config\":{...}}__ACTION__ "
             "and wait for the user to confirm. Only call this tool after the user "
             "sends __CONFIRMED__ in their reply. "
             "The 'config' object in the marker must include: "
@@ -274,10 +274,7 @@ def register_platform_tools(registry) -> None:
         parameters={
             "type": "object",
             "properties": {
-                "agent_name": {
-                    "type": "string",
-                    "description": "Slug name of the target agent, or 'platform_engineer_agent'",
-                },
+                "agent_name": {"type": "string", "description": "Slug name of the target agent, or 'platform_engineer_agent'"},
                 "bot_name": {"type": "string", "description": "Display name for the Slack bot"},
                 "bot_token": {"type": "string", "description": "Bot user OAuth token from Slack (xoxb-...)"},
                 "connection_mode": {
@@ -307,10 +304,7 @@ def register_platform_tools(registry) -> None:
         parameters={
             "type": "object",
             "properties": {
-                "agent_name": {
-                    "type": "string",
-                    "description": "Slug name of the target agent, or 'platform_engineer_agent'",
-                },
+                "agent_name": {"type": "string", "description": "Slug name of the target agent, or 'platform_engineer_agent'"},
                 "bot_name": {"type": "string", "description": "Display name for the Telegram bot"},
                 "bot_token": {"type": "string", "description": "Bot token from @BotFather (format: 123456:ABC-...)"},
             },

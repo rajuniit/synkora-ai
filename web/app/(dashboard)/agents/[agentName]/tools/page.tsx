@@ -1476,7 +1476,7 @@ export default function AgentToolsPage() {
   );
 
   return (
-    <div className="min-h-screen bg-gradient-to-br from-gray-50 via-red-50/30 to-gray-50">
+    <div className="min-h-screen bg-gradient-to-br from-red-50/60 via-white to-rose-50/40">
       {/* Header */}
       <div className="bg-white border-b border-gray-200">
         <div className="max-w-7xl mx-auto px-6 py-3.5">
@@ -1489,7 +1489,7 @@ export default function AgentToolsPage() {
                 <ArrowLeft className="w-4 h-4 text-red-600" />
               </button>
               <div>
-                <h1 className="text-xl font-bold text-gray-900">Tool Configuration</h1>
+                <h1 className="text-2xl md:text-3xl font-extrabold text-gray-900 tracking-tight">Tool Configuration</h1>
                 <p className="text-xs text-gray-600">
                   Configure tools for <span className="font-semibold">{agent?.agent_name || agentName}</span>
                 </p>

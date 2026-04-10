@@ -7,78 +7,143 @@ import { useAuthStore } from '@/lib/store/authStore'
 import { usePermissions } from '@/hooks/usePermissions'
 import { cn } from '@/lib/utils/cn'
 
-const navigation = [
-  { 
-    name: 'Dashboard', 
-    href: '/dashboard', 
+interface NavItem {
+  name: string
+  href: string
+  icon: React.ReactNode
+}
+
+interface NavGroup {
+  name: string
+  icon: React.ReactNode
+  children: NavItem[]
+}
+
+type NavEntry = NavItem | NavGroup
+
+function isGroup(entry: NavEntry): entry is NavGroup {
+  return 'children' in entry
+}
+
+const navigation: NavEntry[] = [
+  {
+    name: 'Dashboard',
+    href: '/dashboard',
     icon: (
       <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
         <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M3 12l2-2m0 0l7-7 7 7M5 10v10a1 1 0 001 1h3m10-11l2 2m-2-2v10a1 1 0 01-1 1h-3m-6 0a1 1 0 001-1v-4a1 1 0 011-1h2a1 1 0 011 1v4a1 1 0 001 1m-6 0h6" />
       </svg>
     )
   },
-  { 
-    name: 'Agents', 
-    href: '/agents', 
+  {
+    name: 'Agents',
+    href: '/agents',
     icon: (
       <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
         <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9.75 17L9 20l-1 1h8l-1-1-.75-3M3 13h18M5 17h14a2 2 0 002-2V5a2 2 0 00-2-2H5a2 2 0 00-2 2v10a2 2 0 002 2z" />
       </svg>
     )
   },
-  { 
-    name: 'Browse Agents', 
-    href: '/browse', 
+  {
+    name: 'Browse Agents',
+    href: '/browse',
     icon: (
       <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
         <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" />
       </svg>
     )
   },
-  { 
-    name: 'MCP Servers', 
-    href: '/mcp-servers', 
+  {
+    name: 'MCP Servers',
+    href: '/mcp-servers',
     icon: (
       <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
         <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 12h14M5 12a2 2 0 01-2-2V6a2 2 0 012-2h14a2 2 0 012 2v4a2 2 0 01-2 2M5 12a2 2 0 00-2 2v4a2 2 0 002 2h14a2 2 0 002-2v-4a2 2 0 00-2-2m-2-4h.01M17 16h.01" />
       </svg>
     )
   },
-  { 
-    name: 'Custom Tools', 
-    href: '/custom-tools', 
+  {
+    name: 'Custom Tools',
+    href: '/custom-tools',
     icon: (
       <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
         <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 6V4m0 2a2 2 0 100 4m0-4a2 2 0 110 4m-6 8a2 2 0 100-4m0 4a2 2 0 110-4m0 4v2m0-6V4m6 6v10m6-2a2 2 0 100-4m0 4a2 2 0 110-4m0 4v2m0-6V4" />
       </svg>
     )
   },
-  { 
-    name: 'Knowledge Bases', 
-    href: '/knowledge-bases', 
+  {
+    name: 'Knowledge Bases',
+    href: '/knowledge-bases',
     icon: (
       <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
         <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 6.253v13m0-13C10.832 5.477 9.246 5 7.5 5S4.168 5.477 3 6.253v13C4.168 18.477 5.754 18 7.5 18s3.332.477 4.5 1.253m0-13C13.168 5.477 14.754 5 16.5 5c1.747 0 3.332.477 4.5 1.253v13C19.832 18.477 18.247 18 16.5 18c-1.746 0-3.332.477-4.5 1.253" />
       </svg>
     )
   },
-  { 
-    name: 'Data Sources', 
-    href: '/data-sources', 
+  {
+    name: 'Data Sources',
+    href: '/data-sources',
     icon: (
       <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
         <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 7v10c0 2.21 3.582 4 8 4s8-1.79 8-4V7M4 7c0 2.21 3.582 4 8 4s8-1.79 8-4M4 7c0-2.21 3.582-4 8-4s8 1.79 8 4m0 5c0 2.21-3.582 4-8 4s-8-1.79-8-4" />
       </svg>
     )
   },
-  { 
-    name: 'Database Connections', 
-    href: '/database-connections', 
+  {
+    name: 'Database Connections',
+    href: '/database-connections',
     icon: (
       <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
         <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 7v10c0 2.21 3.582 4 8 4s8-1.79 8-4V7M4 7c0 2.21 3.582 4 8 4s8-1.79 8-4M4 7c0-2.21 3.582-4 8-4s8 1.79 8 4m0 5c0 2.21-3.582 4-8 4s-8-1.79-8-4" />
       </svg>
     )
+  },
+  // Products submenu
+  {
+    name: 'Products',
+    icon: (
+      <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M20 7l-8-4-8 4m16 0l-8 4m8-4v10l-8 4m0-10L4 7m8 4v10M4 7v10l8 4" />
+      </svg>
+    ),
+    children: [
+      {
+        name: 'Rate My Life',
+        href: '/rate-my-life',
+        icon: (
+          <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M11.049 2.927c.3-.921 1.603-.921 1.902 0l1.519 4.674a1 1 0 00.95.69h4.915c.969 0 1.371 1.24.588 1.81l-3.976 2.888a1 1 0 00-.363 1.118l1.518 4.674c.3.922-.755 1.688-1.538 1.118l-3.976-2.888a1 1 0 00-1.176 0l-3.976 2.888c-.783.57-1.838-.197-1.538-1.118l1.518-4.674a1 1 0 00-.363-1.118l-3.976-2.888c-.784-.57-.38-1.81.588-1.81h4.914a1 1 0 00.951-.69l1.519-4.674z" />
+          </svg>
+        )
+      },
+      {
+        name: 'War Room',
+        href: '/war-room',
+        icon: (
+          <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M17 20h5v-2a3 3 0 00-5.356-1.857M17 20H7m10 0v-2c0-.656-.126-1.283-.356-1.857M7 20H2v-2a3 3 0 015.356-1.857M7 20v-2c0-.656.126-1.283.356-1.857m0 0a5.002 5.002 0 019.288 0M15 7a3 3 0 11-6 0 3 3 0 016 0zm6 3a2 2 0 11-4 0 2 2 0 014 0zM7 10a2 2 0 11-4 0 2 2 0 014 0z" />
+          </svg>
+        )
+      },
+      {
+        name: 'Live Lab',
+        href: '/live-lab',
+        icon: (
+          <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9.75 17L9 20l-1 1h8l-1-1-.75-3M3 13h18M5 17h14a2 2 0 002-2V5a2 2 0 00-2-2H5a2 2 0 00-2 2v10a2 2 0 002 2z" />
+          </svg>
+        )
+      },
+      {
+        name: 'Load Testing',
+        href: '/load-testing',
+        icon: (
+          <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 19v-6a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2a2 2 0 002-2zm0 0V9a2 2 0 012-2h2a2 2 0 012 2v10m-6 0a2 2 0 002 2h2a2 2 0 002-2m0 0V5a2 2 0 012-2h2a2 2 0 012 2v14a2 2 0 01-2 2h-2a2 2 0 01-2-2z" />
+          </svg>
+        )
+      },
+    ]
   },
   {
     name: 'Scheduled Tasks',
@@ -117,17 +182,8 @@ const navigation = [
     )
   },
   {
-    name: 'Load Testing',
-    href: '/load-testing',
-    icon: (
-      <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 19v-6a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2a2 2 0 002-2zm0 0V9a2 2 0 012-2h2a2 2 0 012 2v10m-6 0a2 2 0 002 2h2a2 2 0 002-2m0 0V5a2 2 0 012-2h2a2 2 0 012 2v14a2 2 0 01-2 2h-2a2 2 0 01-2-2z" />
-      </svg>
-    )
-  },
-  {
-    name: 'Billing', 
-    href: '/billing', 
+    name: 'Billing',
+    href: '/billing',
     icon: (
       <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
         <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M3 10h18M7 15h1m4 0h1m-7 4h12a3 3 0 003-3V8a3 3 0 00-3-3H6a3 3 0 00-3 3v8a3 3 0 003 3z" />
@@ -213,9 +269,22 @@ interface SidebarProps {
 export function Sidebar({ mobileOpen = false, onMobileClose }: SidebarProps) {
   const [isExpanded, setIsExpanded] = useState(false)
   const [isPinned, setIsPinned] = useState(false)
+  const [expandedGroups, setExpandedGroups] = useState<Record<string, boolean>>({})
   const pathname = usePathname()
   const user = useAuthStore((state) => state.user)
   const { hasPermission } = usePermissions()
+
+  // Auto-expand group if a child route is active
+  useEffect(() => {
+    for (const entry of navigation) {
+      if (isGroup(entry)) {
+        const hasActiveChild = entry.children.some(child => pathname?.startsWith(child.href))
+        if (hasActiveChild) {
+          setExpandedGroups(prev => ({ ...prev, [entry.name]: true }))
+        }
+      }
+    }
+  }, [pathname])
 
   // Close mobile sidebar on route change
   useEffect(() => {
@@ -240,8 +309,81 @@ export function Sidebar({ mobileOpen = false, onMobileClose }: SidebarProps) {
     setIsExpanded(!isPinned)
   }
 
+  const toggleGroup = (name: string) => {
+    setExpandedGroups(prev => ({ ...prev, [name]: !prev[name] }))
+  }
+
   // Labels are visible when desktop-expanded/pinned OR when mobile drawer is open
   const showLabels = isExpanded || isPinned || mobileOpen
+
+  const renderNavItem = (item: NavItem, isChild = false) => {
+    const isActive = pathname?.startsWith(item.href)
+    return (
+      <Link
+        key={item.name}
+        href={item.href}
+        prefetch={false}
+        className={cn(
+          'flex items-center gap-3 rounded-lg transition-all',
+          isChild ? 'px-3 py-2' : 'px-3 py-3',
+          isActive
+            ? 'bg-gradient-to-r from-primary-500/10 to-primary-600/10 text-primary-400 border-l-2 border-primary-500'
+            : 'text-gray-400 hover:bg-gray-800 hover:text-gray-200'
+        )}
+      >
+        <div className="flex-shrink-0">
+          {item.icon}
+        </div>
+        {showLabels && (
+          <span className={cn('font-medium whitespace-nowrap', isChild ? 'text-xs' : 'text-sm')}>{item.name}</span>
+        )}
+      </Link>
+    )
+  }
+
+  const renderNavGroup = (group: NavGroup) => {
+    const isOpen = expandedGroups[group.name] ?? false
+    const hasActiveChild = group.children.some(child => pathname?.startsWith(child.href))
+
+    return (
+      <div key={group.name}>
+        <button
+          onClick={() => showLabels && toggleGroup(group.name)}
+          className={cn(
+            'w-full flex items-center gap-3 px-3 py-3 rounded-lg transition-all',
+            hasActiveChild
+              ? 'text-primary-400'
+              : 'text-gray-400 hover:bg-gray-800 hover:text-gray-200'
+          )}
+        >
+          <div className="flex-shrink-0">
+            {group.icon}
+          </div>
+          {showLabels && (
+            <>
+              <span className="text-sm font-medium whitespace-nowrap flex-1 text-left">{group.name}</span>
+              <svg
+                className={cn(
+                  'w-4 h-4 transition-transform duration-200 flex-shrink-0',
+                  isOpen ? 'rotate-180' : 'rotate-0'
+                )}
+                fill="none"
+                stroke="currentColor"
+                viewBox="0 0 24 24"
+              >
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
+              </svg>
+            </>
+          )}
+        </button>
+        {showLabels && isOpen && (
+          <div className="ml-4 pl-3 border-l border-gray-700/50 space-y-0.5 mt-0.5 mb-1">
+            {group.children.map(child => renderNavItem(child, true))}
+          </div>
+        )}
+      </div>
+    )
+  }
 
   return (
     <>
@@ -325,30 +467,10 @@ export function Sidebar({ mobileOpen = false, onMobileClose }: SidebarProps) {
         </div>
 
         {/* Navigation */}
-        <nav className="flex-1 flex flex-col space-y-2 px-3 overflow-y-auto">
-          {navigation.map((item) => {
-            const isActive = pathname?.startsWith(item.href)
-            return (
-              <Link
-                key={item.name}
-                href={item.href}
-                prefetch={false}
-                className={cn(
-                  'flex items-center gap-3 px-3 py-3 rounded-lg transition-all',
-                  isActive
-                    ? 'bg-gradient-to-r from-primary-500/10 to-primary-600/10 text-primary-400 border-l-2 border-primary-500'
-                    : 'text-gray-400 hover:bg-gray-800 hover:text-gray-200'
-                )}
-              >
-                <div className="flex-shrink-0">
-                  {item.icon}
-                </div>
-                {showLabels && (
-                  <span className="text-sm font-medium whitespace-nowrap">{item.name}</span>
-                )}
-              </Link>
-            )
-          })}
+        <nav className="flex-1 flex flex-col space-y-1 px-3 overflow-y-auto">
+          {navigation.map((entry) =>
+            isGroup(entry) ? renderNavGroup(entry) : renderNavItem(entry)
+          )}
 
           {/* Settings Section */}
           <div className="pt-4 mt-4 border-t border-gray-700">

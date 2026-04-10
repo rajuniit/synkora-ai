@@ -102,7 +102,7 @@ export default function AgentLLMConfigsPage() {
   const deletingConfig = configs.find(c => c.id === deletingConfigId)
 
   return (
-    <div className="min-h-screen bg-gradient-to-br from-gray-50 via-red-50/30 to-gray-50">
+    <div className="min-h-screen bg-gradient-to-br from-red-50/60 via-white to-rose-50/40">
       {/* Delete Confirmation Modal */}
       {deletingConfigId && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50">
@@ -151,7 +151,7 @@ export default function AgentLLMConfigsPage() {
               <ArrowLeft className="w-5 h-5" />
             </Link>
             <div>
-              <h1 className="text-2xl font-bold text-gray-900">AI Model Config</h1>
+              <h1 className="text-2xl md:text-3xl font-extrabold text-gray-900 tracking-tight">AI Model Config</h1>
               <p className="text-sm text-gray-500 mt-1">
                 Manage AI models for <span className="font-semibold text-gray-700">{agentName}</span>
               </p>

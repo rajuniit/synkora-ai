@@ -186,7 +186,7 @@ export default function EscalationsPage() {
 
   if (loading) {
     return (
-      <div className="flex items-center justify-center h-screen bg-gradient-to-br from-red-50 via-white to-red-50/30">
+      <div className="flex items-center justify-center h-screen bg-gradient-to-br from-red-50/60 via-white to-rose-50/40">
         <div className="text-center">
           <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-red-600 mx-auto mb-4"></div>
           <p className="text-gray-600">Loading escalations...</p>
@@ -196,13 +196,13 @@ export default function EscalationsPage() {
   }
 
   return (
-    <div className="min-h-screen bg-gradient-to-br from-red-50 via-white to-red-50/30 p-4 md:p-6">
+    <div className="min-h-screen bg-gradient-to-br from-red-50/60 via-white to-rose-50/40 p-4 md:p-6">
       <div className="max-w-6xl mx-auto">
         {/* Header */}
         <div className="mb-8">
           <div className="flex items-center justify-between mb-6">
             <div>
-              <h1 className="text-2xl font-bold text-gray-900">Escalations</h1>
+              <h1 className="text-2xl md:text-3xl font-extrabold text-gray-900 tracking-tight">Escalations</h1>
               <p className="text-gray-600 mt-1">
                 Review and respond to agent escalation requests
               </p>

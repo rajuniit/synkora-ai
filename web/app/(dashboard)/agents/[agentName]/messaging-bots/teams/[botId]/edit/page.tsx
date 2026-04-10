@@ -124,7 +124,7 @@ export default function EditTeamsBotPage() {
   }
 
   return (
-    <div className="min-h-screen bg-gray-50 p-4 md:p-8">
+    <div className="min-h-screen bg-gradient-to-br from-red-50/60 via-white to-rose-50/40 p-4 md:p-8">
       <div className="max-w-3xl mx-auto">
         <div className="mb-8">
           <button
@@ -139,7 +139,7 @@ export default function EditTeamsBotPage() {
               <Users className="text-purple-600" size={24} />
             </div>
             <div>
-              <h1 className="text-xl sm:text-3xl font-bold text-gray-900">Edit Teams Bot</h1>
+              <h1 className="text-2xl md:text-3xl font-extrabold text-gray-900 tracking-tight">Edit Teams Bot</h1>
               <p className="text-gray-600 mt-1">Update your Teams bot configuration</p>
             </div>
           </div>

@@ -164,7 +164,7 @@ export default function AgentDetailPage() {
 
   if (loading) {
     return (
-      <div className="min-h-screen bg-gray-50 flex items-center justify-center">
+      <div className="min-h-screen bg-gradient-to-br from-red-50/60 via-white to-rose-50/40 flex items-center justify-center">
         <div className="text-center">
           <div className="inline-block animate-spin rounded-full h-14 w-14 border-4 border-red-600 border-t-transparent"></div>
           <p className="mt-4 text-gray-600 font-medium">Loading agent details...</p>
@@ -178,7 +178,7 @@ export default function AgentDetailPage() {
   }
 
   return (
-    <div className="min-h-screen bg-gray-50">
+    <div className="min-h-screen bg-gradient-to-br from-red-50/60 via-white to-rose-50/40">
       {/* Header - Clean White Design */}
       <div className="bg-white border-b border-gray-200">
         <div className="max-w-7xl mx-auto px-6 py-8">
@@ -217,7 +217,7 @@ export default function AgentDetailPage() {
             </div>
             <div className="flex-1">
               <div className="flex items-center gap-3 mb-2">
-                <h1 className="text-xl sm:text-3xl font-bold text-gray-900">{agent.agent_name}</h1>
+                <h1 className="text-2xl md:text-3xl font-extrabold text-gray-900 tracking-tight">{agent.agent_name}</h1>
                 <span className="px-3 py-1 bg-gray-100 text-gray-700 text-xs font-semibold rounded-full border border-gray-200">
                   {agent.category}
                 </span>

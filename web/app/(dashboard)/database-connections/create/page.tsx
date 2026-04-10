@@ -137,7 +137,7 @@ export default function CreateDatabaseConnectionPage() {
   }
 
   return (
-    <div className="min-h-screen bg-gradient-to-br from-red-50 via-red-50/30 to-red-50 p-4 md:p-6">
+    <div className="min-h-screen bg-gradient-to-br from-red-50/60 via-white to-rose-50/40 p-4 md:p-6">
       <div className="max-w-4xl mx-auto">
         {/* Header - More Compact */}
         <div className="mb-6">
@@ -153,7 +153,7 @@ export default function CreateDatabaseConnectionPage() {
               <Database className="w-6 h-6 text-red-600" />
             </div>
             <div>
-              <h1 className="text-2xl font-bold text-gray-900">Create Database Connection</h1>
+              <h1 className="text-2xl md:text-3xl font-extrabold text-gray-900 tracking-tight">Create Database Connection</h1>
               <p className="text-gray-600 mt-1 text-sm">Add a new database connection for data analysis</p>
             </div>
           </div>

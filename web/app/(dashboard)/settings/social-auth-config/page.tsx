@@ -241,11 +241,11 @@ export default function SocialAuthConfigPage() {
   }
 
   return (
-    <div className="min-h-screen bg-gradient-to-br from-primary-50 via-primary-50/30 to-white p-4 md:p-6">
+    <div className="min-h-screen bg-gradient-to-br from-red-50/60 via-white to-rose-50/40 p-4 md:p-6">
       <div className="max-w-6xl mx-auto">
         {/* Header */}
         <div className="mb-5">
-          <h1 className="text-2xl font-bold text-gray-900">Social Authentication</h1>
+          <h1 className="text-2xl md:text-3xl font-extrabold text-gray-900 tracking-tight">Social Authentication</h1>
           <p className="text-gray-600 mt-1 text-sm">
             Configure OAuth providers for user authentication
           </p>

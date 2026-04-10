@@ -6,6 +6,8 @@ from .agent_api_key import AgentApiKey
 from .agent_api_usage import AgentApiUsage
 from .agent_approval import AgentApprovalRequest, ApprovalStatus
 from .agent_context_file import AgentContextFile
+from .debate_session import DebateSession
+from .wiki_article import WikiArticle, WikiCompilationJob
 from .agent_domain import AgentDomain
 from .agent_knowledge_base import AgentKnowledgeBase
 from .agent_llm_config import AgentLLMConfig
@@ -206,6 +208,11 @@ __all__ = [
     # HITL Approval models
     "AgentApprovalRequest",
     "ApprovalStatus",
+    # Debate Session models
+    "DebateSession",
+    # Wiki / Knowledge Autopilot models
+    "WikiArticle",
+    "WikiCompilationJob",
     # Profile and Role Management models
     "Permission",
     "Role",

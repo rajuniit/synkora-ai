@@ -119,7 +119,7 @@ export default function ProxyConfigsPage() {
 
   if (loading) {
     return (
-      <div className="flex items-center justify-center h-screen bg-gradient-to-br from-primary-50 via-white to-primary-50/30">
+      <div className="flex items-center justify-center h-screen bg-gradient-to-br from-red-50/60 via-white to-rose-50/40">
         <div className="text-center">
           <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-primary-600 mx-auto mb-4"></div>
           <p className="text-gray-600">Loading proxy configurations...</p>
@@ -129,7 +129,7 @@ export default function ProxyConfigsPage() {
   }
 
   return (
-    <div className="min-h-screen bg-gradient-to-br from-primary-50 via-white to-primary-50/30 p-4 md:p-6">
+    <div className="min-h-screen bg-gradient-to-br from-red-50/60 via-white to-rose-50/40 p-4 md:p-6">
       <div className="max-w-6xl mx-auto">
         {/* Header */}
         <div className="mb-8">
@@ -143,7 +143,7 @@ export default function ProxyConfigsPage() {
 
           <div className="flex items-start justify-between">
             <div>
-              <h1 className="text-2xl font-bold text-gray-900">LLM Proxy Configurations</h1>
+              <h1 className="text-2xl md:text-3xl font-extrabold text-gray-900 tracking-tight">LLM Proxy Configurations</h1>
               <p className="text-gray-600 mt-1">
                 Configure mock LLM endpoints to test your AI agents without real API costs
               </p>

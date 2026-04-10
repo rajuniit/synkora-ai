@@ -41,7 +41,7 @@ export default function AgentPricingPage() {
           <ArrowLeft className="mr-2 h-4 w-4" />
           Back to Billing
         </Link>
-        <h1 className="text-xl sm:text-3xl font-bold text-gray-900">Agent Monetization</h1>
+        <h1 className="text-2xl md:text-3xl font-extrabold text-gray-900 tracking-tight">Agent Monetization</h1>
         <p className="mt-2 text-gray-600">
           Configure pricing and view revenue for your agent
         </p>

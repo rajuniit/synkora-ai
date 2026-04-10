@@ -194,6 +194,9 @@ class WhatsAppWebhookService:
                 llm_config_id=None,
                 db=self.db_session,
                 user_id=str(bot.created_by) if bot.created_by else None,
+                tenant_id=bot.tenant_id,
+                trigger_source="whatsapp",
+                trigger_detail=from_number,
             ):
                 if event_data.startswith("data: "):
                     try:

@@ -285,7 +285,7 @@ export default function AgentMCPServersPage() {
   }
 
   return (
-    <div className="min-h-screen bg-gradient-to-br from-gray-50 via-red-50/30 to-gray-50 p-4 md:p-6">
+    <div className="min-h-screen bg-gradient-to-br from-red-50/60 via-white to-rose-50/40 p-4 md:p-6">
       <div className="max-w-7xl mx-auto">
       {/* Header */}
       <div className="mb-6">
@@ -301,7 +301,7 @@ export default function AgentMCPServersPage() {
         
         <div className="flex justify-between items-start">
           <div>
-            <h1 className="text-2xl font-bold text-gray-900">MCP Servers</h1>
+            <h1 className="text-2xl md:text-3xl font-extrabold text-gray-900 tracking-tight">MCP Servers</h1>
             <p className="text-gray-600 mt-1 text-sm">
               Configure which MCP servers <span className="font-semibold">{agent?.name || agentName}</span> can access for extended tool capabilities
             </p>

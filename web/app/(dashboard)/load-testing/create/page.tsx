@@ -202,7 +202,7 @@ export default function CreateLoadTestPage() {
   }
 
   return (
-    <div className="min-h-screen bg-gradient-to-br from-primary-50 via-white to-primary-50/30 p-4 md:p-6">
+    <div className="min-h-screen bg-gradient-to-br from-red-50/60 via-white to-rose-50/40 p-4 md:p-6">
       <div className="max-w-4xl mx-auto">
         {/* Header */}
         <div className="mb-8">
@@ -213,7 +213,7 @@ export default function CreateLoadTestPage() {
             <ArrowLeft className="w-4 h-4" />
             Back to Load Tests
           </Link>
-          <h1 className="text-2xl font-bold text-gray-900">Create Load Test</h1>
+          <h1 className="text-2xl md:text-3xl font-extrabold text-gray-900 tracking-tight">Create Load Test</h1>
           <p className="text-gray-600 mt-1">
             Configure a new load test for your API endpoint
           </p>

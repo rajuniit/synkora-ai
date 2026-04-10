@@ -165,7 +165,7 @@ export default function AgentKnowledgeBasesPage() {
   }
 
   return (
-    <div className="min-h-screen bg-gray-50 p-4 md:p-6">
+    <div className="min-h-screen bg-gradient-to-br from-red-50/60 via-white to-rose-50/40 p-4 md:p-6">
       <div className="max-w-7xl mx-auto">
       {/* Header */}
       <div className="mb-6">
@@ -188,7 +188,7 @@ export default function AgentKnowledgeBasesPage() {
 
         <div className="flex justify-between items-start">
           <div>
-            <h1 className="text-2xl font-bold text-gray-900">Knowledge Bases</h1>
+            <h1 className="text-2xl md:text-3xl font-extrabold text-gray-900 tracking-tight">Knowledge Bases</h1>
             <p className="text-gray-600 mt-1 text-sm">
               Configure which knowledge bases {agent?.name || agentName} can access
             </p>

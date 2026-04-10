@@ -149,7 +149,7 @@ export default function AgentVoicePage() {
   }
 
   return (
-    <div className="min-h-screen bg-gradient-to-br from-red-50 via-red-50/30 to-red-50 p-4 md:p-6">
+    <div className="min-h-screen bg-gradient-to-br from-red-50/60 via-white to-rose-50/40 p-4 md:p-6">
       <div className="max-w-5xl mx-auto">
         {/* Header */}
         <div className="mb-6">
@@ -160,7 +160,7 @@ export default function AgentVoicePage() {
             <ArrowLeft size={16} />
             Back to Agent
           </button>
-          <h1 className="text-2xl font-bold text-gray-900">Voice Settings</h1>
+          <h1 className="text-2xl md:text-3xl font-extrabold text-gray-900 tracking-tight">Voice Settings</h1>
           <p className="text-gray-600 mt-1 text-sm">
             Configure voice input and output for <span className="font-semibold">{agentData?.agent_name}</span>
           </p>

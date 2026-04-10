@@ -54,7 +54,7 @@ export default function EditDomainPage() {
 
   if (loading) {
     return (
-      <div className="flex items-center justify-center min-h-screen bg-gradient-to-br from-amber-50 via-yellow-50/30 to-amber-50">
+      <div className="flex items-center justify-center min-h-screen bg-gradient-to-br from-red-50/60 via-white to-rose-50/40">
         <div className="text-center">
           <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-amber-600 mx-auto"></div>
           <p className="mt-4 text-gray-600">Loading domain...</p>
@@ -65,7 +65,7 @@ export default function EditDomainPage() {
 
   if (error) {
     return (
-      <div className="min-h-screen bg-gradient-to-br from-amber-50 via-yellow-50/30 to-amber-50 p-4 md:p-8">
+      <div className="min-h-screen bg-gradient-to-br from-red-50/60 via-white to-rose-50/40 p-4 md:p-8">
         <div className="max-w-3xl mx-auto">
           <div className="bg-red-50 border border-red-200 rounded-lg p-4 text-red-800">
             {error}
@@ -77,7 +77,7 @@ export default function EditDomainPage() {
 
   if (!domain) {
     return (
-      <div className="min-h-screen bg-gradient-to-br from-amber-50 via-yellow-50/30 to-amber-50 p-4 md:p-8">
+      <div className="min-h-screen bg-gradient-to-br from-red-50/60 via-white to-rose-50/40 p-4 md:p-8">
         <div className="max-w-3xl mx-auto">
           <div className="bg-amber-50 border border-amber-200 rounded-lg p-4 text-amber-800">
             Domain not found
@@ -88,7 +88,7 @@ export default function EditDomainPage() {
   }
 
   return (
-    <div className="min-h-screen bg-gradient-to-br from-amber-50 via-yellow-50/30 to-amber-50 p-4 md:p-6">
+    <div className="min-h-screen bg-gradient-to-br from-red-50/60 via-white to-rose-50/40 p-4 md:p-6">
       <div className="max-w-4xl mx-auto">
         <button
           onClick={() => router.push(`/agents/${agentName}/domains`)}
@@ -100,7 +100,7 @@ export default function EditDomainPage() {
 
         <div className="flex items-center justify-between mb-6">
           <div>
-            <h1 className="text-2xl font-bold text-gray-900">Edit Domain Settings</h1>
+            <h1 className="text-2xl md:text-3xl font-extrabold text-gray-900 tracking-tight">Edit Domain Settings</h1>
             <p className="text-gray-600 mt-1 text-sm">
               Configure DNS settings for {domain.domain}
             </p>

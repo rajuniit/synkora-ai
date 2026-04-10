@@ -253,7 +253,7 @@ export default function CreateKnowledgeBasePage() {
   ]
 
   return (
-    <div className="min-h-screen bg-gradient-to-br from-red-50 via-white to-red-50/30">
+    <div className="min-h-screen bg-gradient-to-br from-red-50/60 via-white to-rose-50/40">
       <div className="max-w-6xl mx-auto p-6">
         {/* Header */}
         <div className="mb-8">
@@ -267,7 +267,7 @@ export default function CreateKnowledgeBasePage() {
 
           <div className="flex items-start justify-between">
             <div>
-              <h1 className="text-2xl font-bold text-gray-900">Create Knowledge Base</h1>
+              <h1 className="text-2xl md:text-3xl font-extrabold text-gray-900 tracking-tight">Create Knowledge Base</h1>
               <p className="text-gray-600 mt-1">
                 Set up a place to store information your AI agents can use
               </p>

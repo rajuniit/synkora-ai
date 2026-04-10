@@ -194,7 +194,7 @@ export default function DataSourceDetailsPage() {
 
   if (error || !dataSource) {
     return (
-      <div className="min-h-screen bg-gray-50 p-4 md:p-8">
+      <div className="min-h-screen bg-gradient-to-br from-red-50/60 via-white to-rose-50/40 p-4 md:p-8">
         <div className="max-w-7xl mx-auto">
           <div className="bg-red-50 border-l-4 border-red-500 rounded-lg p-4 mb-6">
             <div className="flex items-center gap-3">
@@ -215,7 +215,7 @@ export default function DataSourceDetailsPage() {
   }
 
   return (
-    <div className="min-h-screen bg-gray-50 p-4 md:p-8">
+    <div className="min-h-screen bg-gradient-to-br from-red-50/60 via-white to-rose-50/40 p-4 md:p-8">
       <div className="max-w-7xl mx-auto">
         {/* Back Button */}
         <Link
@@ -235,7 +235,7 @@ export default function DataSourceDetailsPage() {
               </div>
               <div className="flex-1">
                 <div className="flex items-center gap-3 mb-2">
-                  <h1 className="text-2xl font-bold text-gray-900">{dataSource.name}</h1>
+                  <h1 className="text-2xl md:text-3xl font-extrabold text-gray-900 tracking-tight">{dataSource.name}</h1>
                   <span className={`inline-flex items-center gap-1 px-2.5 py-1 rounded-full text-xs font-medium ${getStatusColor(dataSource.status)}`}>
                     {getStatusIcon(dataSource.status)}
                     {dataSource.status}

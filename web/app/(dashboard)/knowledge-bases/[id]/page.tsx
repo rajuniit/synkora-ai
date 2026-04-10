@@ -217,7 +217,7 @@ export default function KnowledgeBaseDetailsPage() {
 
   if (error || !kb) {
     return (
-      <div className="min-h-screen bg-gradient-to-br from-red-50 via-red-50/30 to-red-50 p-4 md:p-6">
+      <div className="min-h-screen bg-gradient-to-br from-red-50/60 via-white to-rose-50/40 p-4 md:p-6">
         <div className="max-w-5xl mx-auto">
           <div className="bg-red-50 border-l-4 border-red-500 rounded-lg p-5">
             <div className="flex items-center gap-3">
@@ -241,7 +241,7 @@ export default function KnowledgeBaseDetailsPage() {
   }
 
   return (
-    <div className="min-h-screen bg-gradient-to-br from-red-50 via-red-50/30 to-red-50 p-4 md:p-6">
+    <div className="min-h-screen bg-gradient-to-br from-red-50/60 via-white to-rose-50/40 p-4 md:p-6">
       <div className="max-w-7xl mx-auto">
         {/* Header */}
         <div className="mb-6">
@@ -260,7 +260,7 @@ export default function KnowledgeBaseDetailsPage() {
                   <Database className="w-6 h-6 text-white" />
                 </div>
                 <div className="flex-1">
-                  <h1 className="text-2xl font-bold text-gray-900">{kb.name}</h1>
+                  <h1 className="text-2xl md:text-3xl font-extrabold text-gray-900 tracking-tight">{kb.name}</h1>
                   {kb.description && (
                     <p className="text-gray-600 mt-1 text-sm">{kb.description}</p>
                   )}
@@ -288,6 +288,13 @@ export default function KnowledgeBaseDetailsPage() {
               </div>
               
               <div className="flex gap-2">
+                <Link
+                  href={`/knowledge-bases/${id}/wiki`}
+                  className="inline-flex items-center gap-2 px-3 py-2 text-xs font-medium text-purple-600 bg-purple-50 rounded-lg hover:bg-purple-100 transition-colors"
+                >
+                  <FileText className="w-3.5 h-3.5" />
+                  Wiki
+                </Link>
                 <Link
                   href={`/knowledge-bases/${id}/edit`}
                   className="inline-flex items-center gap-2 px-3 py-2 text-xs font-medium text-red-600 bg-red-50 rounded-lg hover:bg-red-100 transition-colors"

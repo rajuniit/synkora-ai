@@ -36,7 +36,7 @@ export function Header({ onMobileMenuToggle }: HeaderProps) {
   const loading = subscriptionLoading || balanceLoading
 
   return (
-    <header className="h-16 bg-white border-b border-gray-200 flex items-center justify-between px-4 md:px-6">
+    <header className="h-16 bg-transparent flex items-center justify-between px-4 md:px-6">
       {/* Hamburger — mobile only */}
       <button
         className="md:hidden p-2 rounded-lg hover:bg-gray-100 transition-colors text-gray-600"
