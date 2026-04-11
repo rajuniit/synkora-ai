@@ -390,7 +390,9 @@ Return ONLY valid JSON array, no other text."""
         # Use configured max_tokens, but enforce a minimum of 4000 to avoid truncated JSON
         max_tokens = max(llm_config.get("max_tokens") or 4000, 4000)
 
-        logger.info(f"Calling LLM provider={provider} model={model} max_tokens={max_tokens} api_base={api_base or 'default'}")
+        logger.info(
+            f"Calling LLM provider={provider} model={model} max_tokens={max_tokens} api_base={api_base or 'default'}"
+        )
 
         from src.services.agents.config import ModelConfig
         from src.services.agents.llm_client import MultiProviderLLMClient
