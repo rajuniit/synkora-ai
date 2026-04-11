@@ -22,6 +22,36 @@ logger = logging.getLogger(__name__)
 WIKI_CATEGORIES = ["projects", "people", "decisions", "processes", "architecture", "general"]
 
 
+def _recover_partial_json(text: str) -> list[dict]:
+    """
+    Attempt to recover complete article objects from a truncated JSON array.
+    Extracts any fully-closed objects before the truncation point.
+    """
+    import re
+
+    articles = []
+    # Find all complete JSON objects using brace depth tracking
+    depth = 0
+    start = None
+    for i, ch in enumerate(text):
+        if ch == "{":
+            if depth == 0:
+                start = i
+            depth += 1
+        elif ch == "}":
+            depth -= 1
+            if depth == 0 and start is not None:
+                candidate = text[start : i + 1]
+                try:
+                    obj = __import__("json").loads(candidate)
+                    if isinstance(obj, dict) and "title" in obj and "content" in obj:
+                        articles.append(obj)
+                except Exception:
+                    pass
+                start = None
+    return articles
+
+
 # Slug generation
 def _slugify(text: str) -> str:
     """Convert text to URL-friendly slug."""
@@ -263,6 +293,7 @@ class KnowledgeCompiler:
         model = agent_config.model_name
         api_base = agent_config.api_base
         temperature = agent_config.temperature or 0.7
+        max_tokens = agent_config.max_tokens
 
         # Try KB's embedding_config API key first (user updates this via KB edit page)
         api_key = ""
@@ -297,6 +328,7 @@ class KnowledgeCompiler:
             "api_key": api_key,
             "api_base": api_base,
             "temperature": temperature,
+            "max_tokens": max_tokens,
         }
 
     async def _extract_entities(
@@ -355,8 +387,12 @@ Return ONLY valid JSON array, no other text."""
         model = llm_config.get("model", "gpt-4o-mini")
         api_key = llm_config.get("api_key", "")
         api_base = llm_config.get("api_base") or None
+        # Use configured max_tokens, but enforce a minimum of 4000 to avoid truncated JSON
+        max_tokens = max(llm_config.get("max_tokens") or 4000, 4000)
 
-        logger.info(f"Calling LLM provider={provider} model={model} api_base={api_base or 'default'}")
+        logger.info(
+            f"Calling LLM provider={provider} model={model} max_tokens={max_tokens} api_base={api_base or 'default'}"
+        )
 
         from src.services.agents.config import ModelConfig
         from src.services.agents.llm_client import MultiProviderLLMClient
@@ -364,12 +400,12 @@ Return ONLY valid JSON array, no other text."""
         config = ModelConfig(
             provider=provider,
             model_name=model,
-            max_tokens=4000,
+            max_tokens=max_tokens,
             api_key=api_key,
             api_base=api_base,
         )
         client = MultiProviderLLMClient(config=config)
-        response = await client.generate_content(prompt, max_tokens=4000)
+        response = await client.generate_content(prompt, max_tokens=max_tokens)
 
         if not response or not response.strip():
             logger.error("LLM returned empty response")
@@ -385,8 +421,13 @@ Return ONLY valid JSON array, no other text."""
         try:
             articles = json.loads(text)
         except json.JSONDecodeError as e:
-            logger.error(f"LLM returned invalid JSON: {e}\nResponse: {text[:500]}")
-            raise ValueError(f"LLM returned invalid JSON: {e}") from e
+            logger.warning(f"LLM returned truncated JSON, attempting repair: {e}")
+            # Attempt to recover partial articles from truncated JSON
+            articles = _recover_partial_json(text)
+            if not articles:
+                logger.error(f"Could not recover JSON: {e}\nResponse: {text[:500]}")
+                raise ValueError(f"LLM returned invalid JSON: {e}") from e
+            logger.info(f"Recovered {len(articles)} articles from truncated JSON")
 
         if not isinstance(articles, list):
             articles = [articles]
