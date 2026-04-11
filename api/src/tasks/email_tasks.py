@@ -233,14 +233,22 @@ def send_password_reset_email_task(
             try:
                 logger.info(f"📧 Sending password reset email to {email}")
 
-                # Get account to find tenant_id
+                # Get account and resolve tenant via TenantAccountJoin (Account has no direct tenant_id)
+                from src.models.tenant import TenantAccountJoin
+
                 result = await db.execute(select(Account).filter(Account.email == email))
                 account = result.scalar_one_or_none()
                 if not account:
                     logger.error(f"Account not found for email {email}")
                     return {"success": False, "error": "Account not found"}
 
-                email_service = EmailService(db, tenant_id=account.tenant_id)
+                join_result = await db.execute(
+                    select(TenantAccountJoin).filter(TenantAccountJoin.account_id == account.id).limit(1)
+                )
+                join = join_result.scalar_one_or_none()
+                tenant_id = str(join.tenant_id) if join else None
+
+                email_service = EmailService(db, tenant_id=tenant_id)
 
                 result = await email_service.send_password_reset_email(
                     to_email=email, reset_token=reset_token, base_url=base_url
