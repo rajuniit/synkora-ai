@@ -23,6 +23,14 @@ def compile_knowledge_wikis(self):
     asyncio.run(_compile_all_wikis())
 
 
+@celery_app.task(name="tasks.compile_single_knowledge_wiki", bind=True, max_retries=1)
+def compile_single_knowledge_wiki(self, kb_id: int, tenant_id: str):
+    """
+    On-demand task: compile a single knowledge base wiki triggered by the user.
+    """
+    asyncio.run(_compile_single_wiki(kb_id, tenant_id))
+
+
 async def _compile_all_wikis():
     from sqlalchemy import func, select
 
@@ -63,3 +71,13 @@ async def _compile_all_wikis():
                 logger.error(f"Failed to compile KB {kb_id}: {e}")
 
         logger.info(f"Knowledge wiki compilation complete: {compiled} succeeded, {failed} failed")
+
+
+async def _compile_single_wiki(kb_id: int, tenant_id: str):
+    from src.core.database import async_session_factory
+    from src.services.knowledge_autopilot.compiler import KnowledgeCompiler
+
+    async with async_session_factory() as db:
+        compiler = KnowledgeCompiler(db)
+        result = await compiler.compile(knowledge_base_id=kb_id, tenant_id=tenant_id)
+        logger.info(f"On-demand compilation KB {kb_id}: {result.get('status')}")

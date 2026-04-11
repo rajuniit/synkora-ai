@@ -23,6 +23,7 @@ from src.services.app_store import (
     ReviewSyncService,
     get_connector,
 )
+from src.tasks.kb_tasks import analyze_app_store_reviews
 
 logger = logging.getLogger(__name__)
 
@@ -277,33 +278,25 @@ async def analyze_reviews(
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="App store source not found")
 
     try:
-        # Initialize analysis service
-        analysis_service = ReviewAnalysisService(db)
-
-        # Configure LLM
-        llm_config = ModelConfig(
-            provider=request.llm_provider,
-            model_name=request.llm_model,
-            api_key=request.llm_api_key,
-        )
-        analysis_service.initialize_llm_client(llm_config)
-
-        # Analyze reviews
-        result = await analysis_service.analyze_batch(
-            app_store_source_id=source_id,
+        # Dispatch LLM analysis to Celery — returns immediately
+        analyze_app_store_reviews.delay(
+            source_id=str(source_id),
+            tenant_id=str(tenant_id),
+            llm_provider=request.llm_provider,
+            llm_model=request.llm_model,
+            llm_api_key=request.llm_api_key,
             limit=request.limit,
             only_unanalyzed=request.only_unanalyzed,
         )
 
-        logger.info(f"Analyzed reviews for source {source_id}: {result}")
-
-        return result
+        logger.info(f"Queued review analysis for source {source_id}")
+        return {"status": "queued", "message": "Review analysis started in the background"}
 
     except Exception as e:
-        logger.error(f"Failed to analyze reviews for source {source_id}: {e}")
+        logger.error(f"Failed to queue review analysis for source {source_id}: {e}")
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail=f"Failed to analyze reviews: {str(e)}",
+            detail=f"Failed to queue review analysis: {str(e)}",
         )
 
 

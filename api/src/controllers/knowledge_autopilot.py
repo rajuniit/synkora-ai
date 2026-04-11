@@ -18,7 +18,7 @@ from src.middleware.auth_middleware import get_current_account, get_current_tena
 from src.models.knowledge_base import KnowledgeBase
 from src.models.tenant import Account
 from src.models.wiki_article import WikiArticle, WikiCompilationJob
-from src.services.knowledge_autopilot.compiler import KnowledgeCompiler
+from src.tasks.knowledge_compiler_task import compile_single_knowledge_wiki
 
 logger = logging.getLogger(__name__)
 
@@ -32,8 +32,8 @@ async def trigger_compilation(
     current_account: Account = Depends(get_current_account),
     db: AsyncSession = Depends(get_async_db),
 ):
-    """Trigger a manual wiki compilation for a knowledge base."""
-    # Verify KB exists and belongs to tenant
+    """Trigger a manual wiki compilation for a knowledge base (runs as background Celery task)."""
+    # Verify KB exists and belongs to tenant before queuing
     result = await db.execute(
         select(KnowledgeBase).filter(
             KnowledgeBase.id == kb_id,
@@ -44,13 +44,9 @@ async def trigger_compilation(
     if not kb:
         raise HTTPException(status_code=404, detail="Knowledge base not found")
 
-    compiler = KnowledgeCompiler(db)
-    result = await compiler.compile(
-        knowledge_base_id=kb_id,
-        tenant_id=str(tenant_id),
-    )
+    compile_single_knowledge_wiki.delay(kb_id, str(tenant_id))
 
-    return result
+    return {"status": "queued", "message": "Compilation started in the background. Refresh the page in a moment."}
 
 
 @router.get("/knowledge-bases/{kb_id}/wiki")

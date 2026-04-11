@@ -8,12 +8,10 @@ import logging
 import os
 from datetime import UTC, datetime
 
-from fastapi import APIRouter, Depends, HTTPException
+from fastapi import APIRouter, HTTPException
 from pydantic import BaseModel, EmailStr, Field
-from sqlalchemy.ext.asyncio import AsyncSession
 
-from src.core.database import get_async_db
-from src.services.integrations.email_service import EmailService
+from src.tasks.email_tasks import send_email_task
 
 logger = logging.getLogger(__name__)
 
@@ -39,7 +37,6 @@ class ContactFormResponse(BaseModel):
 @router.post("", response_model=ContactFormResponse)
 async def submit_contact_form(
     request: ContactFormRequest,
-    db: AsyncSession = Depends(get_async_db),
 ) -> ContactFormResponse:
     """
     Submit a contact form message.
@@ -48,8 +45,6 @@ async def submit_contact_form(
     Sends an email to the support team with the contact form details.
     """
     try:
-        email_service = EmailService(db)
-
         # Format the email content
         html_content = f"""
         <!DOCTYPE html>
@@ -192,29 +187,21 @@ Submitted at: {datetime.now(UTC).strftime("%Y-%m-%d %H:%M:%S")} UTC
 This message was sent via the Synkora contact form.
         """
 
-        # Send email to support
-        result = await email_service.send_email(
+        # Dispatch email to Celery — returns immediately, retries on failure
+        send_email_task.delay(
+            tenant_id="platform",
             to_email=os.getenv("CONTACT_EMAIL", "hello@localhost"),
             subject=f"[Contact Form] {request.subject}",
-            html_content=html_content,
-            text_content=text_content,
-            tenant_id=None,  # Platform-wide email config
+            html_body=html_content,
+            text_body=text_content,
+            apply_branding=False,
         )
 
-        if result.get("success"):
-            logger.info(f"Contact form submitted successfully from {request.email}")
-            return ContactFormResponse(
-                success=True,
-                message="Thank you for your message! We'll get back to you soon.",
-            )
-        else:
-            logger.error(f"Failed to send contact form email: {result.get('message')}")
-            # Still return success to user - we don't want to expose email config issues
-            # In production, you might want to queue this for retry
-            return ContactFormResponse(
-                success=True,
-                message="Thank you for your message! We'll get back to you soon.",
-            )
+        logger.info(f"Contact form queued from {request.email}")
+        return ContactFormResponse(
+            success=True,
+            message="Thank you for your message! We'll get back to you soon.",
+        )
 
     except Exception as e:
         logger.error(f"Error processing contact form: {str(e)}")
