@@ -40,6 +40,8 @@ class ProfileService:
     async def update_profile(
         self,
         account_id: UUID,
+        name: str | None = None,
+        email: str | None = None,
         avatar_url: str | None = None,
         phone: str | None = None,
         bio: str | None = None,
@@ -70,21 +72,25 @@ class ProfileService:
         if not account:
             return None
 
-        # Update only provided fields
+        # Update only provided fields; treat empty strings as None for nullable fields
+        if name is not None:
+            account.name = name  # name is required, keep as-is
+        if email is not None:
+            account.email = email  # email is required, keep as-is
         if avatar_url is not None:
-            account.avatar_url = avatar_url
+            account.avatar_url = avatar_url or None
         if phone is not None:
-            account.phone = phone
+            account.phone = phone or None
         if bio is not None:
-            account.bio = bio
+            account.bio = bio or None
         if company is not None:
-            account.company = company
+            account.company = company or None
         if job_title is not None:
-            account.job_title = job_title
+            account.job_title = job_title or None
         if location is not None:
-            account.location = location
+            account.location = location or None
         if website is not None:
-            account.website = website
+            account.website = website or None
 
         await self.db.commit()
         await self.db.refresh(account)

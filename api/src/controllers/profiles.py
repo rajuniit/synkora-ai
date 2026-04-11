@@ -167,7 +167,19 @@ async def update_my_profile(
         profile_service = ProfileService(db)
 
         update_data = profile_data.model_dump(exclude_unset=True)
+
+        # notification_preferences is handled by a separate service method
+        notification_preferences = update_data.pop("notification_preferences", None)
+
         updated_profile = await profile_service.update_profile(current_account.id, **update_data)
+
+        if updated_profile is None:
+            raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Profile not found")
+
+        if notification_preferences is not None:
+            updated_profile = await profile_service.update_notification_preferences(
+                current_account.id, notification_preferences
+            )
 
         # Convert to dict with proper serialization
         return {
