@@ -346,8 +346,9 @@ async def platform_create_agent(
         llm_additional_params: dict = {}
 
         if not api_key:
-            from src.models.agent_llm_config import AgentLLMConfig as _LLMCfg
             from uuid import UUID as _UUID
+
+            from src.models.agent_llm_config import AgentLLMConfig as _LLMCfg
             _platform_tenant_id = _UUID("00000000-0000-0000-0000-000000000000")
             _pe_agent = (await db.execute(
                 select(Agent).where(
