@@ -426,9 +426,12 @@ export function Sidebar({ mobileOpen = false, onMobileClose }: SidebarProps) {
               </div>
               {showLabels && (
                 <div className="flex flex-col">
-                  <span className="text-lg font-bold text-white whitespace-nowrap">
-                    synkora <span className="text-primary-400">ai</span>
-                  </span>
+                  <div className="flex items-center gap-2">
+                    <span className="text-lg font-bold text-white whitespace-nowrap">
+                      synkora <span className="text-primary-400">ai</span>
+                    </span>
+                    <span className="px-1.5 py-0.5 bg-primary-900 text-primary-300 text-[9px] font-bold rounded uppercase tracking-wider border border-primary-700">Beta</span>
+                  </div>
                   <span className="text-[10px] text-gray-400 -mt-1">Enterprise Platform</span>
                 </div>
               )}

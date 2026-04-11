@@ -311,6 +311,79 @@ function MainLandingPage() {
       {/* Epic Animated Hero Section */}
       <AnimatedHero />
 
+      {/* Demo Video Section */}
+      <section className="relative py-20 sm:py-28 px-4 sm:px-6 overflow-hidden bg-gradient-to-b from-white to-gray-50">
+        {/* Subtle background blobs */}
+        <div className="absolute inset-0 pointer-events-none overflow-hidden">
+          <div className="absolute -top-40 left-1/2 -translate-x-1/2 w-[700px] h-[400px] bg-red-100/60 rounded-full blur-[100px]" />
+        </div>
+
+        <div className="relative max-w-6xl mx-auto">
+          {/* Header */}
+          <div className="text-center mb-12">
+            <div className="inline-flex items-center gap-2 px-4 py-1.5 bg-red-50 border border-red-100 text-red-600 rounded-full text-sm font-semibold mb-5">
+              <span className="w-2 h-2 bg-red-500 rounded-full animate-pulse" />
+              Product Demo
+            </div>
+            <h2 className="text-4xl sm:text-5xl font-bold text-gray-900 mb-4 tracking-tight">
+              See Synkora in action
+            </h2>
+            <p className="text-lg text-gray-500 max-w-xl mx-auto">
+              Build and deploy powerful AI agents — no code required
+            </p>
+          </div>
+
+          {/* Browser chrome mockup */}
+          <div className="relative">
+            {/* Drop shadow glow */}
+            <div className="absolute -inset-2 bg-gradient-to-b from-red-200/40 to-gray-200/40 rounded-3xl blur-2xl" />
+
+            <div className="relative rounded-2xl overflow-hidden border border-gray-200 shadow-2xl shadow-gray-300/60 bg-white">
+              {/* Browser top bar */}
+              <div className="flex items-center gap-2 px-4 py-3 bg-gray-100 border-b border-gray-200">
+                {/* Traffic lights */}
+                <div className="flex items-center gap-1.5">
+                  <div className="w-3 h-3 rounded-full bg-[#ff5f57]" />
+                  <div className="w-3 h-3 rounded-full bg-[#febc2e]" />
+                  <div className="w-3 h-3 rounded-full bg-[#28c840]" />
+                </div>
+                {/* URL bar */}
+                <div className="flex-1 mx-4">
+                  <div className="flex items-center gap-2 px-3 py-1 bg-white border border-gray-200 rounded-md max-w-xs mx-auto">
+                    <svg className="w-3 h-3 text-gray-400 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 15v2m-6 4h12a2 2 0 002-2v-6a2 2 0 00-2-2H6a2 2 0 00-2 2v6a2 2 0 002 2zm10-10V7a4 4 0 00-8 0v4h8z" />
+                    </svg>
+                    <span className="text-xs text-gray-400 font-mono truncate">app.synkora.com</span>
+                  </div>
+                </div>
+              </div>
+
+              {/* Video */}
+              <div className="aspect-video bg-gray-100">
+                <video
+                  src="/demo_video.mp4"
+                  poster="https://github.com/user-attachments/assets/4e0b11be-b9d8-4cde-9524-c8ec9467059f"
+                  controls
+                  playsInline
+                  className="w-full h-full object-cover"
+                />
+              </div>
+            </div>
+          </div>
+
+          {/* CTA below video */}
+          <div className="text-center mt-10">
+            <Link
+              href="/signup"
+              className="inline-flex items-center gap-2 px-7 py-3 bg-red-600 hover:bg-red-700 text-white font-semibold rounded-xl transition-colors shadow-lg shadow-red-500/30"
+            >
+              <Zap className="w-4 h-4" />
+              Start Building Free
+            </Link>
+          </div>
+        </div>
+      </section>
+
       {/* Animated Features Section */}
       <AnimatedFeatures />
 
