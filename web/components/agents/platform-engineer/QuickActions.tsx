@@ -20,7 +20,7 @@ export function QuickActions({ onSelect, disabled }: Props) {
           key={action.label}
           disabled={disabled}
           onClick={() => onSelect(action.prompt)}
-          className="px-3 py-1.5 text-xs bg-red-50 border border-red-200 text-red-700 rounded-full hover:bg-red-100 hover:border-red-300 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+          className="px-3 py-1.5 text-xs bg-primary-50 border border-primary-200 text-primary-700 rounded-full hover:bg-primary-100 hover:border-primary-300 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
         >
           {action.label}
         </button>

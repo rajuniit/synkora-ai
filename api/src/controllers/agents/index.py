@@ -205,16 +205,21 @@ async def create_agent(
                     }
                 )
 
+                matched_tools: set[str] = set()
                 for cap_id in capability_ids:
                     capability = next((c for c in CAPABILITIES if c["id"] == cap_id), None)
                     if not capability:
                         continue
                     for tool_name in available_tool_names:
                         if any(fnmatch.fnmatch(tool_name, p) for p in capability["tool_patterns"]):
-                            db.add(AgentTool(agent_id=db_agent.id, tool_name=tool_name, config={}, enabled=True))
+                            matched_tools.add(tool_name)
+
+                for tool_name in matched_tools:
+                    db.add(AgentTool(agent_id=db_agent.id, tool_name=tool_name, config={}, enabled=True))
 
                 await db.commit()
             except Exception as tool_err:
+                await db.rollback()
                 logger.warning(f"Failed to enable AgentTool records: {tool_err}")
 
         # Also create an entry in the agent_llm_configs table for the LLM config

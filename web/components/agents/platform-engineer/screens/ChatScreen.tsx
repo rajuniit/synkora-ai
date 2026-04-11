@@ -307,7 +307,7 @@ export function ChatScreen({ agentName = 'platform_engineer_agent' }: Props) {
             onChange={(e) => setInput(e.target.value)}
             placeholder="Describe what you need..."
             rows={1}
-            className="flex-1 px-3 py-2 border border-gray-300 rounded-xl text-sm focus:ring-2 focus:ring-red-500 focus:border-transparent resize-none min-h-[40px] max-h-[120px] overflow-y-auto"
+            className="flex-1 px-3 py-2 border border-gray-300 rounded-xl text-sm focus:ring-2 focus:ring-primary-500 focus:border-transparent resize-none min-h-[40px] max-h-[120px] overflow-y-auto"
             onKeyDown={(e) => {
               if (e.key === 'Enter' && !e.shiftKey) {
                 e.preventDefault()
@@ -318,7 +318,7 @@ export function ChatScreen({ agentName = 'platform_engineer_agent' }: Props) {
           <button
             type="submit"
             disabled={!input.trim() || isStreaming}
-            className="h-10 w-10 flex items-center justify-center bg-red-600 text-white rounded-xl hover:bg-red-700 transition-colors disabled:opacity-50 disabled:cursor-not-allowed flex-shrink-0"
+            className="h-10 w-10 flex items-center justify-center bg-primary-500 text-white rounded-xl hover:bg-primary-600 transition-colors disabled:opacity-50 disabled:cursor-not-allowed flex-shrink-0"
           >
             {isStreaming ? <Loader2 className="h-4 w-4 animate-spin" /> : <Send className="h-4 w-4" />}
           </button>

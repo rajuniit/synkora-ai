@@ -62,7 +62,7 @@ export function SetupScreen({ onConfigured }: Props) {
   if (loading) {
     return (
       <div className="flex-1 flex items-center justify-center">
-        <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-red-600" />
+        <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-primary-500" />
       </div>
     )
   }
@@ -71,8 +71,8 @@ export function SetupScreen({ onConfigured }: Props) {
     <div className="flex flex-col gap-6">
       {/* Header */}
       <div className="flex items-center gap-4 pb-6 border-b border-gray-100">
-        <div className="w-12 h-12 rounded-xl bg-red-100 flex items-center justify-center flex-shrink-0">
-          <Wrench className="h-5 w-5 text-red-600" />
+        <div className="w-12 h-12 rounded-xl bg-primary-50 flex items-center justify-center flex-shrink-0">
+          <Wrench className="h-5 w-5 text-primary-500" />
         </div>
         <div>
           <h3 className="text-lg font-semibold text-gray-900">

@@ -14,7 +14,7 @@ from collections.abc import AsyncGenerator
 from typing import Any
 
 from src.services.agents.config import ModelConfig
-from src.services.observability.langfuse_service import langfuse_service
+from src.services.observability.langfuse_service import LangfuseService
 from src.services.performance.circuit_breaker import CircuitBreakerOpen, get_circuit_breaker
 from src.services.performance.metrics import get_metrics_collector
 
@@ -64,6 +64,7 @@ class MultiProviderLLMClient:
         observability_config: dict[str, Any] | None = None,
         streaming_timeout: int | None = None,
         chunk_timeout: int | None = None,
+        langfuse_service: "LangfuseService | None" = None,
     ):
         """
         Initialize the multi-provider client.
@@ -73,6 +74,7 @@ class MultiProviderLLMClient:
             observability_config: Optional observability configuration for tracing
             streaming_timeout: Total timeout for streaming in seconds (default: 300s)
             chunk_timeout: Timeout between chunks in seconds (default: 60s)
+            langfuse_service: Optional pre-configured LangfuseService (avoids creating duplicate clients)
         """
         self.config = config
         # Normalize provider name to lowercase for consistent comparison
@@ -85,6 +87,7 @@ class MultiProviderLLMClient:
 
         self._client = None
         self.observability_config = observability_config or {}
+        self.langfuse_service = langfuse_service or LangfuseService.for_agent(self.observability_config)
         self.streaming_timeout = streaming_timeout or DEFAULT_STREAMING_TIMEOUT
         self.chunk_timeout = chunk_timeout or CHUNK_TIMEOUT
         self._initialize_provider()
@@ -365,7 +368,7 @@ class MultiProviderLLMClient:
         metrics = get_metrics_collector()
 
         # Check if tracing should be enabled
-        should_trace = langfuse_service.should_trace(self.observability_config)
+        should_trace = self.langfuse_service.should_trace(self.observability_config)
         generation_id = None
         start_time = time.time()
 
@@ -377,7 +380,7 @@ class MultiProviderLLMClient:
             # Create Langfuse generation if tracing is enabled
             if should_trace:
                 logger.info(f"📊 Creating Langfuse generation for model: {self.config.model_name}")
-                generation_id = langfuse_service.create_generation(
+                generation_id = self.langfuse_service.create_generation(
                     name="llm_generation",
                     model=self.config.model_name,
                     input_data={"prompt": prompt},
@@ -429,7 +432,7 @@ class MultiProviderLLMClient:
                 # PERFORMANCE: Track token usage
                 metrics.inc_counter("llm_tokens_total", int(input_tokens + output_tokens))
 
-                langfuse_service.update_generation(
+                self.langfuse_service.update_generation(
                     generation_id=generation_id,
                     output_data={"response": response},
                     usage={
@@ -450,7 +453,7 @@ class MultiProviderLLMClient:
         except Exception as e:
             # Log error to Langfuse if tracing is enabled
             if should_trace and generation_id:
-                langfuse_service.update_generation(
+                self.langfuse_service.update_generation(
                     generation_id=generation_id,
                     output_data={"error": str(e)},
                     metadata={

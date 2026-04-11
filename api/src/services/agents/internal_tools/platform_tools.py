@@ -457,13 +457,17 @@ async def platform_create_agent(
             capability_ids = list(
                 {TOOL_CATEGORY_TO_CAPABILITY_ID[cat] for cat in tools_list if cat in TOOL_CATEGORY_TO_CAPABILITY_ID}
             )
+            matched_tools: set[str] = set()
             for cap_id in capability_ids:
                 capability = next((c for c in CAPABILITIES if c["id"] == cap_id), None)
                 if not capability:
                     continue
                 for tool_name in available_tool_names:
                     if any(fnmatch.fnmatch(tool_name, p) for p in capability["tool_patterns"]):
-                        db.add(AgentTool(agent_id=agent.id, tool_name=tool_name, config={}, enabled=True))
+                        matched_tools.add(tool_name)
+
+            for tool_name in matched_tools:
+                db.add(AgentTool(agent_id=agent.id, tool_name=tool_name, config={}, enabled=True))
 
         await db.commit()
 
@@ -486,6 +490,7 @@ async def platform_create_agent(
 # Maps platform tool category names → capability IDs (used by enable_capabilities_bulk)
 TOOL_CATEGORY_TO_CAPABILITY_ID: dict[str, str] = {
     "browser_tools": "browser-web",
+    "web_search": "browser-web",
     "scheduler_tools": "scheduling",
     "email_tools": "email",
     "gmail_tools": "email",
@@ -508,6 +513,7 @@ TOOL_CATEGORY_TO_CAPABILITY_ID: dict[str, str] = {
     "linkedin_tools": "social-media",
     "youtube_tools": "social-media",
     "news_tools": "social-media",
+    "spawn_agent_tool": "multi-agent",
 }
 
 

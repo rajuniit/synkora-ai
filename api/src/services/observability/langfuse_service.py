@@ -204,12 +204,9 @@ class LangfuseService:
         usage: dict[str, int] | None = None,
         trace_id: str | None = None,
         parent_observation_id: str | None = None,
-    ) -> None:
+    ) -> str | None:
         """
         Create a generation (LLM call) observation.
-
-        Note: This method creates a complete generation in one call.
-        The Langfuse SDK handles everything internally - no need to update separately.
 
         Args:
             name: Name of the generation
@@ -220,12 +217,15 @@ class LangfuseService:
             usage: Token usage information
             trace_id: Optional trace ID to attach to
             parent_observation_id: Optional parent observation ID
+
+        Returns:
+            str | None: Generation ID if created, None otherwise
         """
         if not self.is_enabled or not self._client:
-            return
+            return None
 
         try:
-            self._client.generation(
+            generation = self._client.generation(
                 name=name,
                 model=model,
                 input=input_data,
@@ -235,8 +235,39 @@ class LangfuseService:
                 trace_id=trace_id,
                 parent_observation_id=parent_observation_id,
             )
+            return generation.id
         except Exception as e:
             logger.error(f"Failed to create generation: {e}")
+            return None
+
+    def update_generation(
+        self,
+        generation_id: str,
+        output_data: dict[str, Any] | str | None = None,
+        usage: dict[str, int] | None = None,
+        metadata: dict[str, Any] | None = None,
+    ) -> None:
+        """
+        Update an existing generation with output, usage, and metadata.
+
+        Args:
+            generation_id: ID of the generation to update
+            output_data: Output response data
+            usage: Token usage information
+            metadata: Optional additional metadata
+        """
+        if not self.is_enabled or not self._client:
+            return
+
+        try:
+            self._client.generation(
+                id=generation_id,
+                output=output_data,
+                usage=usage,
+                metadata=metadata,
+            )
+        except Exception as e:
+            logger.error(f"Failed to update generation: {e}")
 
     def create_span(
         self,
