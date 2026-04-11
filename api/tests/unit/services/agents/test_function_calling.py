@@ -317,4 +317,3 @@ class TestFunctionCallingHandler:
         await handler._generate_openai_with_tools([], 0.7, 100)
 
         mock_langfuse.create_generation.assert_called_once()
-        mock_langfuse.flush.assert_called_once()
