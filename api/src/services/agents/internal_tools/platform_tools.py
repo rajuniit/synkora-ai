@@ -239,8 +239,7 @@ async def platform_check_integration(provider: str, runtime_context: Any = None)
 
         # 2. Check platform/tenant API-key OAuth app
         result = await db.execute(
-            select(OAuthApp)
-            .where(
+            select(OAuthApp).where(
                 or_(
                     OAuthApp.tenant_id == runtime_context.tenant_id,
                     OAuthApp.is_platform_app.is_(True),
@@ -248,8 +247,7 @@ async def platform_check_integration(provider: str, runtime_context: Any = None)
                 func.lower(OAuthApp.provider) == provider.lower(),
                 OAuthApp.is_active.is_(True),
                 OAuthApp.api_token.isnot(None),
-            )
-            .limit(1)
+            ).limit(1)
         )
         api_app = result.scalar_one_or_none()
         if api_app:
@@ -348,30 +346,22 @@ async def platform_create_agent(
         llm_additional_params: dict = {}
 
         if not api_key:
-            from uuid import UUID as _UUID
-
             from src.models.agent_llm_config import AgentLLMConfig as _LLMCfg
-
+            from uuid import UUID as _UUID
             _platform_tenant_id = _UUID("00000000-0000-0000-0000-000000000000")
-            _pe_agent = (
-                await db.execute(
-                    select(Agent).where(
-                        Agent.agent_name == "platform_engineer_agent",
-                        Agent.tenant_id == _platform_tenant_id,
-                    )
+            _pe_agent = (await db.execute(
+                select(Agent).where(
+                    Agent.agent_name == "platform_engineer_agent",
+                    Agent.tenant_id == _platform_tenant_id,
                 )
-            ).scalar_one_or_none()
+            )).scalar_one_or_none()
             if _pe_agent:
-                _pe_cfg = (
-                    await db.execute(
-                        select(_LLMCfg)
-                        .where(
-                            _LLMCfg.agent_id == _pe_agent.id,
-                            _LLMCfg.tenant_id == tenant_id,
-                        )
-                        .limit(1)
-                    )
-                ).scalar_one_or_none()
+                _pe_cfg = (await db.execute(
+                    select(_LLMCfg).where(
+                        _LLMCfg.agent_id == _pe_agent.id,
+                        _LLMCfg.tenant_id == tenant_id,
+                    ).limit(1)
+                )).scalar_one_or_none()
                 if _pe_cfg and _pe_cfg.api_key:
                     llm_provider = _pe_cfg.provider
                     llm_model = _pe_cfg.model_name
@@ -381,7 +371,9 @@ async def platform_create_agent(
                     llm_max_tokens = _pe_cfg.max_tokens if _pe_cfg.max_tokens is not None else 4096
                     llm_top_p = _pe_cfg.top_p if _pe_cfg.top_p is not None else 1.0
                     llm_additional_params = _pe_cfg.additional_params or {}
-                    logger.info(f"platform_create_agent: inherited LLM config from PE ({llm_provider}/{llm_model})")
+                    logger.info(
+                        f"platform_create_agent: inherited LLM config from PE ({llm_provider}/{llm_model})"
+                    )
                 else:
                     encrypted_key = ""
             else:
@@ -454,16 +446,22 @@ async def platform_create_agent(
             from src.services.agents.adk_tools import tool_registry
 
             available_tool_names = [t["name"] for t in tool_registry.list_tools()]
-            capability_ids = list(
-                {TOOL_CATEGORY_TO_CAPABILITY_ID[cat] for cat in tools_list if cat in TOOL_CATEGORY_TO_CAPABILITY_ID}
-            )
+            capability_ids = list({
+                TOOL_CATEGORY_TO_CAPABILITY_ID[cat]
+                for cat in tools_list
+                if cat in TOOL_CATEGORY_TO_CAPABILITY_ID
+            })
+            matched_tools: set[str] = set()
             for cap_id in capability_ids:
                 capability = next((c for c in CAPABILITIES if c["id"] == cap_id), None)
                 if not capability:
                     continue
                 for tool_name in available_tool_names:
                     if any(fnmatch.fnmatch(tool_name, p) for p in capability["tool_patterns"]):
-                        db.add(AgentTool(agent_id=agent.id, tool_name=tool_name, config={}, enabled=True))
+                        matched_tools.add(tool_name)
+
+            for tool_name in matched_tools:
+                db.add(AgentTool(agent_id=agent.id, tool_name=tool_name, config={}, enabled=True))
 
         await db.commit()
 
@@ -486,6 +484,7 @@ async def platform_create_agent(
 # Maps platform tool category names → capability IDs (used by enable_capabilities_bulk)
 TOOL_CATEGORY_TO_CAPABILITY_ID: dict[str, str] = {
     "browser_tools": "browser-web",
+    "web_search": "browser-web",
     "scheduler_tools": "scheduling",
     "email_tools": "email",
     "gmail_tools": "email",
@@ -508,6 +507,7 @@ TOOL_CATEGORY_TO_CAPABILITY_ID: dict[str, str] = {
     "linkedin_tools": "social-media",
     "youtube_tools": "social-media",
     "news_tools": "social-media",
+    "spawn_agent_tool": "multi-agent",
 }
 
 
@@ -575,9 +575,11 @@ async def platform_update_agent(
             available_tool_names = [t["name"] for t in tool_registry.list_tools()]
 
             # Collect unique capability IDs from the requested tool categories
-            capability_ids = list(
-                {TOOL_CATEGORY_TO_CAPABILITY_ID[cat] for cat in tools_list if cat in TOOL_CATEGORY_TO_CAPABILITY_ID}
-            )
+            capability_ids = list({
+                TOOL_CATEGORY_TO_CAPABILITY_ID[cat]
+                for cat in tools_list
+                if cat in TOOL_CATEGORY_TO_CAPABILITY_ID
+            })
 
             # For each capability, match and enable tools
             for cap_id in capability_ids:
@@ -586,14 +588,12 @@ async def platform_update_agent(
                     continue
                 for tool_name in available_tool_names:
                     if any(fnmatch.fnmatch(tool_name, p) for p in capability["tool_patterns"]):
-                        existing = (
-                            await db.execute(
-                                select(AgentTool).where(
-                                    AgentTool.agent_id == agent.id,
-                                    AgentTool.tool_name == tool_name,
-                                )
+                        existing = (await db.execute(
+                            select(AgentTool).where(
+                                AgentTool.agent_id == agent.id,
+                                AgentTool.tool_name == tool_name,
                             )
-                        ).scalar_one_or_none()
+                        )).scalar_one_or_none()
                         if existing:
                             existing.enabled = True
                         else:
@@ -609,41 +609,30 @@ async def platform_update_agent(
         platform_tenant_id = _UUID("00000000-0000-0000-0000-000000000000")
 
         # Check if this agent already has an LLM config for this tenant
-        existing_llm = (
-            await db.execute(
-                select(AgentLLMConfig)
-                .where(
-                    AgentLLMConfig.agent_id == agent.id,
-                    AgentLLMConfig.tenant_id == tenant_id,
-                )
-                .limit(1)
-            )
-        ).scalar_one_or_none()
+        existing_llm = (await db.execute(
+            select(AgentLLMConfig).where(
+                AgentLLMConfig.agent_id == agent.id,
+                AgentLLMConfig.tenant_id == tenant_id,
+            ).limit(1)
+        )).scalar_one_or_none()
 
         if not existing_llm or not existing_llm.api_key:
             # Look up PE agent and its per-tenant config
             from src.models.agent import Agent as _Agent
-
-            pe_agent = (
-                await db.execute(
-                    select(_Agent).where(
-                        _Agent.agent_name == "platform_engineer_agent",
-                        _Agent.tenant_id == platform_tenant_id,
-                    )
+            pe_agent = (await db.execute(
+                select(_Agent).where(
+                    _Agent.agent_name == "platform_engineer_agent",
+                    _Agent.tenant_id == platform_tenant_id,
                 )
-            ).scalar_one_or_none()
+            )).scalar_one_or_none()
 
             if pe_agent:
-                pe_cfg = (
-                    await db.execute(
-                        select(AgentLLMConfig)
-                        .where(
-                            AgentLLMConfig.agent_id == pe_agent.id,
-                            AgentLLMConfig.tenant_id == tenant_id,
-                        )
-                        .limit(1)
-                    )
-                ).scalar_one_or_none()
+                pe_cfg = (await db.execute(
+                    select(AgentLLMConfig).where(
+                        AgentLLMConfig.agent_id == pe_agent.id,
+                        AgentLLMConfig.tenant_id == tenant_id,
+                    ).limit(1)
+                )).scalar_one_or_none()
 
                 if pe_cfg and pe_cfg.api_key:
                     if existing_llm:
@@ -651,23 +640,21 @@ async def platform_update_agent(
                         existing_llm.provider = pe_cfg.provider
                         existing_llm.model_name = pe_cfg.model_name
                     else:
-                        db.add(
-                            AgentLLMConfig(
-                                id=uuid4(),
-                                agent_id=agent.id,
-                                tenant_id=tenant_id,
-                                name="Default",
-                                provider=pe_cfg.provider,
-                                model_name=pe_cfg.model_name,
-                                api_key=pe_cfg.api_key,
-                                temperature=0.7,
-                                max_tokens=4096,
-                                top_p=1.0,
-                                is_default=True,
-                                display_order=0,
-                                enabled=True,
-                            )
-                        )
+                        db.add(AgentLLMConfig(
+                            id=uuid4(),
+                            agent_id=agent.id,
+                            tenant_id=tenant_id,
+                            name="Default",
+                            provider=pe_cfg.provider,
+                            model_name=pe_cfg.model_name,
+                            api_key=pe_cfg.api_key,
+                            temperature=0.7,
+                            max_tokens=4096,
+                            top_p=1.0,
+                            is_default=True,
+                            display_order=0,
+                            enabled=True,
+                        ))
 
         await db.commit()
 
@@ -1001,14 +988,12 @@ async def platform_delete_agent_channel(
             from src.models.slack_bot import SlackBot
             from src.services.slack.slack_bot_manager import SlackBotManager
 
-            bot = (
-                await db.execute(
-                    select(SlackBot).where(
-                        SlackBot.id == bot_uuid,
-                        SlackBot.tenant_id == tenant_id,
-                    )
+            bot = (await db.execute(
+                select(SlackBot).where(
+                    SlackBot.id == bot_uuid,
+                    SlackBot.tenant_id == tenant_id,
                 )
-            ).scalar_one_or_none()
+            )).scalar_one_or_none()
             if not bot:
                 return {"success": False, "message": "Slack bot not found"}
 
@@ -1022,14 +1007,12 @@ async def platform_delete_agent_channel(
             from src.models.telegram_bot import TelegramBot
             from src.services.telegram.telegram_bot_manager import TelegramBotManager
 
-            bot = (
-                await db.execute(
-                    select(TelegramBot).where(
-                        TelegramBot.id == bot_uuid,
-                        TelegramBot.tenant_id == tenant_id,
-                    )
+            bot = (await db.execute(
+                select(TelegramBot).where(
+                    TelegramBot.id == bot_uuid,
+                    TelegramBot.tenant_id == tenant_id,
                 )
-            ).scalar_one_or_none()
+            )).scalar_one_or_none()
             if not bot:
                 return {"success": False, "message": "Telegram bot not found"}
 

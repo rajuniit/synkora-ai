@@ -18,7 +18,6 @@ from src.helpers.streaming_helpers import convert_to_json_serializable
 from src.services.agents.config import AgenticConfig
 from src.services.agents.error_tracker import FunctionCallingErrorTracker
 from src.services.observability.langfuse_service import LangfuseService
-from src.services.observability.langfuse_service import langfuse_service as _langfuse_service_singleton
 
 logger = logging.getLogger(__name__)
 
@@ -56,6 +55,7 @@ class FunctionCallingHandler:
         trace_id: str | None = None,
         observability_config: dict[str, Any] | None = None,
         agentic_config: AgenticConfig | None = None,
+        langfuse_service: "LangfuseService | None" = None,
     ):
         """
         Initialize function calling handler.
@@ -68,6 +68,7 @@ class FunctionCallingHandler:
             trace_id: Optional Langfuse trace ID for observability
             observability_config: Optional observability configuration
             agentic_config: Configuration for agentic loop behavior (parallel tools, retries, etc.)
+            langfuse_service: Optional pre-configured LangfuseService (avoids creating duplicate clients)
         """
         self.llm_client = llm_client
         # Normalize provider to lowercase for consistent comparison
@@ -77,7 +78,7 @@ class FunctionCallingHandler:
         self.available_tools = self._get_available_tools(tools)
         self.trace_id = trace_id
         self.observability_config = observability_config or {}
-        self.langfuse_service = _langfuse_service_singleton
+        self.langfuse_service = langfuse_service or LangfuseService.for_agent(self.observability_config)
         self.agentic_config = agentic_config or AgenticConfig()
 
     def _get_available_tools(self, tool_names: list[str] | None) -> list[dict[str, Any]]:
@@ -822,9 +823,6 @@ class FunctionCallingHandler:
                     },
                     trace_id=self.trace_id,
                 )
-                # Flush to ensure generation is sent to Langfuse
-                self.langfuse_service.flush()
-                logger.info("✅ Langfuse generation created and flushed successfully")
 
             return response
 
@@ -849,7 +847,6 @@ class FunctionCallingHandler:
                     },
                     trace_id=self.trace_id,
                 )
-                self.langfuse_service.flush()
             raise
 
     async def _generate_anthropic_with_tools(
@@ -1192,14 +1189,6 @@ class FunctionCallingHandler:
                     func_call["name"], func_call["arguments"], should_trace
                 )
                 results.append(exec_result)
-
-        # Flush all tool spans to Langfuse
-        if should_trace and self.trace_id:
-            try:
-                self.langfuse_service.flush()
-                logger.info(f"✅ Flushed {len(function_calls)} tool execution spans to Langfuse")
-            except Exception as e:
-                logger.warning(f"Failed to flush tool spans: {e}")
 
         return results
 

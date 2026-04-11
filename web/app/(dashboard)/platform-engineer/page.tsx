@@ -4,7 +4,7 @@ import { useState, useEffect, useRef, useCallback } from 'react'
 import { Settings, Send, Loader2, Lock, ArrowRight, Zap, List, Plug, Pencil, Trash2 } from 'lucide-react'
 import Link from 'next/link'
 import toast from 'react-hot-toast'
-import { ChatMessage } from '@/components/chat/components/ChatMessage'
+import { ChatMessages } from '@/components/chat/components'
 import type { Message } from '@/components/chat/types'
 import { getPlatformAgentStatus, type PlatformAgentStatus } from '@/lib/api/platformEngineerApi'
 import { SetupScreen } from '@/components/agents/platform-engineer/screens/SetupScreen'
@@ -14,24 +14,25 @@ import { AgentCreatedCard } from '@/components/agents/platform-engineer/cards/Ag
 import { parseActionMarkers } from '@/components/agents/platform-engineer/types'
 import type { ActionCard, IntegrationCard } from '@/components/agents/platform-engineer/types'
 import type { AgentCreateConfig, ActionCardStatus } from '@/components/agents/platform-engineer/cards/ActionConfirmCard'
-import { secureStorage } from '@/lib/auth/secure-storage'
 import { apiClient } from '@/lib/api/http'
 import { enableCapabilitiesBulk } from '@/lib/api/agents'
+import { useChatTransport } from '@/components/chat/hooks/useChatTransport'
+import type { ChatEvent } from '@/components/chat/hooks/useChatTransport'
 
-// Map PE tool-category names → capability IDs (same IDs used by manual agent creation)
+// Map PE tool-category names -> capability IDs (same IDs used by manual agent creation)
 const TOOL_CATEGORY_TO_CAPABILITY: Record<string, string> = {
   browser_tools: 'browser-web',
   scheduler_tools: 'scheduling',
   email_tools: 'email',
   gmail_tools: 'email',
-  web_search: 'web-research',
+  web_search: 'browser-web',
   file_tools: 'files-storage',
   command_tools: 'system-commands',
   database_tools: 'database-analytics',
   elasticsearch_tools: 'database-analytics',
   data_analysis_tools: 'database-analytics',
   storage_tools: 'files-storage',
-  news_tools: 'web-research',
+  news_tools: 'social-media',
   document_tools: 'documents',
   github_tools: 'code-github',
   gitlab_tools: 'code-github',
@@ -44,7 +45,7 @@ const TOOL_CATEGORY_TO_CAPABILITY: Record<string, string> = {
   linkedin_tools: 'social-media',
   youtube_tools: 'social-media',
   clickup_tools: 'project-mgmt',
-  spawn_agent_tool: 'agents',
+  spawn_agent_tool: 'multi-agent',
 }
 
 const API_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:5001'
@@ -53,6 +54,16 @@ const MSG_STORAGE_KEY = 'pe-messages'
 const CONV_ID_STORAGE_KEY = 'pe-conv-id'
 
 type Screen = 'loading' | 'gate' | 'setup' | 'chat'
+
+interface ToolStatus {
+  tool_name: string
+  status: 'started' | 'completed' | 'error'
+  description: string
+  details?: Record<string, unknown>
+  duration_ms?: number
+  input_tokens?: number
+  output_tokens?: number
+}
 
 interface PEMessage extends Message {
   _actionCard?: ActionCard & { status: ActionCardStatus; createdAgentName?: string }
@@ -72,9 +83,15 @@ export default function PlatformEngineerPage() {
   const [messages, setMessages] = useState<PEMessage[]>([])
   const [input, setInput] = useState('')
   const [isStreaming, setIsStreaming] = useState(false)
+  const [thinkingStatus, setThinkingStatus] = useState<string>('')
+  const [toolStatus, setToolStatus] = useState<ToolStatus | null>(null)
+  const [recentTools, setRecentTools] = useState<ToolStatus[]>([])
   const scrollRef = useRef<HTMLDivElement>(null)
   const textareaRef = useRef<HTMLTextAreaElement>(null)
   const convIdRef = useRef<string>('')
+
+  // Use the same transport hook as normal agents
+  const transport = useChatTransport('sse', API_URL)
 
   // Load persisted conversation on mount
   useEffect(() => {
@@ -152,76 +169,83 @@ export default function PlatformEngineerPage() {
     setMessages((prev) => [...prev, userMsg, assistantMsg])
     setInput('')
     setIsStreaming(true)
+    setThinkingStatus('Thinking...')
 
     try {
-      const token = secureStorage.getAccessToken()
-      const response = await fetch(`${API_URL}/api/v1/agents/chat/stream`, {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          ...(token && { Authorization: `Bearer ${token}` }),
-        },
-        body: JSON.stringify({
-          agent_name: AGENT_NAME,
-          message: content,
-          conversation_id: convIdRef.current || undefined,
-          conversation_history: messages.slice(-10).map((m) => ({
-            role: m.role,
-            content: m.content,
-          })),
-        }),
-      })
-
-      if (!response.ok || !response.body) throw new Error(`HTTP ${response.status}`)
-
-      const reader = response.body.getReader()
-      const decoder = new TextDecoder()
-      let buffer = ''
       let fullResponse = ''
 
-      while (true) {
-        const { done, value } = await reader.read()
-        if (done) break
-
-        buffer += decoder.decode(value, { stream: true })
-        const lines = buffer.split('\n')
-        buffer = lines.pop() || ''
-
-        for (const line of lines) {
-          if (!line.trim() || !line.startsWith('data: ')) continue
-          const jsonStr = line.slice(6).trim()
-          if (jsonStr === '[DONE]') continue
-
-          let data: Record<string, unknown>
-          try {
-            data = JSON.parse(jsonStr)
-          } catch {
-            continue // skip malformed JSON
-          }
-
-          if (data.type === 'error') {
-            throw new Error((data.error as string) || 'Something went wrong')
-          }
-
-          if (data.type === 'chunk') {
-            fullResponse += data.content
-            const { displayText, actionCard, integrationCard } = parseActionMarkers(fullResponse)
-            setMessages((prev) => {
-              const next = [...prev]
-              const last = next[next.length - 1]
-              if (last.role === 'assistant') {
-                next[next.length - 1] = {
-                  ...last,
-                  content: displayText,
-                  _actionCard: actionCard
-                    ? { ...actionCard, status: last._actionCard?.status ?? 'pending' }
-                    : last._actionCard,
-                  _integrationCard: integrationCard ?? last._integrationCard,
-                }
+      for await (const event of transport.sendMessage({
+        agent_name: AGENT_NAME,
+        message: content,
+        conversation_id: convIdRef.current || undefined,
+        conversation_history: messages.slice(-10).map((m) => ({
+          role: m.role,
+          content: m.content,
+        })),
+      })) {
+        if (event.type === 'chunk') {
+          fullResponse += event.content
+          setThinkingStatus('')
+          const { displayText, actionCard, integrationCard } = parseActionMarkers(fullResponse)
+          setMessages((prev) => {
+            const next = [...prev]
+            const last = next[next.length - 1]
+            if (last.role === 'assistant') {
+              next[next.length - 1] = {
+                ...last,
+                content: displayText,
+                _actionCard: actionCard
+                  ? { ...actionCard, status: last._actionCard?.status ?? 'pending' }
+                  : last._actionCard,
+                _integrationCard: integrationCard ?? last._integrationCard,
               }
-              return next
-            })
+            }
+            return next
+          })
+        } else if (event.type === 'status') {
+          if (!event.content?.includes('completed')) {
+            setThinkingStatus(event.content || 'Thinking...')
           }
+        } else if (event.type === 'tool_status') {
+          const newToolStatus: ToolStatus = {
+            tool_name: event.tool_name,
+            status: event.status,
+            description: event.description || `Using ${event.tool_name}`,
+            details: event.details,
+            duration_ms: event.duration_ms,
+            input_tokens: event.input_tokens,
+            output_tokens: event.output_tokens,
+          }
+          if (event.status === 'started') {
+            setToolStatus(newToolStatus)
+            setThinkingStatus(event.description || `Using ${event.tool_name}...`)
+          } else {
+            setRecentTools((prev) => [...prev, newToolStatus].slice(-5))
+            setToolStatus(null)
+          }
+        } else if (event.type === 'done') {
+          setThinkingStatus('')
+          // Finalize assistant message with metadata
+          const doneEvent = event as ChatEvent & { type: 'done' }
+          setMessages((prev) => {
+            const next = [...prev]
+            const last = next[next.length - 1]
+            if (last.role === 'assistant') {
+              next[next.length - 1] = {
+                ...last,
+                metadata: {
+                  ...last.metadata,
+                  sources: (doneEvent.sources || []) as any[],
+                  usage: doneEvent.metadata ? {
+                    input_tokens: doneEvent.metadata.input_tokens || 0,
+                    output_tokens: doneEvent.metadata.output_tokens || 0,
+                    total_tokens: doneEvent.metadata.total_tokens || 0,
+                  } : undefined,
+                },
+              }
+            }
+            return next
+          })
         }
       }
     } catch (err: any) {
@@ -231,15 +255,18 @@ export default function PlatformEngineerPage() {
         const last = next[next.length - 1]
         if (last.role === 'assistant') {
           const existing = last.content ? `${last.content}\n\n` : ''
-          next[next.length - 1] = { ...last, content: `${existing}⚠ ${msg}`, isError: true }
+          next[next.length - 1] = { ...last, content: `${existing}Error: ${msg}`, isError: true }
         }
         return next
       })
       toast.error(msg)
     } finally {
       setIsStreaming(false)
+      setThinkingStatus('')
+      setToolStatus(null)
+      setRecentTools([])
     }
-  }, [isStreaming, messages])
+  }, [isStreaming, messages, transport])
 
   const handleConfirm = async (config: AgentCreateConfig) => {
     setMessages((prev) =>
@@ -250,6 +277,13 @@ export default function PlatformEngineerPage() {
       )
     )
     try {
+      // Build tool objects for the backend (so it also creates AgentTool records)
+      const toolObjects = (config.tools_list || []).map((t) => ({
+        name: t,
+        description: t.replace(/_/g, ' '),
+        enabled: true,
+      }))
+
       const res = await apiClient.axios.post('/api/v1/agents/', {
         config: {
           name: config.name,
@@ -263,7 +297,7 @@ export default function PlatformEngineerPage() {
             max_tokens: 4096,
             api_key: '',
           },
-          tools: [],
+          tools: toolObjects,
           metadata: {},
         },
         agent_type: 'llm',
@@ -271,10 +305,12 @@ export default function PlatformEngineerPage() {
         category: config.category,
         tags: config.tags,
       })
-      const created = res.data?.agent_name || config.name
-      const agentId: string | undefined = res.data?.agent_id
+      // Response: { success, message, data: { agent_id, agent_name } }
+      const responseData = res.data?.data || res.data
+      const created = responseData?.agent_name || config.name
+      const agentId: string | undefined = responseData?.agent_id
 
-      // Enable capabilities exactly like the manual create page does
+      // Also enable capabilities via the bulk endpoint as a fallback
       if (agentId && config.tools_list && config.tools_list.length > 0) {
         const capabilityIds = [...new Set(
           config.tools_list
@@ -282,7 +318,11 @@ export default function PlatformEngineerPage() {
             .filter(Boolean)
         )]
         if (capabilityIds.length > 0) {
-          await enableCapabilitiesBulk(agentId, capabilityIds)
+          try {
+            await enableCapabilitiesBulk(agentId, capabilityIds)
+          } catch (e) {
+            console.warn('enableCapabilitiesBulk failed (tools may already be enabled):', e)
+          }
         }
       }
       setMessages((prev) =>
@@ -326,29 +366,46 @@ export default function PlatformEngineerPage() {
     )
   }
 
-  // ─── Loading ──────────────────────────────────────────────────────────────
+  const handleCopyMessage = async (content: string) => {
+    try {
+      await navigator.clipboard.writeText(content)
+    } catch {
+      // ignore
+    }
+  }
 
+  const handleRetry = (messageId: string) => {
+    const messageIndex = messages.findIndex((m) => m.id === messageId)
+    if (messageIndex > 0) {
+      const previousUserMessage = messages[messageIndex - 1]
+      if (previousUserMessage.role === 'user') {
+        setMessages((prev) => prev.slice(0, messageIndex))
+        sendMessage(previousUserMessage.content)
+      }
+    }
+  }
+
+  // --- Loading ---
   if (screen === 'loading') {
     return (
       <div className="flex items-center justify-center py-32">
-        <div className="animate-spin rounded-full h-10 w-10 border-b-2 border-red-600" />
+        <div className="animate-spin rounded-full h-10 w-10 border-b-2 border-primary-500" />
       </div>
     )
   }
 
-  // ─── Plan Gate ────────────────────────────────────────────────────────────
-
+  // --- Plan Gate ---
   if (screen === 'gate') {
     return (
       <div className="flex flex-col items-center justify-center py-24 px-4 text-center space-y-6">
-        <div className="w-16 h-16 rounded-full bg-red-100 flex items-center justify-center">
-          <Lock className="h-7 w-7 text-red-500" />
+        <div className="w-16 h-16 rounded-full bg-primary-50 flex items-center justify-center">
+          <Lock className="h-7 w-7 text-primary-500" />
         </div>
         <div className="space-y-2">
           <span className="inline-block px-3 py-1 bg-gray-100 text-gray-600 rounded-full text-xs font-medium">
             You&apos;re on the {status?.plan_tier ? status.plan_tier.charAt(0) + status.plan_tier.slice(1).toLowerCase() : 'Free'} plan
           </span>
-          <h3 className="text-xl font-semibold text-gray-900">Platform Engineer Agent</h3>
+          <h3 className="text-xl font-extrabold tracking-tight text-gray-900">Platform Engineer Agent</h3>
           <p className="text-sm text-gray-500 max-w-sm leading-relaxed">
             Available on Hobby and above. Create and manage AI agents through natural conversation.
           </p>
@@ -356,39 +413,35 @@ export default function PlatformEngineerPage() {
         <ul className="text-left space-y-2 text-sm text-gray-600 max-w-xs">
           {['Create agents through conversation', 'Check integration status', 'Manage agent configurations', 'Get tool recommendations'].map((f) => (
             <li key={f} className="flex items-center gap-2">
-              <div className="w-1.5 h-1.5 rounded-full bg-red-400 flex-shrink-0" />
+              <div className="w-1.5 h-1.5 rounded-full bg-primary-500 flex-shrink-0" />
               {f}
             </li>
           ))}
         </ul>
-        <Link href="/billing/subscription" className="flex items-center gap-2 px-5 py-2.5 bg-gradient-to-r from-red-500 to-red-600 text-white rounded-lg text-sm font-medium hover:opacity-90 transition-opacity">
+        <Link href="/billing/subscription" className="flex items-center gap-2 px-5 py-2.5 bg-gradient-to-r from-primary-500 to-primary-600 text-white rounded-lg text-sm font-medium hover:opacity-90 transition-opacity">
           Upgrade Plan <ArrowRight className="h-4 w-4" />
         </Link>
       </div>
     )
   }
 
-  // ─── Setup ────────────────────────────────────────────────────────────────
-
+  // --- Setup ---
   if (screen === 'setup') {
     return (
       <div className="flex flex-col h-[calc(100vh-4rem)]">
-        {/* Sub-header matches chat screen */}
-        <div className="flex items-center justify-between px-4 md:px-8 py-3 border-b border-gray-100 bg-white flex-shrink-0">
+        <div className="flex items-center justify-between px-4 md:px-8 py-3 border-b border-gray-100 bg-white/80 backdrop-blur-sm flex-shrink-0">
           <div className="flex items-center gap-2.5">
-            <div className="w-7 h-7 rounded-lg bg-gradient-to-br from-red-500 to-red-600 flex items-center justify-center">
+            <div className="w-7 h-7 rounded-lg bg-gradient-to-br from-primary-500 to-primary-600 flex items-center justify-center shadow-sm shadow-primary-500/20">
               <svg className="h-4 w-4 text-white" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
                 <path strokeLinecap="round" strokeLinejoin="round" d="M11.42 15.17L17.25 21A2.652 2.652 0 0021 17.25l-5.877-5.877M11.42 15.17l2.496-3.03c.317-.384.74-.626 1.208-.766M11.42 15.17l-4.655 5.653a2.548 2.548 0 11-3.586-3.586l6.837-5.63m5.108-.233c.55-.164 1.163-.188 1.743-.14a4.5 4.5 0 004.486-6.336l-3.276 3.277a3.004 3.004 0 01-2.25-2.25l3.276-3.276a4.5 4.5 0 00-6.336 4.486c.091 1.076-.071 2.264-.904 2.95l-.102.085m-1.745 1.437L5.909 7.5H4.5L2.25 3.75l1.5-1.5L7.5 4.5v1.409l4.26 4.26m-1.745 1.437l1.745-1.437m6.615 8.206L15.75 15.75M4.867 19.125h.008v.008h-.008v-.008z" />
               </svg>
             </div>
             <div>
-              <p className="text-sm font-semibold text-gray-900 leading-tight">Platform Engineer</p>
+              <p className="text-sm font-extrabold text-gray-900 leading-tight">Platform Engineer</p>
               <p className="text-xs text-gray-400 leading-tight">LLM Configuration</p>
             </div>
           </div>
         </div>
-
-        {/* Full-width setup content */}
         <div className="flex-1 overflow-y-auto">
           <div className="px-4 md:px-8 py-6 max-w-7xl mx-auto">
             <SetupScreen
@@ -406,22 +459,32 @@ export default function PlatformEngineerPage() {
     )
   }
 
-  // ─── Chat ─────────────────────────────────────────────────────────────────
-
+  // --- Chat ---
   const isEmpty = messages.length === 0
+
+  // Build messages for ChatMessages (strip PE-specific fields for the component)
+  const chatMessages: Message[] = messages.map((m) => ({
+    id: m.id,
+    role: m.role,
+    content: m.content,
+    timestamp: m.timestamp,
+    isError: m.isError,
+    metadata: m.metadata,
+    sources: m.sources,
+  }))
 
   return (
     <div className="flex flex-col h-[calc(100vh-4rem)]">
-      {/* Sub-header: agent info + settings */}
-      <div className="flex items-center justify-between px-4 md:px-8 py-3 border-b border-gray-100 bg-white flex-shrink-0">
+      {/* Sub-header */}
+      <div className="flex items-center justify-between px-4 md:px-8 py-3 border-b border-gray-100 bg-white/80 backdrop-blur-sm flex-shrink-0">
         <div className="flex items-center gap-2.5">
-          <div className="w-7 h-7 rounded-lg bg-gradient-to-br from-red-500 to-red-600 flex items-center justify-center">
+          <div className="w-7 h-7 rounded-lg bg-gradient-to-br from-primary-500 to-primary-600 flex items-center justify-center shadow-sm shadow-primary-500/20">
             <svg className="h-4 w-4 text-white" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
               <path strokeLinecap="round" strokeLinejoin="round" d="M11.42 15.17L17.25 21A2.652 2.652 0 0021 17.25l-5.877-5.877M11.42 15.17l2.496-3.03c.317-.384.74-.626 1.208-.766M11.42 15.17l-4.655 5.653a2.548 2.548 0 11-3.586-3.586l6.837-5.63m5.108-.233c.55-.164 1.163-.188 1.743-.14a4.5 4.5 0 004.486-6.336l-3.276 3.277a3.004 3.004 0 01-2.25-2.25l3.276-3.276a4.5 4.5 0 00-6.336 4.486c.091 1.076-.071 2.264-.904 2.95l-.102.085m-1.745 1.437L5.909 7.5H4.5L2.25 3.75l1.5-1.5L7.5 4.5v1.409l4.26 4.26m-1.745 1.437l1.745-1.437m6.615 8.206L15.75 15.75M4.867 19.125h.008v.008h-.008v-.008z" />
             </svg>
           </div>
           <div>
-            <p className="text-sm font-semibold text-gray-900 leading-tight">Platform Engineer</p>
+            <p className="text-sm font-extrabold text-gray-900 leading-tight">Platform Engineer</p>
             {status?.is_configured && (
               <p className="text-xs text-gray-400 leading-tight">{status.provider} / {status.model_name}</p>
             )}
@@ -432,7 +495,7 @@ export default function PlatformEngineerPage() {
             <button
               onClick={clearConversation}
               title="Clear conversation"
-              className="h-8 w-8 flex items-center justify-center rounded-lg text-gray-400 hover:text-red-500 hover:bg-red-50 transition-colors"
+              className="h-8 w-8 flex items-center justify-center rounded-lg text-gray-400 hover:text-primary-500 hover:bg-primary-50 transition-colors"
             >
               <Trash2 className="h-4 w-4" />
             </button>
@@ -452,51 +515,54 @@ export default function PlatformEngineerPage() {
         {isEmpty ? (
           <HeroSection onSend={sendMessage} isStreaming={isStreaming} />
         ) : (
-          <div className="px-4 md:px-8 py-6 max-w-7xl mx-auto space-y-2">
-            {messages.map((msg, i) => {
-              const isLast = i === messages.length - 1
-              return (
-                <div key={msg.id}>
-                  <ChatMessage
-                    message={msg}
-                    isStreaming={isLast && isStreaming && msg.role === 'assistant'}
-                    agentName="Platform Engineer"
-                  />
-                  {msg._actionCard && msg._actionCard.status !== 'created' && (
-                    <div className="ml-10 mt-2">
-                      <ActionConfirmCard
-                        config={msg._actionCard.config}
-                        status={msg._actionCard.status}
-                        onConfirm={handleConfirm}
-                        onCancel={handleCancelAction}
-                      />
-                    </div>
-                  )}
-                  {msg._actionCard?.status === 'created' && msg._actionCard.createdAgentName && (
-                    <div className="ml-10 mt-2">
-                      <AgentCreatedCard agentName={msg._actionCard.createdAgentName} />
-                    </div>
-                  )}
-                  {msg._integrationCard && (
-                    <div className="ml-10 mt-2">
-                      <IntegrationPromptCard
-                        provider={msg._integrationCard.provider}
-                        message={msg._integrationCard.message}
-                        connect_url={msg._integrationCard.connect_url}
-                      />
-                    </div>
-                  )}
-                </div>
-              )
-            })}
+          <div className="max-w-4xl mx-auto">
+            <ChatMessages
+              messages={chatMessages}
+              isStreaming={isStreaming}
+              onCopyMessage={handleCopyMessage}
+              onRetry={handleRetry}
+              thinkingStatus={thinkingStatus}
+              toolStatus={toolStatus}
+              recentTools={recentTools}
+              agentName="Platform Engineer"
+            />
+            {/* Render action/integration cards on top of the ChatMessages */}
+            {messages.map((msg) => (
+              <div key={`cards-${msg.id}`}>
+                {msg._actionCard && msg._actionCard.status !== 'created' && (
+                  <div className="px-4 md:px-8 -mt-2 mb-4 ml-10">
+                    <ActionConfirmCard
+                      config={msg._actionCard.config}
+                      status={msg._actionCard.status}
+                      onConfirm={handleConfirm}
+                      onCancel={handleCancelAction}
+                    />
+                  </div>
+                )}
+                {msg._actionCard?.status === 'created' && msg._actionCard.createdAgentName && (
+                  <div className="px-4 md:px-8 -mt-2 mb-4 ml-10">
+                    <AgentCreatedCard agentName={msg._actionCard.createdAgentName} />
+                  </div>
+                )}
+                {msg._integrationCard && (
+                  <div className="px-4 md:px-8 -mt-2 mb-4 ml-10">
+                    <IntegrationPromptCard
+                      provider={msg._integrationCard.provider}
+                      message={msg._integrationCard.message}
+                      connect_url={msg._integrationCard.connect_url}
+                    />
+                  </div>
+                )}
+              </div>
+            ))}
           </div>
         )}
       </div>
 
       {/* Input bar */}
       {!isEmpty && (
-        <div className="border-t border-gray-100 bg-white px-4 md:px-8 py-3 flex-shrink-0">
-          <div className="max-w-7xl mx-auto">
+        <div className="border-t border-gray-100 bg-white/80 backdrop-blur-sm px-4 md:px-8 py-3 flex-shrink-0">
+          <div className="max-w-4xl mx-auto">
             <ChatInputBar
               value={input}
               onChange={setInput}
@@ -511,7 +577,7 @@ export default function PlatformEngineerPage() {
   )
 }
 
-// ─── Sub-components ──────────────────────────────────────────────────────────
+// --- Sub-components ---
 
 function HeroSection({
   onSend,
@@ -527,7 +593,12 @@ function HeroSection({
     <div className="flex flex-col items-center justify-center min-h-full px-4 py-16 text-center">
       <div className="w-full max-w-3xl space-y-8">
         <div className="space-y-3">
-          <h1 className="text-5xl font-bold text-gray-900 tracking-tight leading-tight">
+          <div className="w-14 h-14 rounded-2xl bg-gradient-to-br from-primary-500 to-primary-600 flex items-center justify-center mx-auto mb-4 shadow-lg shadow-primary-500/20">
+            <svg className="h-7 w-7 text-white" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+              <path strokeLinecap="round" strokeLinejoin="round" d="M11.42 15.17L17.25 21A2.652 2.652 0 0021 17.25l-5.877-5.877M11.42 15.17l2.496-3.03c.317-.384.74-.626 1.208-.766M11.42 15.17l-4.655 5.653a2.548 2.548 0 11-3.586-3.586l6.837-5.63m5.108-.233c.55-.164 1.163-.188 1.743-.14a4.5 4.5 0 004.486-6.336l-3.276 3.277a3.004 3.004 0 01-2.25-2.25l3.276-3.276a4.5 4.5 0 00-6.336 4.486c.091 1.076-.071 2.264-.904 2.95l-.102.085m-1.745 1.437L5.909 7.5H4.5L2.25 3.75l1.5-1.5L7.5 4.5v1.409l4.26 4.26m-1.745 1.437l1.745-1.437m6.615 8.206L15.75 15.75M4.867 19.125h.008v.008h-.008v-.008z" />
+            </svg>
+          </div>
+          <h1 className="text-4xl md:text-5xl font-extrabold text-gray-900 tracking-tight leading-tight">
             What will you build?
           </h1>
           <p className="text-lg text-gray-500">
@@ -536,7 +607,7 @@ function HeroSection({
         </div>
 
         {/* Input */}
-        <div className="bg-white border border-gray-200 rounded-2xl shadow-sm px-4 pt-3 pb-2 text-left">
+        <div className="bg-white border border-gray-200 rounded-2xl shadow-sm hover:shadow-md transition-shadow px-4 pt-3 pb-2 text-left">
           <textarea
             ref={textareaRef}
             value={value}
@@ -555,7 +626,7 @@ function HeroSection({
             <button
               onClick={() => { if (value.trim()) onSend(value) }}
               disabled={!value.trim() || isStreaming}
-              className="h-9 w-9 flex items-center justify-center bg-red-600 text-white rounded-xl hover:bg-red-700 transition-colors disabled:opacity-40 disabled:cursor-not-allowed"
+              className="h-9 w-9 flex items-center justify-center bg-primary-500 text-white rounded-xl hover:bg-primary-600 transition-colors disabled:opacity-40 disabled:cursor-not-allowed shadow-sm shadow-primary-500/20"
             >
               {isStreaming ? <Loader2 className="h-4 w-4 animate-spin" /> : <Send className="h-4 w-4" />}
             </button>
@@ -569,7 +640,7 @@ function HeroSection({
               key={label}
               disabled={isStreaming}
               onClick={() => onSend(prompt)}
-              className="flex items-center gap-1.5 px-4 py-2 text-sm bg-white border border-gray-200 text-gray-700 rounded-full hover:bg-gray-50 hover:border-gray-300 transition-colors disabled:opacity-50"
+              className="flex items-center gap-1.5 px-4 py-2 text-sm bg-white border border-gray-200 text-gray-700 rounded-full hover:bg-primary-50 hover:border-primary-200 hover:text-primary-700 transition-colors disabled:opacity-50"
             >
               <Icon className="h-3.5 w-3.5 text-gray-400" />
               {label}
@@ -595,7 +666,7 @@ function ChatInputBar({
   textareaRef: React.RefObject<HTMLTextAreaElement | null>
 }) {
   return (
-    <div className="bg-white border border-gray-200 rounded-2xl px-4 pt-3 pb-2 shadow-sm">
+    <div className="bg-white border border-gray-200 rounded-2xl px-4 pt-3 pb-2 shadow-sm hover:shadow-md transition-shadow">
       <textarea
         ref={textareaRef}
         value={value}
@@ -614,7 +685,7 @@ function ChatInputBar({
         <button
           onClick={onSend}
           disabled={!value.trim() || isStreaming}
-          className="h-9 w-9 flex items-center justify-center bg-red-600 text-white rounded-xl hover:bg-red-700 transition-colors disabled:opacity-40 disabled:cursor-not-allowed"
+          className="h-9 w-9 flex items-center justify-center bg-primary-500 text-white rounded-xl hover:bg-primary-600 transition-colors disabled:opacity-40 disabled:cursor-not-allowed shadow-sm shadow-primary-500/20"
         >
           {isStreaming ? <Loader2 className="h-4 w-4 animate-spin" /> : <Send className="h-4 w-4" />}
         </button>

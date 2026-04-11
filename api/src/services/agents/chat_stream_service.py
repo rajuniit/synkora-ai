@@ -1544,6 +1544,7 @@ class ChatStreamService:
             trace_id=trace_id,
             observability_config=agent.observability_config,
             agentic_config=agentic_config,
+            langfuse_service=agent.langfuse_service,
         )
 
         # Use max_tokens and temperature from LLM config (configured in database)
