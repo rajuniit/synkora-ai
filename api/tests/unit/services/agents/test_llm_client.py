@@ -17,9 +17,11 @@ class TestMultiProviderLLMClient:
 
     @pytest.fixture
     def mock_langfuse(self):
-        with patch("src.services.agents.llm_client.langfuse_service") as mock:
-            mock.should_trace.return_value = False
-            yield mock
+        with patch("src.services.agents.llm_client.LangfuseService") as mock_cls:
+            mock_instance = MagicMock()
+            mock_instance.should_trace.return_value = False
+            mock_cls.for_agent.return_value = mock_instance
+            yield mock_instance
 
     def test_init_openai(self, mock_config):
         with patch("openai.AsyncOpenAI") as MockClient:

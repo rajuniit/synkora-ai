@@ -37,9 +37,11 @@ def mock_tool_registry():
 
 @pytest.fixture
 def mock_langfuse():
-    with patch("src.services.agents.function_calling._langfuse_service_singleton") as mock:
-        mock.should_trace.return_value = False
-        yield mock
+    with patch("src.services.agents.function_calling.LangfuseService") as mock_cls:
+        mock_instance = MagicMock()
+        mock_instance.should_trace.return_value = False
+        mock_cls.for_agent.return_value = mock_instance
+        yield mock_instance
 
 
 @pytest.fixture
