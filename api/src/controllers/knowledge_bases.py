@@ -23,10 +23,10 @@ from src.models.knowledge_base import (
     VectorDBProvider,
 )
 from src.models.tenant import Tenant, TenantPlan, TenantStatus
-from src.services.data_sources.document_processor import DocumentProcessor
 from src.services.knowledge_base import RAGService
 from src.services.knowledge_base.embedding_service import EmbeddingService
 from src.services.storage.s3_storage import S3StorageService
+from src.tasks.kb_tasks import crawl_and_process_kb, process_kb_documents
 
 logger = logging.getLogger(__name__)
 
@@ -619,7 +619,6 @@ async def upload_documents(
 
         # Initialize services
         s3_storage = S3StorageService()
-        doc_processor = DocumentProcessor(db)
 
         failed_files = []
         processed_docs = []
@@ -724,9 +723,9 @@ async def upload_documents(
                 failed_files.append({"filename": file.filename, "error": str(e)})
                 continue
 
-        # Process documents (chunk, embed, store)
+        # Dispatch chunking + embedding to Celery so the HTTP request returns immediately
         if processed_docs:
-            # Create a temporary data source for UI uploads
+            # Get or create the manual data source
             result = await db.execute(
                 select(DataSource).filter(
                     DataSource.knowledge_base_id == kb.id, DataSource.type == DataSourceType.MANUAL
@@ -746,14 +745,14 @@ async def upload_documents(
                 await db.commit()
                 await db.refresh(data_source)
 
-            result = await doc_processor.process_documents(data_source=data_source, documents=processed_docs)
+            process_kb_documents.delay(data_source.id, str(tenant_id), processed_docs)
 
             return DocumentUploadResponse(
-                success=result["success"],
-                message=f"Processed {result['documents_processed']} documents successfully",
-                documents_processed=result["documents_processed"],
-                documents_embedded=result.get("documents_embedded", 0),
-                total_chunks=result.get("total_chunks", 0),
+                success=True,
+                message=f"{len(processed_docs)} document(s) uploaded and queued for processing",
+                documents_processed=len(processed_docs),
+                documents_embedded=0,
+                total_chunks=0,
                 failed_files=failed_files,
             )
         else:
@@ -795,10 +794,7 @@ async def add_text_content(
         if not kb:
             raise HTTPException(status_code=404, detail="Knowledge base not found")
 
-        # Initialize document processor
-        doc_processor = DocumentProcessor(db)
-
-        # Create a temporary data source for text content
+        # Get or create manual data source
         result = await db.execute(
             select(DataSource).filter(DataSource.knowledge_base_id == kb.id, DataSource.type == DataSourceType.MANUAL)
         )
@@ -816,7 +812,6 @@ async def add_text_content(
             await db.commit()
             await db.refresh(data_source)
 
-        # Create document record
         documents = [
             {
                 "id": request.title,
@@ -830,17 +825,17 @@ async def add_text_content(
             }
         ]
 
-        # Process document
-        result = await doc_processor.process_documents(data_source=data_source, documents=documents)
+        # Dispatch chunking + embedding to Celery
+        process_kb_documents.delay(data_source.id, str(tenant_id), documents)
 
-        logger.info(f"Added text content '{request.title}' to KB {kb_id}")
+        logger.info(f"Queued text content '{request.title}' for KB {kb_id}")
 
         return DocumentUploadResponse(
-            success=result["success"],
-            message=f"Text content '{request.title}' added successfully",
-            documents_processed=result["documents_processed"],
-            documents_embedded=result.get("documents_embedded", 0),
-            total_chunks=result.get("total_chunks", 0),
+            success=True,
+            message=f"Text content '{request.title}' queued for processing",
+            documents_processed=1,
+            documents_embedded=0,
+            total_chunks=0,
             failed_files=[],
         )
 
@@ -864,11 +859,7 @@ async def crawl_website(
     This endpoint fetches content from a URL and processes it.
     """
     try:
-        import asyncio
-        from urllib.parse import urljoin, urlparse
-
-        import requests
-        from bs4 import BeautifulSoup
+        from urllib.parse import urlparse
 
         from src.services.security.url_validator import validate_url
 
@@ -881,22 +872,18 @@ async def crawl_website(
         if not kb:
             raise HTTPException(status_code=404, detail="Knowledge base not found")
 
-        # Validate URL format
+        # Validate URL format and SSRF before queuing
         parsed_url = urlparse(request.url)
         if not parsed_url.scheme or not parsed_url.netloc:
             raise HTTPException(status_code=400, detail="Invalid URL format")
 
-        # SECURITY: Validate URL against SSRF attacks (blocks private IPs, cloud metadata, etc.)
         is_valid, error_msg = validate_url(
             request.url, allowed_schemes=["http", "https"], block_private_ips=True, resolve_dns=True
         )
         if not is_valid:
             raise HTTPException(status_code=400, detail=f"URL not allowed: {error_msg}")
 
-        # Initialize document processor
-        doc_processor = DocumentProcessor(db)
-
-        # Create a data source for web content
+        # Get or create web data source
         result = await db.execute(
             select(DataSource).filter(DataSource.knowledge_base_id == kb.id, DataSource.type == DataSourceType.WEB)
         )
@@ -914,109 +901,30 @@ async def crawl_website(
             await db.commit()
             await db.refresh(data_source)
 
-        documents = []
-        visited_urls = set()
-        urls_to_crawl = [request.url]
+        # Dispatch crawl + embed to Celery
+        crawl_and_process_kb.delay(
+            data_source.id,
+            str(tenant_id),
+            request.url,
+            request.max_pages,
+            request.include_subpages,
+        )
 
-        while urls_to_crawl and len(documents) < request.max_pages:
-            current_url = urls_to_crawl.pop(0)
-
-            if current_url in visited_urls:
-                continue
-
-            visited_urls.add(current_url)
-
-            try:
-                # SECURITY: Validate each URL before fetching (protects against DNS rebinding)
-                is_url_valid, url_error = validate_url(
-                    current_url, allowed_schemes=["http", "https"], block_private_ips=True, resolve_dns=True
-                )
-                if not is_url_valid:
-                    logger.warning(f"SSRF blocked during crawl: {current_url} - {url_error}")
-                    continue
-
-                # Fetch page (run in executor to avoid blocking the event loop)
-                headers = {"User-Agent": "Mozilla/5.0 (compatible; AIBot/1.0)"}
-                loop = asyncio.get_running_loop()
-                response = await loop.run_in_executor(
-                    None, lambda: requests.get(current_url, headers=headers, timeout=30)
-                )
-                response.raise_for_status()
-
-                # Parse HTML
-                soup = BeautifulSoup(response.content, "html.parser")
-
-                # Extract title
-                title = soup.title.string if soup.title else current_url
-
-                # Remove script and style elements
-                for script in soup(["script", "style", "nav", "footer", "header"]):
-                    script.decompose()
-
-                # Get text content
-                text_content = soup.get_text(separator="\n", strip=True)
-
-                # Clean up whitespace
-                lines = [line.strip() for line in text_content.splitlines() if line.strip()]
-                text_content = "\n".join(lines)
-
-                if text_content:
-                    documents.append(
-                        {
-                            "id": current_url,
-                            "text": text_content,
-                            "metadata": {
-                                "title": title,
-                                "url": current_url,
-                                "source_type": "web",
-                                "upload_source": "crawl",
-                            },
-                        }
-                    )
-                    logger.info(f"Crawled: {current_url}")
-
-                # Find subpage links if enabled
-                if request.include_subpages and len(documents) < request.max_pages:
-                    for link in soup.find_all("a", href=True):
-                        href = link["href"]
-                        full_url = urljoin(current_url, href)
-                        parsed_full = urlparse(full_url)
-
-                        # Only follow links on same domain
-                        if (
-                            parsed_full.netloc == parsed_url.netloc
-                            and full_url not in visited_urls
-                            and not href.startswith("#")
-                            and not href.startswith("mailto:")
-                            and not href.startswith("javascript:")
-                        ):
-                            urls_to_crawl.append(full_url)
-
-            except Exception as e:
-                logger.warning(f"Failed to crawl {current_url}: {e}")
-                continue
-
-        if not documents:
-            raise HTTPException(status_code=400, detail="Could not extract any content from the URL")
-
-        # Process documents
-        result = await doc_processor.process_documents(data_source=data_source, documents=documents)
-
-        logger.info(f"Crawled {len(documents)} pages from {request.url} to KB {kb_id}")
+        logger.info(f"Queued crawl of {request.url} for KB {kb_id}")
 
         return DocumentUploadResponse(
-            success=result["success"],
-            message=f"Crawled {len(documents)} page(s) successfully",
-            documents_processed=result["documents_processed"],
-            documents_embedded=result.get("documents_embedded", 0),
-            total_chunks=result.get("total_chunks", 0),
+            success=True,
+            message=f"Crawl of '{request.url}' queued for processing",
+            documents_processed=0,
+            documents_embedded=0,
+            total_chunks=0,
             failed_files=[],
         )
 
     except HTTPException:
         raise
     except Exception as e:
-        logger.error(f"Error crawling website: {e}", exc_info=True)
+        logger.error(f"Error queuing website crawl: {e}", exc_info=True)
         raise HTTPException(status_code=500, detail=str(e))
 
 
