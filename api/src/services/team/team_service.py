@@ -275,8 +275,9 @@ class TeamService:
         # Send invitation email via Celery task (async)
         try:
             from src.tasks.email_tasks import send_team_invitation_email_task
+            from src.utils.config_helper import get_app_base_url
 
-            base_url = os.environ.get("APP_BASE_URL", "http://localhost:3005")
+            base_url = await get_app_base_url(self.db)
             send_team_invitation_email_task.delay(
                 tenant_id=str(tenant_id),
                 to_email=email,
@@ -408,8 +409,9 @@ class TeamService:
         # Send invitation email via Celery task (async)
         try:
             from src.tasks.email_tasks import send_team_invitation_email_task
+            from src.utils.config_helper import get_app_base_url
 
-            base_url = os.environ.get("APP_BASE_URL", "http://localhost:3005")
+            base_url = await get_app_base_url(self.db)
             send_team_invitation_email_task.delay(
                 tenant_id=str(tenant_id),
                 to_email=invitation.email,

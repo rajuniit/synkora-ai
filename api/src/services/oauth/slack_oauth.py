@@ -29,7 +29,7 @@ class SlackOAuth:
         self.client_id = client_id or os.getenv("SLACK_CLIENT_ID")
         self.client_secret = client_secret or os.getenv("SLACK_CLIENT_SECRET")
         self.redirect_uri = redirect_uri or os.getenv(
-            "SLACK_REDIRECT_URI", "http://localhost:3005/oauth/slack/callback"
+            "SLACK_REDIRECT_URI", "https://synkora.ai/oauth/slack/callback"
         )
 
         if not self.client_id or not self.client_secret:
