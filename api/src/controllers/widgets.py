@@ -316,9 +316,7 @@ async def get_widget_chat_history(
 
         # Collect all agent IDs this widget can route to (default + all routed agents)
         # SECURITY: all routed agents must belong to the same tenant as the widget
-        routes_result = await db.execute(
-            select(WidgetAgentRoute).filter(WidgetAgentRoute.widget_id == widget.id)
-        )
+        routes_result = await db.execute(select(WidgetAgentRoute).filter(WidgetAgentRoute.widget_id == widget.id))
         routed_agent_ids = {r.agent_id for r in routes_result.scalars().all()}
         routed_agent_ids.add(widget.agent_id)
 
