@@ -27,6 +27,8 @@ interface Widget {
   allowed_domains: string[] | null;
   rate_limit: number;
   is_active: boolean;
+  identity_verification_required: boolean;
+  enable_agent_routing: boolean;
   created_at: string;
   updated_at: string;
 }
@@ -219,6 +221,16 @@ export default function AgentWidgetsPage() {
                     >
                       {widget.is_active ? "Active" : "Inactive"}
                     </span>
+                    {widget.identity_verification_required && (
+                      <span className="px-2 py-0.5 text-xs font-medium rounded-full bg-amber-100 text-amber-800">
+                        Identity verified
+                      </span>
+                    )}
+                    {widget.enable_agent_routing && (
+                      <span className="px-2 py-0.5 text-xs font-medium rounded-full bg-blue-100 text-blue-800">
+                        Routing on
+                      </span>
+                    )}
                   </div>
 
                   <div className="space-y-1.5 text-xs text-gray-600">

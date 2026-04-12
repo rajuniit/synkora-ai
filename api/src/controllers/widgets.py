@@ -4,6 +4,7 @@ Widget API endpoints.
 Provides REST API endpoints for managing agent widgets (embedded chat interfaces).
 """
 
+import hmac
 import json
 import logging
 import secrets
@@ -12,7 +13,7 @@ from typing import Any
 
 from fastapi import APIRouter, Depends, HTTPException, Request, status
 from fastapi.responses import StreamingResponse
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, ConfigDict, Field
 from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import joinedload
@@ -24,8 +25,9 @@ from src.middleware.auth_middleware import get_current_tenant_id
 from src.middleware.widget_auth import WidgetAuthMiddleware
 from src.models.agent import Agent
 from src.models.agent_widget import AgentWidget, WidgetAnalytics
-from src.models.conversation import Conversation
+from src.models.conversation import Conversation, ConversationStatus
 from src.models.message import Message
+from src.models.widget_agent_route import WidgetAgentRoute
 from src.services.security.advanced_prompt_scanner import advanced_prompt_scanner
 
 logger = logging.getLogger(__name__)
@@ -57,6 +59,8 @@ class UpdateWidgetRequest(BaseModel):
     theme_config: dict[str, Any] | None = Field(None, description="JSON configuration for widget appearance")
     rate_limit: int | None = Field(None, description="Maximum requests per hour")
     is_active: bool | None = Field(None, description="Whether the widget is active")
+    identity_verification_required: bool | None = Field(None, description="Require HMAC identity verification")
+    enable_agent_routing: bool | None = Field(None, description="Enable org-based agent routing")
 
 
 class WidgetResponse(BaseModel):
@@ -65,6 +69,25 @@ class WidgetResponse(BaseModel):
     success: bool
     message: str
     data: dict[str, Any] = Field(default_factory=dict)
+
+
+class WidgetUserContext(BaseModel):
+    """User identity context sent from SaaS platform."""
+
+    model_config = ConfigDict(populate_by_name=True)
+
+    id: str = Field(..., max_length=255, description="SaaS platform's user ID")
+    name: str | None = None
+    email: str | None = None
+    org_id: str | None = Field(None, alias="orgId", description="SaaS platform's org/workspace ID")
+    org_name: str | None = Field(None, alias="orgName")
+
+
+class WidgetAgentRouteSchema(BaseModel):
+    """Single org → agent route mapping."""
+
+    external_org_id: str = Field(..., max_length=255)
+    agent_id: uuid.UUID
 
 
 def generate_api_key() -> tuple[str, str, str]:
@@ -98,6 +121,12 @@ async def create_widget(
 
         plain_key, encrypted_key, key_prefix = generate_api_key()
 
+        # Generate HMAC identity secret (returned plaintext once, stored encrypted)
+        from src.services.agents.security import encrypt_value
+
+        plain_secret = secrets.token_urlsafe(32)
+        encrypted_secret = encrypt_value(plain_secret)
+
         widget = AgentWidget(
             agent_id=agent_uuid,
             tenant_id=agent.tenant_id,
@@ -108,6 +137,9 @@ async def create_widget(
             theme_config=request.theme_config or {},
             rate_limit=request.rate_limit,
             is_active=True,
+            identity_secret=encrypted_secret,
+            identity_verification_required=False,
+            enable_agent_routing=False,
         )
 
         db.add(widget)
@@ -121,12 +153,15 @@ async def create_widget(
                 "widget_id": str(widget.id),
                 "widget_name": widget.widget_name,
                 "api_key": plain_key,
+                "identity_secret": plain_secret,
                 "agent_id": str(widget.agent_id),
                 "agent_name": agent.agent_name,
                 "allowed_domains": widget.allowed_domains,
                 "theme_config": widget.theme_config,
                 "rate_limit": widget.rate_limit,
                 "is_active": widget.is_active,
+                "identity_verification_required": widget.identity_verification_required,
+                "enable_agent_routing": widget.enable_agent_routing,
                 "created_at": widget.created_at.isoformat(),
             },
         )
@@ -259,7 +294,11 @@ async def get_widget_config(http_request: Request, db: AsyncSession = Depends(ge
 
 @widgets_router.get("/widgets/chat/history")
 async def get_widget_chat_history(
-    session_id: str, http_request: Request, limit: int = 50, db: AsyncSession = Depends(get_async_db)
+    http_request: Request,
+    session_id: str | None = None,
+    external_user_id: str | None = None,
+    limit: int = 50,
+    db: AsyncSession = Depends(get_async_db),
 ):
     try:
         api_key = http_request.headers.get("X-Widget-API-Key")
@@ -270,25 +309,53 @@ async def get_widget_chat_history(
         if not widget:
             raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Invalid or inactive widget API key")
 
-        # SECURITY: Verify agent belongs to the same tenant as the widget
-        result = await db.execute(
-            select(Agent).filter(
-                Agent.id == widget.agent_id,
-                Agent.tenant_id == widget.tenant_id,  # Prevent cross-tenant access
+        if not session_id and not external_user_id:
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST, detail="Either session_id or external_user_id is required"
+            )
+
+        # Collect all agent IDs this widget can route to (default + all routed agents)
+        # SECURITY: all routed agents must belong to the same tenant as the widget
+        routes_result = await db.execute(select(WidgetAgentRoute).filter(WidgetAgentRoute.widget_id == widget.id))
+        routed_agent_ids = {r.agent_id for r in routes_result.scalars().all()}
+        routed_agent_ids.add(widget.agent_id)
+
+        # Verify all agent IDs belong to the widget's tenant
+        agents_result = await db.execute(
+            select(Agent.id).filter(
+                Agent.id.in_(routed_agent_ids),
+                Agent.tenant_id == widget.tenant_id,
             )
         )
-        agent = result.scalar_one_or_none()
-        if not agent:
+        valid_agent_ids = [row[0] for row in agents_result.all()]
+        if not valid_agent_ids:
             raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Agent not found")
 
-        conversation_result = await db.execute(
-            select(Conversation).filter(Conversation.agent_id == agent.id, Conversation.session_id == session_id)
-        )
+        # Scope by external_user_id for identified users, else by session_id
+        if external_user_id:
+            conversation_result = await db.execute(
+                select(Conversation)
+                .filter(
+                    Conversation.agent_id.in_(valid_agent_ids),
+                    Conversation.external_user_id == external_user_id,
+                    Conversation.status == ConversationStatus.ACTIVE,
+                )
+                .order_by(Conversation.updated_at.desc())
+                .limit(1)
+            )
+        else:
+            conversation_result = await db.execute(
+                select(Conversation).filter(
+                    Conversation.agent_id.in_(valid_agent_ids),
+                    Conversation.session_id == session_id,
+                )
+            )
         conversation = conversation_result.scalar_one_or_none()
 
+        identifier = external_user_id or session_id
         if not conversation:
             return WidgetResponse(
-                success=True, message="No chat history found", data={"session_id": session_id, "messages": []}
+                success=True, message="No chat history found", data={"identifier": identifier, "messages": []}
             )
 
         messages_result = await db.execute(
@@ -306,7 +373,11 @@ async def get_widget_chat_history(
         return WidgetResponse(
             success=True,
             message=f"Found {len(messages_list)} messages",
-            data={"session_id": session_id, "messages": messages_list},
+            data={
+                "identifier": identifier,
+                "conversation_id": str(conversation.id),
+                "messages": messages_list,
+            },
         )
 
     except HTTPException:
@@ -352,6 +423,8 @@ async def get_widget(
                 "theme_config": widget.theme_config,
                 "rate_limit": widget.rate_limit,
                 "is_active": widget.is_active,
+                "identity_verification_required": widget.identity_verification_required,
+                "enable_agent_routing": widget.enable_agent_routing,
                 "created_at": widget.created_at.isoformat(),
                 "updated_at": widget.updated_at.isoformat(),
             },
@@ -395,6 +468,10 @@ async def update_widget(
             widget.rate_limit = request.rate_limit
         if request.is_active is not None:
             widget.is_active = request.is_active
+        if request.identity_verification_required is not None:
+            widget.identity_verification_required = request.identity_verification_required
+        if request.enable_agent_routing is not None:
+            widget.enable_agent_routing = request.enable_agent_routing
 
         await db.commit()
         await db.refresh(widget)
@@ -493,6 +570,198 @@ async def regenerate_api_key(
         await db.rollback()
         logger.error(f"Failed to regenerate API key: {e}", exc_info=True)
         raise HTTPException(status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail="Failed to regenerate API key")
+
+
+@widgets_router.post("/widgets/{widget_id}/regenerate-identity-secret", response_model=WidgetResponse)
+async def regenerate_identity_secret(
+    widget_id: str,
+    tenant_id: uuid.UUID = Depends(get_current_tenant_id),
+    db: AsyncSession = Depends(get_async_db),
+):
+    """Regenerate the HMAC identity secret. Returns the new plaintext secret once."""
+    try:
+        try:
+            widget_uuid = uuid.UUID(widget_id)
+        except ValueError:
+            raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Invalid widget ID format")
+
+        result = await db.execute(
+            select(AgentWidget).filter(AgentWidget.id == widget_uuid, AgentWidget.tenant_id == tenant_id)
+        )
+        widget = result.scalar_one_or_none()
+        if not widget:
+            raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=f"Widget with ID '{widget_id}' not found")
+
+        from src.services.agents.security import encrypt_value
+
+        plain_secret = secrets.token_urlsafe(32)
+        widget.identity_secret = encrypt_value(plain_secret)
+        await db.commit()
+
+        return WidgetResponse(
+            success=True,
+            message="Identity secret regenerated successfully",
+            data={"widget_id": str(widget.id), "identity_secret": plain_secret},
+        )
+
+    except HTTPException:
+        raise
+    except Exception as e:
+        await db.rollback()
+        logger.error(f"Failed to regenerate identity secret: {e}", exc_info=True)
+        raise HTTPException(status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail="Failed to regenerate secret")
+
+
+@widgets_router.get("/widgets/{widget_id}/routes", response_model=WidgetResponse)
+async def list_widget_routes(
+    widget_id: str,
+    tenant_id: uuid.UUID = Depends(get_current_tenant_id),
+    db: AsyncSession = Depends(get_async_db),
+):
+    """List all org→agent routes for this widget."""
+    try:
+        try:
+            widget_uuid = uuid.UUID(widget_id)
+        except ValueError:
+            raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Invalid widget ID format")
+
+        result = await db.execute(
+            select(AgentWidget).filter(AgentWidget.id == widget_uuid, AgentWidget.tenant_id == tenant_id)
+        )
+        widget = result.scalar_one_or_none()
+        if not widget:
+            raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=f"Widget with ID '{widget_id}' not found")
+
+        routes_result = await db.execute(select(WidgetAgentRoute).filter(WidgetAgentRoute.widget_id == widget_uuid))
+        routes = routes_result.scalars().all()
+
+        return WidgetResponse(
+            success=True,
+            message=f"Found {len(routes)} routes",
+            data={
+                "widget_id": widget_id,
+                "routes": [
+                    {
+                        "external_org_id": r.external_org_id,
+                        "agent_id": str(r.agent_id),
+                        "created_at": r.created_at.isoformat(),
+                    }
+                    for r in routes
+                ],
+            },
+        )
+
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"Failed to list routes: {e}", exc_info=True)
+        raise HTTPException(status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail="Failed to list routes")
+
+
+@widgets_router.put("/widgets/{widget_id}/routes", response_model=WidgetResponse)
+async def set_widget_routes(
+    widget_id: str,
+    routes: list[WidgetAgentRouteSchema],
+    tenant_id: uuid.UUID = Depends(get_current_tenant_id),
+    db: AsyncSession = Depends(get_async_db),
+):
+    """Bulk-replace all org→agent routes for this widget."""
+    try:
+        try:
+            widget_uuid = uuid.UUID(widget_id)
+        except ValueError:
+            raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Invalid widget ID format")
+
+        result = await db.execute(
+            select(AgentWidget).filter(AgentWidget.id == widget_uuid, AgentWidget.tenant_id == tenant_id)
+        )
+        widget = result.scalar_one_or_none()
+        if not widget:
+            raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=f"Widget with ID '{widget_id}' not found")
+
+        # Validate all agent IDs belong to the same tenant
+        for route in routes:
+            agent_result = await db.execute(
+                select(Agent).filter(Agent.id == route.agent_id, Agent.tenant_id == tenant_id)
+            )
+            if not agent_result.scalar_one_or_none():
+                raise HTTPException(
+                    status_code=status.HTTP_400_BAD_REQUEST,
+                    detail=f"Agent {route.agent_id} not found or belongs to a different tenant",
+                )
+
+        # Delete existing routes
+        existing_result = await db.execute(select(WidgetAgentRoute).filter(WidgetAgentRoute.widget_id == widget_uuid))
+        for old_route in existing_result.scalars().all():
+            await db.delete(old_route)
+
+        # Insert new routes
+        for route in routes:
+            db.add(
+                WidgetAgentRoute(
+                    widget_id=widget_uuid,
+                    external_org_id=route.external_org_id,
+                    agent_id=route.agent_id,
+                )
+            )
+
+        await db.commit()
+
+        return WidgetResponse(
+            success=True,
+            message=f"Set {len(routes)} routes",
+            data={"widget_id": widget_id, "route_count": len(routes)},
+        )
+
+    except HTTPException:
+        raise
+    except Exception as e:
+        await db.rollback()
+        logger.error(f"Failed to set routes: {e}", exc_info=True)
+        raise HTTPException(status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail="Failed to set routes")
+
+
+@widgets_router.delete("/widgets/{widget_id}/routes/{external_org_id}", response_model=WidgetResponse)
+async def delete_widget_route(
+    widget_id: str,
+    external_org_id: str,
+    tenant_id: uuid.UUID = Depends(get_current_tenant_id),
+    db: AsyncSession = Depends(get_async_db),
+):
+    """Remove a single org→agent route."""
+    try:
+        try:
+            widget_uuid = uuid.UUID(widget_id)
+        except ValueError:
+            raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Invalid widget ID format")
+
+        result = await db.execute(
+            select(AgentWidget).filter(AgentWidget.id == widget_uuid, AgentWidget.tenant_id == tenant_id)
+        )
+        if not result.scalar_one_or_none():
+            raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=f"Widget with ID '{widget_id}' not found")
+
+        route_result = await db.execute(
+            select(WidgetAgentRoute).filter(
+                WidgetAgentRoute.widget_id == widget_uuid,
+                WidgetAgentRoute.external_org_id == external_org_id,
+            )
+        )
+        route = route_result.scalar_one_or_none()
+        if not route:
+            raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Route not found")
+
+        await db.delete(route)
+        await db.commit()
+
+        return WidgetResponse(success=True, message=f"Route for org '{external_org_id}' deleted")
+
+    except HTTPException:
+        raise
+    except Exception as e:
+        await db.rollback()
+        logger.error(f"Failed to delete route: {e}", exc_info=True)
+        raise HTTPException(status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail="Failed to delete route")
 
 
 @widgets_router.get("/widgets/{widget_id}/embed-code", response_model=WidgetResponse)
@@ -624,6 +893,8 @@ class WidgetChatRequest(BaseModel):
     message: str = Field(..., description="User message")
     session_id: str | None = Field(None, description="Session ID for conversation continuity")
     conversation_id: str | None = Field(None, description="Conversation ID if continuing existing chat")
+    user: WidgetUserContext | None = Field(None, description="Identified user context from SaaS platform")
+    user_hash: str | None = Field(None, description="HMAC-SHA256(identity_secret, user.id) for identity verification")
 
 
 @widgets_router.post("/widgets/chat")
@@ -653,10 +924,47 @@ async def widget_chat(request: WidgetChatRequest, http_request: Request, db: Asy
                 status_code=status.HTTP_429_TOO_MANY_REQUESTS, detail="Rate limit exceeded for this widget"
             )
 
+        # ── HMAC identity verification ────────────────────────────────────────────
+        if widget.identity_verification_required:
+            if not request.user or not request.user_hash:
+                raise HTTPException(
+                    status_code=status.HTTP_403_FORBIDDEN,
+                    detail="Identity verification required: user context and user_hash must be provided",
+                )
+            if not widget.identity_secret:
+                raise HTTPException(
+                    status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail="Widget identity secret not configured"
+                )
+            try:
+                from src.services.agents.security import decrypt_value
+
+                plain_secret = decrypt_value(widget.identity_secret)
+                expected = hmac.new(plain_secret.encode(), request.user.id.encode(), "sha256").hexdigest()
+                if not hmac.compare_digest(expected, request.user_hash):
+                    raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Invalid identity hash")
+            except HTTPException:
+                raise
+            except Exception as e:
+                logger.error(f"HMAC verification error for widget {widget.id}: {e}")
+                raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Identity verification failed")
+
+        # ── Agent routing ─────────────────────────────────────────────────────────
+        resolved_agent_id = widget.agent_id
+        if widget.enable_agent_routing and request.user and request.user.org_id:
+            route_result = await db.execute(
+                select(WidgetAgentRoute).filter(
+                    WidgetAgentRoute.widget_id == widget.id,
+                    WidgetAgentRoute.external_org_id == request.user.org_id,
+                )
+            )
+            route = route_result.scalar_one_or_none()
+            if route:
+                resolved_agent_id = route.agent_id
+
         # Get agent - SECURITY: Verify agent belongs to the same tenant as the widget
         result = await db.execute(
             select(Agent).filter(
-                Agent.id == widget.agent_id,
+                Agent.id == resolved_agent_id,
                 Agent.tenant_id == widget.tenant_id,  # Prevent cross-tenant access
             )
         )
@@ -692,6 +1000,59 @@ async def widget_chat(request: WidgetChatRequest, http_request: Request, db: Asy
             return StreamingResponse(
                 generate_security_block(), media_type="text/event-stream", headers={"X-Security-Status": "blocked"}
             )
+
+        # ── Conversation find-or-create ───────────────────────────────────────────
+        # For identified users, reuse existing active conversation for continuity.
+        # If conversation_id supplied, verify ownership before using it.
+        resolved_conversation_id = request.conversation_id
+
+        if request.user:
+            if resolved_conversation_id:
+                # Verify this conversation belongs to this user
+                ownership_result = await db.execute(
+                    select(Conversation).filter(
+                        Conversation.id == uuid.UUID(resolved_conversation_id),
+                        Conversation.agent_id == agent.id,
+                        Conversation.external_user_id == request.user.id,
+                    )
+                )
+                if not ownership_result.scalar_one_or_none():
+                    resolved_conversation_id = None  # Strip invalid/spoofed ID
+
+            if not resolved_conversation_id:
+                # Find existing active conversation for this user (most recent first)
+                existing_result = await db.execute(
+                    select(Conversation)
+                    .filter(
+                        Conversation.agent_id == agent.id,
+                        Conversation.external_user_id == request.user.id,
+                        Conversation.status == ConversationStatus.ACTIVE,
+                    )
+                    .order_by(Conversation.updated_at.desc())
+                    .limit(1)
+                )
+                existing = existing_result.scalar_one_or_none()
+                if existing:
+                    resolved_conversation_id = str(existing.id)
+                else:
+                    # Create new conversation scoped to this user
+                    new_conv = Conversation(
+                        agent_id=agent.id,
+                        external_user_id=request.user.id,
+                        external_org_id=request.user.org_id,
+                        external_user_name=request.user.name,
+                        session_id=f"eu_{request.user.id}",
+                        name=f"Chat with {request.user.name or request.user.id}",
+                        status=ConversationStatus.ACTIVE,
+                    )
+                    db.add(new_conv)
+                    try:
+                        await db.commit()
+                        await db.refresh(new_conv)
+                        resolved_conversation_id = str(new_conv.id)
+                    except Exception as e:
+                        await db.rollback()
+                        logger.warning(f"Could not create conversation for user {request.user.id}: {e}")
 
         # Generate session ID if not provided
         session_id = request.session_id or str(uuid.uuid4())
@@ -734,11 +1095,11 @@ async def widget_chat(request: WidgetChatRequest, http_request: Request, db: Asy
         from src.services.agents.chat_stream_service import ChatStreamService
         from src.services.conversation_service import ConversationService
 
-        # Load conversation history if conversation_id is provided
+        # Load conversation history if conversation_id is resolved
         conversation_history = None
-        if request.conversation_id:
+        if resolved_conversation_id:
             try:
-                conversation_uuid = uuid.UUID(request.conversation_id)
+                conversation_uuid = uuid.UUID(resolved_conversation_id)
                 conversation_history = await ConversationService.get_conversation_history_cached(
                     db=db,
                     conversation_id=conversation_uuid,
@@ -760,7 +1121,7 @@ async def widget_chat(request: WidgetChatRequest, http_request: Request, db: Asy
                 agent.agent_name,
                 request.message,
                 conversation_history,  # Pass loaded history for memory
-                request.conversation_id,
+                resolved_conversation_id,
                 None,  # attachments
                 None,  # llm_config_id
                 db,

@@ -107,6 +107,7 @@ from .user_oauth_token import UserOAuthToken
 from .voice_api_key import VoiceApiKey
 from .voice_usage import VoiceUsage
 from .whatsapp_bot import WhatsAppBot
+from .widget_agent_route import WidgetAgentRoute
 from .wiki_article import WikiArticle, WikiCompilationJob
 from .workflow_execution import (
     WorkflowExecution,
@@ -142,6 +143,7 @@ __all__ = [
     "AgentTool",
     "AgentWidget",
     "WidgetAnalytics",
+    "WidgetAgentRoute",
     "SlackBot",
     "SlackConversation",
     "TelegramBot",

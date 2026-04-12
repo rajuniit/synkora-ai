@@ -548,7 +548,10 @@
     this.widgetId       = cfg.widgetId;
     this.apiKey         = cfg.apiKey;
     this.apiUrl         = (cfg.apiUrl || "http://localhost:5001/api/v1").replace(/\/$/, "");
-    this.sessionId      = uid();
+    this._user          = cfg.user || null;
+    this._userHash      = cfg.userHash || null;
+    // Stable session: identified users get a deterministic ID so history survives page reload
+    this.sessionId      = (this._user && this._user.id) ? "eu_" + this._user.id : uid();
     this.conversationId = null;
     this.streaming      = false;
     this._isOpen        = false;
@@ -931,6 +934,8 @@
         message: text,
         session_id: this.sessionId,
         conversation_id: this.conversationId || undefined,
+        user: this._user || undefined,
+        user_hash: this._userHash || undefined,
       }),
     })
       .then(function (res) {
@@ -1024,6 +1029,92 @@
   };
 
   // ─── Public API ────────────────────────────────────────────────────────────────
+  //
+  // SynkoraWidget.init(cfg)
+  //
+  // Required options:
+  //   widgetId  {string}  — Widget UUID from the Synkora dashboard
+  //   apiKey    {string}  — Widget API key from the Synkora dashboard
+  //
+  // Optional options:
+  //   apiUrl    {string}  — Override the Synkora API base URL (default: auto-detected)
+  //
+  // ── Identity Verification (recommended for authenticated SaaS apps) ──────────
+  //
+  //   user      {object}  — Logged-in user context. When provided, conversations are
+  //                         scoped to this user so history persists across sessions.
+  //     user.id       {string}  REQUIRED — Your platform's unique user ID
+  //     user.name     {string}  Optional display name shown in Synkora dashboard
+  //     user.email    {string}  Optional user email
+  //     user.orgId    {string}  Optional org/workspace ID — used for agent routing
+  //     user.orgName  {string}  Optional org display name
+  //
+  //   userHash  {string}  — HMAC-SHA256 signature of the user's ID, computed on your
+  //                         server using the widget's identity secret.
+  //                         Required when identity_verification_required=true on the widget.
+  //
+  //   HOW TO GENERATE userHash (server-side only — never in the browser):
+  //
+  //     Node.js:
+  //       const crypto = require("crypto");
+  //       const hash = crypto
+  //         .createHmac("sha256", WIDGET_IDENTITY_SECRET)
+  //         .update(user.id)
+  //         .digest("hex");
+  //
+  //     Python:
+  //       import hmac, hashlib
+  //       hash = hmac.new(
+  //           WIDGET_IDENTITY_SECRET.encode(),
+  //           user_id.encode(),
+  //           hashlib.sha256
+  //       ).hexdigest()
+  //
+  //     Ruby:
+  //       require "openssl"
+  //       hash = OpenSSL::HMAC.hexdigest("SHA256", WIDGET_IDENTITY_SECRET, user_id)
+  //
+  //     PHP:
+  //       $hash = hash_hmac("sha256", $userId, $widgetIdentitySecret);
+  //
+  //   ⚠  The WIDGET_IDENTITY_SECRET is shown once when you create the widget (or after
+  //      regenerating it via POST /api/v1/widgets/{id}/regenerate-identity-secret).
+  //      Store it as a server-side environment variable — never expose it to the browser.
+  //
+  // ── Agent Routing ────────────────────────────────────────────────────────────
+  //
+  //   When enable_agent_routing=true is set on the widget and user.orgId is provided,
+  //   Synkora looks up a pre-configured route table (managed via the widget routes API)
+  //   to pick the agent for that org. This lets different customer orgs get different
+  //   agents (different knowledge bases, system prompts, tools) from a single widget.
+  //   Orgs without a route fall back to the widget's default agent.
+  //
+  // ── Examples ─────────────────────────────────────────────────────────────────
+  //
+  //   Basic (anonymous, no identity verification):
+  //     SynkoraWidget.init({
+  //       widgetId: "your-widget-id",
+  //       apiKey:   "swk_...",
+  //     });
+  //
+  //   With identified user (no verification enforced):
+  //     SynkoraWidget.init({
+  //       widgetId: "your-widget-id",
+  //       apiKey:   "swk_...",
+  //       user: { id: "usr_123", name: "Alice", email: "alice@acme.com", orgId: "acme" },
+  //     });
+  //
+  //   With identity verification enabled (userHash required):
+  //     // 1. Your server computes: hash = HMAC-SHA256(WIDGET_IDENTITY_SECRET, user.id)
+  //     // 2. Your server passes the hash to the page (e.g. in a <script> or API response)
+  //     SynkoraWidget.init({
+  //       widgetId:  "your-widget-id",
+  //       apiKey:    "swk_...",
+  //       user:      { id: "usr_123", name: "Alice", orgId: "acme" },
+  //       userHash:  "{{ server_computed_hash }}",
+  //     });
+  //
+  // ─────────────────────────────────────────────────────────────────────────────
 
   global.SynkoraWidget = {
     _i: {},
