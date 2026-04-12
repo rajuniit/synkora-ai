@@ -41,9 +41,7 @@ class GmailOAuth:
         """
         self.client_id = client_id or os.getenv("GMAIL_CLIENT_ID")
         self.client_secret = client_secret or os.getenv("GMAIL_CLIENT_SECRET")
-        self.redirect_uri = redirect_uri or os.getenv(
-            "GMAIL_REDIRECT_URI", "https://synkora.ai/oauth/gmail/callback"
-        )
+        self.redirect_uri = redirect_uri or os.getenv("GMAIL_REDIRECT_URI", "https://synkora.ai/oauth/gmail/callback")
 
         if not self.client_id or not self.client_secret:
             logger.warning("Gmail OAuth credentials not configured")
