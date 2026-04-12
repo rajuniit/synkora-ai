@@ -34,11 +34,11 @@ def compile_single_knowledge_wiki(self, kb_id: int, tenant_id: str):
 async def _compile_all_wikis():
     from sqlalchemy import func, select
 
-    from src.core.database import async_session_factory
+    from src.core.database import create_celery_async_session
     from src.models.wiki_article import WikiArticle
     from src.services.knowledge_autopilot.compiler import KnowledgeCompiler
 
-    async with async_session_factory() as db:
+    async with create_celery_async_session()() as db:
         # Find all knowledge bases that have at least one wiki article (autopilot active)
         result = await db.execute(
             select(WikiArticle.knowledge_base_id, WikiArticle.tenant_id).group_by(
@@ -74,10 +74,10 @@ async def _compile_all_wikis():
 
 
 async def _compile_single_wiki(kb_id: int, tenant_id: str):
-    from src.core.database import async_session_factory
+    from src.core.database import create_celery_async_session
     from src.services.knowledge_autopilot.compiler import KnowledgeCompiler
 
-    async with async_session_factory() as db:
+    async with create_celery_async_session()() as db:
         compiler = KnowledgeCompiler(db)
         result = await compiler.compile(knowledge_base_id=kb_id, tenant_id=tenant_id)
         logger.info(f"On-demand compilation KB {kb_id}: {result.get('status')}")
