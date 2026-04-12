@@ -9,7 +9,7 @@ from datetime import datetime
 from typing import Optional
 from uuid import UUID
 
-from sqlalchemy import DateTime, Enum, ForeignKey, Integer, String, Text
+from sqlalchemy import DateTime, Enum, ForeignKey, Index, Integer, String, Text
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from .base import Base, SoftDeleteMixin, TimestampMixin, UUIDMixin
@@ -38,6 +38,8 @@ class Conversation(Base, UUIDMixin, TimestampMixin, SoftDeleteMixin):
 
     __tablename__ = "conversations"
 
+    __table_args__ = (Index("ix_conversations_agent_external_user", "agent_id", "external_user_id"),)
+
     # Foreign keys
     app_id: Mapped[UUID | None] = mapped_column(ForeignKey("apps.id"), index=True)
     account_id: Mapped[UUID | None] = mapped_column(ForeignKey("accounts.id"), index=True)
@@ -54,6 +56,11 @@ class Conversation(Base, UUIDMixin, TimestampMixin, SoftDeleteMixin):
         nullable=False,
         default=ConversationStatus.ACTIVE,
     )
+
+    # Widget identity fields — set when an identified user chats via widget
+    external_user_id: Mapped[str | None] = mapped_column(String(255), nullable=True, index=True)
+    external_org_id: Mapped[str | None] = mapped_column(String(255), nullable=True, index=True)
+    external_user_name: Mapped[str | None] = mapped_column(String(255), nullable=True)
 
     # Metrics
     message_count: Mapped[int] = mapped_column(default=0)

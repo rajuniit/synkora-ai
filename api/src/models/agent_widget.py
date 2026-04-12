@@ -90,8 +90,29 @@ class AgentWidget(BaseModel, TenantMixin):
         comment="Whether the widget is currently active",
     )
 
+    identity_secret = Column(
+        Text,
+        nullable=True,
+        comment="SECURITY: Encrypted HMAC secret for verifying user identity",
+    )
+
+    identity_verification_required = Column(
+        Boolean,
+        nullable=False,
+        default=False,
+        comment="When True, user context + valid HMAC required on every chat request",
+    )
+
+    enable_agent_routing = Column(
+        Boolean,
+        nullable=False,
+        default=False,
+        comment="When True, resolve agent from widget_agent_routes table based on org_id",
+    )
+
     # Relationships
     agent = relationship("Agent", back_populates="widgets")
+    routes = relationship("WidgetAgentRoute", back_populates="widget", cascade="all, delete-orphan")
 
     @staticmethod
     def generate_api_key() -> tuple[str, str, str]:
