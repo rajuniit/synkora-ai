@@ -48,4 +48,4 @@ async def get_app_base_url(db: AsyncSession, tenant_id: UUID | None = None) -> s
         return await config_service.get_app_base_url(tenant_id)
     except Exception as e:
         logger.warning(f"Error getting app base URL: {e}")
-        return os.getenv("APP_BASE_URL", "http://localhost:3005").rstrip("/")
+        return os.getenv("APP_BASE_URL", "https://synkora.ai").rstrip("/")

@@ -747,7 +747,7 @@ class AuthService:
 
     @staticmethod
     async def send_verification_email(
-        db: AsyncSession, account_id: uuid.UUID, base_url: str = "http://localhost:3005"
+        db: AsyncSession, account_id: uuid.UUID, base_url: str = "https://synkora.ai"
     ) -> dict:
         """
         Generate verification token and send verification email.
@@ -828,8 +828,10 @@ class AuthService:
         # Queue welcome email
         try:
             from src.tasks.email_tasks import send_welcome_email_task
+            from src.utils.config_helper import get_app_base_url
 
-            send_welcome_email_task.delay(account_id=str(account.id))
+            base_url = await get_app_base_url(db)
+            send_welcome_email_task.delay(account_id=str(account.id), base_url=base_url)
             logger.info(f"Welcome email task queued for account {account.id}")
         except Exception as e:
             logger.error(f"Failed to queue welcome email: {e}")

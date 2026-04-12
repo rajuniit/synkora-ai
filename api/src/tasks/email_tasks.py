@@ -99,7 +99,7 @@ def send_email_task(
 
 
 @celery_app.task(name="send_verification_email_task", bind=True, max_retries=3, default_retry_delay=30)
-def send_verification_email_task(self, account_id: str, base_url: str = "http://localhost:3005") -> dict[str, Any]:
+def send_verification_email_task(self, account_id: str, base_url: str = "https://synkora.ai") -> dict[str, Any]:
     """
     Send email verification email asynchronously.
 
@@ -140,7 +140,7 @@ def send_verification_email_task(self, account_id: str, base_url: str = "http://
 
 
 @celery_app.task(name="send_welcome_email_task", bind=True, max_retries=3, default_retry_delay=30)
-def send_welcome_email_task(self, account_id: str, base_url: str = "http://localhost:3005") -> dict[str, Any]:
+def send_welcome_email_task(self, account_id: str, base_url: str = "https://synkora.ai") -> dict[str, Any]:
     """
     Send welcome email after email verification.
 
@@ -206,7 +206,7 @@ def send_welcome_email_task(self, account_id: str, base_url: str = "http://local
 
 @celery_app.task(name="send_password_reset_email_task", bind=True, max_retries=3, default_retry_delay=30)
 def send_password_reset_email_task(
-    self, email: str, reset_token: str, base_url: str = "http://localhost:3005"
+    self, email: str, reset_token: str, base_url: str = "https://synkora.ai"
 ) -> dict[str, Any]:
     """
     Send password reset email asynchronously.
@@ -341,7 +341,7 @@ def send_team_invitation_email_task(
     to_email: str,
     inviter_name: str,
     invitation_token: str,
-    base_url: str = "http://localhost:3005",
+    base_url: str = "https://synkora.ai",
 ) -> dict[str, Any]:
     """
     Send team invitation email.

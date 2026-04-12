@@ -10,7 +10,7 @@ from typing import Any
 from uuid import UUID
 
 # Configurable branding/contact info — set these env vars when self-hosting
-_APP_BASE_URL = os.getenv("APP_BASE_URL", "http://localhost:3005")
+_APP_BASE_URL = os.getenv("APP_BASE_URL", "https://synkora.ai")
 _SUPPORT_EMAIL = os.getenv("SUPPORT_EMAIL", "support@localhost")
 _DOCS_URL = os.getenv("DOCS_URL", "")
 
@@ -491,7 +491,7 @@ class EmailService:
         to_email: str,
         verification_token: str,
         tenant_id: UUID | None = None,
-        base_url: str = "http://localhost:3005",
+        base_url: str = "https://synkora.ai",
     ) -> dict[str, Any]:
         """Send email verification email."""
         verification_url = f"{base_url}/verify-email?token={verification_token}"
@@ -837,7 +837,7 @@ class EmailService:
         to_email: str,
         user_name: str | None = None,
         tenant_id: UUID | None = None,
-        base_url: str = "http://localhost:3005",
+        base_url: str = "https://synkora.ai",
     ) -> dict[str, Any]:
         """Send welcome email after email verification with core features."""
         dashboard_url = f"{base_url}/dashboard"
@@ -1222,7 +1222,7 @@ class EmailService:
         team_name: str,
         role: str,
         tenant_id: UUID | None = None,
-        base_url: str = "http://localhost:3005",
+        base_url: str = "https://synkora.ai",
     ) -> dict[str, Any]:
         """Send team invitation email."""
         invitation_url = f"{base_url}/accept-invite?token={invitation_token}"
@@ -1433,7 +1433,7 @@ class EmailService:
         )
 
     async def send_password_reset_email(
-        self, to_email: str, reset_token: str, tenant_id: UUID | None = None, base_url: str = "http://localhost:3005"
+        self, to_email: str, reset_token: str, tenant_id: UUID | None = None, base_url: str = "https://synkora.ai"
     ) -> dict[str, Any]:
         """Send password reset email."""
         reset_url = f"{base_url}/reset-password?token={reset_token}"

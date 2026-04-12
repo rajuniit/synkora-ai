@@ -375,4 +375,4 @@ class IntegrationConfigService:
         except Exception as e:
             # Log error and return default
             logger.warning(f"Error retrieving app base URL: {e}")
-            return os.getenv("APP_BASE_URL", "http://localhost:3005").rstrip("/")
+            return os.getenv("APP_BASE_URL", "https://synkora.ai").rstrip("/")
