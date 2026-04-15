@@ -105,24 +105,8 @@ def upgrade() -> None:
 
 
 def downgrade() -> None:
-    conn = op.get_bind()
-
-    # conversations.external_org_id is owned by migration 20260412_0001 which is
-    # always in the chain below this one — never drop it here.
-
-    op.execute("DROP INDEX IF EXISTS ix_dsd_search_vector")
-    op.execute("ALTER TABLE data_source_documents DROP COLUMN IF EXISTS search_vector")
-
-    sv_tier = conn.execute(
-        sa.text(
-            "SELECT 1 FROM information_schema.columns "
-            "WHERE table_name='data_source_documents' AND column_name='storage_tier'"
-        )
-    ).fetchone()
-    if sv_tier:
-        op.execute("DROP INDEX IF EXISTS ix_dsd_tenant_tier_created")
-        op.execute(
-            "ALTER TABLE data_source_documents "
-            "DROP CONSTRAINT IF EXISTS ck_dsd_storage_tier"
-        )
-        op.execute("ALTER TABLE data_source_documents DROP COLUMN IF EXISTS storage_tier")
+    # This migration is a one-way backfill for a production database that missed
+    # branch migrations 20260412_0001 and 20260413_0002. Those migrations are always
+    # present in the chain and own every object this migration conditionally adds.
+    # Their own downgrades handle cleanup — nothing to undo here.
+    pass
