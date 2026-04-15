@@ -817,9 +817,7 @@ async def get_stream_health(
     db: AsyncSession = Depends(get_async_db),
 ):
     """Return real-time Redis Stream stats for a webhook-based data source."""
-    result = await db.execute(
-        select(DataSource).filter(DataSource.id == ds_id, DataSource.tenant_id == tenant_id)
-    )
+    result = await db.execute(select(DataSource).filter(DataSource.id == ds_id, DataSource.tenant_id == tenant_id))
     ds = result.scalar_one_or_none()
     if not ds:
         raise HTTPException(status_code=404, detail="Data source not found")
@@ -855,6 +853,7 @@ async def get_stream_health(
         pass
 
     from src.config.settings import get_settings
+
     base_url = get_settings().api_base_url.rstrip("/")
     webhook_url = f"{base_url}/api/webhooks/kb/{kb_id}/{source_type}"
 
@@ -882,7 +881,8 @@ async def activate_data_source(
 ):
     """Activate a webhook-based data source (set status = ACTIVE)."""
     result = await db.execute(
-        select(DataSource).options(selectinload(DataSource.oauth_app))
+        select(DataSource)
+        .options(selectinload(DataSource.oauth_app))
         .filter(DataSource.id == ds_id, DataSource.tenant_id == tenant_id)
     )
     ds = result.scalar_one_or_none()
@@ -910,7 +910,8 @@ async def deactivate_data_source(
 ):
     """Deactivate a data source (set status = INACTIVE)."""
     result = await db.execute(
-        select(DataSource).options(selectinload(DataSource.oauth_app))
+        select(DataSource)
+        .options(selectinload(DataSource.oauth_app))
         .filter(DataSource.id == ds_id, DataSource.tenant_id == tenant_id)
     )
     ds = result.scalar_one_or_none()

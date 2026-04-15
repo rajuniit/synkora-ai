@@ -126,11 +126,14 @@ class RecallService:
             if agent_id:
                 payload["metadata"] = {"synkora_agent_id": agent_id}
 
-            async with aiohttp.ClientSession() as session, session.post(
-                f"{self.base_url}/bot/",
-                headers=self.headers,
-                json=payload,
-            ) as response:
+            async with (
+                aiohttp.ClientSession() as session,
+                session.post(
+                    f"{self.base_url}/bot/",
+                    headers=self.headers,
+                    json=payload,
+                ) as response,
+            ):
                 if response.status in [200, 201]:
                     result = await response.json()
                     logger.info(f"Successfully created Recall bot: {result.get('id')}")
@@ -168,10 +171,13 @@ class RecallService:
             Bot details including status, recordings, transcript
         """
         try:
-            async with aiohttp.ClientSession() as session, session.get(
-                f"{self.base_url}/bot/{bot_id}/",
-                headers=self.headers,
-            ) as response:
+            async with (
+                aiohttp.ClientSession() as session,
+                session.get(
+                    f"{self.base_url}/bot/{bot_id}/",
+                    headers=self.headers,
+                ) as response,
+            ):
                 if response.status == 200:
                     result = await response.json()
 
@@ -191,9 +197,7 @@ class RecallService:
                             "join_at": result.get("join_at"),
                             "recordings": recordings,
                             "video_url": media_shortcuts.get("video_mixed", {}).get("data", {}).get("download_url"),
-                            "transcript_url": media_shortcuts.get("transcript", {})
-                            .get("data", {})
-                            .get("download_url"),
+                            "transcript_url": media_shortcuts.get("transcript", {}).get("data", {}).get("download_url"),
                             "created_at": result.get("created_at"),
                         },
                     }
@@ -231,11 +235,14 @@ class RecallService:
             if meeting_url:
                 params["meeting_url"] = meeting_url
 
-            async with aiohttp.ClientSession() as session, session.get(
-                f"{self.base_url}/bot/",
-                headers=self.headers,
-                params=params,
-            ) as response:
+            async with (
+                aiohttp.ClientSession() as session,
+                session.get(
+                    f"{self.base_url}/bot/",
+                    headers=self.headers,
+                    params=params,
+                ) as response,
+            ):
                 if response.status == 200:
                     result = await response.json()
                     bots = result.get("results", [])
@@ -279,10 +286,13 @@ class RecallService:
             Removal status
         """
         try:
-            async with aiohttp.ClientSession() as session, session.post(
-                f"{self.base_url}/bot/{bot_id}/leave_call/",
-                headers=self.headers,
-            ) as response:
+            async with (
+                aiohttp.ClientSession() as session,
+                session.post(
+                    f"{self.base_url}/bot/{bot_id}/leave_call/",
+                    headers=self.headers,
+                ) as response,
+            ):
                 if response.status in [200, 204]:
                     logger.info(f"Successfully removed bot {bot_id} from meeting")
                     return {
@@ -353,9 +363,7 @@ class RecallService:
                         )
 
                     # Create full text version
-                    full_text = "\n\n".join(
-                        [f"**{seg['speaker']}**: {seg['text']}" for seg in formatted_transcript]
-                    )
+                    full_text = "\n\n".join([f"**{seg['speaker']}**: {seg['text']}" for seg in formatted_transcript])
 
                     return {
                         "success": True,

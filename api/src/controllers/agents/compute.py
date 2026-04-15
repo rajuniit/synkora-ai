@@ -58,10 +58,7 @@ class ComputeAssignRequest(PydanticModel):
     )
     remote_credentials: str | None = Field(
         default=None,
-        description=(
-            "SSH private key (PEM format) or password. "
-            "Stored encrypted at rest. Send only on create/update."
-        ),
+        description=("SSH private key (PEM format) or password. Stored encrypted at rest. Send only on create/update."),
     )
     remote_base_path: str | None = Field(
         default="/tmp/agent_workspace",
@@ -119,9 +116,7 @@ async def get_compute(
     """Get the compute configuration for an agent."""
     await _get_agent_or_404(agent_id, tenant_id, db)
 
-    result = await db.execute(
-        select(AgentCompute).where(AgentCompute.agent_id == agent_id)
-    )
+    result = await db.execute(select(AgentCompute).where(AgentCompute.agent_id == agent_id))
     compute = result.scalar_one_or_none()
 
     if compute is None:
@@ -170,9 +165,7 @@ async def assign_compute(
     # based on the tenant's TenantComputeConfig (see /api/v1/tenant/compute-config)
 
     # Remove existing compute record if any
-    existing_result = await db.execute(
-        select(AgentCompute).where(AgentCompute.agent_id == agent_id)
-    )
+    existing_result = await db.execute(select(AgentCompute).where(AgentCompute.agent_id == agent_id))
     existing = existing_result.scalar_one_or_none()
     if existing:
         await db.delete(existing)
@@ -214,9 +207,7 @@ async def update_compute(
     """Update compute configuration fields for an agent."""
     await _get_agent_or_404(agent_id, tenant_id, db)
 
-    result = await db.execute(
-        select(AgentCompute).where(AgentCompute.agent_id == agent_id)
-    )
+    result = await db.execute(select(AgentCompute).where(AgentCompute.agent_id == agent_id))
     compute = result.scalar_one_or_none()
     if compute is None:
         raise HTTPException(
@@ -253,9 +244,7 @@ async def remove_compute(
     """
     await _get_agent_or_404(agent_id, tenant_id, db)
 
-    result = await db.execute(
-        select(AgentCompute).where(AgentCompute.agent_id == agent_id)
-    )
+    result = await db.execute(select(AgentCompute).where(AgentCompute.agent_id == agent_id))
     compute = result.scalar_one_or_none()
     if compute:
         await db.delete(compute)
@@ -315,9 +304,7 @@ async def test_compute(
     await session.close()
 
     # Persist connection status
-    r = await db.execute(
-        select(AgentCompute).where(AgentCompute.agent_id == agent_id)
-    )
+    r = await db.execute(select(AgentCompute).where(AgentCompute.agent_id == agent_id))
     compute = r.scalar_one_or_none()
     if compute:
         if result["success"]:

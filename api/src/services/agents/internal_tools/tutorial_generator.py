@@ -190,8 +190,7 @@ async def internal_fetch_repository_files(
                     d
                     for d in dirs
                     if not any(
-                        fnmatch(os.path.join(root, d), os.path.join(repo_path, pattern))
-                        for pattern in exclude_patterns
+                        fnmatch(os.path.join(root, d), os.path.join(repo_path, pattern)) for pattern in exclude_patterns
                     )
                 ]
 

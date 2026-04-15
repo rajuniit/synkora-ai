@@ -84,9 +84,7 @@ class LinearConnector(BaseConnector):
         issues = await self._fetch_issues(since=None, count_only=True)
         return issues
 
-    async def fetch_documents(
-        self, since: datetime | None = None, limit: int | None = None
-    ) -> list[dict[str, Any]]:
+    async def fetch_documents(self, since: datetime | None = None, limit: int | None = None) -> list[dict[str, Any]]:
         cfg = self.data_source.config
         team_ids: list[str] = cfg.get("team_ids") or []
 

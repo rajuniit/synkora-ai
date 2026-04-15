@@ -177,7 +177,9 @@ async def create_oauth_app(
                 raise HTTPException(status_code=400, detail="api_token is required for API token method")
         elif data.auth_method == "basic_auth":
             if not data.api_token:
-                raise HTTPException(status_code=400, detail="password (api_token field) is required for basic_auth method")
+                raise HTTPException(
+                    status_code=400, detail="password (api_token field) is required for basic_auth method"
+                )
 
         # Check if app with same provider and name exists for this tenant
         existing_result = await db.execute(

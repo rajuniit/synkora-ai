@@ -124,14 +124,10 @@ async def _process_kb_documents(data_source_id: int, tenant_id: str, documents: 
             from src.tasks.knowledge_compiler_task import compile_single_knowledge_wiki
 
             wiki_check = await db.execute(
-                select(WikiArticle.id).filter(
-                    WikiArticle.knowledge_base_id == data_source.knowledge_base_id
-                ).limit(1)
+                select(WikiArticle.id).filter(WikiArticle.knowledge_base_id == data_source.knowledge_base_id).limit(1)
             )
             if wiki_check.scalar_one_or_none():
-                compile_single_knowledge_wiki.delay(
-                    data_source.knowledge_base_id, str(data_source.tenant_id)
-                )
+                compile_single_knowledge_wiki.delay(data_source.knowledge_base_id, str(data_source.tenant_id))
                 logger.info(f"Triggered wiki recompile for KB {data_source.knowledge_base_id}")
 
 
@@ -160,7 +156,7 @@ async def _crawl_and_process_kb(
     async_session_factory = create_celery_async_session()
 
     CRAWL_CONCURRENCY = 10  # max parallel HTTP requests
-    CRAWL_BATCH_SIZE = 20   # pages to embed per DB batch
+    CRAWL_BATCH_SIZE = 20  # pages to embed per DB batch
 
     parsed_base = urlparse(url)
     visited: set[str] = set()
@@ -291,9 +287,7 @@ async def _crawl_and_process_kb(
 
         async with async_session_factory() as db_check:
             wiki_check = await db_check.execute(
-                select(WikiArticle.id).filter(
-                    WikiArticle.knowledge_base_id == _kb_id
-                ).limit(1)
+                select(WikiArticle.id).filter(WikiArticle.knowledge_base_id == _kb_id).limit(1)
             )
             if wiki_check.scalar_one_or_none():
                 compile_single_knowledge_wiki.delay(_kb_id, _ds_tenant_id)

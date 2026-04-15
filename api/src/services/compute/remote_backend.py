@@ -38,10 +38,7 @@ def _ensure_asyncssh() -> None:
         except ImportError:
             _ASYNCSSH_AVAILABLE = False
     if not _ASYNCSSH_AVAILABLE:
-        raise RuntimeError(
-            "asyncssh is not installed. "
-            "Install it with: pip install asyncssh>=2.14.0"
-        )
+        raise RuntimeError("asyncssh is not installed. Install it with: pip install asyncssh>=2.14.0")
 
 
 class RemoteSSHComputeSession:
@@ -110,9 +107,7 @@ class RemoteSSHComputeSession:
                 kwargs["client_keys"] = []
 
             self._conn = await asyncssh.connect(**kwargs)
-            logger.info(
-                f"SSH connection established to {self._username}@{self._host}:{self._port}"
-            )
+            logger.info(f"SSH connection established to {self._username}@{self._host}:{self._port}")
 
         return self._conn
 
@@ -243,9 +238,7 @@ class RemoteSSHComputeSession:
                 entries.append(
                     {
                         "name": entry.filename,
-                        "is_dir": (
-                            entry.attrs.type == asyncssh.FILEXFER_TYPE_DIRECTORY
-                        ),
+                        "is_dir": (entry.attrs.type == asyncssh.FILEXFER_TYPE_DIRECTORY),
                         "size": entry.attrs.size or 0,
                     }
                 )

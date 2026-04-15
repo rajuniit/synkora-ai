@@ -22,7 +22,6 @@ _client = httpx.AsyncClient(
 
 
 class SandboxComputeBackend(ComputeBackend):
-
     def __init__(
         self,
         tenant_id: str,
@@ -69,7 +68,6 @@ class SandboxComputeBackend(ComputeBackend):
 
 
 class SandboxComputeSession:
-
     def __init__(self, tenant_id: str, agent_id: str, backend: SandboxComputeBackend) -> None:
         self.tenant_id = tenant_id
         self.agent_id = agent_id
@@ -172,7 +170,9 @@ class SandboxComputeSession:
                 f"p.write_bytes(base64.b64decode(pathlib.Path('{tmp}').read_text())); pathlib.Path('{tmp}').unlink()",
             ]
         )
-        return result if result.get("success") else {"success": False, "error": result.get("error", "Binary write failed")}
+        return (
+            result if result.get("success") else {"success": False, "error": result.get("error", "Binary write failed")}
+        )
 
     async def read_file_bytes(self, path: str) -> bytes | None:
         """Read binary file content from the sandbox using base64 encoding."""

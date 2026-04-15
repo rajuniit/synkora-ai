@@ -5,7 +5,6 @@ WikiArticle stores auto-generated wiki pages from knowledge base documents.
 WikiCompilationJob tracks compilation runs.
 """
 
-
 from sqlalchemy import JSON, Boolean, Column, DateTime, Float, Integer, String, Text
 
 from src.models.base import BaseModel, TenantMixin

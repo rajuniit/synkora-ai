@@ -24,7 +24,6 @@ logger = logging.getLogger(__name__)
 
 
 class DockerComputeBackend(ComputeBackend):
-
     def __init__(
         self,
         tenant_id: str,
@@ -41,12 +40,10 @@ class DockerComputeBackend(ComputeBackend):
 
     def _container_id(self) -> str:
         from src.config.settings import settings
+
         cid = settings.compute_container_id
         if not cid:
-            raise RuntimeError(
-                "COMPUTE_CONTAINER_ID is not set. "
-                "Start the platform container and set this env var."
-            )
+            raise RuntimeError("COMPUTE_CONTAINER_ID is not set. Start the platform container and set this env var.")
         return cid
 
     def _agent_path(self, agent_id: str) -> str:
@@ -68,10 +65,7 @@ class DockerComputeBackend(ComputeBackend):
         await loop.run_in_executor(None, self._prepare_agent_dir, container_id, agent_path)
         await loop.run_in_executor(None, self._sync_from_s3, container_id, agent_id, agent_path)
 
-        logger.info(
-            f"Compute checkout: tenant={self._tenant_id[:8]} "
-            f"agent={agent_id[:8]} path={agent_path}"
-        )
+        logger.info(f"Compute checkout: tenant={self._tenant_id[:8]} agent={agent_id[:8]} path={agent_path}")
 
         from src.services.compute.docker_backend import DockerComputeSession
 
@@ -108,6 +102,7 @@ class DockerComputeBackend(ComputeBackend):
 
     def _prepare_agent_dir(self, container_id: str, agent_path: str) -> None:
         import docker  # type: ignore[import-untyped]
+
         client = docker.from_env()
         container = client.containers.get(container_id)
         container.exec_run(["mkdir", "-p", agent_path])
@@ -115,6 +110,7 @@ class DockerComputeBackend(ComputeBackend):
     def _remove_agent_dir(self, container_id: str, agent_path: str) -> None:
         try:
             import docker  # type: ignore[import-untyped]
+
             client = docker.from_env()
             container = client.containers.get(container_id)
             container.exec_run(["rm", "-rf", agent_path])
@@ -138,7 +134,7 @@ class DockerComputeBackend(ComputeBackend):
         buf = io.BytesIO()
         with tarfile.open(fileobj=buf, mode="w") as tar:
             for obj in objects:
-                rel_path = obj["Key"][len(prefix):]
+                rel_path = obj["Key"][len(prefix) :]
                 if not rel_path or rel_path.endswith("/"):
                     continue
                 data = s3.get_object(Bucket=self._s3_bucket, Key=obj["Key"])["Body"].read()
@@ -188,7 +184,7 @@ class DockerComputeBackend(ComputeBackend):
                     continue
                 rel = member.name
                 if rel.startswith(f"{dir_name}/"):
-                    rel = rel[len(dir_name) + 1:]
+                    rel = rel[len(dir_name) + 1 :]
                 elif rel.startswith("./"):
                     rel = rel[2:]
                 if not rel or rel.startswith("/"):

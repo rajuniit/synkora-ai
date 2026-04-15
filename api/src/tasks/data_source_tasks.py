@@ -67,6 +67,7 @@ def sync_data_source_task(
             return {"success": False, "error": f"Unsupported type: {data_source.type}"}
 
         import importlib
+
         module_path, class_name = connector_map[source_type]
         mod = importlib.import_module(module_path)
         connector_cls = getattr(mod, class_name)

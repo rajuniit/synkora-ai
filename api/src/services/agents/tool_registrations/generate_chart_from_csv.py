@@ -138,8 +138,14 @@ async def generate_chart_from_data(
                     values = df.iloc[:, 1].tolist()
 
                 palette = [
-                    "#6366f1", "#8b5cf6", "#06b6d4", "#10b981",
-                    "#f59e0b", "#ef4444", "#ec4899", "#84cc16",
+                    "#6366f1",
+                    "#8b5cf6",
+                    "#06b6d4",
+                    "#10b981",
+                    "#f59e0b",
+                    "#ef4444",
+                    "#ec4899",
+                    "#84cc16",
                 ]
                 colors = [palette[i % len(palette)] for i in range(len(labels))]
                 chart_config["data"] = {
@@ -197,9 +203,9 @@ async def generate_chart_from_data(
                 if x_column not in df.columns or y_column not in df.columns:
                     return {"success": False, "error": f"Columns not found. Available: {list(df.columns)}"}
                 chart_config["data"] = {
-                    "data": df[[x_column, y_column]].rename(
-                        columns={x_column: "subject", y_column: "value"}
-                    ).to_dict(orient="records"),
+                    "data": df[[x_column, y_column]]
+                    .rename(columns={x_column: "subject", y_column: "value"})
+                    .to_dict(orient="records"),
                     "xKey": "subject",
                     "yKey": "value",
                 }
@@ -210,9 +216,9 @@ async def generate_chart_from_data(
                 if x_column not in df.columns or y_column not in df.columns:
                     return {"success": False, "error": f"Columns not found. Available: {list(df.columns)}"}
                 chart_config["data"] = {
-                    "data": df[[x_column, y_column]].rename(
-                        columns={x_column: "name", y_column: "size"}
-                    ).to_dict(orient="records"),
+                    "data": df[[x_column, y_column]]
+                    .rename(columns={x_column: "name", y_column: "size"})
+                    .to_dict(orient="records"),
                     "xKey": "name",
                     "yKey": "size",
                 }
@@ -223,9 +229,10 @@ async def generate_chart_from_data(
                 if x_column not in df.columns or y_column not in df.columns:
                     return {"success": False, "error": f"Columns not found. Available: {list(df.columns)}"}
                 chart_config["data"] = {
-                    "data": df[[x_column, y_column]].sort_values(y_column, ascending=False).rename(
-                        columns={x_column: "name", y_column: "value"}
-                    ).to_dict(orient="records"),
+                    "data": df[[x_column, y_column]]
+                    .sort_values(y_column, ascending=False)
+                    .rename(columns={x_column: "name", y_column: "value"})
+                    .to_dict(orient="records"),
                     "xKey": "name",
                     "yKey": "value",
                 }
@@ -295,8 +302,10 @@ async def generate_chart_from_data(
                         "success": False,
                         "error": "candlestick requires columns: open, high, low, close",
                     }
-                date_col = x_column if x_column and x_column in df.columns else (
-                    next((c for c in df.columns if "date" in c.lower() or "time" in c.lower()), None)
+                date_col = (
+                    x_column
+                    if x_column and x_column in df.columns
+                    else (next((c for c in df.columns if "date" in c.lower() or "time" in c.lower()), None))
                 )
                 trace: dict[str, Any] = {
                     "type": "candlestick",
@@ -331,8 +340,11 @@ async def generate_chart_from_data(
             logger.info(f"Generated plotly config: {chart_type}")
             return {"success": True, "chart": chart_config, "message": f"Chart '{title}' generated successfully"}
 
-        return {"success": False, "error": f"Unsupported chart type: {chart_type}. Supported: "
-                f"{', '.join(sorted(CHARTJS_TYPES | RECHARTS_TYPES | PLOTLY_TYPES))}"}
+        return {
+            "success": False,
+            "error": f"Unsupported chart type: {chart_type}. Supported: "
+            f"{', '.join(sorted(CHARTJS_TYPES | RECHARTS_TYPES | PLOTLY_TYPES))}",
+        }
 
     except Exception as e:
         logger.error(f"Error generating chart from data: {e}", exc_info=True)

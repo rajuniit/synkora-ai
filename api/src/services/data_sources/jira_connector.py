@@ -101,9 +101,7 @@ class JiraConnector(BaseConnector):
         except Exception:
             return 0
 
-    async def fetch_documents(
-        self, since: datetime | None = None, limit: int | None = None
-    ) -> list[dict[str, Any]]:
+    async def fetch_documents(self, since: datetime | None = None, limit: int | None = None) -> list[dict[str, Any]]:
         """Fetch Jira issues (+ optionally comments) updated since `since`."""
         documents: list[dict[str, Any]] = []
         include_comments = self.data_source.config.get("include_comments", True)
@@ -154,6 +152,7 @@ class JiraConnector(BaseConnector):
             if api_token.startswith("gAAAAA"):
                 api_token = decrypt_value(api_token)
             import base64
+
             credentials = base64.b64encode(f"{email}:{api_token}".encode()).decode()
             return {"Authorization": f"Basic {credentials}", "Content-Type": "application/json"}
 
@@ -177,7 +176,9 @@ class JiraConnector(BaseConnector):
         return " AND ".join(clauses[:-1]) + " " + clauses[-1] if len(clauses) > 1 else clauses[-1]
 
     async def _fetch_issue_page(self, jql: str, start_at: int, max_results: int) -> list[dict]:
-        fields = "summary,description,status,priority,assignee,reporter,created,updated,labels,comment,issuetype,project"
+        fields = (
+            "summary,description,status,priority,assignee,reporter,created,updated,labels,comment,issuetype,project"
+        )
         try:
             async with httpx.AsyncClient(headers=self._headers, timeout=30) as client:
                 resp = await client.get(
@@ -210,22 +211,24 @@ class JiraConnector(BaseConnector):
             body = self._extract_text(c.get("body"))
             if not body:
                 continue
-            docs.append({
-                "id": f"jira_comment_{c['id']}",
-                "external_id": f"comment_{c['id']}",
-                "title": f"Comment on {issue_id}",
-                "content": body,
-                "content_type": "text",
-                "metadata": {
-                    "source": "jira",
-                    "type": "comment",
-                    "issue_id": issue_id,
-                    "author": c.get("author", {}).get("displayName"),
-                    "author_email": c.get("author", {}).get("emailAddress"),
-                },
-                "source_created_at": c.get("created"),
-                "source_updated_at": c.get("updated"),
-            })
+            docs.append(
+                {
+                    "id": f"jira_comment_{c['id']}",
+                    "external_id": f"comment_{c['id']}",
+                    "title": f"Comment on {issue_id}",
+                    "content": body,
+                    "content_type": "text",
+                    "metadata": {
+                        "source": "jira",
+                        "type": "comment",
+                        "issue_id": issue_id,
+                        "author": c.get("author", {}).get("displayName"),
+                        "author_email": c.get("author", {}).get("emailAddress"),
+                    },
+                    "source_created_at": c.get("created"),
+                    "source_updated_at": c.get("updated"),
+                }
+            )
         return docs
 
     def _issue_to_document(self, issue: dict[str, Any]) -> dict[str, Any]:

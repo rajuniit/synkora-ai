@@ -15,9 +15,7 @@ from src.models.base import BaseModel, TenantMixin
 class TenantComputeConfig(BaseModel, TenantMixin):
     __tablename__ = "tenant_compute_configs"
 
-    __table_args__ = (
-        UniqueConstraint("tenant_id", name="uq_tenant_compute_configs_tenant_id"),
-    )
+    __table_args__ = (UniqueConstraint("tenant_id", name="uq_tenant_compute_configs_tenant_id"),)
 
     # S3 workspace — falls back to platform COMPUTE_S3_BUCKET / COMPUTE_S3_REGION if null
     s3_bucket = Column(String(300), nullable=True, comment="S3 bucket for this tenant's agent workspaces")

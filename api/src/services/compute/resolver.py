@@ -74,9 +74,7 @@ async def build_compute_session_for_agent(
     from src.models.agent_compute import AgentCompute, ComputeStatus, ComputeType
 
     try:
-        agent_uuid = (
-            uuid.UUID(str(agent_id)) if not isinstance(agent_id, uuid.UUID) else agent_id
-        )
+        agent_uuid = uuid.UUID(str(agent_id)) if not isinstance(agent_id, uuid.UUID) else agent_id
         stmt = select(AgentCompute).where(
             AgentCompute.agent_id == agent_uuid,
             AgentCompute.status == ComputeStatus.ACTIVE,
@@ -112,17 +110,14 @@ async def build_compute_session_for_agent(
                 conversation_id=conv_id,
             )
             logger.info(
-                f"Built {backend.backend_type} session for agent {agent_id} "
-                f"(tenant={tenant_id}, conv={conv_id[:8]})"
+                f"Built {backend.backend_type} session for agent {agent_id} (tenant={tenant_id}, conv={conv_id[:8]})"
             )
             return session
 
         # ── REMOTE_SERVER ───────────────────────────────────────────────────────
         if compute.compute_type == ComputeType.REMOTE_SERVER:
             if not compute.remote_host:
-                logger.warning(
-                    f"Agent {agent_id} has REMOTE_SERVER compute but remote_host is not set"
-                )
+                logger.warning(f"Agent {agent_id} has REMOTE_SERVER compute but remote_host is not set")
                 return None
 
             credentials = compute.get_credentials()

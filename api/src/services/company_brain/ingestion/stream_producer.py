@@ -39,15 +39,18 @@ class StreamProducer:
     async def _get_redis(self) -> Any:
         if self._redis is None:
             from src.config.redis import get_redis_async
+
             self._redis = get_redis_async()
         return self._redis
 
     def _max_len(self) -> int:
         from src.config.settings import get_settings
+
         return getattr(get_settings(), "company_brain_stream_maxlen", 500_000)
 
     def _use_streams(self) -> bool:
         from src.config.settings import get_settings
+
         backend = getattr(get_settings(), "company_brain_queue_backend", "redis_streams")
         return backend == "redis_streams"
 
@@ -119,6 +122,7 @@ class StreamProducer:
         """Fallback: dispatch Celery task directly (no Redis Streams)."""
         try:
             from src.tasks.company_brain_tasks import kb_process_batch_task
+
             kb_process_batch_task.delay(
                 kb_id=kb_id,
                 tenant_id=tenant_id,

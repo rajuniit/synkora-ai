@@ -785,9 +785,7 @@ async def internal_run_command(
                     "error": f"Command '{_cmd_name}' is not in this agent's allowed command list.",
                     "return_code": -1,
                 }
-        logger.info(
-            f"Routing command to remote compute: '{_sanitize_command_for_logging(command)}'"
-        )
+        logger.info(f"Routing command to remote compute: '{_sanitize_command_for_logging(command)}'")
         return await _compute_session.exec_command(
             command=command,
             cwd=working_directory,

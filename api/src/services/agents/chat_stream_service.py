@@ -1048,7 +1048,7 @@ class ChatStreamService:
                         data_source_id=ds_id,
                         tenant_id=str(tenant_id) if tenant_id else "",
                         url=url,
-                        max_pages=50,           # crawl up to 50 pages per URL
+                        max_pages=50,  # crawl up to 50 pages per URL
                         include_subpages=True,  # follow same-domain links
                     )
                     queued.append(url)
@@ -1670,89 +1670,89 @@ class ChatStreamService:
         )
 
         try:
-         _stream_gen = function_handler.generate_with_functions_stream(
-            prompt=prompt,
-            temperature=configured_temperature,
-            max_tokens=configured_max_tokens,
-            max_iterations=agentic_config.max_iterations,
-            messages=messages,
-         )
-         async for event in _stream_gen:
-            if event["type"] == "text":
-                if state.first_token_time is None:
-                    state.first_token_time = time.time()
-                    time_to_first_token = state.first_token_time - start_time
-                    yield await generate_first_token_event(time_to_first_token)
+            _stream_gen = function_handler.generate_with_functions_stream(
+                prompt=prompt,
+                temperature=configured_temperature,
+                max_tokens=configured_max_tokens,
+                max_iterations=agentic_config.max_iterations,
+                messages=messages,
+            )
+            async for event in _stream_gen:
+                if event["type"] == "text":
+                    if state.first_token_time is None:
+                        state.first_token_time = time.time()
+                        time_to_first_token = state.first_token_time - start_time
+                        yield await generate_first_token_event(time_to_first_token)
 
-                sanitization_result = self.output_sanitizer.sanitize(
-                    event["content"],
-                    context=f"agent_chat_{agent_name_cached}",
-                )
-
-                state.assistant_chunks.append(sanitization_result.sanitized_content)
-                state.total_output_tokens += TokenCounter.count_tokens(sanitization_result.sanitized_content)
-
-                if sanitization_result.detections:
-                    logger.warning(
-                        f"Sanitized {len(sanitization_result.detections)} sensitive items in agent response. "
-                        f"Agent: {agent_name_cached}, Action: {sanitization_result.action_taken}"
+                    sanitization_result = self.output_sanitizer.sanitize(
+                        event["content"],
+                        context=f"agent_chat_{agent_name_cached}",
                     )
 
-                yield await generate_chunk_event(sanitization_result.sanitized_content)
+                    state.assistant_chunks.append(sanitization_result.sanitized_content)
+                    state.total_output_tokens += TokenCounter.count_tokens(sanitization_result.sanitized_content)
 
-            elif event["type"] == "function_call":
-                # Track tool start time
-                tool_name = event["name"]
-                state.tool_start_times[tool_name] = time.time()
+                    if sanitization_result.detections:
+                        logger.warning(
+                            f"Sanitized {len(sanitization_result.detections)} sensitive items in agent response. "
+                            f"Agent: {agent_name_cached}, Action: {sanitization_result.action_taken}"
+                        )
 
-                # Send rich tool status event with description and details
-                yield await generate_tool_status_event(
-                    tool_name=tool_name,
-                    status="started",
-                    arguments=event.get("arguments"),
-                )
+                    yield await generate_chunk_event(sanitization_result.sanitized_content)
 
-            elif event["type"] == "function_result":
-                tool_name = event["name"]
+                elif event["type"] == "function_call":
+                    # Track tool start time
+                    tool_name = event["name"]
+                    state.tool_start_times[tool_name] = time.time()
 
-                # Calculate execution duration
-                duration_ms = None
-                if tool_name in state.tool_start_times:
-                    start_time = state.tool_start_times.pop(tool_name)
-                    duration_ms = int((time.time() - start_time) * 1000)
+                    # Send rich tool status event with description and details
+                    yield await generate_tool_status_event(
+                        tool_name=tool_name,
+                        status="started",
+                        arguments=event.get("arguments"),
+                    )
 
-                yield await generate_tool_status_event(
-                    tool_name=tool_name,
-                    status="completed",
-                    duration_ms=duration_ms,
-                )
+                elif event["type"] == "function_result":
+                    tool_name = event["name"]
 
-            elif event["type"] == "chart":
-                # Two event shapes:
-                # 1. internal_generate_chart: {chart_id, chart_type, chart_config, chart_data}
-                # 2. inline tools: {chart: {chart_type, library, title, data, table_data, config, ...}}
-                chart = event.get("chart", {})
-                # Store full chart object (library, table_data, chart_type) for DB persistence + history reload
-                state.chart_data.append(
-                    {
-                        "chart_type": chart.get("chart_type") or event.get("chart_type", "bar"),
-                        "type": chart.get("chart_type") or event.get("chart_type", "bar"),  # legacy compat
-                        "library": chart.get("library") or "chartjs",
-                        "title": chart.get("title") or event.get("chart_title", "Chart"),
-                        "description": chart.get("description") or "",
-                        "data": chart.get("data") or event.get("chart_data") or {},
-                        "config": chart.get("config") or event.get("chart_config") or {},
-                        "table_data": chart.get("table_data"),
-                    }
-                )
-                chart_payload = {k: v for k, v in event.items() if k != "type"}
-                yield await generate_sse_event("chart", chart_payload)
+                    # Calculate execution duration
+                    duration_ms = None
+                    if tool_name in state.tool_start_times:
+                        start_time = state.tool_start_times.pop(tool_name)
+                        duration_ms = int((time.time() - start_time) * 1000)
 
-            elif event["type"] == "diagram":
-                diagram = event.get("diagram", {})
-                state.diagram_data.append(diagram)
-                diagram_payload = {k: v for k, v in event.items() if k != "type"}
-                yield await generate_sse_event("diagram", diagram_payload)
+                    yield await generate_tool_status_event(
+                        tool_name=tool_name,
+                        status="completed",
+                        duration_ms=duration_ms,
+                    )
+
+                elif event["type"] == "chart":
+                    # Two event shapes:
+                    # 1. internal_generate_chart: {chart_id, chart_type, chart_config, chart_data}
+                    # 2. inline tools: {chart: {chart_type, library, title, data, table_data, config, ...}}
+                    chart = event.get("chart", {})
+                    # Store full chart object (library, table_data, chart_type) for DB persistence + history reload
+                    state.chart_data.append(
+                        {
+                            "chart_type": chart.get("chart_type") or event.get("chart_type", "bar"),
+                            "type": chart.get("chart_type") or event.get("chart_type", "bar"),  # legacy compat
+                            "library": chart.get("library") or "chartjs",
+                            "title": chart.get("title") or event.get("chart_title", "Chart"),
+                            "description": chart.get("description") or "",
+                            "data": chart.get("data") or event.get("chart_data") or {},
+                            "config": chart.get("config") or event.get("chart_config") or {},
+                            "table_data": chart.get("table_data"),
+                        }
+                    )
+                    chart_payload = {k: v for k, v in event.items() if k != "type"}
+                    yield await generate_sse_event("chart", chart_payload)
+
+                elif event["type"] == "diagram":
+                    diagram = event.get("diagram", {})
+                    state.diagram_data.append(diagram)
+                    diagram_payload = {k: v for k, v in event.items() if k != "type"}
+                    yield await generate_sse_event("diagram", diagram_payload)
 
         finally:
             # Release compute session (stops ephemeral container, closes SSH, etc.)

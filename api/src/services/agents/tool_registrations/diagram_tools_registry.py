@@ -14,23 +14,22 @@ def register_diagram_tools(registry) -> None:
         name="internal_generate_diagram",
         description=(
             "Generate a publication-quality technical diagram from a structured JSON spec.\n\n"
-
             "━━ DIAGRAM TYPES — pick template_type based on what you're drawing ━━\n"
             "• architecture — layered system diagrams, microservices, RAG pipelines, agent architecture, "
             "memory architecture, data-flow, network topology. Use containers for tiers (INPUT→CORE→STORAGE→OUTPUT).\n"
             "• sequence — time-ordered message exchanges: auth flows, API protocols, multi-service calls. "
             'Uses participants:[{id,label,color}] + messages:[{from,to,label,type:"sync|reply|async",note?}]\n'
             "• comparison — feature matrix table comparing options side-by-side. "
-            'Uses columns:[str or {label,color}] + rows:[{label,values:[...]}]\n'
+            "Uses columns:[str or {label,color}] + rows:[{label,values:[...]}]\n"
             "• timeline — Gantt/roadmap with task bars on a time axis. "
             'Uses periods:["Q1","Q2",...] + tracks:[{label,start,end,color?}] + milestones?:[{label,at,color?}]\n'
             "• mind-map — radial concept map from a central topic. "
             'Uses center:"Topic" + branches:[{label,color?,children:[str,...]}]\n'
             "• er-diagram — Entity-Relationship database schema. "
-            'Uses entities:[{id,label,color?,attributes:[{name,type,pk?,fk?}]}] + relationships:[{from,to,label?,from_card,to_card}]\n'
+            "Uses entities:[{id,label,color?,attributes:[{name,type,pk?,fk?}]}] + relationships:[{from,to,label?,from_card,to_card}]\n"
             "• class-diagram — UML class hierarchy with attributes and methods. "
-            'Uses classes:[{id,name,abstract?,interface?,attributes:[str],methods:[str],x?,y?}] + relationships:[{from,to,type,label?}]\n'
-            '  Relationship types: extends, implements, association, aggregation, composition, dependency\n'
+            "Uses classes:[{id,name,abstract?,interface?,attributes:[str],methods:[str],x?,y?}] + relationships:[{from,to,type,label?}]\n"
+            "  Relationship types: extends, implements, association, aggregation, composition, dependency\n"
             "• use-case — UML actors + system boundary + use case ellipses. "
             'Uses system:"Name" + actors:[{id,label,side:"left|right"}] + use_cases:[{id,label}] '
             '+ relationships:[{actor,use_case} or {from,to,type:"include|extend"}]\n'
@@ -38,7 +37,6 @@ def register_diagram_tools(registry) -> None:
             "Use rounded_rect for states, circle for initial/final, diamond for decisions, arrows for transitions.\n"
             "• flowchart — process/decision flows (uses architecture renderer). "
             "Use diamond for decisions, parallelogram for I/O steps, circle for start/end, rounded_rect for processes.\n\n"
-
             "━━ NODE KINDS — choose the right shape for the component ━━\n"
             "• rounded_rect — default for services, APIs, apps, gateways, SDKs, processors\n"
             "• double_rect — LLMs, model runtimes, AI inference engines (double border = AI inference)\n"
@@ -53,7 +51,6 @@ def register_diagram_tools(registry) -> None:
             "• terminal — CLI tools, scripts, shell processes\n"
             "• folder — namespaces, file system groups\n"
             "• speech — chat messages, user utterances, prompts\n\n"
-
             "━━ ICONS — STRICT RULES ━━\n"
             "ONLY set an icon if the node literally IS that product/service. Never assign icons "
             "to generic architectural concepts.\n"
@@ -65,12 +62,10 @@ def register_diagram_tools(registry) -> None:
             "'AWS'→aws, 'GCP'→gcp, 'GitHub'→github, 'Grafana'→grafana, 'Stripe'→stripe.\n"
             "• NEVER assign nginx/nodejs/anthropic/openai icons to nodes like 'Application', "
             "'Client', 'Gateway', 'Agent', 'User', 'Manager', 'Store' — these get no icon.\n\n"
-
             "━━ TYPE LABELS — small text shown ABOVE the main label ━━\n"
             "Add type_label for every important node to give context: "
             "'CLIENT', 'SDK', 'MODEL', 'ROUTER', 'PROCESSOR', 'STORAGE', 'ACTION', 'OUTPUT', "
             "'INFERENCE', 'ORCHESTRATION', 'ENTRY', 'WORKING MEMORY', 'ASSEMBLER', etc.\n\n"
-
             "━━ CONTAINERS — always use for layered architecture diagrams ━━\n"
             "• Define 3-5 containers representing tiers/layers\n"
             "• Each container MUST have id, x, y, width, height — these are the exact pixel bounds\n"
@@ -87,7 +82,6 @@ def register_diagram_tools(registry) -> None:
             "'01 //', '02 //', '1.', etc. WRONG: '01 // INPUT LAYER'. RIGHT: 'INPUT LAYER'.\n"
             "• Good labels: 'INPUT LAYER', 'STORAGE', 'CORE', 'OUTPUT / RETRIEVAL', "
             "'MEMORY MANAGER (MEM0 CORE)'\n\n"
-
             "━━ ARROWS / FLOW TYPES ━━\n"
             "• control — API calls, HTTP requests, orchestration commands (solid)\n"
             "• data — data payloads, responses, streaming (solid)\n"
@@ -98,14 +92,12 @@ def register_diagram_tools(registry) -> None:
             "• embed — data transformation, embedding generation, vector encoding (purple)\n"
             "Always add label for non-obvious arrows: 'store()', 'retrieve()', 'facts', "
             "'resolved', 'write', 'read', 'embeddings', 'context'.\n\n"
-
             "━━ STYLES ━━\n"
             "1=Flat  2=Dark Terminal  3=Blueprint  4=Notion Clean (default)  "
             "5=Glassmorphism  6=Claude Official  7=OpenAI Official\n\n"
-
             "━━ SEQUENCE DIAGRAMS — use template_type: sequence ━━\n"
             "For flows, protocols, API call sequences, auth flows, message passing:\n"
-            '{\n'
+            "{\n"
             '  "template_type": "sequence",\n'
             '  "style": 4,\n'
             '  "title": "OAuth2 Authorization Code Flow",\n'
@@ -114,7 +106,7 @@ def register_diagram_tools(registry) -> None:
             '    {"id": "client",   "label": "Client App",      "color": "#3B82F6"},\n'
             '    {"id": "auth",     "label": "Auth Server",     "color": "#10B981"},\n'
             '    {"id": "resource", "label": "Resource Server", "color": "#F59E0B"}\n'
-            '  ],\n'
+            "  ],\n"
             '  "messages": [\n'
             '    {"from": "user",   "to": "client",   "label": "1. Click Login",                    "type": "sync"},\n'
             '    {"from": "client", "to": "auth",     "label": "2. Authorization Request",          "type": "sync"},\n'
@@ -125,11 +117,10 @@ def register_diagram_tools(registry) -> None:
             '    {"from": "auth",   "to": "client",   "label": "7. access_token + refresh_token",   "type": "reply"},\n'
             '    {"from": "client", "to": "resource", "label": "8. API Request (Bearer token)",     "type": "sync"},\n'
             '    {"from": "resource","to": "client",  "label": "9. Protected Resource",             "type": "reply"}\n'
-            '  ]\n'
-            '}\n'
+            "  ]\n"
+            "}\n"
             "Message types: sync (solid →), reply (dashed ←/→), async (dashed, fire-and-forget).\n"
-            'Keep labels short — use \\n to split long labels across 2 lines.\n\n'
-
+            "Keep labels short — use \\n to split long labels across 2 lines.\n\n"
             "━━ COMPARISON MATRIX — use template_type: comparison ━━\n"
             '{"template_type":"comparison","style":4,"title":"RAG Approaches","subtitle":"Feature comparison",\n'
             ' "columns":[{"label":"Naive RAG","color":"#3B82F6"},{"label":"Advanced RAG","color":"#10B981"},{"label":"Modular RAG","color":"#8B5CF6"}],\n'
@@ -138,8 +129,7 @@ def register_diagram_tools(registry) -> None:
             '   {"label":"Latency","values":["Low","Medium","High"]},\n'
             '   {"label":"Setup Effort","values":["Minimal","Moderate","Complex"]},\n'
             '   {"label":"Customizable","values":["✗","Partial","✓"]}\n'
-            ' ]}\n\n'
-
+            " ]}\n\n"
             "━━ TIMELINE — use template_type: timeline ━━\n"
             '{"template_type":"timeline","style":4,"title":"Project Roadmap",\n'
             ' "periods":["Week 1","Week 2","Week 3","Week 4","Week 5","Week 6"],\n'
@@ -148,9 +138,8 @@ def register_diagram_tools(registry) -> None:
             '   {"label":"Backend","start":1,"end":5,"color":"#10B981"},\n'
             '   {"label":"Frontend","start":2,"end":5,"color":"#8B5CF6"},\n'
             '   {"label":"Testing","start":4,"end":6,"color":"#F59E0B"}\n'
-            ' ],\n'
+            " ],\n"
             ' "milestones":[{"label":"Design Review","at":2},{"label":"Beta Launch","at":5,"color":"#EF4444"}]}\n\n'
-
             "━━ MIND MAP — use template_type: mind-map ━━\n"
             '{"template_type":"mind-map","style":4,"title":"AI Platform","center":"AI Platform",\n'
             ' "branches":[\n'
@@ -158,47 +147,43 @@ def register_diagram_tools(registry) -> None:
             '   {"label":"Data Layer","color":"#10B981","children":["Vector DB","PostgreSQL","Redis"]},\n'
             '   {"label":"Models","color":"#8B5CF6","children":["LLM","Embeddings","Classifiers"]},\n'
             '   {"label":"API","color":"#F59E0B","children":["REST","WebSocket","GraphQL"]}\n'
-            ' ]}\n\n'
-
+            " ]}\n\n"
             "━━ ER DIAGRAM — use template_type: er-diagram ━━\n"
             '{"template_type":"er-diagram","style":4,"title":"E-commerce Schema",\n'
             ' "entities":[\n'
             '   {"id":"user","label":"User","color":"#3B82F6","attributes":[{"name":"id","type":"UUID","pk":true},{"name":"email","type":"VARCHAR(255)"},{"name":"name","type":"VARCHAR(100)"}]},\n'
             '   {"id":"order","label":"Order","color":"#10B981","attributes":[{"name":"id","type":"UUID","pk":true},{"name":"user_id","type":"UUID","fk":true},{"name":"total","type":"DECIMAL"}]},\n'
             '   {"id":"product","label":"Product","color":"#8B5CF6","attributes":[{"name":"id","type":"UUID","pk":true},{"name":"name","type":"VARCHAR"},{"name":"price","type":"DECIMAL"}]}\n'
-            ' ],\n'
+            " ],\n"
             ' "relationships":[\n'
             '   {"from":"user","to":"order","label":"places","from_card":"1","to_card":"N"},\n'
             '   {"from":"order","to":"product","label":"contains","from_card":"N","to_card":"M"}\n'
-            ' ]}\n\n'
-
+            " ]}\n\n"
             "━━ CLASS DIAGRAM — use template_type: class-diagram ━━\n"
             '{"template_type":"class-diagram","style":4,"title":"Animal Hierarchy",\n'
             ' "classes":[\n'
             '   {"id":"animal","name":"Animal","abstract":true,"attributes":["-name: String","-age: int"],"methods":["+speak(): String","+move(): void"]},\n'
             '   {"id":"dog","name":"Dog","attributes":["-breed: String"],"methods":["+fetch(): void","+speak(): String"]},\n'
             '   {"id":"cat","name":"Cat","attributes":["-indoor: bool"],"methods":["+purr(): void","+speak(): String"]}\n'
-            ' ],\n'
+            " ],\n"
             ' "relationships":[\n'
             '   {"from":"dog","to":"animal","type":"extends"},\n'
             '   {"from":"cat","to":"animal","type":"extends"}\n'
-            ' ]}\n\n'
-
+            " ]}\n\n"
             "━━ USE CASE — use template_type: use-case ━━\n"
             '{"template_type":"use-case","style":4,"title":"E-Commerce Use Cases","system":"Online Store",\n'
             ' "actors":[{"id":"customer","label":"Customer","side":"left"},{"id":"admin","label":"Admin","side":"right"}],\n'
             ' "use_cases":[\n'
             '   {"id":"browse","label":"Browse Products"},{"id":"checkout","label":"Checkout"},\n'
             '   {"id":"pay","label":"Process Payment"},{"id":"manage","label":"Manage Inventory"}\n'
-            ' ],\n'
+            " ],\n"
             ' "relationships":[\n'
             '   {"actor":"customer","use_case":"browse"},{"actor":"customer","use_case":"checkout"},\n'
             '   {"from":"checkout","to":"pay","type":"include"},\n'
             '   {"actor":"admin","use_case":"manage"}\n'
-            ' ]}\n\n'
-
+            " ]}\n\n"
             "━━ ARCHITECTURE SPEC FORMAT ━━\n"
-            '{\n'
+            "{\n"
             '  "template_type": "architecture",\n'
             '  "style": 4,\n'
             '  "title": "Mem0 Memory Architecture",\n'
@@ -216,7 +201,7 @@ def register_diagram_tools(registry) -> None:
             '    {"id": "ctx", "label": "Context Builder", "kind": "rounded_rect", "icon": "", "type_label": "ASSEMBLER", "container": "output"},\n'
             '    {"id": "rank", "label": "Ranked Results", "kind": "rounded_rect", "icon": "", "type_label": "RERANKER", "container": "output"},\n'
             '    {"id": "resp", "label": "Personalized Response", "kind": "rounded_rect", "icon": "", "type_label": "OUTPUT", "container": "output"}\n'
-            '  ],\n'
+            "  ],\n"
             '  "arrows": [\n'
             '    {"source": "user", "target": "app", "flow": "control"},\n'
             '    {"source": "app", "target": "llm", "flow": "control"},\n'
@@ -231,7 +216,7 @@ def register_diagram_tools(registry) -> None:
             '    {"source": "kv", "target": "rank", "label": "key facts", "flow": "read"},\n'
             '    {"source": "ctx", "target": "rank", "flow": "data"},\n'
             '    {"source": "rank", "target": "resp", "flow": "data"}\n'
-            '  ],\n'
+            "  ],\n"
             '  "containers": [\n'
             '    {"id": "input", "label": "INPUT LAYER", "x": 60, "y": 60, "width": 1200, "height": 200,\n'
             '     "fill": "#EFF6FF", "label_color": "#3B82F6"},\n'
@@ -241,8 +226,8 @@ def register_diagram_tools(registry) -> None:
             '     "fill": "#F0FDF4", "label_color": "#16A34A"},\n'
             '    {"id": "output", "label": "OUTPUT / RETRIEVAL", "x": 60, "y": 780, "width": 1200, "height": 200,\n'
             '     "fill": "#FFF7ED", "label_color": "#EA580C"}\n'
-            '  ]\n'
-            '}\n\n'
+            "  ]\n"
+            "}\n\n"
             "Nodes omitting x/y/width/height are auto-laid-out within the diagram."
         ),
         parameters={

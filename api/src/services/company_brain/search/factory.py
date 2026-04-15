@@ -64,14 +64,17 @@ def _build_backend(backend_type: str, config: dict[str, Any]) -> BaseSearchBacke
     match bt:
         case SearchBackendType.QDRANT_HYBRID:
             from .qdrant_hybrid_backend import QdrantHybridBackend
+
             return QdrantHybridBackend(config)
 
         case SearchBackendType.POSTGRES_FTS:
             from .postgres_fts_backend import PostgresFTSBackend
+
             return PostgresFTSBackend(config)
 
         case SearchBackendType.ELASTICSEARCH:
             from .elasticsearch_backend import ElasticsearchBackend
+
             return ElasticsearchBackend(config)
 
         case SearchBackendType.TYPESENSE:
@@ -82,6 +85,7 @@ def _stable_hash(obj: Any) -> str:
     """Deterministic hash for use as a cache key (not cryptographic)."""
     import hashlib
     import json
+
     try:
         return hashlib.md5(json.dumps(obj, sort_keys=True).encode()).hexdigest()[:8]
     except Exception:

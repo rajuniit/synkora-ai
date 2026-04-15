@@ -28,8 +28,8 @@ logger = logging.getLogger(__name__)
 
 @dataclass
 class QueryIntent:
-    intent: str = "cross_source"                    # routing intent
-    source_types: list[str] = field(default_factory=list)   # empty = all
+    intent: str = "cross_source"  # routing intent
+    source_types: list[str] = field(default_factory=list)  # empty = all
     time_from: str | None = None
     time_to: str | None = None
     entities: list[str] = field(default_factory=list)
@@ -70,12 +70,14 @@ async def classify_query(query: str) -> QueryIntent:
     Falls back to a safe default intent if the LLM call fails.
     """
     from src.config.settings import get_settings
+
     settings = get_settings()
     model = getattr(settings, "company_brain_query_router_model", "claude-haiku-4-5-20251001")
     enable_pageindex = getattr(settings, "company_brain_enable_pageindex", False)
 
     try:
         import litellm
+
         response = await litellm.acompletion(
             model=model,
             messages=[
@@ -122,8 +124,10 @@ def _default_intent(query: str) -> QueryIntent:
         tiers = ["hot", "warm"]
 
     return QueryIntent(
-        intent="recent" if any(s in query_lower for s in recent_signals) else
-               "code" if any(s in query_lower for s in code_signals) else
-               "cross_source",
+        intent="recent"
+        if any(s in query_lower for s in recent_signals)
+        else "code"
+        if any(s in query_lower for s in code_signals)
+        else "cross_source",
         tiers=tiers,
     )

@@ -137,14 +137,10 @@ async def _embed_wiki_documents(kb_id: int, tenant_id: str) -> None:
             config=embedding_config,
         )
         vector_db_config = kb.get_vector_db_config_decrypted()
-        vector_db = VectorDBProviderFactory.create(
-            provider_type=kb.vector_db_provider, config=vector_db_config
-        )
+        vector_db = VectorDBProviderFactory.create(provider_type=kb.vector_db_provider, config=vector_db_config)
         vector_db.connect()
         collection_name = (
-            kb.vector_db_config.get("index_name")
-            or kb.vector_db_config.get("collection_name")
-            or f"kb-{kb.id}"
+            kb.vector_db_config.get("index_name") or kb.vector_db_config.get("collection_name") or f"kb-{kb.id}"
         )
         namespace = str(kb.id)
 
@@ -228,26 +224,26 @@ async def _embed_wiki_documents(kb_id: int, tenant_id: str) -> None:
                     db.add(seg)
                     await db.flush()
 
-                    vectors.append({
-                        "id": node_id,
-                        "vector": embedding,
-                        "payload": {
-                            "knowledge_base_id": kb_id,
-                            "document_id": str(kb_doc.id),
-                            "segment_id": str(seg.id),
-                            "external_id": external_id,
-                            "chunk_index": i,
-                            "text": chunk["text"],
-                            "source_type": "wiki",
-                            "title": article.title,
-                            "category": article.category,
-                        },
-                    })
+                    vectors.append(
+                        {
+                            "id": node_id,
+                            "vector": embedding,
+                            "payload": {
+                                "knowledge_base_id": kb_id,
+                                "document_id": str(kb_doc.id),
+                                "segment_id": str(seg.id),
+                                "external_id": external_id,
+                                "chunk_index": i,
+                                "text": chunk["text"],
+                                "source_type": "wiki",
+                                "title": article.title,
+                                "category": article.category,
+                            },
+                        }
+                    )
 
                 if vectors:
-                    vector_db.add_vectors(
-                        collection_name=collection_name, vectors=vectors, namespace=namespace
-                    )
+                    vector_db.add_vectors(collection_name=collection_name, vectors=vectors, namespace=namespace)
 
                 kb_doc.status = DocumentStatus.COMPLETED
                 await db.commit()

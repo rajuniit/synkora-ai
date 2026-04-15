@@ -438,7 +438,6 @@ class CompanyBrainConfig(BaseSettings):
     )
 
 
-
 class FeatureConfig(BaseSettings):
     """Feature configuration combining all feature settings."""
 

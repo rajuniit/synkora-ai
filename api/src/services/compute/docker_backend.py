@@ -206,4 +206,3 @@ class DockerComputeSession:
         if self._client is None:
             self._client = await loop.run_in_executor(None, docker.from_env)
         return await loop.run_in_executor(None, self._client.containers.get, self._container_id)
-

@@ -468,9 +468,7 @@ def auto_layout(spec: dict[str, Any]) -> dict[str, Any]:
     # Build a lookup of containers that have explicit bounds.
     containers_spec: list[dict[str, Any]] = spec.get("containers", [])
     bounded_containers: dict[str, dict[str, Any]] = {
-        c["id"]: c
-        for c in containers_spec
-        if "id" in c and "x" in c and "y" in c and "width" in c and "height" in c
+        c["id"]: c for c in containers_spec if "id" in c and "x" in c and "y" in c and "width" in c and "height" in c
     }
 
     # Identify the set of node ids that need layout.

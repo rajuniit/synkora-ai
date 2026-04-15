@@ -97,9 +97,7 @@ class ClickUpConnector(BaseConnector):
                 pass
         return total
 
-    async def fetch_documents(
-        self, since: datetime | None = None, limit: int | None = None
-    ) -> list[dict[str, Any]]:
+    async def fetch_documents(self, since: datetime | None = None, limit: int | None = None) -> list[dict[str, Any]]:
         include_comments = self.data_source.config.get("include_comments", True)
         include_subtasks = self.data_source.config.get("include_subtasks", True)
         documents: list[dict[str, Any]] = []
@@ -236,21 +234,23 @@ class ClickUpConnector(BaseConnector):
             text = c.get("comment_text") or ""
             if not text.strip():
                 continue
-            docs.append({
-                "id": f"clickup_comment_{c['id']}",
-                "external_id": str(c["id"]),
-                "title": f"Comment on task {task_id}",
-                "content": text,
-                "content_type": "text",
-                "metadata": {
-                    "source": "clickup",
-                    "type": "comment",
-                    "task_id": task_id,
-                    "author": (c.get("user") or {}).get("username"),
-                    "author_email": (c.get("user") or {}).get("email"),
-                },
-                "source_created_at": _ms_to_iso(c.get("date")),
-            })
+            docs.append(
+                {
+                    "id": f"clickup_comment_{c['id']}",
+                    "external_id": str(c["id"]),
+                    "title": f"Comment on task {task_id}",
+                    "content": text,
+                    "content_type": "text",
+                    "metadata": {
+                        "source": "clickup",
+                        "type": "comment",
+                        "task_id": task_id,
+                        "author": (c.get("user") or {}).get("username"),
+                        "author_email": (c.get("user") or {}).get("email"),
+                    },
+                    "source_created_at": _ms_to_iso(c.get("date")),
+                }
+            )
         return docs
 
     def _task_to_document(self, task: dict[str, Any]) -> dict[str, Any]:

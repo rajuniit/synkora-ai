@@ -96,7 +96,6 @@ async def _get_gmail_service(runtime_context: Any) -> Any:
 
         # Check if token is expired and refresh if needed
         if user_token.token_expires_at:
-
             now = datetime.now(UTC)
             expires_at = user_token.token_expires_at
             if expires_at.tzinfo is None:

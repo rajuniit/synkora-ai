@@ -4,7 +4,6 @@ Debate Session model for AI War Room.
 Stores multi-agent debate sessions with participants, messages, and configuration.
 """
 
-
 from sqlalchemy import JSON, Boolean, Column, DateTime, Integer, String, Text
 from sqlalchemy.dialects.postgresql import UUID
 

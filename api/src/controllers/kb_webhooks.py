@@ -152,17 +152,21 @@ async def _get_slack_data_source(kb_id: int) -> DataSource:
     factory = get_async_session_factory()
     async with factory() as session:
         result = await session.execute(
-            select(DataSource).where(
+            select(DataSource)
+            .where(
                 DataSource.knowledge_base_id == kb_id,
                 DataSource.type == DataSourceType.SLACK,
                 DataSource.status == DataSourceStatus.ACTIVE,
-            ).limit(1)
+            )
+            .limit(1)
         )
         ds = result.scalar_one_or_none()
 
     if not ds:
         logger.warning("No active Slack data source for kb_id=%d", kb_id)
-        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Slack data source not found for this knowledge base")
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND, detail="Slack data source not found for this knowledge base"
+        )
 
     return ds
 
@@ -174,6 +178,7 @@ def _extract_signing_secret(ds: DataSource) -> str:
         raise HTTPException(status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail="Signing secret not configured")
 
     from src.services.agents.security import decrypt_value
+
     return decrypt_value(secret_raw) if secret_raw.startswith("gAAAAA") else secret_raw
 
 

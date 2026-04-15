@@ -127,9 +127,10 @@ async def internal_zoom_create_meeting(
         # Make API call
         headers = {"Authorization": f"Bearer {access_token}", "Content-Type": "application/json"}
 
-        async with aiohttp.ClientSession() as session, session.post(
-            f"{ZOOM_API_BASE}/users/me/meetings", headers=headers, json=meeting_data
-        ) as response:
+        async with (
+            aiohttp.ClientSession() as session,
+            session.post(f"{ZOOM_API_BASE}/users/me/meetings", headers=headers, json=meeting_data) as response,
+        ):
             if response.status not in [200, 201]:
                 error_data = await response.json()
                 logger.error(f"Zoom API error: {error_data}")
@@ -391,9 +392,10 @@ async def internal_zoom_update_meeting(
         # Make API call
         headers = {"Authorization": f"Bearer {access_token}", "Content-Type": "application/json"}
 
-        async with aiohttp.ClientSession() as session, session.patch(
-            f"{ZOOM_API_BASE}/meetings/{meeting_id}", headers=headers, json=update_data
-        ) as response:
+        async with (
+            aiohttp.ClientSession() as session,
+            session.patch(f"{ZOOM_API_BASE}/meetings/{meeting_id}", headers=headers, json=update_data) as response,
+        ):
             if response.status != 204:
                 error_data = await response.json()
                 logger.error(f"Zoom API error: {error_data}")

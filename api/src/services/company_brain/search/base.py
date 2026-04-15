@@ -13,10 +13,10 @@ from typing import Any
 
 
 class SearchBackendType(StrEnum):
-    QDRANT_HYBRID = "qdrant_hybrid"    # Dense + sparse vectors, RRF fusion (recommended)
-    POSTGRES_FTS = "postgres_fts"      # PG tsvector + GIN index, zero extra infra
-    ELASTICSEARCH = "elasticsearch"    # ES / OpenSearch kNN + BM25
-    TYPESENSE = "typesense"            # Lightweight alternative (future)
+    QDRANT_HYBRID = "qdrant_hybrid"  # Dense + sparse vectors, RRF fusion (recommended)
+    POSTGRES_FTS = "postgres_fts"  # PG tsvector + GIN index, zero extra infra
+    ELASTICSEARCH = "elasticsearch"  # ES / OpenSearch kNN + BM25
+    TYPESENSE = "typesense"  # Lightweight alternative (future)
 
 
 @dataclass
@@ -29,14 +29,14 @@ class SearchFilter:
     ignore fields they don't support via the `extra` passthrough dict.
     """
 
-    source_types: list[str] = field(default_factory=list)    # e.g. ["slack", "github"]
-    time_from: str | None = None                              # ISO-8601 datetime string
+    source_types: list[str] = field(default_factory=list)  # e.g. ["slack", "github"]
+    time_from: str | None = None  # ISO-8601 datetime string
     time_to: str | None = None
-    entity_ids: list[str] = field(default_factory=list)       # canonical entity PKs (str)
-    channels: list[str] = field(default_factory=list)         # Slack channels, Jira projects
-    authors: list[str] = field(default_factory=list)          # email or display name
+    entity_ids: list[str] = field(default_factory=list)  # canonical entity PKs (str)
+    channels: list[str] = field(default_factory=list)  # Slack channels, Jira projects
+    authors: list[str] = field(default_factory=list)  # email or display name
     storage_tiers: list[str] = field(default_factory=lambda: ["hot"])  # hot | warm | archive
-    extra: dict[str, Any] = field(default_factory=dict)       # backend-specific passthrough
+    extra: dict[str, Any] = field(default_factory=dict)  # backend-specific passthrough
 
 
 @dataclass
@@ -48,17 +48,17 @@ class SearchResult:
     results across different engines and apply RRF fusion in the assembler.
     """
 
-    doc_id: str               # Internal PK (data_source_documents.id as str)
-    external_id: str          # Source-system ID (Slack ts, GitHub issue number, …)
-    source_type: str          # "slack" | "github" | "jira" | …
-    content: str              # The indexed text chunk
-    title: str | None         # Message subject, PR title, ticket summary, …
-    score: float              # Final combined score [0, 1]
+    doc_id: str  # Internal PK (data_source_documents.id as str)
+    external_id: str  # Source-system ID (Slack ts, GitHub issue number, …)
+    source_type: str  # "slack" | "github" | "jira" | …
+    content: str  # The indexed text chunk
+    title: str | None  # Message subject, PR title, ticket summary, …
+    score: float  # Final combined score [0, 1]
     vector_score: float | None
     keyword_score: float | None
     metadata: dict[str, Any]  # Source-specific metadata (channel, author, url, …)
     source_url: str | None
-    occurred_at: str | None   # ISO-8601 datetime from the source system
+    occurred_at: str | None  # ISO-8601 datetime from the source system
     storage_tier: str = "hot"
 
 
@@ -67,9 +67,9 @@ class SearchResponse:
     """Unified search response returned by every backend."""
 
     results: list[SearchResult]
-    total_found: int          # Total matches before limit (best-effort for vector backends)
+    total_found: int  # Total matches before limit (best-effort for vector backends)
     took_ms: float
-    backend_used: str         # Which backend produced this response
+    backend_used: str  # Which backend produced this response
     cache_hit: bool = False
 
 

@@ -39,7 +39,7 @@ class ConfluenceConnector(BaseConnector):
     def __init__(self, data_source: DataSource, db: Any):
         super().__init__(data_source, db)
         self._auth: tuple[str, str] | None = None  # (email, api_token) for Cloud
-        self._bearer: str | None = None            # OAuth or PAT
+        self._bearer: str | None = None  # OAuth or PAT
 
     def get_required_config_fields(self) -> list[str]:
         return ["base_url"]
@@ -95,9 +95,7 @@ class ConfluenceConnector(BaseConnector):
         pages = await self._fetch_all_pages(since=None, count_only=True)
         return pages
 
-    async def fetch_documents(
-        self, since: datetime | None = None, limit: int | None = None
-    ) -> list[dict[str, Any]]:
+    async def fetch_documents(self, since: datetime | None = None, limit: int | None = None) -> list[dict[str, Any]]:
         cfg = self.data_source.config
         space_keys: list[str] = cfg.get("space_keys") or []
         include_blogs: bool = cfg.get("include_blogs", True)
@@ -169,11 +167,9 @@ class ConfluenceConnector(BaseConnector):
                 start += limit
         return spaces
 
-    async def _fetch_space(
-        self, space_key: str, since: datetime | None, include_blogs: bool
-    ) -> list[dict[str, Any]]:
+    async def _fetch_space(self, space_key: str, since: datetime | None, include_blogs: bool) -> list[dict[str, Any]]:
         docs: list[dict[str, Any]] = []
-        for content_type in (["page"] + (["blogpost"] if include_blogs else [])):
+        for content_type in ["page"] + (["blogpost"] if include_blogs else []):
             pages = await self._search_space_content(space_key, content_type, since)
             for page in pages:
                 doc = await self._page_to_document(page)
@@ -181,9 +177,7 @@ class ConfluenceConnector(BaseConnector):
                     docs.append(doc)
         return docs
 
-    async def _search_space_content(
-        self, space_key: str, content_type: str, since: datetime | None
-    ) -> list[dict]:
+    async def _search_space_content(self, space_key: str, content_type: str, since: datetime | None) -> list[dict]:
         """Use CQL to fetch content from a space."""
         cql_parts = [f"type={content_type}", f'space="{space_key}"']
         if since:

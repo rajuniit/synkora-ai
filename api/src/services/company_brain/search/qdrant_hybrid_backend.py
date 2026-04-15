@@ -24,8 +24,17 @@ logger = logging.getLogger(__name__)
 
 _DENSE_VECTOR_NAME = "dense"
 _SPARSE_VECTOR_NAME = "sparse"
-_PAYLOAD_FIELDS = ["doc_id", "external_id", "source_type", "title", "content",
-                   "metadata", "source_url", "occurred_at", "storage_tier"]
+_PAYLOAD_FIELDS = [
+    "doc_id",
+    "external_id",
+    "source_type",
+    "title",
+    "content",
+    "metadata",
+    "source_url",
+    "occurred_at",
+    "storage_tier",
+]
 
 
 def _collection_name(tenant_id: str, tier: str) -> str:
@@ -52,6 +61,7 @@ class QdrantHybridBackend(BaseSearchBackend):
             return self._client
         try:
             from qdrant_client import AsyncQdrantClient
+
             settings = get_settings()
             url = self._config.get("url") or settings.qdrant_url or "http://localhost:6333"
             api_key = self._config.get("api_key") or settings.qdrant_api_key

@@ -653,4 +653,3 @@ def setup_logging() -> None:
     logging.getLogger("slack_sdk.socket_mode.builtin").setLevel(logging.WARNING)
     logging.getLogger("slack_sdk.web.async_client").setLevel(logging.WARNING)
     logging.getLogger("slack_sdk.web.base_client").setLevel(logging.WARNING)
-

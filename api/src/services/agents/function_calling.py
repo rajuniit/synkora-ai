@@ -579,7 +579,12 @@ class FunctionCallingHandler:
                         }
 
                 # Emit charts returned by analyze_data_statistics
-                if func_name == "analyze_data_statistics" and isinstance(result, dict) and result.get("success") and "charts" in result:
+                if (
+                    func_name == "analyze_data_statistics"
+                    and isinstance(result, dict)
+                    and result.get("success")
+                    and "charts" in result
+                ):
                     for stat_chart in result.get("charts", []):
                         yield {
                             "type": "chart",

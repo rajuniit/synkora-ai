@@ -86,9 +86,7 @@ class NotionConnector(BaseConnector):
         pages = await self._search_all_pages(since=None)
         return len(pages)
 
-    async def fetch_documents(
-        self, since: datetime | None = None, limit: int | None = None
-    ) -> list[dict[str, Any]]:
+    async def fetch_documents(self, since: datetime | None = None, limit: int | None = None) -> list[dict[str, Any]]:
         cfg = self.data_source.config
         include_children = cfg.get("include_children", True)
         documents: list[dict[str, Any]] = []

@@ -1025,8 +1025,6 @@ async def internal_gitlab_get_file(
         return {"success": False, "error": str(e)}
 
 
-
-
 async def internal_gitlab_clone_repo(
     repo_url: str,
     use_ssh: bool = False,
