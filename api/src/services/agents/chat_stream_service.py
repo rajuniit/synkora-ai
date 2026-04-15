@@ -43,11 +43,14 @@ logger = logging.getLogger(__name__)
 class StreamState:
     assistant_chunks: list[str]
     chart_data: list[dict[str, Any]]
+    diagram_data: list[dict[str, Any]] = None
     total_output_tokens: int = 0
     first_token_time: float | None = None
     tool_start_times: dict[str, float] = None  # Track tool execution start times
 
     def __post_init__(self):
+        if self.diagram_data is None:
+            self.diagram_data = []
         if self.tool_start_times is None:
             self.tool_start_times = {}
 
@@ -277,6 +280,12 @@ class ChatStreamService:
                 attachment_context = format_attachment_context(attachments)
 
             agent_kbs, agent_tools, mcp_tool_names = await self._load_agent_resources(db_agent, db)
+
+            # Detect URLs in user message and queue background Celery crawl tasks (non-blocking).
+            # Reuses already-loaded agent_kbs so no extra DB query is needed.
+            url_notice = await self._queue_url_crawl_tasks(message, db_agent, agent_kbs)
+            if url_notice:
+                attachment_context = (attachment_context + "\n\n" + url_notice).strip()
             perf_config = (db_agent.agent_metadata or {}).get("performance_config") or {}
             rag_config = (
                 perf_config.get("rag", {"enabled": True}) if isinstance(perf_config, dict) else {"enabled": True}
@@ -409,12 +418,15 @@ class ChatStreamService:
 
                 if state.chart_data:
                     logger.info(f"💾 Saving {len(state.chart_data)} charts to database metadata")
+                if state.diagram_data:
+                    logger.info(f"💾 Saving {len(state.diagram_data)} diagrams to database metadata")
 
                 assistant_message = await self.chat_service.save_assistant_message(
                     conversation_id=conversation_uuid,
                     content=assistant_content,
                     sources=retrieved_sources,
                     charts=state.chart_data,
+                    diagrams=state.diagram_data,
                     timing=timing_metrics,
                     usage={
                         "input_tokens": total_input_tokens,
@@ -970,6 +982,95 @@ class ChatStreamService:
                     db=db,
                 )
 
+    async def _queue_url_crawl_tasks(self, message: str, db_agent: Any, agent_kbs: list[Any]) -> str:
+        """
+        Detect URLs in the user message and queue background Celery crawl tasks.
+
+        No HTTP requests are made here — this is purely fire-and-forget task queuing.
+        If the agent has knowledge bases configured, each URL is queued into the first
+        available KB using the existing crawl_and_process_kb Celery task.
+
+        Returns a short notice string to inject into agent context so the agent can
+        inform the user. Returns empty string if no URLs were found.
+        """
+        url_pattern = re.compile(r"https?://[^\s<>\"'{}|\\^`\[\]]+")
+        urls = list(dict.fromkeys(url_pattern.findall(message)))  # deduplicate, preserve order
+        if not urls:
+            return ""
+
+        # Only queue crawl if the agent has at least one KB to store into
+        if not agent_kbs:
+            # No KB configured — just surface the URLs so the agent can use web_fetch if needed
+            url_list = "\n".join(f"- {u}" for u in urls)
+            return f"[System: The user's message contains these URLs. Use internal_web_fetch to read them if needed.]\n{url_list}"
+
+        target_akb = agent_kbs[0]  # AgentKnowledgeBase join-table object
+        kb_id = target_akb.knowledge_base_id
+        # knowledge_base relationship is eagerly loaded via selectinload in _load_agent_resources
+        tenant_id = target_akb.knowledge_base.tenant_id if target_akb.knowledge_base else None
+
+        if not kb_id:
+            return ""
+
+        try:
+            from sqlalchemy import select
+
+            from src.models.data_source import DataSource, DataSourceStatus, DataSourceType
+            from src.tasks.kb_tasks import crawl_and_process_kb
+
+            # Get or create a WEB data source for this KB (sync DB lookup via existing session-factory)
+            from src.core.database import get_async_session_factory
+
+            async with get_async_session_factory()() as db:
+                result = await db.execute(
+                    select(DataSource).filter(
+                        DataSource.knowledge_base_id == kb_id,
+                        DataSource.type == DataSourceType.WEB,
+                    )
+                )
+                data_source = result.scalar_one_or_none()
+                if not data_source:
+                    data_source = DataSource(
+                        tenant_id=tenant_id,
+                        knowledge_base_id=kb_id,
+                        name="Web Crawl",
+                        type=DataSourceType.WEB,
+                        status=DataSourceStatus.ACTIVE,
+                    )
+                    db.add(data_source)
+                    await db.commit()
+                    await db.refresh(data_source)
+                ds_id = data_source.id
+
+            queued = []
+            for url in urls:
+                try:
+                    crawl_and_process_kb.delay(
+                        data_source_id=ds_id,
+                        tenant_id=str(tenant_id) if tenant_id else "",
+                        url=url,
+                        max_pages=50,           # crawl up to 50 pages per URL
+                        include_subpages=True,  # follow same-domain links
+                    )
+                    queued.append(url)
+                    logger.info(f"Queued background crawl: {url} → KB {kb_id}")
+                except Exception as exc:
+                    logger.warning(f"Failed to queue crawl for {url}: {exc}")
+
+            if not queued:
+                return ""
+
+            url_list = "\n".join(f"- {u}" for u in queued)
+            return (
+                f"[System: The following URL(s) from the user's message have been queued for background "
+                f"crawling into knowledge base (id={kb_id}). Content will be available for retrieval "
+                f"once processing completes. Inform the user the crawl is underway.]\n{url_list}"
+            )
+
+        except Exception as exc:
+            logger.warning(f"URL crawl task queuing failed: {exc}")
+            return ""
+
     async def _load_agent_resources(self, db_agent, db: AsyncSession) -> tuple[list[Any], list[Any], list[str]]:
         """
         Load agent resources (knowledge bases and tools) in parallel.
@@ -1495,6 +1596,16 @@ class ChatStreamService:
         # but all tool queries must use the CALLING tenant's ID.
         effective_tenant_id = caller_tenant_id if caller_tenant_id else db_agent.tenant_id
 
+        # Resolve compute session once per conversation (DB lookup, cached on context)
+        from src.services.compute.resolver import build_compute_session_for_agent
+
+        _compute_session = await build_compute_session_for_agent(
+            db_agent.id,
+            db,
+            tenant_id=effective_tenant_id,
+            conversation_id=conversation_uuid,
+        )
+
         runtime_context = RuntimeContext(
             tenant_id=effective_tenant_id,
             agent_id=db_agent.id,
@@ -1504,6 +1615,7 @@ class ChatStreamService:
             message_id=user_message_id,
             user_id=user_uuid,
             shared_state=shared_state,
+            compute_session=_compute_session,
         )
 
         # Populate assigned tools so discovery only exposes agent's own tools
@@ -1558,13 +1670,15 @@ class ChatStreamService:
             f"📝 Using max_tokens={configured_max_tokens}, temperature={configured_temperature} from LLM config"
         )
 
-        async for event in function_handler.generate_with_functions_stream(
+        try:
+         _stream_gen = function_handler.generate_with_functions_stream(
             prompt=prompt,
             temperature=configured_temperature,
             max_tokens=configured_max_tokens,
             max_iterations=agentic_config.max_iterations,
-            messages=messages,  # Pass structured conversation history
-        ):
+            messages=messages,
+         )
+         async for event in _stream_gen:
             if event["type"] == "text":
                 if state.first_token_time is None:
                     state.first_token_time = time.time()
@@ -1617,19 +1731,37 @@ class ChatStreamService:
             elif event["type"] == "chart":
                 # Two event shapes:
                 # 1. internal_generate_chart: {chart_id, chart_type, chart_config, chart_data}
-                # 2. internal_query_and_chart / generate_chart_from_data: {chart: {chart_type, title, data, config}}
+                # 2. inline tools: {chart: {chart_type, library, title, data, table_data, config, ...}}
                 chart = event.get("chart", {})
-                # Prefer nested chart object; fall back to top-level fields
+                # Store full chart object (library, table_data, chart_type) for DB persistence + history reload
                 state.chart_data.append(
                     {
-                        "type": chart.get("chart_type") or event.get("chart_type", "bar"),
+                        "chart_type": chart.get("chart_type") or event.get("chart_type", "bar"),
+                        "type": chart.get("chart_type") or event.get("chart_type", "bar"),  # legacy compat
+                        "library": chart.get("library") or "chartjs",
                         "title": chart.get("title") or event.get("chart_title", "Chart"),
+                        "description": chart.get("description") or "",
                         "data": chart.get("data") or event.get("chart_data") or {},
                         "config": chart.get("config") or event.get("chart_config") or {},
+                        "table_data": chart.get("table_data"),
                     }
                 )
                 chart_payload = {k: v for k, v in event.items() if k != "type"}
                 yield await generate_sse_event("chart", chart_payload)
+
+            elif event["type"] == "diagram":
+                diagram = event.get("diagram", {})
+                state.diagram_data.append(diagram)
+                diagram_payload = {k: v for k, v in event.items() if k != "type"}
+                yield await generate_sse_event("diagram", diagram_payload)
+
+        finally:
+            # Release compute session (stops ephemeral container, closes SSH, etc.)
+            if _compute_session is not None:
+                try:
+                    await _compute_session.close()
+                except Exception as _ce:
+                    logger.debug(f"Compute session cleanup error: {_ce}")
 
     async def _stream_without_tools(
         self,

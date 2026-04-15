@@ -464,6 +464,17 @@ async def internal_generate_chart(
         - error: Error message (if any)
     """
     try:
+        # Normalize query_result — the LLM may pass data in several shapes:
+        #   1. A plain list of rows (e.g. from micromobility tool results aggregated by LLM)
+        #   2. A flat dict of key→value pairs (e.g. {"total_reports": 276, "pending": 216})
+        #   3. The standard {"success": True, "data": [...]} format from internal_query_database
+        if isinstance(query_result, list):
+            query_result = {"success": True, "data": query_result, "row_count": len(query_result)}
+        elif isinstance(query_result, dict) and "data" not in query_result:
+            # Flat dict — convert each key/value into a row suitable for charting
+            rows = [{"label": k, "value": v} for k, v in query_result.items() if isinstance(v, (int, float))]
+            query_result = {"success": True, "data": rows, "row_count": len(rows)}
+
         # Clean query_result to remove any non-serializable objects
         # This prevents Session objects or other non-JSON-serializable data from being stored
         clean_query_result = {

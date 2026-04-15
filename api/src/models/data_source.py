@@ -25,6 +25,11 @@ class DataSourceType(enum.StrEnum):
     MANUAL = "MANUAL"  # For direct file uploads from UI
     WEB = "WEB"  # For website crawling
     CUSTOM = "CUSTOM"
+    # Project Management
+    JIRA = "JIRA"
+    CLICKUP = "CLICKUP"
+    LINEAR = "LINEAR"
+    ASANA = "ASANA"
     # Data Analysis Sources
     DATADOG = "DATADOG"
     DATABRICKS = "DATABRICKS"
@@ -138,6 +143,9 @@ class DataSourceDocument(BaseModel, TimestampMixin):
     doc_metadata: Mapped[dict] = mapped_column(JSON, nullable=False, default=dict)
     # Example for Slack: {"channel": "general", "user": "john", "thread_ts": "..."}
     # Example for Gmail: {"from": "...", "to": "...", "subject": "...", "labels": [...]}
+
+    # Tiered storage (hot/warm/archive) — see company_brain_tier_migration_task
+    storage_tier: Mapped[str] = mapped_column(String(20), nullable=False, default="hot")
 
     # Vector embedding
     embedding_id: Mapped[str | None] = mapped_column(String(255), nullable=True, index=True)  # Qdrant point ID

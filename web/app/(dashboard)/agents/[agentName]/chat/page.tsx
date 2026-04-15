@@ -558,6 +558,22 @@ export default function AdvancedChatPage() {
             }
             return newMessages
           })
+        } else if (event.type === 'diagram' && (event as any).diagram) {
+          setMessages((prev) => {
+            const newMessages = [...prev]
+            const lastIndex = newMessages.length - 1
+            if (lastIndex >= 0 && newMessages[lastIndex].role === 'assistant') {
+              const currentMetadata = newMessages[lastIndex].metadata || {}
+              newMessages[lastIndex] = {
+                ...newMessages[lastIndex],
+                metadata: {
+                  ...currentMetadata,
+                  diagrams: [...(currentMetadata.diagrams || []), (event as any).diagram],
+                },
+              }
+            }
+            return newMessages
+          })
         } else if (event.type === 'done') {
           setThinkingStatus('')
           responseSources = event.sources || []

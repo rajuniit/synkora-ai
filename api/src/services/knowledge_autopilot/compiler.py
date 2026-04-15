@@ -236,6 +236,15 @@ class KnowledgeCompiler:
             }
             await self.db.commit()
 
+            # Queue embedding of wiki articles into the KB vector store so agents can RAG them
+            try:
+                from src.tasks.knowledge_compiler_task import embed_wiki_documents
+
+                embed_wiki_documents.delay(knowledge_base_id, tenant_id)
+                logger.info(f"Queued wiki embedding for KB {knowledge_base_id}")
+            except Exception as e:
+                logger.warning(f"Failed to queue wiki embedding: {e}")
+
             return {
                 "status": "completed",
                 "job_id": str(job.id),

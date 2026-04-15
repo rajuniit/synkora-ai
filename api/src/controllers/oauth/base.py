@@ -410,11 +410,11 @@ async def initiate_oauth(
         base_url = await get_app_base_url(db, oauth_app.tenant_id)
         redirect_url = data.redirect_url or f"{base_url}/oauth-apps"
 
-        # API token apps don't need OAuth flow
-        if oauth_app.auth_method == "api_token":
+        # API token / basic_auth apps don't need OAuth flow
+        if oauth_app.auth_method in ("api_token", "basic_auth"):
             return {
-                "auth_url": f"{redirect_url}?oauth=success&provider={provider}&method=api_token",
-                "method": "api_token",
+                "auth_url": f"{redirect_url}?oauth=success&provider={provider}&method={oauth_app.auth_method}",
+                "method": oauth_app.auth_method,
             }
 
         # Decrypt credentials

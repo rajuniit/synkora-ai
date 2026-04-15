@@ -135,68 +135,98 @@ async def internal_fetch_repository_files(
         if not is_valid:
             return {"error": error}
 
-        if not os.path.exists(repo_path):
-            return {"error": f"Repository path not found: {repo_path}"}
-
         # Use defaults if not provided
         if include_patterns is None:
             include_patterns = DEFAULT_INCLUDE_PATTERNS
         if exclude_patterns is None:
             exclude_patterns = DEFAULT_EXCLUDE_PATTERNS
 
+        from src.services.compute.resolver import get_compute_session_from_config
+
+        _cs = await get_compute_session_from_config(config)
+
         files_list = []
         total_size = 0
         skipped_count = 0
 
-        # Walk through repository
-        for root, dirs, files in os.walk(repo_path):
-            # Filter directories
-            dirs[:] = [
-                d
-                for d in dirs
-                if not any(
-                    fnmatch(os.path.join(root, d), os.path.join(repo_path, pattern)) for pattern in exclude_patterns
-                )
-            ]
-
-            for file in files:
-                file_path = os.path.join(root, file)
+        if _cs is not None and _cs.is_remote:
+            # Remote: use find to enumerate files, then read each via compute session
+            find_result = await _cs.exec_command(["find", repo_path, "-type", "f"])
+            if not find_result.get("success"):
+                return {"error": f"Repository path not found: {repo_path}"}
+            all_files = [f for f in find_result["output"].splitlines() if f.strip()]
+            for file_path in all_files:
                 relative_path = os.path.relpath(file_path, repo_path)
-
-                # Check exclude patterns
-                if any(fnmatch(relative_path, pattern) for pattern in exclude_patterns):
+                filename = os.path.basename(file_path)
+                if any(fnmatch(relative_path, p) for p in exclude_patterns):
                     skipped_count += 1
                     continue
-
-                # Check include patterns
-                if not any(fnmatch(file, pattern) for pattern in include_patterns):
+                if not any(fnmatch(filename, p) for p in include_patterns):
                     skipped_count += 1
                     continue
-
-                # Check file size
                 try:
-                    file_size = os.path.getsize(file_path)
+                    stat_r = await _cs.exec_command(["stat", "-c", "%s", file_path])
+                    file_size = int(stat_r["output"].strip()) if stat_r.get("success") and stat_r.get("output") else 0
                     if file_size > max_file_size:
                         logger.warning(f"Skipping large file: {relative_path} ({file_size} bytes)")
                         skipped_count += 1
                         continue
-
-                    # Read file content
-                    try:
-                        with open(file_path, encoding="utf-8") as f:
-                            content = f.read()
-                    except UnicodeDecodeError:
-                        # Try with latin-1 encoding
-                        with open(file_path, encoding="latin-1") as f:
-                            content = f.read()
-
-                    files_list.append((relative_path, content))
-                    total_size += file_size
-
+                    read_r = await _cs.read_file(file_path, max_lines=50000)
+                    if read_r.get("success"):
+                        files_list.append((relative_path, read_r.get("content", "")))
+                        total_size += file_size
+                    else:
+                        skipped_count += 1
                 except Exception as e:
-                    logger.warning(f"Error reading file {relative_path}: {e}")
+                    logger.warning(f"Error reading remote file {relative_path}: {e}")
                     skipped_count += 1
-                    continue
+        else:
+            if not os.path.exists(repo_path):
+                return {"error": f"Repository path not found: {repo_path}"}
+
+            # Walk through repository
+            for root, dirs, files in os.walk(repo_path):
+                dirs[:] = [
+                    d
+                    for d in dirs
+                    if not any(
+                        fnmatch(os.path.join(root, d), os.path.join(repo_path, pattern))
+                        for pattern in exclude_patterns
+                    )
+                ]
+
+                for file in files:
+                    file_path = os.path.join(root, file)
+                    relative_path = os.path.relpath(file_path, repo_path)
+
+                    if any(fnmatch(relative_path, pattern) for pattern in exclude_patterns):
+                        skipped_count += 1
+                        continue
+                    if not any(fnmatch(file, pattern) for pattern in include_patterns):
+                        skipped_count += 1
+                        continue
+
+                    try:
+                        file_size = os.path.getsize(file_path)
+                        if file_size > max_file_size:
+                            logger.warning(f"Skipping large file: {relative_path} ({file_size} bytes)")
+                            skipped_count += 1
+                            continue
+
+                        try:
+                            with open(file_path, encoding="utf-8") as f:
+                                content = f.read()
+                        except UnicodeDecodeError:
+                            with open(file_path, encoding="latin-1") as f:
+                                content = f.read()
+
+                        files_list.append((relative_path, content))
+                        total_size += file_size
+
+                    except Exception as e:
+                        logger.warning(f"Error reading file {relative_path}: {e}")
+                        skipped_count += 1
+                        continue
 
         if not files_list:
             return {"error": "No files found matching the specified patterns", "skipped_count": skipped_count}
@@ -870,19 +900,17 @@ async def internal_combine_tutorial(
 
         # Write files if output path provided
         if output_path:
-            os.makedirs(output_path, exist_ok=True)
+            from .git_helpers import async_makedirs, async_write_file
 
-            # Write index.md
+            await async_makedirs(output_path, config)
+
             index_filepath = os.path.join(output_path, "index.md")
-            with open(index_filepath, "w", encoding="utf-8") as f:
-                f.write(index_content)
+            await async_write_file(index_filepath, index_content, config)
             logger.info(f"Wrote {index_filepath}")
 
-            # Write chapter files
             for chapter_info in chapter_files:
                 chapter_filepath = os.path.join(output_path, chapter_info["filename"])
-                with open(chapter_filepath, "w", encoding="utf-8") as f:
-                    f.write(chapter_info["content"])
+                await async_write_file(chapter_filepath, chapter_info["content"], config)
                 logger.info(f"Wrote {chapter_filepath}")
 
         logger.info(f"Tutorial generation complete! {len(chapter_files)} chapters created.")

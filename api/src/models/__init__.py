@@ -2,6 +2,7 @@
 
 from .activity_log import ActivityLog, ActivityType
 from .agent import Agent
+from .agent_compute import AgentCompute, ComputeStatus, ComputeType
 from .agent_api_key import AgentApiKey
 from .agent_api_usage import AgentApiUsage
 from .agent_approval import AgentApprovalRequest, ApprovalStatus
@@ -27,11 +28,13 @@ from .agent_tool import AgentTool
 from .agent_user import AgentUser
 from .agent_webhook import AgentWebhook, AgentWebhookEvent
 from .agent_widget import AgentWidget, WidgetAnalytics
+from .widget_agent_route import WidgetAgentRoute
 from .app import App, AppMode, AppStatus
 from .app_review import AppReview, ReviewSentiment
 from .app_store_source import AppStoreSource, SourceStatus, StoreType, SyncFrequency
 from .base import BaseModel, SoftDeleteMixin, StatusMixin, TenantMixin, TimestampMixin
 from .chart import Chart
+from .kb_brain import KBEntity, KBRelationship, KBSyncCursor
 from .conversation import Conversation, ConversationStatus
 from .credit_balance import CreditBalance
 from .credit_topup import CreditTopup, TopupStatus
@@ -48,6 +51,7 @@ from .data_source import (
 from .database_connection import DatabaseConnection, DatabaseConnectionType
 from .dataset import Dataset
 from .debate_session import DebateSession
+from .diagram import Diagram
 from .document import Document, DocumentStatus
 from .document_segment import DocumentSegment
 from .followup import FollowupConfig, FollowupItem, FollowupPriority, FollowupStatus
@@ -107,7 +111,6 @@ from .user_oauth_token import UserOAuthToken
 from .voice_api_key import VoiceApiKey
 from .voice_usage import VoiceUsage
 from .whatsapp_bot import WhatsAppBot
-from .widget_agent_route import WidgetAgentRoute
 from .wiki_article import WikiArticle, WikiCompilationJob
 from .workflow_execution import (
     WorkflowExecution,
@@ -134,6 +137,9 @@ __all__ = [
     "Message",
     # Agent models
     "Agent",
+    "AgentCompute",
+    "ComputeType",
+    "ComputeStatus",
     "AgentApiKey",
     "AgentApiUsage",
     "AgentContextFile",
@@ -203,6 +209,12 @@ __all__ = [
     "DatabaseConnectionType",
     # Chart models
     "Chart",
+    # KB Brain models
+    "KBSyncCursor",
+    "KBEntity",
+    "KBRelationship",
+    # Diagram models
+    "Diagram",
     # Scheduled Task models
     "ScheduledTask",
     "TaskExecution",
@@ -271,6 +283,7 @@ __all__ = [
     "EscalationReason",
     "EscalationStatus",
     "EscalationPriority",
+    # Compute models
     # Webhook models
     "AgentSubscription",
     "AgentWebhook",

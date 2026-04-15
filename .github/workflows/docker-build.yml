@@ -138,3 +138,24 @@ jobs:
           tags: synkora-scraper:test
           cache-from: type=gha,scope=scraper
           cache-to: type=gha,mode=max,scope=scraper
+
+  build-sandbox:
+    name: Build Sandbox Service Docker Image
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3
+
+      - name: Build sandbox service image
+        uses: docker/build-push-action@v5
+        with:
+          context: ./services/sandbox
+          file: ./services/sandbox/Dockerfile
+          push: false
+          tags: synkora-sandbox:test
+          cache-from: type=gha,scope=sandbox
+          cache-to: type=gha,mode=max,scope=sandbox

@@ -78,6 +78,7 @@ class ChatService:
         content: str,
         sources: list[dict[str, Any]] | None = None,
         charts: list[dict[str, Any]] | None = None,
+        diagrams: list[dict[str, Any]] | None = None,
         workflow_type: str | None = None,
         execution_log: list[dict[str, Any]] | None = None,
         workflow_state: dict[str, Any] | None = None,
@@ -114,6 +115,7 @@ class ChatService:
             metadata = build_message_metadata(
                 sources=sources,
                 charts=charts,
+                diagrams=diagrams,
                 workflow_type=workflow_type,
                 execution_log=execution_log,
                 workflow_state=workflow_state,

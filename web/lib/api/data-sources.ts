@@ -29,3 +29,23 @@ export async function getDataSourceSyncHistory(id: string): Promise<any[]> {
   const { data } = await apiClient.axios.get(`/api/v1/data-sources/${id}/sync-history`)
   return data
 }
+
+export async function getStreamHealth(id: string): Promise<any> {
+  const { data } = await apiClient.axios.get(`/api/v1/data-sources/${id}/stream-health`)
+  return data
+}
+
+export async function updateDataSourceConfig(id: string, config: Record<string, any>): Promise<any> {
+  const { data } = await apiClient.axios.put(`/api/v1/data-sources/${id}`, { config })
+  return data
+}
+
+export async function activateDataSource(id: string): Promise<any> {
+  const { data } = await apiClient.axios.post(`/api/v1/data-sources/${id}/activate`)
+  return data
+}
+
+export async function deactivateDataSource(id: string): Promise<any> {
+  const { data } = await apiClient.axios.post(`/api/v1/data-sources/${id}/deactivate`)
+  return data
+}

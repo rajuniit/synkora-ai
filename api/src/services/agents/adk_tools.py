@@ -158,6 +158,13 @@ class ADKToolRegistry:
 
         register_jira_tools(self)
 
+        # Micromobility tools - use modular registry
+        from src.services.agents.tool_registrations.micromobility_tools_registry import (
+            register_micromobility_tools,
+        )
+
+        register_micromobility_tools(self)
+
         # Document generation tools - use modular registry
         from src.services.agents.tool_registrations.document_tools_registry import (
             register_document_tools,
@@ -251,6 +258,13 @@ class ADKToolRegistry:
 
         register_github_repo_tools(self)
 
+        # Diagram generation tools - use modular registry
+        from src.services.agents.tool_registrations.diagram_tools_registry import (
+            register_diagram_tools,
+        )
+
+        register_diagram_tools(self)
+
         # Recall.ai meeting bot tools - use modular registry
         from src.services.agents.tool_registrations.recall_tools_registry import register_recall_tools
 
@@ -260,6 +274,11 @@ class ADKToolRegistry:
         from src.services.agents.tool_registrations.spawn_agent_tools_registry import register_spawn_agent_tools
 
         register_spawn_agent_tools(self)
+
+        # Knowledge base ingest tools - use modular registry
+        from src.services.agents.tool_registrations.kb_ingest_tools_registry import register_kb_ingest_tools
+
+        register_kb_ingest_tools(self)
 
         # Multi-agent transfer tool
         self.register_tool(

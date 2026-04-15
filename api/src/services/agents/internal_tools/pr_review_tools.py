@@ -444,13 +444,45 @@ async def internal_get_file_content(
     Returns:
         Dictionary with file content
     """
-    # --- Local filesystem read (preferred when repo is cloned) ---
+    # --- Local/remote filesystem read (preferred when repo is cloned) ---
     if repo_path:
         try:
             import os
 
+            from src.services.compute.resolver import get_compute_session_from_config
+
             full_path = os.path.join(repo_path, path)
-            # Prevent path traversal
+            _cs = await get_compute_session_from_config(config)
+
+            if _cs is not None and _cs.is_remote:
+                # Path traversal guard: simple prefix check (sandbox enforces it server-side)
+                if not (full_path.startswith(repo_path + "/") or full_path == repo_path):
+                    return {"success": False, "error": f"Path '{path}' is outside the repository directory"}
+
+                # Check existence + type
+                list_result = await _cs.list_dir(full_path)
+                if list_result.get("success"):
+                    # It's a directory (sandbox returns is_dir: bool)
+                    raw = list_result.get("entries", [])
+                    entries = [
+                        {
+                            "name": e.get("name", ""),
+                            "type": "dir" if e.get("is_dir") else "file",
+                            "path": os.path.join(path, e.get("name", "")),
+                            "size": e.get("size", 0),
+                        }
+                        for e in sorted(raw, key=lambda e: (not e.get("is_dir"), e.get("name", "")))
+                    ]
+                    return {"success": True, "type": "directory", "path": path, "contents": entries}
+
+                # Not a directory — try to read as file
+                read_result = await _cs.read_file(full_path, max_lines=10000)
+                if not read_result.get("success"):
+                    return {"success": False, "error": f"Path '{path}' not found in repository"}
+                content = read_result.get("content", "")
+                return {"success": True, "type": "file", "content": content, "path": path, "size": len(content)}
+
+            # --- Local read ---
             real_repo = os.path.realpath(repo_path)
             real_full = os.path.realpath(full_path)
             if not real_full.startswith(real_repo + os.sep) and real_full != real_repo:
@@ -470,14 +502,8 @@ async def internal_get_file_content(
                             "size": entry.stat().st_size if entry.is_file() else 0,
                         }
                     )
-                return {
-                    "success": True,
-                    "type": "directory",
-                    "path": path,
-                    "contents": entries,
-                }
+                return {"success": True, "type": "directory", "path": path, "contents": entries}
 
-            # Read file
             file_size = os.path.getsize(real_full)
             if file_size > 5 * 1024 * 1024:  # 5 MB guard
                 return {"success": False, "error": f"File '{path}' is too large ({file_size // 1024}KB) to read"}
@@ -485,13 +511,7 @@ async def internal_get_file_content(
             with open(real_full, encoding="utf-8", errors="replace") as f:
                 content = f.read()
 
-            return {
-                "success": True,
-                "type": "file",
-                "content": content,
-                "path": path,
-                "size": file_size,
-            }
+            return {"success": True, "type": "file", "content": content, "path": path, "size": file_size}
         except Exception as e:
             logger.error(f"Failed to read file from local repo: {e}", exc_info=True)
             return {"success": False, "error": str(e)}

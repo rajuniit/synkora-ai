@@ -7,7 +7,7 @@ spec:
     # The ACME staging server URL (for testing)
     server: https://acme-staging-v02.api.letsencrypt.org/directory
     # Email address used for ACME registration
-    email: hello@otoride.co  # REPLACE THIS WITH YOUR EMAIL
+    email: hello@synkora.ai  # REPLACE THIS WITH YOUR EMAIL
     # Name of a secret used to store the ACME account private key
     privateKeySecretRef:
       name: letsencrypt-staging

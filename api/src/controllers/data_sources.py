@@ -791,3 +791,133 @@ async def get_sync_history(
     except Exception as e:
         logger.error(f"Error getting sync history: {e}")
         raise HTTPException(status_code=500, detail=str(e))
+
+
+# ---------------------------------------------------------------------------
+# Stream health — Redis Streams visibility for webhook-based sources
+# ---------------------------------------------------------------------------
+
+
+class StreamHealthResponse(BaseModel):
+    """Real-time Redis Stream stats for a data source."""
+
+    stream_key: str
+    stream_length: int
+    pending_count: int
+    consumer_group: str
+    consumers: int
+    webhook_url: str
+    is_stream_active: bool
+
+
+@router.get("/{ds_id}/stream-health", response_model=StreamHealthResponse)
+async def get_stream_health(
+    ds_id: int,
+    tenant_id: UUID = Depends(get_current_tenant_id),
+    db: AsyncSession = Depends(get_async_db),
+):
+    """Return real-time Redis Stream stats for a webhook-based data source."""
+    result = await db.execute(
+        select(DataSource).filter(DataSource.id == ds_id, DataSource.tenant_id == tenant_id)
+    )
+    ds = result.scalar_one_or_none()
+    if not ds:
+        raise HTTPException(status_code=404, detail="Data source not found")
+    if not ds.knowledge_base_id:
+        raise HTTPException(status_code=400, detail="Data source is not linked to a knowledge base")
+
+    kb_id = ds.knowledge_base_id
+    source_type = ds.type.value.lower()
+    stream_key = f"kb_ingest:{kb_id}:{source_type}"
+    group = "kb_embedder"
+
+    from src.config.redis import get_redis_async
+
+    r = get_redis_async()
+    try:
+        stream_length = await r.xlen(stream_key)
+    except Exception:
+        stream_length = 0
+
+    pending_count = 0
+    consumers = 0
+    try:
+        groups = await r.xinfo_groups(stream_key)
+        for g in groups:
+            name = g.get("name", b"")
+            if isinstance(name, bytes):
+                name = name.decode()
+            if name == group:
+                pending_count = int(g.get("pending", 0))
+                consumers = int(g.get("consumers", 0))
+                break
+    except Exception:
+        pass
+
+    from src.config.settings import get_settings
+    base_url = get_settings().api_base_url.rstrip("/")
+    webhook_url = f"{base_url}/api/webhooks/kb/{kb_id}/{source_type}"
+
+    return StreamHealthResponse(
+        stream_key=stream_key,
+        stream_length=stream_length,
+        pending_count=pending_count,
+        consumer_group=group,
+        consumers=consumers,
+        webhook_url=webhook_url,
+        is_stream_active=stream_length > 0 or pending_count > 0,
+    )
+
+
+# ---------------------------------------------------------------------------
+# Activate / deactivate webhook-based data sources
+# ---------------------------------------------------------------------------
+
+
+@router.post("/{ds_id}/activate", response_model=DataSourceResponse)
+async def activate_data_source(
+    ds_id: int,
+    tenant_id: UUID = Depends(get_current_tenant_id),
+    db: AsyncSession = Depends(get_async_db),
+):
+    """Activate a webhook-based data source (set status = ACTIVE)."""
+    result = await db.execute(
+        select(DataSource).options(selectinload(DataSource.oauth_app))
+        .filter(DataSource.id == ds_id, DataSource.tenant_id == tenant_id)
+    )
+    ds = result.scalar_one_or_none()
+    if not ds:
+        raise HTTPException(status_code=404, detail="Data source not found")
+
+    cfg = ds.config or {}
+    if not cfg.get("signing_secret"):
+        raise HTTPException(
+            status_code=400,
+            detail="signing_secret must be configured before activating",
+        )
+
+    ds.status = DataSourceStatus.ACTIVE
+    await db.commit()
+    await db.refresh(ds)
+    return build_data_source_response(ds)
+
+
+@router.post("/{ds_id}/deactivate", response_model=DataSourceResponse)
+async def deactivate_data_source(
+    ds_id: int,
+    tenant_id: UUID = Depends(get_current_tenant_id),
+    db: AsyncSession = Depends(get_async_db),
+):
+    """Deactivate a data source (set status = INACTIVE)."""
+    result = await db.execute(
+        select(DataSource).options(selectinload(DataSource.oauth_app))
+        .filter(DataSource.id == ds_id, DataSource.tenant_id == tenant_id)
+    )
+    ds = result.scalar_one_or_none()
+    if not ds:
+        raise HTTPException(status_code=404, detail="Data source not found")
+
+    ds.status = DataSourceStatus.INACTIVE
+    await db.commit()
+    await db.refresh(ds)
+    return build_data_source_response(ds)

@@ -179,6 +179,14 @@ const TOOL_GROUPS: ToolGroup[] = [
     expanded: false
   },
   {
+    id: 'diagram',
+    name: 'Diagram Tools',
+    description: 'Generate architecture diagrams, flowcharts, sequence diagrams, ER diagrams, and more',
+    icon: Package,
+    tools: [],
+    expanded: false
+  },
+  {
     id: 'docker',
     name: 'Docker',
     description: 'Query Docker container logs and monitor running services',
@@ -335,6 +343,14 @@ const TOOL_GROUPS: ToolGroup[] = [
     name: 'News & RSS',
     description: 'Fetch news articles from NewsAPI or RSS/Atom feeds without getting blocked',
     icon: Newspaper,
+    tools: [],
+    expanded: false
+  },
+  {
+    id: 'micromobility',
+    name: 'Micromobility ',
+    description: 'Manage fleet vehicles, trips, riders, tasks, pricing, invoices, and analytics via Dashboard',
+    icon: Globe,
     tools: [],
     expanded: false
   },
@@ -524,7 +540,7 @@ export default function AgentToolsPage() {
 
   const loadAllOAuthApps = async () => {
     try {
-      const providers = ['github', 'gitlab', 'SLACK', 'gmail', 'zoom', 'google_calendar', 'google_drive', 'clickup', 'jira', 'twitter', 'linkedin', 'recall', 'newsapi'];
+      const providers = ['github', 'gitlab', 'SLACK', 'gmail', 'zoom', 'google_calendar', 'google_drive', 'clickup', 'jira', 'twitter', 'linkedin', 'recall', 'newsapi', 'micromobility'];
       const allApps: any[] = [];
       
       for (const provider of providers) {
@@ -585,7 +601,7 @@ export default function AgentToolsPage() {
 
   const getAuthMethodForProvider = (provider: string) => {
     // Providers that only support API tokens (no OAuth flow)
-    const apiTokenOnlyProviders = ['recall', 'TELEGRAM', 'onepassword', 'newsapi'];
+    const apiTokenOnlyProviders = ['recall', 'TELEGRAM', 'onepassword', 'newsapi', 'micromobility'];
     if (apiTokenOnlyProviders.includes(provider.toLowerCase()) ||
         apiTokenOnlyProviders.includes(provider)) {
       return 'api_token';
@@ -613,7 +629,7 @@ export default function AgentToolsPage() {
       const app = providerApps[0]; // Use first available app
 
       // Providers that only support API tokens (no OAuth flow)
-      const apiTokenOnlyProviders = ['recall', 'TELEGRAM', 'onepassword', 'newsapi'];
+      const apiTokenOnlyProviders = ['recall', 'TELEGRAM', 'onepassword', 'newsapi', 'micromobility'];
       const isApiTokenOnly = apiTokenOnlyProviders.includes(provider.toLowerCase()) ||
                              apiTokenOnlyProviders.includes(provider);
 
@@ -710,6 +726,8 @@ export default function AgentToolsPage() {
         groupId = 'linkedin';
       } else if (toolName.includes('recall')) {
         groupId = 'recall';
+      } else if (toolName.includes('micromobility')) {
+        groupId = 'micromobility';
       }
       // Document generation tools - NEW!
       else if (toolName.includes('generate_pdf') || toolName.includes('generate_powerpoint') || 
@@ -760,6 +778,8 @@ export default function AgentToolsPage() {
           toolName.includes('directory') || toolName.includes('search_files') || toolName.includes('edit')) &&
           !toolName.includes('s3') && !toolName.includes('storage')) {
         groupId = 'file_system';
+      } else if (toolName === 'internal_generate_diagram' || toolName === 'internal_generate_quick_diagram') {
+        groupId = 'diagram';
       } else if (toolName === 'internal_generate_chart' || toolName === 'internal_query_and_chart') {
         groupId = 'charts';
       } else if (toolName === 'generate_chart_from_data') {
@@ -829,8 +849,9 @@ export default function AgentToolsPage() {
           ];
         }
         
-        // Add OAuth selector for ALL internal_github_* tools
+        // Add OAuth selector for ALL internal_github_* and internal_git_* tools
         if (tool.name.startsWith('internal_github_') ||
+            tool.name.startsWith('internal_git_') ||
             tool.name === 'internal_create_github_repository' ||
             tool.name === 'internal_deploy_blog_to_github' ||
             tool.name === 'internal_enable_github_pages' ||
@@ -961,6 +982,22 @@ export default function AgentToolsPage() {
           ];
         }
 
+        // Add OAuth selector for ALL Micromobility tools
+        if (tool.name.includes('micromobility')) {
+          baseTool.configurable = true;
+          baseTool.oauthProvider = 'micromobility';
+          baseTool.requiredFields = [
+            {
+              key: 'oauth_app_id',
+              label: 'Micromobility Integration',
+              description: 'Select a configured Dashboard integration (API token or username/password)',
+              placeholder: 'Select integration',
+              type: 'select',
+              options: []
+            }
+          ];
+        }
+
         // Add OAuth selector for ALL Gmail tools (both internal_gmail_* and gmail_* legacy tools)
         if (tool.name.includes('gmail')) {
           baseTool.configurable = true;
@@ -1069,6 +1106,7 @@ export default function AgentToolsPage() {
 
   const getToolIcon = (toolName: string): string => {
     const name = toolName.toLowerCase();
+    if (name.includes('micromobility')) return '🛴';
     if (name.includes('recall')) return '🎥';
     if (name.includes('gitlab')) return '🦊';
     if (name.includes('twitter')) return '🐦';
@@ -1260,18 +1298,35 @@ export default function AgentToolsPage() {
         if (!oauthField.options) {
           oauthField.options = [];
         }
-        oauthField.options = providerApps.map((app: any) => ({
-          value: app.id.toString(),
-          label: `${app.app_name}${app.is_default ? ' (Default)' : ''}`,
-          isAuthorized: app.has_access_token || app.has_api_token
-        }));
+        oauthField.options = providerApps.map((app: any) => {
+          const isConfigured = app.has_access_token || app.has_api_token;
+          const suffix = app.auth_method === 'basic_auth'
+            ? isConfigured ? ' (configured)' : ' (missing credentials)'
+            : isConfigured ? ' (connected)' : ' (not connected)';
+          return {
+            value: app.id.toString(),
+            label: `${app.app_name}${app.is_default ? ' · Default' : ''}${suffix}`,
+            isAuthorized: isConfigured,
+          };
+        });
+
+        // Auto-select configured app for basic_auth / api_token providers —
+        // no per-user flow needed, admin credentials are shared automatically.
+        oauthField.autoSelectedAppId = null;
+        const autoSelectApp = providerApps.find((a: any) =>
+          (a.auth_method === 'basic_auth' || a.auth_method === 'api_token') &&
+          (a.has_api_token || a.has_access_token)
+        );
+        if (autoSelectApp) {
+          oauthField.autoSelectedAppId = autoSelectApp.id.toString();
+        }
 
         // Mark if no accounts available
         oauthField.noAccountsAvailable = providerApps.length === 0;
         oauthField.providerName = toolCopy.oauthProvider;
       }
     }
-    
+
     // Populate integration config options if tool uses integration configs
     if (toolCopy.integrationConfigType) {
       try {
@@ -1286,7 +1341,7 @@ export default function AgentToolsPage() {
             value: config.id.toString(),
             label: `${config.provider} (${config.integration_type})${config.is_platform_config ? ' - Default' : ''}`
           }));
-          
+
           if (configs.length === 0) {
             configField.options.push({
               value: '',
@@ -1298,9 +1353,19 @@ export default function AgentToolsPage() {
         console.error('Failed to load integration configs:', error);
       }
     }
-    
+
+    const savedConfig = getToolConfig(tool.name);
+
+    // If no oauth_app_id saved yet, auto-populate from the auto-selected app
+    const oauthField = toolCopy.requiredFields?.find((f: any) => f.key === 'oauth_app_id') ||
+                       toolCopy.optionalFields?.find((f: any) => f.key === 'oauth_app_id');
+    const autoId = (oauthField as any)?.autoSelectedAppId;
+    const mergedConfig = (autoId && !savedConfig.oauth_app_id)
+      ? { ...savedConfig, oauth_app_id: autoId }
+      : savedConfig;
+
     setSelectedTool(toolCopy);
-    setToolConfig(getToolConfig(tool.name));
+    setToolConfig(mergedConfig);
   };
 
   const closeConfigModal = () => {
@@ -1574,6 +1639,7 @@ export default function AgentToolsPage() {
                 if (group.id === 'twitter') return 'twitter';
                 if (group.id === 'linkedin') return 'linkedin';
                 if (group.id === 'recall') return 'recall';
+                if (group.id === 'micromobility') return 'micromobility';
                 return null;
               })();
 

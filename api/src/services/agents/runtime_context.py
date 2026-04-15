@@ -52,6 +52,7 @@ class RuntimeContext:
     shared_state: dict[str, Any] | None = None
     all_available_tools: list[dict[str, Any]] | None = None  # Agent's assigned tools only
     allowed_database_connections: list[str] | None = None  # Allowed DB connection IDs (None = all)
+    compute_session: Any | None = None  # ComputeSession | None — remote compute backend
 
     def __post_init__(self):
         """Initialize shared_state if not provided."""
@@ -147,6 +148,7 @@ class RuntimeContext:
             message_id=self.message_id,
             user_id=self.user_id,
             shared_state=self.shared_state,  # Share the same state dict!
+            compute_session=self.compute_session,  # Propagate compute to sub-agents
         )
 
 

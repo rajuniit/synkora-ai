@@ -757,6 +757,44 @@ async def internal_run_command(
                 "return_code": -1,
             }
 
+    # --- Remote compute routing ---
+    # If the agent has a remote ComputeSession, execute there instead of locally.
+    # Security: the command allowlist check still applies; path validation is skipped
+    # because paths are resolved on the remote target.
+    from src.services.compute.resolver import get_compute_session_from_config
+
+    _compute_session = await get_compute_session_from_config(config)
+    if _compute_session is not None and _compute_session.is_remote:
+        # Check global allowlist (pass workspace_path=None to skip local path validation)
+        if not _is_command_safe(command, None):
+            logger.error(f"Security check FAILED for remote command: '{_sanitize_command_for_logging(command)}'")
+            return {
+                "success": False,
+                "output": "",
+                "error": "Command is not allowed. Only allowlisted commands can be executed.",
+                "return_code": -1,
+            }
+        # Check per-agent command override if set
+        _allowed_override = (config or {}).get("_allowed_commands_override")
+        if _allowed_override is not None:
+            _cmd_name = command[0].split("/")[-1]
+            if _cmd_name not in _allowed_override:
+                return {
+                    "success": False,
+                    "output": "",
+                    "error": f"Command '{_cmd_name}' is not in this agent's allowed command list.",
+                    "return_code": -1,
+                }
+        logger.info(
+            f"Routing command to remote compute: '{_sanitize_command_for_logging(command)}'"
+        )
+        return await _compute_session.exec_command(
+            command=command,
+            cwd=working_directory,
+            timeout=timeout,
+            input_text=input_text,
+        )
+
     # Get workspace path from config or RuntimeContext (used for file path validation in commands)
     workspace_path = _get_workspace_path(config)
 

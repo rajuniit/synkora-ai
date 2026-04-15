@@ -742,10 +742,11 @@ async def internal_browser_pdf(
 
         pdf_bytes = base64.b64decode(result["pdf_base64"])
         parent_dir = os.path.dirname(path)
+        from src.services.agents.internal_tools.git_helpers import async_makedirs, async_write_file_bytes
+
         if parent_dir:
-            os.makedirs(parent_dir, exist_ok=True)
-        with open(path, "wb") as f:
-            f.write(pdf_bytes)
+            await async_makedirs(parent_dir, config)
+        await async_write_file_bytes(path, pdf_bytes, config)
         return {"success": True, "action": "pdf", "path": path, "size_bytes": len(pdf_bytes), "session_id": session_id}
 
     return result

@@ -28,9 +28,23 @@ export interface Attachment {
   thumbnail_url?: string
 }
 
+export interface DiagramData {
+  id?: string
+  title: string
+  description?: string
+  diagram_type: string
+  style?: number
+  svg_url?: string
+  svg_content?: string
+  png_url?: string
+  spec?: object
+  created_at?: string
+}
+
 export interface MessageMetadata {
   sources?: Source[]
   charts?: ChartData[]
+  diagrams?: DiagramData[]
   tables?: TableData[]
   keyPeople?: Person[]
   news?: NewsItem[]
@@ -97,13 +111,14 @@ export interface RAGSource {
 }
 
 export interface ChartData {
-  type?: 'bar' | 'line' | 'pie' | 'area' | 'scatter' | 'doughnut'
-  chart_type?: 'bar' | 'line' | 'pie' | 'area' | 'scatter' | 'doughnut'
+  type?: string
+  chart_type?: string
   title: string
   description?: string
   library?: string
   data: any
   config?: any
+  table_data?: Array<Record<string, unknown>>
 }
 
 export interface TableData {

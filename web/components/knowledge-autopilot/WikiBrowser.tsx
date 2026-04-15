@@ -271,13 +271,21 @@ export function WikiBrowser({ kbId, kbName }: WikiBrowserProps) {
             </button>
           </div>
         ) : (
+          <>
+          <style>{`
+            @keyframes wikiCardIn {
+              from { opacity: 0; transform: translateY(10px); }
+              to   { opacity: 1; transform: translateY(0); }
+            }
+          `}</style>
           <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-4 p-5">
-            {displayArticles.map((article) => {
+            {displayArticles.map((article, index) => {
               const catConfig = CATEGORY_CONFIG[article.category] || CATEGORY_CONFIG.general
               return (
                 <button
                   key={article.id}
                   onClick={() => router.push(`/knowledge-bases/${kbId}/wiki/${article.slug}`)}
+                  style={{ animation: 'wikiCardIn 0.35s ease-out both', animationDelay: `${index * 45}ms` }}
                   className="bg-white border border-gray-200 rounded-xl p-5 text-left hover:border-primary-300 hover:shadow-lg hover:shadow-primary-500/5 transition-all group"
                 >
                   <div className="flex items-center gap-2 mb-3">
@@ -313,6 +321,7 @@ export function WikiBrowser({ kbId, kbName }: WikiBrowserProps) {
               )
             })}
           </div>
+          </>
         )}
       </div>
     </div>

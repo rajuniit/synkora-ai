@@ -1,0 +1,88 @@
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: synkora-sandbox
+  namespace: synkora-production
+  labels:
+    app: synkora
+    component: sandbox
+spec:
+  replicas: 1
+  strategy:
+    type: Recreate
+  selector:
+    matchLabels:
+      app: synkora
+      component: sandbox
+  template:
+    metadata:
+      labels:
+        app: synkora
+        component: sandbox
+    spec:
+      imagePullSecrets:
+      - name: ecr-registry-secret
+      containers:
+      - name: sandbox
+        image: IMAGE_PLACEHOLDER
+        imagePullPolicy: Always
+        ports:
+        - containerPort: 5004
+          name: http
+          protocol: TCP
+        env:
+        - name: SANDBOX_API_KEY
+          valueFrom:
+            secretKeyRef:
+              name: synkora-secrets
+              key: SANDBOX_API_KEY
+        resources:
+          requests:
+            memory: "512Mi"
+            cpu: "250m"
+          limits:
+            memory: "1Gi"
+            cpu: "500m"
+        livenessProbe:
+          httpGet:
+            path: /health
+            port: 5004
+          initialDelaySeconds: 15
+          periodSeconds: 30
+          timeoutSeconds: 10
+          failureThreshold: 3
+        readinessProbe:
+          httpGet:
+            path: /health
+            port: 5004
+          initialDelaySeconds: 5
+          periodSeconds: 10
+          timeoutSeconds: 5
+          failureThreshold: 3
+        volumeMounts:
+        - name: workspaces
+          mountPath: /workspaces
+      volumes:
+      - name: workspaces
+        emptyDir:
+          sizeLimit: 2Gi
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: synkora-sandbox
+  namespace: synkora-production
+  labels:
+    app: synkora
+    component: sandbox
+spec:
+  type: ClusterIP
+  selector:
+    app: synkora
+    component: sandbox
+  ports:
+  - name: http
+    port: 5004
+    targetPort: 5004
+    protocol: TCP

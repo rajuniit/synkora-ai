@@ -13,7 +13,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from src.core.database import get_async_db
 from src.middleware.auth_middleware import get_current_tenant_id
 from src.models.data_source import DataSource, DataSourceStatus, DataSourceType
-from src.models.document import Document
+from src.models.document import Document, DocumentStatus
 from src.models.document_segment import DocumentSegment
 from src.models.knowledge_base import (
     ChunkingStrategy,
@@ -701,16 +701,43 @@ async def upload_documents(
                     doc = DocxDocument(BytesIO(content))
                     text_content = "\n".join([para.text for para in doc.paragraphs])
 
-                # Create document record
+                # Create a stub Document record immediately so the file
+                # is visible in the browser before Celery finishes.
+                stub_doc = Document(
+                    tenant_id=tenant_id,
+                    knowledge_base_id=kb.id,
+                    name=file.filename,
+                    external_id=file.filename,
+                    s3_key=s3_key,
+                    s3_url=s3_result.get("url"),
+                    file_size=file_size,
+                    mime_type=mime,
+                    original_filename=file.filename,
+                    source_type=DataSourceType.MANUAL.value,
+                    content_type=file_type,
+                    upload_source="ui",
+                    status=DocumentStatus.PENDING,
+                    doc_metadata={
+                        "title": file.filename,
+                        "file_type": file_type,
+                        "upload_source": "ui",
+                    },
+                )
+                db.add(stub_doc)
+                await db.flush()  # get stub_doc.id without committing yet
+
                 processed_docs.append(
                     {
                         "id": file.filename,
                         "text": text_content,
                         "metadata": {
                             "title": file.filename,
-                            "url": s3_result["url"],
+                            "url": s3_result.get("url", ""),
+                            "s3_url": s3_result.get("url", ""),
                             "file_type": file_type,
                             "file_size": file_size,
+                            "mime_type": mime,
+                            "original_filename": file.filename,
                             "upload_source": "ui",
                         },
                     }
@@ -742,8 +769,13 @@ async def upload_documents(
                     status=DataSourceStatus.ACTIVE,
                 )
                 db.add(data_source)
-                await db.commit()
-                await db.refresh(data_source)
+
+            # Update KB document count to include the stub docs
+            kb.total_documents = (kb.total_documents or 0) + len(processed_docs)
+
+            # Commit stubs + data_source together so docs are immediately visible
+            await db.commit()
+            await db.refresh(data_source)
 
             process_kb_documents.delay(data_source.id, str(tenant_id), processed_docs)
 
@@ -940,6 +972,7 @@ class DocumentResponse(BaseModel):
     chunk_count: int
     has_images: bool
     image_count: int
+    status: str
     created_at: str
     updated_at: str
     metadata: dict
@@ -1073,6 +1106,7 @@ async def list_documents(
                     chunk_count=segment_counts.get(doc.id, 0),
                     has_images=doc.has_images,
                     image_count=doc.image_count,
+                    status=doc.status.value,
                     created_at=doc.created_at.isoformat(),
                     updated_at=doc.updated_at.isoformat(),
                     metadata=doc.doc_metadata or {},

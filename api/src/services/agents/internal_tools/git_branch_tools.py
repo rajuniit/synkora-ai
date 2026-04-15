@@ -6,10 +6,14 @@ All operations work on a locally cloned repository within the agent workspace.
 """
 
 import logging
-import os
 from typing import Any
 
-from .git_helpers import _get_workspace_path, _run_git_command, _validate_repo_path
+from .git_helpers import (
+    _get_workspace_path,
+    async_path_exists,
+    async_run_git_command,
+    async_validate_repo_path,
+)
 
 logger = logging.getLogger(__name__)
 
@@ -31,21 +35,21 @@ async def internal_git_create_branch(
     """
     try:
         workspace_path = _get_workspace_path(config)
-        is_valid, error = _validate_repo_path(repo_path, workspace_path)
+        is_valid, error = await async_validate_repo_path(repo_path, workspace_path, config)
         if not is_valid:
             return {"success": False, "error": error}
 
-        if not os.path.exists(repo_path):
+        if not await async_path_exists(repo_path, config):
             return {"success": False, "error": f"Repository path does not exist: {repo_path}"}
 
         logger.info(f"Fetching latest changes in {repo_path}")
-        fetch_result = _run_git_command(["git", "fetch", "origin"], repo_path)
+        fetch_result = await async_run_git_command(["git", "fetch", "origin"], repo_path, config)
         if not fetch_result["success"]:
             logger.warning(f"git fetch failed: {fetch_result['error']}")
 
         source_branch = f"origin/{from_branch}" if "/" not in from_branch else from_branch
         logger.info(f"Creating branch '{branch_name}' from '{source_branch}'")
-        result = _run_git_command(["git", "checkout", "-b", branch_name, source_branch], repo_path)
+        result = await async_run_git_command(["git", "checkout", "-b", branch_name, source_branch], repo_path, config)
 
         if not result["success"]:
             return {"success": False, "error": f"Failed to create branch: {result['error']}"}
@@ -77,14 +81,14 @@ async def internal_git_switch_branch(
     """
     try:
         workspace_path = _get_workspace_path(config)
-        is_valid, error = _validate_repo_path(repo_path, workspace_path)
+        is_valid, error = await async_validate_repo_path(repo_path, workspace_path, config)
         if not is_valid:
             return {"success": False, "error": error}
 
-        if not os.path.exists(repo_path):
+        if not await async_path_exists(repo_path, config):
             return {"success": False, "error": f"Repository path does not exist: {repo_path}"}
 
-        result = _run_git_command(["git", "checkout", branch_name], repo_path)
+        result = await async_run_git_command(["git", "checkout", branch_name], repo_path, config)
         if not result["success"]:
             return {"success": False, "error": f"Failed to switch branch: {result['error']}"}
 
@@ -111,18 +115,18 @@ async def internal_git_list_branches(
     """
     try:
         workspace_path = _get_workspace_path(config)
-        is_valid, error = _validate_repo_path(repo_path, workspace_path)
+        is_valid, error = await async_validate_repo_path(repo_path, workspace_path, config)
         if not is_valid:
             return {"success": False, "error": error}
 
-        if not os.path.exists(repo_path):
+        if not await async_path_exists(repo_path, config):
             return {"success": False, "error": f"Repository path does not exist: {repo_path}"}
 
         command = ["git", "branch"]
         if include_remote:
             command.append("-a")
 
-        result = _run_git_command(command, repo_path)
+        result = await async_run_git_command(command, repo_path, config)
         if not result["success"]:
             return {"success": False, "error": f"Failed to list branches: {result['error']}"}
 
@@ -168,18 +172,18 @@ async def internal_git_pull_changes(
     """
     try:
         workspace_path = _get_workspace_path(config)
-        is_valid, error = _validate_repo_path(repo_path, workspace_path)
+        is_valid, error = await async_validate_repo_path(repo_path, workspace_path, config)
         if not is_valid:
             return {"success": False, "error": error}
 
-        if not os.path.exists(repo_path):
+        if not await async_path_exists(repo_path, config):
             return {"success": False, "error": f"Repository path does not exist: {repo_path}"}
 
         command = ["git", "pull", remote]
         if branch:
             command.append(branch)
 
-        result = _run_git_command(command, repo_path)
+        result = await async_run_git_command(command, repo_path, config)
         if not result["success"]:
             return {"success": False, "error": f"Failed to pull changes: {result['error']}"}
 

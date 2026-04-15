@@ -138,6 +138,10 @@ interface ExtendedAPIClient extends APIClient {
   deleteDataSource: typeof dataSources.deleteDataSource
   syncDataSource: typeof dataSources.syncDataSource
   getDataSourceSyncHistory: typeof dataSources.getDataSourceSyncHistory
+  getStreamHealth: typeof dataSources.getStreamHealth
+  updateDataSourceConfig: typeof dataSources.updateDataSourceConfig
+  activateDataSource: typeof dataSources.activateDataSource
+  deactivateDataSource: typeof dataSources.deactivateDataSource
 
   // OAuth
   getOAuthApps: typeof oauth.getOAuthApps
@@ -172,10 +176,6 @@ interface ExtendedAPIClient extends APIClient {
   deleteWidget: typeof widgets.deleteWidget
   regenerateWidgetKey: typeof widgets.regenerateWidgetKey
   getWidgetEmbedCode: typeof widgets.getWidgetEmbedCode
-  regenerateIdentitySecret: typeof widgets.regenerateIdentitySecret
-  getWidgetRoutes: typeof widgets.getWidgetRoutes
-  setWidgetRoutes: typeof widgets.setWidgetRoutes
-  deleteWidgetRoute: typeof widgets.deleteWidgetRoute
 
   // Slack Bots
   getSlackBots: typeof slackBots.getSlackBots
@@ -349,6 +349,10 @@ export const apiClient: ExtendedAPIClient = Object.assign(_apiClient, {
   deleteDataSource: dataSources.deleteDataSource,
   syncDataSource: dataSources.syncDataSource,
   getDataSourceSyncHistory: dataSources.getDataSourceSyncHistory,
+  getStreamHealth: dataSources.getStreamHealth,
+  updateDataSourceConfig: dataSources.updateDataSourceConfig,
+  activateDataSource: dataSources.activateDataSource,
+  deactivateDataSource: dataSources.deactivateDataSource,
 
   // OAuth
   getOAuthApps: oauth.getOAuthApps,
@@ -383,10 +387,6 @@ export const apiClient: ExtendedAPIClient = Object.assign(_apiClient, {
   deleteWidget: widgets.deleteWidget,
   regenerateWidgetKey: widgets.regenerateWidgetKey,
   getWidgetEmbedCode: widgets.getWidgetEmbedCode,
-  regenerateIdentitySecret: widgets.regenerateIdentitySecret,
-  getWidgetRoutes: widgets.getWidgetRoutes,
-  setWidgetRoutes: widgets.setWidgetRoutes,
-  deleteWidgetRoute: widgets.deleteWidgetRoute,
 
   // Slack Bots
   getSlackBots: slackBots.getSlackBots,

@@ -47,27 +47,36 @@ def sync_data_source_task(
             return {"success": False, "error": "Data source not found"}
 
         # Route to appropriate connector based on type
-        if data_source.type == "gmail":
-            from src.services.data_sources.gmail_connector import GmailConnector
+        connector_map = {
+            "GMAIL": ("src.services.data_sources.gmail_connector", "GmailConnector"),
+            "SLACK": ("src.services.data_sources.slack_connector", "SlackConnector"),
+            "GITHUB": ("src.services.data_sources.github_connector", "GitHubConnector"),
+            "GITLAB": ("src.services.data_sources.gitlab_connector", "GitLabConnector"),
+            "GOOGLE_DRIVE": ("src.services.data_sources.google_drive_connector", "GoogleDriveConnector"),
+            "TELEGRAM": ("src.services.data_sources.telegram_connector", "TelegramConnector"),
+            "JIRA": ("src.services.data_sources.jira_connector", "JiraConnector"),
+            "CLICKUP": ("src.services.data_sources.clickup_connector", "ClickUpConnector"),
+            "NOTION": ("src.services.data_sources.notion_connector", "NotionConnector"),
+            "CONFLUENCE": ("src.services.data_sources.confluence_connector", "ConfluenceConnector"),
+            "LINEAR": ("src.services.data_sources.linear_connector", "LinearConnector"),
+        }
 
-            connector = GmailConnector(db, data_source)
-        elif data_source.type == "slack":
-            from src.services.data_sources.slack_connector import SlackConnector
-
-            connector = SlackConnector(db, data_source)
-        elif data_source.type == "github":
-            from src.services.data_sources.github_connector import GitHubConnector
-
-            connector = GitHubConnector(db, data_source)
-        else:
+        source_type = str(data_source.type).upper()
+        if source_type not in connector_map:
             logger.error(f"Unsupported data source type: {data_source.type}")
             return {"success": False, "error": f"Unsupported type: {data_source.type}"}
+
+        import importlib
+        module_path, class_name = connector_map[source_type]
+        mod = importlib.import_module(module_path)
+        connector_cls = getattr(mod, class_name)
+        connector = connector_cls(data_source, db)
 
         # Perform sync
         result = connector.sync(full_sync=full_sync)
 
         # Update last sync time
-        data_source.last_synced_at = datetime.now(UTC)
+        data_source.last_sync_at = datetime.now(UTC)
         db.commit()
 
         logger.info(f"✅ Sync completed for data source {data_source_id}: {result}")

@@ -348,6 +348,18 @@ services:
     networks:
       - synkora-network
 
+  # Sandbox Microservice (agent code execution)
+  # Internal only — reachable within the Docker network as http://synkora-sandbox:5004
+  synkora-sandbox:
+    build:
+      context: ./services/sandbox
+      dockerfile: Dockerfile
+    container_name: synkora-sandbox
+    environment:
+      - SANDBOX_API_KEY=${SANDBOX_API_KEY:-}
+    networks:
+      - synkora-network
+
   # ---------------------------------------------------------------------------
   # PgBouncer — connection pooler in front of PostgreSQL.
   # Mirrors the production K8s setup (pgbouncer-deployment.yml).
@@ -411,8 +423,11 @@ services:
       - PYTHONUNBUFFERED=1
       - ML_SERVICE_URL=http://synkora-ml:5002
       - SCRAPER_SERVICE_URL=http://synkora-scraper:5003
+      - SANDBOX_SERVICE_URL=http://synkora-sandbox:5004
+      - SANDBOX_API_KEY=${SANDBOX_API_KEY:-}
       # Workspace Settings (uses /tmp which is already writable)
       - WORKSPACE_BASE_PATH=/tmp/synkora/workspaces
+
       - WORKSPACE_TTL_HOURS=24
       - WORKSPACE_MAX_SIZE_MB=2000
     volumes:
@@ -436,6 +451,8 @@ services:
       synkora-ml:
         condition: service_started
       synkora-scraper:
+        condition: service_started
+      synkora-sandbox:
         condition: service_started
     networks:
       - synkora-network
@@ -464,7 +481,10 @@ services:
       - CELERY_CONCURRENCY=${CELERY_CONCURRENCY:-4}
       - ML_SERVICE_URL=http://synkora-ml:5002
       - SCRAPER_SERVICE_URL=http://synkora-scraper:5003
+      - SANDBOX_SERVICE_URL=http://synkora-sandbox:5004
+      - SANDBOX_API_KEY=${SANDBOX_API_KEY:-}
       - WORKSPACE_BASE_PATH=/tmp/synkora/workspaces
+
       - WORKSPACE_TTL_HOURS=24
       - WORKSPACE_MAX_SIZE_MB=2000
     volumes:
@@ -492,7 +512,10 @@ services:
       - PYTHONUNBUFFERED=1
       - ML_SERVICE_URL=http://synkora-ml:5002
       - SCRAPER_SERVICE_URL=http://synkora-scraper:5003
+      - SANDBOX_SERVICE_URL=http://synkora-sandbox:5004
+      - SANDBOX_API_KEY=${SANDBOX_API_KEY:-}
       - WORKSPACE_BASE_PATH=/tmp/synkora/workspaces
+
       - WORKSPACE_TTL_HOURS=24
       - WORKSPACE_MAX_SIZE_MB=2000
     volumes:
@@ -520,7 +543,10 @@ services:
       - PYTHONUNBUFFERED=1
       - ML_SERVICE_URL=http://synkora-ml:5002
       - SCRAPER_SERVICE_URL=http://synkora-scraper:5003
+      - SANDBOX_SERVICE_URL=http://synkora-sandbox:5004
+      - SANDBOX_API_KEY=${SANDBOX_API_KEY:-}
       - WORKSPACE_BASE_PATH=/tmp/synkora/workspaces
+
       - WORKSPACE_TTL_HOURS=24
       - WORKSPACE_MAX_SIZE_MB=2000
     volumes:
@@ -547,7 +573,10 @@ services:
       - PYTHONUNBUFFERED=1
       - ML_SERVICE_URL=http://synkora-ml:5002
       - SCRAPER_SERVICE_URL=http://synkora-scraper:5003
+      - SANDBOX_SERVICE_URL=http://synkora-sandbox:5004
+      - SANDBOX_API_KEY=${SANDBOX_API_KEY:-}
       - WORKSPACE_BASE_PATH=/tmp/synkora/workspaces
+
       - WORKSPACE_TTL_HOURS=24
       - WORKSPACE_MAX_SIZE_MB=2000
     volumes:
@@ -574,7 +603,10 @@ services:
       - PYTHONUNBUFFERED=1
       - ML_SERVICE_URL=http://synkora-ml:5002
       - SCRAPER_SERVICE_URL=http://synkora-scraper:5003
+      - SANDBOX_SERVICE_URL=http://synkora-sandbox:5004
+      - SANDBOX_API_KEY=${SANDBOX_API_KEY:-}
       - WORKSPACE_BASE_PATH=/tmp/synkora/workspaces
+
       - WORKSPACE_TTL_HOURS=24
       - WORKSPACE_MAX_SIZE_MB=2000
     volumes:

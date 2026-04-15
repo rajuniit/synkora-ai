@@ -92,6 +92,7 @@ class OAuthApp(Base):
             "tags": self.tags or [],
             "is_internal_tool": self.is_internal_tool,
             "description": self.description,
+            "config": self.config,
             "created_at": self.created_at.isoformat() if self.created_at else None,
             "updated_at": self.updated_at.isoformat() if self.updated_at else None,
         }
@@ -101,7 +102,7 @@ class OAuthApp(Base):
                 data["has_access_token"] = bool(self.access_token)
                 data["has_refresh_token"] = bool(self.refresh_token)
                 data["token_expires_at"] = self.token_expires_at.isoformat() if self.token_expires_at else None
-            elif self.auth_method == "api_token":
+            elif self.auth_method in ("api_token", "basic_auth"):
                 data["has_api_token"] = bool(self.api_token)
 
         return data

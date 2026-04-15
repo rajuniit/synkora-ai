@@ -130,6 +130,17 @@ const RecallIcon = () => (
   </svg>
 )
 
+const MicromobilityIcon = () => (
+  <svg className="w-8 h-8" viewBox="0 0 24 24" fill="none">
+    <rect width="24" height="24" rx="6" fill="#10B981"/>
+    <circle cx="6.5" cy="17" r="2.5" stroke="white" strokeWidth="1.5"/>
+    <circle cx="17.5" cy="17" r="2.5" stroke="white" strokeWidth="1.5"/>
+    <path d="M6.5 17H11L14 8H17.5" stroke="white" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round"/>
+    <path d="M12 8H16" stroke="white" strokeWidth="1.5" strokeLinecap="round"/>
+    <circle cx="17.5" cy="8" r="1" fill="white"/>
+  </svg>
+)
+
 const PROVIDERS = [
   {
     value: 'github',
@@ -372,6 +383,21 @@ const PROVIDERS = [
     supportsApiToken: true,
     apiTokenDescription: 'Use your NewsAPI key from newsapi.org to search news articles'
   },
+  {
+    value: 'micromobility',
+    label: 'Micromobility',
+    icon: <MicromobilityIcon />,
+    color: 'text-emerald-700',
+    bgColor: 'bg-emerald-50',
+    description: 'Fleet management for scooters, bikes, and micromobility vehicles via Dashboard',
+    defaultScopes: [],
+    redirectUri: `${API_URL}/api/v1/oauth/micromobility/callback`,
+    setupGuide: 'https://example.com',
+    supportsOAuth: false,
+    supportsApiToken: true,
+    supportsBasicAuth: true,
+    apiTokenDescription: 'Paste the JWT token obtained from the login endpoint',
+  },
 ]
 
 const COMMON_TAGS = [
@@ -410,10 +436,14 @@ export default function CreateOAuthAppPage() {
   const selectedProvider = PROVIDERS.find(p => p.value === formData.provider)
 
   const handleProviderChange = (provider: string) => {
-    const providerInfo = PROVIDERS.find(p => p.value === provider)
+    const providerInfo = PROVIDERS.find(p => p.value === provider) as typeof PROVIDERS[0] & { supportsBasicAuth?: boolean }
     if (providerInfo) {
-      // Auto-select api_token method for providers that don't support OAuth
-      const authMethod = providerInfo.supportsOAuth ? 'oauth' : 'api_token'
+      let authMethod = 'api_token'
+      if (providerInfo.supportsBasicAuth) {
+        authMethod = 'basic_auth'
+      } else if (providerInfo.supportsOAuth) {
+        authMethod = 'oauth'
+      }
       setFormData({
         ...formData,
         provider,
@@ -422,6 +452,7 @@ export default function CreateOAuthAppPage() {
         scopes: providerInfo.defaultScopes,
         description: providerInfo.description,
         auth_method: authMethod,
+        config: {},
       })
     }
   }
@@ -464,7 +495,7 @@ export default function CreateOAuthAppPage() {
       if (formData.auth_method === 'oauth') {
         setShowSuccessModal(true)
       } else {
-        // For API token method, redirect directly
+        // For API token / basic_auth, redirect directly
         router.push('/oauth-apps')
       }
     } catch (err) {
@@ -583,45 +614,67 @@ export default function CreateOAuthAppPage() {
               </div>
 
               {/* Authentication Method Selection */}
-              {selectedProvider?.supportsApiToken && (
+              {(selectedProvider?.supportsApiToken || (selectedProvider as any)?.supportsBasicAuth) && (
                 <div className="bg-white rounded-lg shadow-sm border border-gray-200 p-5">
                   <h2 className="text-base font-semibold text-gray-900 mb-3">Authentication Method</h2>
                   <p className="text-sm text-gray-600 mb-3">
-                    Choose how to authenticate with {selectedProvider.label}
+                    Choose how to authenticate with {selectedProvider?.label}
                   </p>
                   <div className="space-y-2.5">
-                    <label className="flex items-start gap-2.5 p-3 border rounded-lg cursor-pointer hover:bg-gray-50">
-                      <input
-                        type="radio"
-                        name="auth_method"
-                        value="oauth"
-                        checked={formData.auth_method === 'oauth'}
-                        onChange={(e) => setFormData({ ...formData, auth_method: e.target.value })}
-                        className="mt-0.5 w-4 h-4 text-[#ff444f] border-gray-300 focus:ring-[#ff444f]"
-                      />
-                      <div>
-                        <div className="font-medium text-gray-900 text-sm">OAuth Flow</div>
-                        <div className="text-xs text-gray-600">
-                          Standard OAuth 2.0 flow with user authorization. Requires OAuth app setup.
+                    {selectedProvider?.supportsOAuth && (
+                      <label className="flex items-start gap-2.5 p-3 border rounded-lg cursor-pointer hover:bg-gray-50">
+                        <input
+                          type="radio"
+                          name="auth_method"
+                          value="oauth"
+                          checked={formData.auth_method === 'oauth'}
+                          onChange={(e) => setFormData({ ...formData, auth_method: e.target.value })}
+                          className="mt-0.5 w-4 h-4 text-[#ff444f] border-gray-300 focus:ring-[#ff444f]"
+                        />
+                        <div>
+                          <div className="font-medium text-gray-900 text-sm">OAuth Flow</div>
+                          <div className="text-xs text-gray-600">
+                            Standard OAuth 2.0 flow with user authorization. Requires OAuth app setup.
+                          </div>
                         </div>
-                      </div>
-                    </label>
-                    <label className="flex items-start gap-2.5 p-3 border rounded-lg cursor-pointer hover:bg-gray-50">
-                      <input
-                        type="radio"
-                        name="auth_method"
-                        value="api_token"
-                        checked={formData.auth_method === 'api_token'}
-                        onChange={(e) => setFormData({ ...formData, auth_method: e.target.value })}
-                        className="mt-0.5 w-4 h-4 text-[#ff444f] border-gray-300 focus:ring-[#ff444f]"
-                      />
-                      <div>
-                        <div className="font-medium text-gray-900 text-sm">API Token</div>
-                        <div className="text-xs text-gray-600">
-                          {selectedProvider.apiTokenDescription}
+                      </label>
+                    )}
+                    {(selectedProvider as any)?.supportsBasicAuth && (
+                      <label className="flex items-start gap-2.5 p-3 border rounded-lg cursor-pointer hover:bg-gray-50">
+                        <input
+                          type="radio"
+                          name="auth_method"
+                          value="basic_auth"
+                          checked={formData.auth_method === 'basic_auth'}
+                          onChange={(e) => setFormData({ ...formData, auth_method: e.target.value })}
+                          className="mt-0.5 w-4 h-4 text-[#ff444f] border-gray-300 focus:ring-[#ff444f]"
+                        />
+                        <div>
+                          <div className="font-medium text-gray-900 text-sm">Username & Password</div>
+                          <div className="text-xs text-gray-600">
+                            Login with username and password to obtain a JWT token automatically. Token is refreshed when expired.
+                          </div>
                         </div>
-                      </div>
-                    </label>
+                      </label>
+                    )}
+                    {selectedProvider?.supportsApiToken && (
+                      <label className="flex items-start gap-2.5 p-3 border rounded-lg cursor-pointer hover:bg-gray-50">
+                        <input
+                          type="radio"
+                          name="auth_method"
+                          value="api_token"
+                          checked={formData.auth_method === 'api_token'}
+                          onChange={(e) => setFormData({ ...formData, auth_method: e.target.value })}
+                          className="mt-0.5 w-4 h-4 text-[#ff444f] border-gray-300 focus:ring-[#ff444f]"
+                        />
+                        <div>
+                          <div className="font-medium text-gray-900 text-sm">API Token</div>
+                          <div className="text-xs text-gray-600">
+                            {selectedProvider.apiTokenDescription}
+                          </div>
+                        </div>
+                      </label>
+                    )}
                   </div>
                 </div>
               )}
@@ -629,10 +682,114 @@ export default function CreateOAuthAppPage() {
               {/* Authentication Credentials */}
               <div className="bg-white rounded-lg shadow-sm border border-gray-200 p-5">
                 <h2 className="text-base font-semibold text-gray-900 mb-3">
-                  {formData.auth_method === 'api_token' ? 'API Token' : 'OAuth Credentials'}
+                  {formData.auth_method === 'api_token' ? 'API Token' : formData.auth_method === 'basic_auth' ? 'Login Credentials' : 'OAuth Credentials'}
                 </h2>
                 
-                {formData.auth_method === 'oauth' ? (
+                {formData.auth_method === 'basic_auth' ? (
+                  <div className="space-y-4">
+                    <div>
+                      <label className="block text-sm font-medium text-gray-700 mb-1.5">
+                        Base URL *
+                      </label>
+                      <input
+                        type="url"
+                        required
+                        value={formData.config.base_url || ''}
+                        onChange={(e) => setFormData({ ...formData, config: { ...formData.config, base_url: e.target.value } })}
+                        className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-[#ff444f] focus:border-transparent font-mono text-sm"
+                        placeholder="https://api.your-oto-instance.com"
+                      />
+                      <p className="text-xs text-gray-500 mt-1">Base URL of your API (must be HTTPS)</p>
+                    </div>
+                    <div>
+                      <label className="block text-sm font-medium text-gray-700 mb-1.5">
+                        Login Endpoint *
+                      </label>
+                      <input
+                        type="text"
+                        required
+                        value={formData.config.login_endpoint || ''}
+                        onChange={(e) => setFormData({ ...formData, config: { ...formData.config, login_endpoint: e.target.value } })}
+                        className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-[#ff444f] focus:border-transparent font-mono text-sm"
+                        placeholder="/admin-login-jwt/"
+                      />
+                      <p className="text-xs text-gray-500 mt-1">
+                        Endpoint to POST username/password to receive a JWT token (e.g. <code className="bg-gray-100 px-1 rounded">/admin-login-jwt/</code>)
+                      </p>
+                    </div>
+                    <div>
+                      <label className="block text-sm font-medium text-gray-700 mb-1.5">
+                        Token Field in Response *
+                      </label>
+                      <input
+                        type="text"
+                        required
+                        value={formData.config.token_response_field || ''}
+                        onChange={(e) => setFormData({ ...formData, config: { ...formData.config, token_response_field: e.target.value } })}
+                        className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-[#ff444f] focus:border-transparent font-mono text-sm"
+                        placeholder="token"
+                      />
+                      <p className="text-xs text-gray-500 mt-1">
+                        JSON field name in the login response that contains the JWT (e.g. <code className="bg-gray-100 px-1 rounded">token</code>)
+                      </p>
+                    </div>
+                    <div className="grid grid-cols-2 gap-3">
+                      <div>
+                        <label className="block text-sm font-medium text-gray-700 mb-1.5">
+                          Username Field Name
+                        </label>
+                        <input
+                          type="text"
+                          value={formData.config.login_username_field || ''}
+                          onChange={(e) => setFormData({ ...formData, config: { ...formData.config, login_username_field: e.target.value } })}
+                          className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-[#ff444f] focus:border-transparent font-mono text-sm"
+                          placeholder="username"
+                        />
+                        <p className="text-xs text-gray-500 mt-1">Login body key for username (default: <code className="bg-gray-100 px-1 rounded">username</code>)</p>
+                      </div>
+                      <div>
+                        <label className="block text-sm font-medium text-gray-700 mb-1.5">
+                          Password Field Name
+                        </label>
+                        <input
+                          type="text"
+                          value={formData.config.login_password_field || ''}
+                          onChange={(e) => setFormData({ ...formData, config: { ...formData.config, login_password_field: e.target.value } })}
+                          className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-[#ff444f] focus:border-transparent font-mono text-sm"
+                          placeholder="password"
+                        />
+                        <p className="text-xs text-gray-500 mt-1">Login body key for password (default: <code className="bg-gray-100 px-1 rounded">password</code>)</p>
+                      </div>
+                    </div>
+                    <div>
+                      <label className="block text-sm font-medium text-gray-700 mb-1.5">
+                        Username *
+                      </label>
+                      <input
+                        type="text"
+                        required
+                        value={formData.config.username || ''}
+                        onChange={(e) => setFormData({ ...formData, config: { ...formData.config, username: e.target.value } })}
+                        className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-[#ff444f] focus:border-transparent text-sm"
+                        placeholder="admin@your-company.com"
+                      />
+                    </div>
+                    <div>
+                      <label className="block text-sm font-medium text-gray-700 mb-1.5">
+                        Password *
+                      </label>
+                      <input
+                        type="password"
+                        required
+                        value={formData.api_token}
+                        onChange={(e) => setFormData({ ...formData, api_token: e.target.value })}
+                        className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-[#ff444f] focus:border-transparent font-mono text-sm"
+                        placeholder="Enter your password"
+                      />
+                      <p className="text-xs text-gray-500 mt-1">Encrypted and stored securely. Used to obtain and refresh the JWT token.</p>
+                    </div>
+                  </div>
+                ) : formData.auth_method === 'oauth' ? (
                   <div className="space-y-4">
                     <div>
                       <label className="block text-sm font-medium text-gray-700 mb-1.5">
@@ -784,8 +941,8 @@ export default function CreateOAuthAppPage() {
                             type="url"
                             required
                             value={formData.config.base_url || ''}
-                            onChange={(e) => setFormData({ 
-                              ...formData, 
+                            onChange={(e) => setFormData({
+                              ...formData,
                               config: { ...formData.config, base_url: e.target.value }
                             })}
                             className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-[#ff444f] focus:border-transparent font-mono text-sm"
@@ -795,7 +952,7 @@ export default function CreateOAuthAppPage() {
                             Your Jira instance URL (e.g., https://your-domain.atlassian.net)
                           </p>
                         </div>
-                        
+
                         <div>
                           <label className="block text-sm font-medium text-gray-700 mb-1.5">
                             Email Address *
@@ -804,8 +961,8 @@ export default function CreateOAuthAppPage() {
                             type="email"
                             required
                             value={formData.config.email || ''}
-                            onChange={(e) => setFormData({ 
-                              ...formData, 
+                            onChange={(e) => setFormData({
+                              ...formData,
                               config: { ...formData.config, email: e.target.value }
                             })}
                             className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-[#ff444f] focus:border-transparent text-sm"
@@ -815,6 +972,71 @@ export default function CreateOAuthAppPage() {
                             The email address associated with your Jira account
                           </p>
                         </div>
+                      </>
+                    )}
+
+                    {/* Micromobility-specific fields */}
+                    {formData.provider === 'micromobility' && (
+                      <>
+                        <div>
+                          <label className="block text-sm font-medium text-gray-700 mb-1.5">
+                            Base URL *
+                          </label>
+                          <input
+                            type="url"
+                            required
+                            value={formData.config.base_url || ''}
+                            onChange={(e) => setFormData({
+                              ...formData,
+                              config: { ...formData.config, base_url: e.target.value }
+                            })}
+                            className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-[#ff444f] focus:border-transparent font-mono text-sm"
+                            placeholder="https://api.your-oto-instance.com"
+                          />
+                          <p className="text-xs text-gray-500 mt-1">
+                            The base URL of your API (must be HTTPS)
+                          </p>
+                        </div>
+                        {formData.auth_method === 'api_token' && (
+                          <>
+                            <div>
+                              <label className="block text-sm font-medium text-gray-700 mb-1.5">
+                                API Key Header
+                              </label>
+                              <input
+                                type="text"
+                                value={formData.config.api_key_header || 'Authorization'}
+                                onChange={(e) => setFormData({
+                                  ...formData,
+                                  config: { ...formData.config, api_key_header: e.target.value }
+                                })}
+                                className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-[#ff444f] focus:border-transparent font-mono text-sm"
+                                placeholder="Authorization"
+                              />
+                              <p className="text-xs text-gray-500 mt-1">
+                                HTTP header name to send the token in (default: Authorization)
+                              </p>
+                            </div>
+                            <div>
+                              <label className="block text-sm font-medium text-gray-700 mb-1.5">
+                                API Key Format
+                              </label>
+                              <input
+                                type="text"
+                                value={formData.config.api_key_format || 'Bearer {token}'}
+                                onChange={(e) => setFormData({
+                                  ...formData,
+                                  config: { ...formData.config, api_key_format: e.target.value }
+                                })}
+                                className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-[#ff444f] focus:border-transparent font-mono text-sm"
+                                placeholder="Bearer {token}"
+                              />
+                              <p className="text-xs text-gray-500 mt-1">
+                                Format string for the token value. Use <code className="bg-gray-100 px-1 rounded">{'{token}'}</code> as the placeholder (default: Bearer {'{token}'})
+                              </p>
+                            </div>
+                          </>
+                        )}
                       </>
                     )}
                     
@@ -840,6 +1062,8 @@ export default function CreateOAuthAppPage() {
                         {formData.provider === 'linkedin' && ' For LinkedIn, use an Access Token from your app.'}
                         {formData.provider === 'onepassword' && ' For 1Password, use a Service Account Token.'}
                         {formData.provider === 'recall' && ' For Recall.ai, use your API key from the Recall.ai dashboard.'}
+                        {formData.provider === 'micromobility' && ' For Micromobility, use the JWT token returned by the admin login endpoint (POST /admin-login-jwt/).'}
+
                       </p>
                     </div>
                   </div>

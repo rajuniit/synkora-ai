@@ -163,6 +163,18 @@ from src.services.agents.internal_tools.twitter_tools import (
     internal_twitter_search_tweets,
 )
 
+# Diagram tools
+from src.services.agents.internal_tools.diagram_tools import (
+    internal_generate_diagram,
+    internal_generate_quick_diagram,
+)
+
+# KB ingest tools
+from src.services.agents.internal_tools.kb_ingest_tools import (
+    internal_kb_add_text,
+    internal_kb_crawl_url,
+)
+
 # Web tools
 from src.services.agents.internal_tools.web_tools import (
     internal_web_fetch,
@@ -315,4 +327,10 @@ __all__ = [
     "internal_spawn_agent",
     "internal_check_task",
     "internal_list_background_tasks",
+    # Diagram tools
+    "internal_generate_diagram",
+    "internal_generate_quick_diagram",
+    # KB ingest tools
+    "internal_kb_crawl_url",
+    "internal_kb_add_text",
 ]

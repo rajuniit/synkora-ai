@@ -24,6 +24,7 @@ interface Document {
   chunk_count: number
   has_images: boolean
   image_count: number
+  status: string
   created_at: string
   updated_at: string
   metadata: Record<string, any>
@@ -317,7 +318,16 @@ export default function DocumentBrowser({
                       {formatFileSize(doc.file_size)}
                     </td>
                     <td className="px-4 py-4 text-sm text-gray-500">
-                      {doc.chunk_count}
+                      {doc.status === 'PENDING' || doc.status === 'PROCESSING' ? (
+                        <span className="inline-flex items-center gap-1 text-amber-600">
+                          <Loader2 className="w-3 h-3 animate-spin" />
+                          Processing
+                        </span>
+                      ) : doc.status === 'ERROR' ? (
+                        <span className="text-red-500">Error</span>
+                      ) : (
+                        doc.chunk_count
+                      )}
                     </td>
                     <td className="px-4 py-4 text-sm text-gray-500">
                       {formatDate(doc.created_at)}

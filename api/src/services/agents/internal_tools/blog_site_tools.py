@@ -17,12 +17,13 @@ custom CSS and HTML dynamically based on user's description.
 
 import logging
 import os
-import subprocess
 import uuid
 from datetime import datetime
 from typing import Any
 
 import requests
+
+from .git_helpers import async_makedirs, async_path_exists, async_run_git_command, async_write_file
 
 logger = logging.getLogger(__name__)
 
@@ -98,12 +99,12 @@ async def internal_generate_blog_site(
         safe_name = "".join(c if c.isalnum() or c in "_ -" else "_" for c in site_name)[:50]
         site_dir_name = f"blog_{safe_name.replace(' ', '_')}_{uuid.uuid4().hex[:8]}"
         temp_dir = os.path.join(workspace_path, "sites", site_dir_name)
-        os.makedirs(temp_dir, exist_ok=True)
+        await async_makedirs(temp_dir, config)
 
         # Create directory structure
         dirs = ["posts", "images", "css", "js"]
         for dir_name in dirs:
-            os.makedirs(os.path.join(temp_dir, dir_name), exist_ok=True)
+            await async_makedirs(os.path.join(temp_dir, dir_name), config)
 
         # Create minimal placeholder files (agent will overwrite with custom content)
         now = datetime.now()
@@ -136,16 +137,17 @@ async def internal_generate_blog_site(
 </body>
 </html>"""
 
-        with open(os.path.join(temp_dir, "index.html"), "w", encoding="utf-8") as f:
-            f.write(index_content)
-
-        # Empty CSS file - agent will write custom styles
-        with open(os.path.join(temp_dir, "css", "style.css"), "w", encoding="utf-8") as f:
-            f.write("/* Agent will generate custom CSS based on user's style requirements */\n")
-
-        # Minimal JS file
-        with open(os.path.join(temp_dir, "js", "app.js"), "w", encoding="utf-8") as f:
-            f.write("// Blog site JavaScript\nconsole.log('Blog loaded');\n")
+        await async_write_file(os.path.join(temp_dir, "index.html"), index_content, config)
+        await async_write_file(
+            os.path.join(temp_dir, "css", "style.css"),
+            "/* Agent will generate custom CSS based on user's style requirements */\n",
+            config,
+        )
+        await async_write_file(
+            os.path.join(temp_dir, "js", "app.js"),
+            "// Blog site JavaScript\nconsole.log('Blog loaded');\n",
+            config,
+        )
 
         return {
             "success": True,
@@ -288,7 +290,7 @@ async def internal_deploy_to_github(
         if not is_valid:
             return {"success": False, "error": error}
 
-        if not os.path.exists(site_path):
+        if not await async_path_exists(site_path, config):
             return {"success": False, "error": f"Site path not found: {site_path}"}
 
         # Git commands to execute
@@ -301,34 +303,21 @@ async def internal_deploy_to_github(
             ["git", "push", "-u", "origin", branch],
         ]
 
-        from src.services.agents.internal_tools.command_tools import _is_command_safe
-
         results = []
         for cmd in commands:
-            if not _is_command_safe(cmd, workspace_path):
-                return {
-                    "success": False,
-                    "error": f"Command blocked by security validator: {' '.join(cmd)}",
-                    "results": results,
+            result = await async_run_git_command(cmd, site_path, config, timeout=120)
+            results.append(
+                {
+                    "command": " ".join(cmd),
+                    "returncode": result.get("return_code", -1),
+                    "stdout": result.get("output", "")[:500],
+                    "stderr": result.get("error", "")[:500],
                 }
-            try:
-                result = subprocess.run(cmd, cwd=site_path, capture_output=True, text=True, timeout=120)
-                results.append(
-                    {
-                        "command": " ".join(cmd),
-                        "returncode": result.returncode,
-                        "stdout": result.stdout[:500] if result.stdout else "",
-                        "stderr": result.stderr[:500] if result.stderr else "",
-                    }
-                )
+            )
 
-                # Continue even if remote already exists
-                if result.returncode != 0 and "remote origin already exists" not in result.stderr:
-                    if "git push" in " ".join(cmd):
-                        # Push failure is critical
-                        return {"success": False, "error": f"Git push failed: {result.stderr}", "results": results}
-            except subprocess.TimeoutExpired:
-                return {"success": False, "error": f"Command timed out: {' '.join(cmd)}", "results": results}
+            if not result["success"] and "remote origin already exists" not in result.get("error", ""):
+                if "git push" in " ".join(cmd):
+                    return {"success": False, "error": f"Git push failed: {result.get('error')}", "results": results}
 
         return {
             "success": True,
