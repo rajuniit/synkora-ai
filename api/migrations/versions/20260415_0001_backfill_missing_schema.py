@@ -107,27 +107,22 @@ def upgrade() -> None:
 def downgrade() -> None:
     conn = op.get_bind()
 
-    # Remove external_org_id if we added it
-    org_exists = conn.execute(
-        sa.text(
-            "SELECT column_name FROM information_schema.columns "
-            "WHERE table_name='conversations' AND column_name='external_org_id'"
-        )
-    ).fetchone()
-    if org_exists:
-        op.drop_index("ix_conversations_external_org_id", table_name="conversations")
-        op.drop_column("conversations", "external_org_id")
+    # conversations.external_org_id is owned by migration 20260412_0001 which is
+    # always in the chain below this one — never drop it here.
 
     op.execute("DROP INDEX IF EXISTS ix_dsd_search_vector")
     op.execute("ALTER TABLE data_source_documents DROP COLUMN IF EXISTS search_vector")
 
     sv_tier = conn.execute(
         sa.text(
-            "SELECT column_name FROM information_schema.columns "
+            "SELECT 1 FROM information_schema.columns "
             "WHERE table_name='data_source_documents' AND column_name='storage_tier'"
         )
     ).fetchone()
     if sv_tier:
-        op.drop_index("ix_dsd_tenant_tier_created", table_name="data_source_documents")
-        op.drop_constraint("ck_dsd_storage_tier", "data_source_documents", type_="check")
-        op.drop_column("data_source_documents", "storage_tier")
+        op.execute("DROP INDEX IF EXISTS ix_dsd_tenant_tier_created")
+        op.execute(
+            "ALTER TABLE data_source_documents "
+            "DROP CONSTRAINT IF EXISTS ck_dsd_storage_tier"
+        )
+        op.execute("ALTER TABLE data_source_documents DROP COLUMN IF EXISTS storage_tier")
