@@ -93,6 +93,7 @@ class ComputeSession(ABC):
     def is_remote(self) -> bool:
         """True if compute is on a remote host."""
 
+    @abstractmethod
     async def close(self) -> None:
         """Release any resources held by this session (connection, etc.)."""
 

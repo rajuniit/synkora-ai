@@ -127,37 +127,36 @@ async def internal_zoom_create_meeting(
         # Make API call
         headers = {"Authorization": f"Bearer {access_token}", "Content-Type": "application/json"}
 
-        async with aiohttp.ClientSession() as session:
-            async with session.post(
-                f"{ZOOM_API_BASE}/users/me/meetings", headers=headers, json=meeting_data
-            ) as response:
-                if response.status not in [200, 201]:
-                    error_data = await response.json()
-                    logger.error(f"Zoom API error: {error_data}")
-                    return {
-                        "success": False,
-                        "error": f"Failed to create meeting: {error_data.get('message', 'Unknown error')}",
-                    }
-
-                result = await response.json()
-
-                logger.info(f"Successfully created Zoom meeting: {result.get('id')}")
-
+        async with aiohttp.ClientSession() as session, session.post(
+            f"{ZOOM_API_BASE}/users/me/meetings", headers=headers, json=meeting_data
+        ) as response:
+            if response.status not in [200, 201]:
+                error_data = await response.json()
+                logger.error(f"Zoom API error: {error_data}")
                 return {
-                    "success": True,
-                    "data": {
-                        "meeting_id": result.get("id"),
-                        "topic": result.get("topic"),
-                        "start_time": result.get("start_time"),
-                        "duration": result.get("duration"),
-                        "timezone": result.get("timezone"),
-                        "join_url": result.get("join_url"),
-                        "password": result.get("password"),
-                        "host_email": result.get("host_email"),
-                        "agenda": result.get("agenda"),
-                    },
-                    "message": f"Successfully created meeting: {topic}",
+                    "success": False,
+                    "error": f"Failed to create meeting: {error_data.get('message', 'Unknown error')}",
                 }
+
+            result = await response.json()
+
+            logger.info(f"Successfully created Zoom meeting: {result.get('id')}")
+
+            return {
+                "success": True,
+                "data": {
+                    "meeting_id": result.get("id"),
+                    "topic": result.get("topic"),
+                    "start_time": result.get("start_time"),
+                    "duration": result.get("duration"),
+                    "timezone": result.get("timezone"),
+                    "join_url": result.get("join_url"),
+                    "password": result.get("password"),
+                    "host_email": result.get("host_email"),
+                    "agenda": result.get("agenda"),
+                },
+                "message": f"Successfully created meeting: {topic}",
+            }
 
     except Exception as e:
         logger.error(f"Failed to create Zoom meeting: {e}", exc_info=True)
@@ -392,25 +391,24 @@ async def internal_zoom_update_meeting(
         # Make API call
         headers = {"Authorization": f"Bearer {access_token}", "Content-Type": "application/json"}
 
-        async with aiohttp.ClientSession() as session:
-            async with session.patch(
-                f"{ZOOM_API_BASE}/meetings/{meeting_id}", headers=headers, json=update_data
-            ) as response:
-                if response.status != 204:
-                    error_data = await response.json()
-                    logger.error(f"Zoom API error: {error_data}")
-                    return {
-                        "success": False,
-                        "error": f"Failed to update meeting: {error_data.get('message', 'Unknown error')}",
-                    }
-
-                logger.info(f"Successfully updated Zoom meeting: {meeting_id}")
-
+        async with aiohttp.ClientSession() as session, session.patch(
+            f"{ZOOM_API_BASE}/meetings/{meeting_id}", headers=headers, json=update_data
+        ) as response:
+            if response.status != 204:
+                error_data = await response.json()
+                logger.error(f"Zoom API error: {error_data}")
                 return {
-                    "success": True,
-                    "message": f"Successfully updated meeting {meeting_id}",
-                    "updated_fields": list(update_data.keys()),
+                    "success": False,
+                    "error": f"Failed to update meeting: {error_data.get('message', 'Unknown error')}",
                 }
+
+            logger.info(f"Successfully updated Zoom meeting: {meeting_id}")
+
+            return {
+                "success": True,
+                "message": f"Successfully updated meeting {meeting_id}",
+                "updated_fields": list(update_data.keys()),
+            }
 
     except Exception as e:
         logger.error(f"Failed to update Zoom meeting: {e}", exc_info=True)

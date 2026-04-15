@@ -1015,11 +1015,10 @@ class ChatStreamService:
         try:
             from sqlalchemy import select
 
-            from src.models.data_source import DataSource, DataSourceStatus, DataSourceType
-            from src.tasks.kb_tasks import crawl_and_process_kb
-
             # Get or create a WEB data source for this KB (sync DB lookup via existing session-factory)
             from src.core.database import get_async_session_factory
+            from src.models.data_source import DataSource, DataSourceStatus, DataSourceType
+            from src.tasks.kb_tasks import crawl_and_process_kb
 
             async with get_async_session_factory()() as db:
                 result = await db.execute(

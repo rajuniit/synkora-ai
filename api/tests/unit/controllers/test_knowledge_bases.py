@@ -11,7 +11,7 @@ from fastapi.testclient import TestClient
 from src.controllers.knowledge_bases import router
 from src.core.database import get_async_db
 from src.middleware.auth_middleware import get_current_tenant_id
-from src.models.knowledge_base import ChunkingStrategy, EmbeddingProvider, KnowledgeBaseStatus, VectorDBProvider
+from src.models.knowledge_base import KnowledgeBaseStatus
 
 
 def setup_db_execute_mock(mock_db, return_value, return_list=False):

@@ -166,7 +166,6 @@ class QdrantHybridBackend(BaseSearchBackend):
         limit: int,
     ) -> list[SearchResult]:
         """Run dense-only search (sparse requires query vector; caller provides embedding)."""
-        from qdrant_client.models import Prefetch, Query, ScoredPoint
 
         client = self._get_client()
 
@@ -329,7 +328,6 @@ class QdrantHybridBackend(BaseSearchBackend):
         # Qdrant doesn't support moving between collections natively.
         # Retrieve from old tier, re-insert into new tier collection, delete from old.
         # For now, just update the payload field (simpler, avoids re-embedding).
-        from qdrant_client.models import FieldCondition, Filter, MatchAny, SetPayload
 
         client = self._get_client()
         updated = 0

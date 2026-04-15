@@ -1,8 +1,7 @@
 """Tests for agent_tasks."""
 
 import json
-import sys
-from unittest.mock import AsyncMock, MagicMock, Mock, patch
+from unittest.mock import Mock, patch
 from uuid import uuid4
 
 import pytest

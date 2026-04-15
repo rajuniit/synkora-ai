@@ -1,15 +1,12 @@
-import asyncio
 from datetime import UTC, datetime
-from unittest.mock import ANY, AsyncMock, MagicMock, call, patch
+from unittest.mock import AsyncMock, MagicMock, call, patch
 from uuid import uuid4
 
 import pytest
-from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from src.models.agent import Agent
 from src.models.conversation import Conversation
-from src.models.message import Message
 from src.models.slack_bot import SlackBot, SlackConversation
 from src.services.slack.slack_socket_service import SlackSocketService
 

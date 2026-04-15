@@ -80,7 +80,8 @@ def _build_backend(backend_type: str, config: dict[str, Any]) -> BaseSearchBacke
 
 def _stable_hash(obj: Any) -> str:
     """Deterministic hash for use as a cache key (not cryptographic)."""
-    import hashlib, json
+    import hashlib
+    import json
     try:
         return hashlib.md5(json.dumps(obj, sort_keys=True).encode()).hexdigest()[:8]
     except Exception:

@@ -13,7 +13,6 @@ from typing import Any
 import httpx
 from bs4 import BeautifulSoup
 from github import Github
-from google.oauth2.credentials import Credentials
 from googleapiclient.discovery import build
 from sqlalchemy import select
 

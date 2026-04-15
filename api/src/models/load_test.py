@@ -6,7 +6,7 @@ Database model for storing AI agent load test configurations.
 
 from enum import StrEnum
 
-from sqlalchemy import Column, Enum, ForeignKey, Index, Integer, String, Text
+from sqlalchemy import Column, Enum, ForeignKey, Index, String, Text
 from sqlalchemy.dialects.postgresql import JSON, UUID
 from sqlalchemy.orm import relationship
 

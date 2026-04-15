@@ -21,7 +21,6 @@ Fallback: if classification fails, returns a safe default intent (all sources, h
 import json
 import logging
 from dataclasses import dataclass, field
-from datetime import UTC, datetime, timedelta
 from typing import Any
 
 logger = logging.getLogger(__name__)

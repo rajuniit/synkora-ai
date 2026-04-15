@@ -16,7 +16,7 @@ from ...middleware.auth_middleware import get_current_tenant_id, get_optional_ac
 from ...models.oauth_app import OAuthApp
 from ...models.tenant import Account
 from ...models.user_oauth_token import UserOAuthToken
-from ...services.agents.security import decrypt_value, encrypt_value
+from ...services.agents.security import encrypt_value
 from .base import (
     OAuthAppCreate,
     OAuthAppUpdate,

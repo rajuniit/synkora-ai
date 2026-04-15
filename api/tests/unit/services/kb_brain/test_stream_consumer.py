@@ -6,11 +6,11 @@ without real Redis or embedding services.
 """
 
 import json
+from unittest.mock import AsyncMock, patch
+
 import pytest
-from unittest.mock import AsyncMock, MagicMock, patch
 
-from src.services.company_brain.ingestion.stream_consumer import StreamConsumer, _GROUP
-
+from src.services.company_brain.ingestion.stream_consumer import StreamConsumer
 
 # ---------------------------------------------------------------------------
 # Fixtures

@@ -125,6 +125,7 @@ class DockerComputeBackend(ComputeBackend):
         if not self._s3_bucket:
             return
         import boto3  # type: ignore[import-untyped]
+
         import docker  # type: ignore[import-untyped]
 
         s3 = boto3.client("s3", region_name=self._s3_region)
@@ -155,8 +156,9 @@ class DockerComputeBackend(ComputeBackend):
         if not self._s3_bucket:
             return
         import boto3  # type: ignore[import-untyped]
-        import docker  # type: ignore[import-untyped]
         import docker.errors  # type: ignore[import-untyped]
+
+        import docker  # type: ignore[import-untyped]
 
         client = docker.from_env()
         try:

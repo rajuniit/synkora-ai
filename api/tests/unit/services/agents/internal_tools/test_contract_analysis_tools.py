@@ -5,7 +5,7 @@ Tests the contract analysis capabilities including type detection,
 element extraction, risk assessment, and report generation.
 """
 
-from unittest.mock import AsyncMock, MagicMock, patch
+from unittest.mock import AsyncMock, patch
 
 import pytest
 

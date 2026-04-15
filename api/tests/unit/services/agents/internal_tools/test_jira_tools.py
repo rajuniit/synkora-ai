@@ -7,7 +7,6 @@ Supports both Basic Auth (API token) and OAuth 2.0 authentication.
 
 from unittest.mock import AsyncMock, MagicMock, patch
 
-import httpx
 import pytest
 
 

@@ -7,10 +7,9 @@ creation, directory structure management, and TTL-based cleanup.
 
 import json
 import logging
-import os
 import shutil
 import uuid
-from datetime import UTC, datetime, timezone
+from datetime import UTC, datetime
 from pathlib import Path
 from typing import Any
 

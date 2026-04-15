@@ -62,7 +62,7 @@ def _create_mock_data_source(ds_id, tenant_id, kb_id, **kwargs):
     mock_ds.updated_at = datetime.now(UTC)
     # Explicitly set oauth_app to None to avoid MagicMock auto-creation
     # which causes Pydantic validation errors for OAuthAppInfo
-    mock_ds.oauth_app = kwargs.get("oauth_app", None)
+    mock_ds.oauth_app = kwargs.get("oauth_app")
     return mock_ds
 
 

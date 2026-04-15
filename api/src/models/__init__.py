@@ -2,10 +2,10 @@
 
 from .activity_log import ActivityLog, ActivityType
 from .agent import Agent
-from .agent_compute import AgentCompute, ComputeStatus, ComputeType
 from .agent_api_key import AgentApiKey
 from .agent_api_usage import AgentApiUsage
 from .agent_approval import AgentApprovalRequest, ApprovalStatus
+from .agent_compute import AgentCompute, ComputeStatus, ComputeType
 from .agent_context_file import AgentContextFile
 from .agent_domain import AgentDomain
 from .agent_knowledge_base import AgentKnowledgeBase
@@ -28,13 +28,11 @@ from .agent_tool import AgentTool
 from .agent_user import AgentUser
 from .agent_webhook import AgentWebhook, AgentWebhookEvent
 from .agent_widget import AgentWidget, WidgetAnalytics
-from .widget_agent_route import WidgetAgentRoute
 from .app import App, AppMode, AppStatus
 from .app_review import AppReview, ReviewSentiment
 from .app_store_source import AppStoreSource, SourceStatus, StoreType, SyncFrequency
 from .base import BaseModel, SoftDeleteMixin, StatusMixin, TenantMixin, TimestampMixin
 from .chart import Chart
-from .kb_brain import KBEntity, KBRelationship, KBSyncCursor
 from .conversation import Conversation, ConversationStatus
 from .credit_balance import CreditBalance
 from .credit_topup import CreditTopup, TopupStatus
@@ -64,6 +62,7 @@ from .human_escalation import (
     HumanEscalation,
 )
 from .integration_config import IntegrationConfig
+from .kb_brain import KBEntity, KBRelationship, KBSyncCursor
 from .knowledge_base import (
     EmbeddingProvider,
     KnowledgeBase,
@@ -111,6 +110,7 @@ from .user_oauth_token import UserOAuthToken
 from .voice_api_key import VoiceApiKey
 from .voice_usage import VoiceUsage
 from .whatsapp_bot import WhatsAppBot
+from .widget_agent_route import WidgetAgentRoute
 from .wiki_article import WikiArticle, WikiCompilationJob
 from .workflow_execution import (
     WorkflowExecution,

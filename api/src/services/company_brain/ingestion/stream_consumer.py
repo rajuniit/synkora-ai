@@ -44,14 +44,17 @@ class StreamConsumer:
 
     async def _get_redis(self) -> Any:
         from src.config.redis import get_redis_async
+
         return get_redis_async()
 
     def _batch_size(self) -> int:
         from src.config.settings import get_settings
+
         return getattr(get_settings(), "company_brain_batch_size", 100)
 
     def _min_tokens(self) -> int:
         from src.config.settings import get_settings
+
         return getattr(get_settings(), "company_brain_min_content_tokens", 10)
 
     async def _ensure_group(self, r: Any, key: str) -> None:
@@ -117,9 +120,10 @@ class StreamConsumer:
         raw_docs: list[dict[str, Any]],
         min_tokens: int,
     ) -> dict[str, int]:
+        from src.services.company_brain.search.factory import get_search_backend
+
         from .chunker import chunk_document
         from .dedup import get_dedup_backend
-        from src.services.company_brain.search.factory import get_search_backend
 
         dedup = get_dedup_backend()
         search = get_search_backend()
@@ -135,8 +139,7 @@ class StreamConsumer:
         # 2. Dedup check
         external_ids = [str(d.get("id") or d.get("external_id", "")) for d in filtered]
         unseen_ids = set(await dedup.filter_unseen(tenant_id, source_type, external_ids))
-        unique_docs = [d for d in filtered
-                       if str(d.get("id") or d.get("external_id", "")) in unseen_ids]
+        unique_docs = [d for d in filtered if str(d.get("id") or d.get("external_id", "")) in unseen_ids]
         skipped += len(filtered) - len(unique_docs)
 
         if not unique_docs:
@@ -165,19 +168,21 @@ class StreamConsumer:
 
         # 5. Build index documents
         index_docs: list[dict[str, Any]] = []
-        for chunk, emb in zip(all_chunks, embeddings):
-            index_docs.append({
-                "doc_id": f"{chunk.get('id', '')}_{chunk['chunk_index']}",
-                "external_id": str(chunk.get("id") or chunk.get("external_id", "")),
-                "source_type": source_type,
-                "content": chunk["chunk_content"],
-                "title": chunk.get("title"),
-                "embedding": emb,
-                "metadata": {**(chunk.get("metadata") or {}), "tenant_id": tenant_id},
-                "source_url": chunk.get("external_url"),
-                "occurred_at": chunk.get("source_created_at"),
-                "storage_tier": "hot",
-            })
+        for chunk, emb in zip(all_chunks, embeddings, strict=False):
+            index_docs.append(
+                {
+                    "doc_id": f"{chunk.get('id', '')}_{chunk['chunk_index']}",
+                    "external_id": str(chunk.get("id") or chunk.get("external_id", "")),
+                    "source_type": source_type,
+                    "content": chunk["chunk_content"],
+                    "title": chunk.get("title"),
+                    "embedding": emb,
+                    "metadata": {**(chunk.get("metadata") or {}), "tenant_id": tenant_id},
+                    "source_url": chunk.get("external_url"),
+                    "occurred_at": chunk.get("source_created_at"),
+                    "storage_tier": "hot",
+                }
+            )
 
         # 6. Index
         result = await search.index_documents(tenant_id, index_docs)
@@ -207,10 +212,11 @@ class StreamConsumer:
     async def _embed_batch(self, texts: list[str], source_type: str) -> list[list[float]]:
         """Embed a batch of texts using the configured model for this source type."""
         import json as _json
+
         from src.config.settings import get_settings
+
         settings = get_settings()
-        raw_models = getattr(settings, "company_brain_embedding_models",
-                             '{"default":"text-embedding-3-small"}')
+        raw_models = getattr(settings, "company_brain_embedding_models", '{"default":"text-embedding-3-small"}')
         try:
             models: dict[str, str] = _json.loads(raw_models)
         except Exception:
@@ -219,5 +225,6 @@ class StreamConsumer:
         model = models.get(source_type.lower(), models.get("default", "text-embedding-3-small"))
 
         from src.services.knowledge_base.embedding_service import EmbeddingService
+
         svc = EmbeddingService(model=model)
         return await svc.embed_batch(texts)

@@ -6,10 +6,9 @@ scheduled tasks with both interval-based and cron-based scheduling.
 """
 
 from unittest.mock import AsyncMock, MagicMock, patch
-from uuid import UUID, uuid4
+from uuid import uuid4
 
 import pytest
-from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 

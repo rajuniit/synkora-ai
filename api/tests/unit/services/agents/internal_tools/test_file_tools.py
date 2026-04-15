@@ -1,16 +1,11 @@
-import os
 import subprocess
-import tempfile
 from pathlib import Path
 from unittest.mock import MagicMock, mock_open, patch
 
 import pytest
 
 from src.services.agents.internal_tools.file_tools import (
-    ALLOWED_EXTENSIONS,
-    MAX_MEDIA_FILE_SIZE,
     MAX_TEXT_FILE_SIZE,
-    MAX_TOKEN_LENGTH,
     _check_file_size,
     _count_tokens,
     _is_path_allowed,

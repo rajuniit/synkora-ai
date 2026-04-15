@@ -10,11 +10,9 @@ Tests the GitLab tools for repository and project management including:
 
 from unittest.mock import AsyncMock, MagicMock, patch
 
-import httpx
 import pytest
 
 from src.services.agents.internal_tools.git_helpers import (
-    _get_repo_size,
     _run_git_command,
     async_get_repo_size,
 )

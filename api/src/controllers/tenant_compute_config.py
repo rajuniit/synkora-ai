@@ -22,8 +22,9 @@ router = APIRouter()
 async def compute_status(
     tenant_id: uuid.UUID = Depends(get_current_tenant_id),
 ):
-    from src.config.settings import settings
     import httpx
+
+    from src.config.settings import settings
 
     sandbox_url = settings.sandbox_service_url
     available = False
@@ -47,6 +48,7 @@ async def compute_test(
     db: AsyncSession = Depends(get_async_db),
 ):
     import time
+
     from src.services.compute.backends.factory import get_backend_for_tenant
 
     try:

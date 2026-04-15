@@ -8,7 +8,6 @@ import pytest
 
 from src.services.security.advanced_prompt_scanner import (
     AdvancedPromptScanner,
-    Detection,
     ThreatLevel,
     advanced_prompt_scanner,
 )

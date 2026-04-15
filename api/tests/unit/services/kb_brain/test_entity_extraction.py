@@ -4,11 +4,11 @@ No database required — upsert is tested with in-memory mock DB session.
 """
 
 import uuid
-import pytest
 from unittest.mock import MagicMock
 
-from src.tasks.company_brain_tasks import _extract_entities_from_meta, _upsert_entity
+import pytest
 
+from src.tasks.company_brain_tasks import _extract_entities_from_meta, _upsert_entity
 
 TENANT_ID = str(uuid.uuid4())
 KB_ID = 1

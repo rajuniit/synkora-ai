@@ -6,6 +6,7 @@ and the upgrade/downgrade functions exist and are callable (not just syntactical
 """
 
 import importlib
+
 import pytest
 
 
@@ -39,7 +40,7 @@ class TestMigration0003:
     def test_upgrade_creates_kb_tables(self):
         """Verify upgrade() calls create_table for kb_* tables."""
         mod = _load_migration(self.MODULE)
-        import ast, inspect
+        import inspect
         source = inspect.getsource(mod.upgrade)
         assert "kb_sync_cursors" in source
         assert "kb_entities" in source
@@ -132,8 +133,9 @@ class TestDedup:
         assert hashed != long_id
 
     def test_get_dedup_backend_default_returns_redis(self):
-        from src.services.company_brain.ingestion import dedup
         from unittest.mock import patch
+
+        from src.services.company_brain.ingestion import dedup
 
         class FakeSettings:
             company_brain_dedup_backend = "redis_set"
@@ -144,8 +146,9 @@ class TestDedup:
         assert isinstance(backend, dedup.RedisSetDedup)
 
     def test_get_dedup_backend_postgres_returns_postgres(self):
-        from src.services.company_brain.ingestion import dedup
         from unittest.mock import patch
+
+        from src.services.company_brain.ingestion import dedup
 
         class FakeSettings:
             company_brain_dedup_backend = "postgres"

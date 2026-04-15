@@ -15,7 +15,7 @@ Auth:
 """
 
 import logging
-from datetime import UTC, datetime
+from datetime import datetime
 from typing import Any
 
 import httpx

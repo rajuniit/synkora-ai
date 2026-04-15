@@ -10,7 +10,6 @@ from datetime import UTC
 from typing import Any
 
 from sqlalchemy import select
-from sqlalchemy.ext.asyncio import AsyncSession
 
 logger = logging.getLogger(__name__)
 
@@ -354,7 +353,6 @@ class CredentialResolver:
             Access token string or None if not configured
         """
         import json
-        from datetime import datetime
 
         from src.models.agent_tool import AgentTool
         from src.models.oauth_app import OAuthApp

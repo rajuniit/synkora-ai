@@ -126,33 +126,32 @@ class RecallService:
             if agent_id:
                 payload["metadata"] = {"synkora_agent_id": agent_id}
 
-            async with aiohttp.ClientSession() as session:
-                async with session.post(
-                    f"{self.base_url}/bot/",
-                    headers=self.headers,
-                    json=payload,
-                ) as response:
-                    if response.status in [200, 201]:
-                        result = await response.json()
-                        logger.info(f"Successfully created Recall bot: {result.get('id')}")
-                        return {
-                            "success": True,
-                            "data": {
-                                "bot_id": result.get("id"),
-                                "status": result.get("status", {}).get("code"),
-                                "meeting_url": meeting_url,
-                                "bot_name": bot_name,
-                                "join_at": payload.get("join_at"),
-                            },
-                            "message": f"Bot '{bot_name}' sent to join meeting",
-                        }
-                    else:
-                        error_data = await response.json()
-                        logger.error(f"Recall API error: {error_data}")
-                        return {
-                            "success": False,
-                            "error": error_data.get("detail", str(error_data)),
-                        }
+            async with aiohttp.ClientSession() as session, session.post(
+                f"{self.base_url}/bot/",
+                headers=self.headers,
+                json=payload,
+            ) as response:
+                if response.status in [200, 201]:
+                    result = await response.json()
+                    logger.info(f"Successfully created Recall bot: {result.get('id')}")
+                    return {
+                        "success": True,
+                        "data": {
+                            "bot_id": result.get("id"),
+                            "status": result.get("status", {}).get("code"),
+                            "meeting_url": meeting_url,
+                            "bot_name": bot_name,
+                            "join_at": payload.get("join_at"),
+                        },
+                        "message": f"Bot '{bot_name}' sent to join meeting",
+                    }
+                else:
+                    error_data = await response.json()
+                    logger.error(f"Recall API error: {error_data}")
+                    return {
+                        "success": False,
+                        "error": error_data.get("detail", str(error_data)),
+                    }
 
         except Exception as e:
             logger.error(f"Failed to send bot to meeting: {e}", exc_info=True)
@@ -169,41 +168,40 @@ class RecallService:
             Bot details including status, recordings, transcript
         """
         try:
-            async with aiohttp.ClientSession() as session:
-                async with session.get(
-                    f"{self.base_url}/bot/{bot_id}/",
-                    headers=self.headers,
-                ) as response:
-                    if response.status == 200:
-                        result = await response.json()
+            async with aiohttp.ClientSession() as session, session.get(
+                f"{self.base_url}/bot/{bot_id}/",
+                headers=self.headers,
+            ) as response:
+                if response.status == 200:
+                    result = await response.json()
 
-                        # Extract useful info
-                        status = result.get("status", {})
-                        recordings = result.get("recordings", [])
-                        media_shortcuts = result.get("media_shortcuts", {})
+                    # Extract useful info
+                    status = result.get("status", {})
+                    recordings = result.get("recordings", [])
+                    media_shortcuts = result.get("media_shortcuts", {})
 
-                        return {
-                            "success": True,
-                            "data": {
-                                "bot_id": bot_id,
-                                "status_code": status.get("code"),
-                                "status_message": status.get("message"),
-                                "meeting_url": result.get("meeting_url", {}).get("url"),
-                                "bot_name": result.get("bot_name"),
-                                "join_at": result.get("join_at"),
-                                "recordings": recordings,
-                                "video_url": media_shortcuts.get("video_mixed", {}).get("data", {}).get("download_url"),
-                                "transcript_url": media_shortcuts.get("transcript", {})
-                                .get("data", {})
-                                .get("download_url"),
-                                "created_at": result.get("created_at"),
-                            },
-                        }
-                    elif response.status == 404:
-                        return {"success": False, "error": f"Bot {bot_id} not found"}
-                    else:
-                        error_data = await response.json()
-                        return {"success": False, "error": error_data.get("detail", str(error_data))}
+                    return {
+                        "success": True,
+                        "data": {
+                            "bot_id": bot_id,
+                            "status_code": status.get("code"),
+                            "status_message": status.get("message"),
+                            "meeting_url": result.get("meeting_url", {}).get("url"),
+                            "bot_name": result.get("bot_name"),
+                            "join_at": result.get("join_at"),
+                            "recordings": recordings,
+                            "video_url": media_shortcuts.get("video_mixed", {}).get("data", {}).get("download_url"),
+                            "transcript_url": media_shortcuts.get("transcript", {})
+                            .get("data", {})
+                            .get("download_url"),
+                            "created_at": result.get("created_at"),
+                        },
+                    }
+                elif response.status == 404:
+                    return {"success": False, "error": f"Bot {bot_id} not found"}
+                else:
+                    error_data = await response.json()
+                    return {"success": False, "error": error_data.get("detail", str(error_data))}
 
         except Exception as e:
             logger.error(f"Failed to get bot {bot_id}: {e}", exc_info=True)
@@ -233,39 +231,38 @@ class RecallService:
             if meeting_url:
                 params["meeting_url"] = meeting_url
 
-            async with aiohttp.ClientSession() as session:
-                async with session.get(
-                    f"{self.base_url}/bot/",
-                    headers=self.headers,
-                    params=params,
-                ) as response:
-                    if response.status == 200:
-                        result = await response.json()
-                        bots = result.get("results", [])
+            async with aiohttp.ClientSession() as session, session.get(
+                f"{self.base_url}/bot/",
+                headers=self.headers,
+                params=params,
+            ) as response:
+                if response.status == 200:
+                    result = await response.json()
+                    bots = result.get("results", [])
 
-                        formatted_bots = []
-                        for bot in bots:
-                            status_info = bot.get("status", {})
-                            formatted_bots.append(
-                                {
-                                    "bot_id": bot.get("id"),
-                                    "bot_name": bot.get("bot_name"),
-                                    "status_code": status_info.get("code"),
-                                    "meeting_url": bot.get("meeting_url", {}).get("url"),
-                                    "created_at": bot.get("created_at"),
-                                }
-                            )
+                    formatted_bots = []
+                    for bot in bots:
+                        status_info = bot.get("status", {})
+                        formatted_bots.append(
+                            {
+                                "bot_id": bot.get("id"),
+                                "bot_name": bot.get("bot_name"),
+                                "status_code": status_info.get("code"),
+                                "meeting_url": bot.get("meeting_url", {}).get("url"),
+                                "created_at": bot.get("created_at"),
+                            }
+                        )
 
-                        return {
-                            "success": True,
-                            "data": {
-                                "bots": formatted_bots,
-                                "total": len(formatted_bots),
-                            },
-                        }
-                    else:
-                        error_data = await response.json()
-                        return {"success": False, "error": error_data.get("detail", str(error_data))}
+                    return {
+                        "success": True,
+                        "data": {
+                            "bots": formatted_bots,
+                            "total": len(formatted_bots),
+                        },
+                    }
+                else:
+                    error_data = await response.json()
+                    return {"success": False, "error": error_data.get("detail", str(error_data))}
 
         except Exception as e:
             logger.error(f"Failed to list bots: {e}", exc_info=True)
@@ -282,22 +279,21 @@ class RecallService:
             Removal status
         """
         try:
-            async with aiohttp.ClientSession() as session:
-                async with session.post(
-                    f"{self.base_url}/bot/{bot_id}/leave_call/",
-                    headers=self.headers,
-                ) as response:
-                    if response.status in [200, 204]:
-                        logger.info(f"Successfully removed bot {bot_id} from meeting")
-                        return {
-                            "success": True,
-                            "message": f"Bot {bot_id} removed from meeting",
-                        }
-                    elif response.status == 404:
-                        return {"success": False, "error": f"Bot {bot_id} not found"}
-                    else:
-                        error_data = await response.json()
-                        return {"success": False, "error": error_data.get("detail", str(error_data))}
+            async with aiohttp.ClientSession() as session, session.post(
+                f"{self.base_url}/bot/{bot_id}/leave_call/",
+                headers=self.headers,
+            ) as response:
+                if response.status in [200, 204]:
+                    logger.info(f"Successfully removed bot {bot_id} from meeting")
+                    return {
+                        "success": True,
+                        "message": f"Bot {bot_id} removed from meeting",
+                    }
+                elif response.status == 404:
+                    return {"success": False, "error": f"Bot {bot_id} not found"}
+                else:
+                    error_data = await response.json()
+                    return {"success": False, "error": error_data.get("detail", str(error_data))}
 
         except Exception as e:
             logger.error(f"Failed to remove bot {bot_id}: {e}", exc_info=True)
@@ -336,43 +332,42 @@ class RecallService:
                 }
 
             # Fetch the transcript
-            async with aiohttp.ClientSession() as session:
-                async with session.get(transcript_url) as response:
-                    if response.status == 200:
-                        transcript_data = await response.json()
+            async with aiohttp.ClientSession() as session, session.get(transcript_url) as response:
+                if response.status == 200:
+                    transcript_data = await response.json()
 
-                        # Format transcript with speaker labels
-                        formatted_transcript = []
-                        for segment in transcript_data:
-                            speaker = segment.get("speaker", "Unknown")
-                            words = segment.get("words", [])
-                            text = " ".join([w.get("text", "") for w in words])
-                            start_time = words[0].get("start_timestamp") if words else None
+                    # Format transcript with speaker labels
+                    formatted_transcript = []
+                    for segment in transcript_data:
+                        speaker = segment.get("speaker", "Unknown")
+                        words = segment.get("words", [])
+                        text = " ".join([w.get("text", "") for w in words])
+                        start_time = words[0].get("start_timestamp") if words else None
 
-                            formatted_transcript.append(
-                                {
-                                    "speaker": speaker,
-                                    "text": text,
-                                    "start_time": start_time,
-                                }
-                            )
-
-                        # Create full text version
-                        full_text = "\n\n".join(
-                            [f"**{seg['speaker']}**: {seg['text']}" for seg in formatted_transcript]
+                        formatted_transcript.append(
+                            {
+                                "speaker": speaker,
+                                "text": text,
+                                "start_time": start_time,
+                            }
                         )
 
-                        return {
-                            "success": True,
-                            "data": {
-                                "bot_id": bot_id,
-                                "segments": formatted_transcript,
-                                "full_text": full_text,
-                                "segment_count": len(formatted_transcript),
-                            },
-                        }
-                    else:
-                        return {"success": False, "error": "Failed to fetch transcript"}
+                    # Create full text version
+                    full_text = "\n\n".join(
+                        [f"**{seg['speaker']}**: {seg['text']}" for seg in formatted_transcript]
+                    )
+
+                    return {
+                        "success": True,
+                        "data": {
+                            "bot_id": bot_id,
+                            "segments": formatted_transcript,
+                            "full_text": full_text,
+                            "segment_count": len(formatted_transcript),
+                        },
+                    }
+                else:
+                    return {"success": False, "error": "Failed to fetch transcript"}
 
         except Exception as e:
             logger.error(f"Failed to get transcript for bot {bot_id}: {e}", exc_info=True)

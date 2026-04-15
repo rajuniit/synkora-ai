@@ -2,7 +2,7 @@ from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
 
-from src.models import AgentMCPServer, MCPServer
+from src.models import MCPServer
 from src.services.mcp.mcp_client import MCPClient, MCPClientManager, MCPConnectionError, MCPToolExecutionError
 
 

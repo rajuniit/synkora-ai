@@ -32,7 +32,7 @@ def compile_single_knowledge_wiki(self, kb_id: int, tenant_id: str):
 
 
 async def _compile_all_wikis():
-    from sqlalchemy import func, select
+    from sqlalchemy import select
 
     from src.core.database import create_celery_async_session
     from src.models.wiki_article import WikiArticle

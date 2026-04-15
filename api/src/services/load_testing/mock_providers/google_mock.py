@@ -6,10 +6,9 @@ Generates mock responses in Google Generative AI API format.
 
 import asyncio
 import json
-import uuid
-from typing import Any, AsyncGenerator
+from collections.abc import AsyncGenerator
 
-from .base import BaseMockProvider, MockError
+from .base import BaseMockProvider
 
 
 class GoogleMockProvider(BaseMockProvider):

@@ -38,6 +38,7 @@ class PostgresFTSBackend(BaseSearchBackend):
 
     def _get_session(self) -> Any:
         from src.core.database import SessionLocal
+
         return SessionLocal()
 
     def _build_where(self, tenant_id: str, filters: SearchFilter | None) -> tuple[str, list[Any]]:
@@ -76,8 +77,6 @@ class PostgresFTSBackend(BaseSearchBackend):
         start = time.monotonic()
         where, params = self._build_where(tenant_id, filters)
         params_with_query = [query] + params
-        query_idx = 1
-        where_offset = 1  # query is $1, tenant_id shifts to $2
 
         # Renumber WHERE params because $1 is now the query
         renumbered_where = where
@@ -107,7 +106,9 @@ class PostgresFTSBackend(BaseSearchBackend):
 
         try:
             import asyncpg
+
             from src.config.settings import get_settings
+
             settings = get_settings()
             conn = await asyncpg.connect(settings.database_url)
             try:
@@ -161,7 +162,9 @@ class PostgresFTSBackend(BaseSearchBackend):
     async def health_check(self) -> dict[str, Any]:
         try:
             import asyncpg
+
             from src.config.settings import get_settings
+
             settings = get_settings()
             conn = await asyncpg.connect(settings.database_url)
             await conn.fetchval("SELECT 1")

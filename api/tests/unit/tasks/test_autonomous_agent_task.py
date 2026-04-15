@@ -11,11 +11,9 @@ import json
 import re
 import uuid
 from datetime import UTC, datetime
-from types import SimpleNamespace
-from unittest.mock import AsyncMock, MagicMock, patch
+from unittest.mock import MagicMock
 
 import pytest
-
 
 # ---------------------------------------------------------------------------
 # Helpers shared across tests
@@ -143,7 +141,6 @@ class TestPromptConstruction:
 
     def _build_prompt(self, goal: str, run_number: int, memory_block: str, max_steps: int = 20) -> str:
         """Mirrors the prompt construction logic in _run_autonomous_agent."""
-        from datetime import UTC, datetime
 
         return (
             f"[AUTONOMOUS MODE]\n"

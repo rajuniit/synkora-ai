@@ -192,10 +192,7 @@ def create_slack_blocks(text: str) -> list:
         is_table = False
         if len(lines) >= 2:
             # Check first line for pipe
-            if re.match(r"^\s*\|", lines[0]):
-                is_table = True
-            # Check second line for separator row pattern like |---|---|
-            elif re.match(r"^\s*\|?[-:|\s]+\|?", lines[1]):
+            if re.match(r"^\s*\|", lines[0]) or re.match(r"^\s*\|?[-:|\s]+\|?", lines[1]):
                 is_table = True
 
         if is_table:

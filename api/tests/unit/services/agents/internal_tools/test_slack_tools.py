@@ -5,7 +5,7 @@ Tests the Slack tools that allow agents to interact with Slack channels,
 including reading messages, sending messages, and searching.
 """
 
-from unittest.mock import AsyncMock, MagicMock, patch
+from unittest.mock import AsyncMock, patch
 
 import pytest
 from slack_sdk.errors import SlackApiError

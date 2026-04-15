@@ -1,13 +1,10 @@
-from typing import Any
-from unittest.mock import AsyncMock, MagicMock, call, patch
+from unittest.mock import AsyncMock, MagicMock, patch
 from uuid import uuid4
 
 import pytest
-from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from src.models.data_source import DataSource, DataSourceDocument, DataSourceType
-from src.models.document import Document
 from src.models.knowledge_base import EmbeddingProvider, KnowledgeBase, VectorDBProvider
 from src.services.data_sources.document_processor import DocumentProcessor
 

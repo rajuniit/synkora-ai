@@ -5,10 +5,8 @@ WikiArticle stores auto-generated wiki pages from knowledge base documents.
 WikiCompilationJob tracks compilation runs.
 """
 
-import uuid
 
 from sqlalchemy import JSON, Boolean, Column, DateTime, Float, Integer, String, Text
-from sqlalchemy.dialects.postgresql import UUID
 
 from src.models.base import BaseModel, TenantMixin
 

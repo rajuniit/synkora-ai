@@ -1,4 +1,3 @@
-from datetime import datetime, timedelta
 from decimal import Decimal
 from unittest.mock import AsyncMock, MagicMock, patch
 from uuid import uuid4
@@ -7,8 +6,6 @@ import pytest
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from src.models.agent_pricing import AgentPricing, PricingModel
-from src.models.agent_revenue import AgentRevenue, RevenueStatus
-from src.models.platform_settings import PlatformSettings
 from src.services.billing.agent_pricing_service import AgentPricingService
 
 

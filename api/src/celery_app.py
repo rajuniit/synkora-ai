@@ -4,7 +4,6 @@ Celery application configuration for scheduled tasks
 
 import json
 import logging
-import traceback
 from datetime import UTC, datetime
 
 import sentry_sdk

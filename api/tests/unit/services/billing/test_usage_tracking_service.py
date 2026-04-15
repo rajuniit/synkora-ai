@@ -3,12 +3,8 @@ from unittest.mock import AsyncMock, MagicMock, patch
 from uuid import uuid4
 
 import pytest
-from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from src.models.agent import Agent
-from src.models.credit_transaction import CreditTransaction
-from src.models.usage_analytics import UsageAnalytics
 from src.services.billing.usage_tracking_service import UsageTrackingService
 
 

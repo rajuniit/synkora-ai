@@ -161,9 +161,7 @@ def execute_scheduled_task(
                     # Replace redacted email placeholders with actual creator email
                     if creator_email:
                         for key, value in context_items.items():
-                            if isinstance(value, str) and "[EMAIL_REDACTED]" in value:
-                                context_items[key] = creator_email
-                            elif value == "[EMAIL_REDACTED]":
+                            if isinstance(value, str) and "[EMAIL_REDACTED]" in value or value == "[EMAIL_REDACTED]":
                                 context_items[key] = creator_email
 
                     if context_items:

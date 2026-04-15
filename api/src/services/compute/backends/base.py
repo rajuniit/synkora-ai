@@ -9,7 +9,7 @@ All backends produce a ComputeSession that command/file tools use uniformly.
 """
 
 from abc import ABC, abstractmethod
-from typing import TYPE_CHECKING, Any
+from typing import TYPE_CHECKING
 
 if TYPE_CHECKING:
     from src.services.compute.session import ComputeSession

@@ -26,12 +26,10 @@ from src.models.agent import Agent
 from src.models.debate_session import DebateSession
 from src.models.tenant import Account
 from src.schemas.debate import (
-    DebateContext,
     DebateCreateRequest,
     DebateJoinRequest,
     DebateListItem,
     DebateRespondRequest,
-    DebateSessionSchema,
     DebateUpdateRequest,
 )
 from src.services.agents.workflows.debate_executor import PARTICIPANT_COLORS, DebateExecutor

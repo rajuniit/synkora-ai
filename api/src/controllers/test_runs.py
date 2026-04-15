@@ -1,7 +1,7 @@
 """Test Run API endpoints."""
 
 import logging
-from datetime import UTC, datetime
+from datetime import datetime
 from uuid import UUID
 
 from fastapi import APIRouter, Depends, HTTPException, Query
@@ -12,7 +12,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from src.core.database import get_async_db
 from src.middleware.auth_middleware import get_current_tenant_id
 from src.models.load_test import LoadTest, LoadTestStatus
-from src.models.test_result import MetricType, PercentileType, TestResult
+from src.models.test_result import MetricType, TestResult
 from src.models.test_run import TestRun, TestRunStatus
 from src.schemas.load_testing import (
     ExportRequest,

@@ -83,7 +83,7 @@ async def retrieve(
     results_per_source = await asyncio.gather(*tasks, return_exceptions=True)
     all_results: list[SearchResult] = []
 
-    for source_type, result in zip(source_types, results_per_source):
+    for source_type, result in zip(source_types, results_per_source, strict=False):
         if isinstance(result, Exception):
             logger.warning("Search failed for source %s: %s", source_type, result)
         else:
@@ -133,6 +133,14 @@ async def _fetch_pageindex(
 def _all_source_types() -> list[str]:
     """Return all known source types (used when intent has no specific source)."""
     return [
-        "slack", "github", "gitlab", "jira", "clickup",
-        "notion", "confluence", "gmail", "google_drive", "linear",
+        "slack",
+        "github",
+        "gitlab",
+        "jira",
+        "clickup",
+        "notion",
+        "confluence",
+        "gmail",
+        "google_drive",
+        "linear",
     ]

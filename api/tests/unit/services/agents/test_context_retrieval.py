@@ -1,8 +1,6 @@
 """Tests for context_retrieval.py."""
 
-from datetime import datetime
-from unittest.mock import AsyncMock, Mock, patch
-from uuid import uuid4
+from unittest.mock import Mock
 
 import pytest
 

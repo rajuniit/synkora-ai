@@ -26,6 +26,7 @@ logger = logging.getLogger(__name__)
 # Stream consumer task (runs every ~30s per active stream via beat)
 # ---------------------------------------------------------------------------
 
+
 @celery_app.task(
     name="kb_consume_stream_task",
     bind=True,
@@ -33,9 +34,7 @@ logger = logging.getLogger(__name__)
     default_retry_delay=30,
     queue="company_brain",
 )
-def kb_consume_stream_task(
-    self, kb_id: int, tenant_id: str, source_type: str
-) -> dict[str, Any]:
+def kb_consume_stream_task(self, kb_id: int, tenant_id: str, source_type: str) -> dict[str, Any]:
     """
     Consume one batch from the Redis Stream for (kb_id, source_type).
     Designed to be called frequently (every 10-30 seconds per active stream).
@@ -44,6 +43,7 @@ def kb_consume_stream_task(
 
     async def _run():
         from src.services.company_brain.ingestion.stream_consumer import StreamConsumer
+
         consumer = StreamConsumer()
         return await consumer.consume(kb_id=kb_id, tenant_id=tenant_id, source_type=source_type)
 
@@ -57,6 +57,7 @@ def kb_consume_stream_task(
 # ---------------------------------------------------------------------------
 # Direct batch processing (celery_only queue backend)
 # ---------------------------------------------------------------------------
+
 
 @celery_app.task(
     name="kb_process_batch_task",
@@ -77,6 +78,7 @@ def kb_process_batch_task(
 
     async def _run():
         from src.services.company_brain.ingestion.stream_consumer import StreamConsumer
+
         consumer = StreamConsumer()
         # Bypass the stream and call the processing pipeline directly
         return await consumer._process_batch(
@@ -97,6 +99,7 @@ def kb_process_batch_task(
 # Data source sync tasks
 # ---------------------------------------------------------------------------
 
+
 @celery_app.task(
     name="company_brain_incremental_sync_task",
     bind=True,
@@ -104,16 +107,14 @@ def kb_process_batch_task(
     default_retry_delay=300,
     queue="company_brain",
 )
-def company_brain_incremental_sync_task(
-    self, data_source_id: int, tenant_id: str
-) -> dict[str, Any]:
+def company_brain_incremental_sync_task(self, data_source_id: int, tenant_id: str) -> dict[str, Any]:
     """Run an incremental sync for one data source."""
     db = SessionLocal()
     try:
         return _run_sync(db, data_source_id, tenant_id, full_sync=False)
     except Exception as exc:
         logger.error("Incremental sync failed for ds=%s: %s", data_source_id, exc)
-        raise self.retry(exc=exc, countdown=300 * (2 ** self.request.retries))
+        raise self.retry(exc=exc, countdown=300 * (2**self.request.retries))
     finally:
         db.close()
 
@@ -125,9 +126,7 @@ def company_brain_incremental_sync_task(
     default_retry_delay=600,
     queue="company_brain",
 )
-def company_brain_full_sync_task(
-    self, data_source_id: int, tenant_id: str
-) -> dict[str, Any]:
+def company_brain_full_sync_task(self, data_source_id: int, tenant_id: str) -> dict[str, Any]:
     """Run a full re-sync for one data source."""
     db = SessionLocal()
     try:
@@ -142,12 +141,17 @@ def company_brain_full_sync_task(
 def _run_sync(db: Any, data_source_id: int, tenant_id: str, full_sync: bool) -> dict[str, Any]:
     """Shared sync logic: instantiate the right connector and run sync."""
     import asyncio
-    from src.models.data_source import DataSource, DataSourceStatus, DataSourceType
 
-    ds = db.query(DataSource).filter(
-        DataSource.id == data_source_id,
-        DataSource.tenant_id == uuid.UUID(tenant_id),
-    ).first()
+    from src.models.data_source import DataSource, DataSourceStatus
+
+    ds = (
+        db.query(DataSource)
+        .filter(
+            DataSource.id == data_source_id,
+            DataSource.tenant_id == uuid.UUID(tenant_id),
+        )
+        .first()
+    )
 
     if not ds:
         return {"success": False, "error": "DataSource not found"}
@@ -164,7 +168,6 @@ def _run_sync(db: Any, data_source_id: int, tenant_id: str, full_sync: bool) -> 
         return {"success": False, "error": ds.last_error}
 
     async def _run():
-        since = None if full_sync else ds.last_sync_at
         return await connector.sync(incremental=not full_sync)
 
     try:
@@ -205,6 +208,7 @@ def _get_connector(ds: Any, db: Any) -> Any:
 
     module_path, class_name = class_path.rsplit(".", 1)
     import importlib
+
     mod = importlib.import_module(module_path)
     cls = getattr(mod, class_name)
     return cls(data_source=ds, db=db)
@@ -213,6 +217,7 @@ def _get_connector(ds: Any, db: Any) -> Any:
 # ---------------------------------------------------------------------------
 # Fan-out task — syncs all active Company Brain data sources
 # ---------------------------------------------------------------------------
+
 
 @celery_app.task(name="company_brain_sync_all_task", queue="company_brain")
 def company_brain_sync_all_task(tenant_id: str | None = None) -> dict[str, Any]:
@@ -248,6 +253,7 @@ def company_brain_sync_all_task(tenant_id: str | None = None) -> dict[str, Any]:
 # Tier migration task — promotes documents from hot → warm → archive
 # ---------------------------------------------------------------------------
 
+
 @celery_app.task(name="company_brain_tier_migration_task", queue="company_brain")
 def company_brain_tier_migration_task() -> dict[str, Any]:
     """
@@ -257,8 +263,8 @@ def company_brain_tier_migration_task() -> dict[str, Any]:
     warm → archive: docs older than COMPANY_BRAIN_WARM_DAYS (mark is_embedded=False,
                     remove from vector index — S3 archival handled by storage layer)
     """
-    import asyncio
     from src.config.settings import get_settings
+
     settings = get_settings()
     hot_days = getattr(settings, "company_brain_hot_days", 90)
     warm_days = getattr(settings, "company_brain_warm_days", 730)
@@ -269,6 +275,7 @@ def company_brain_tier_migration_task() -> dict[str, Any]:
 
     try:
         from sqlalchemy import text
+
         now = datetime.now(UTC)
         hot_cutoff = now - timedelta(days=hot_days)
         warm_cutoff = now - timedelta(days=warm_days)
@@ -302,7 +309,8 @@ def company_brain_tier_migration_task() -> dict[str, Any]:
 
         logger.info(
             "Tier migration: hot→warm=%d, warm→archive=%d",
-            promoted_to_warm, promoted_to_archive,
+            promoted_to_warm,
+            promoted_to_archive,
         )
         return {
             "promoted_to_warm": promoted_to_warm,
@@ -367,7 +375,10 @@ def kb_extract_entities_task(
         db.commit()
         logger.info(
             "kb_extract_entities_task: upserted=%d for %d docs (source=%s, kb=%d)",
-            upserted, len(docs), source_type, knowledge_base_id,
+            upserted,
+            len(docs),
+            source_type,
+            knowledge_base_id,
         )
         return {"upserted": upserted, "docs_processed": len(docs)}
 
@@ -391,86 +402,104 @@ def _extract_entities_from_meta(source_type: str, meta: dict) -> list[dict]:
     if source_type == "slack":
         user = meta.get("user") or meta.get("user_id")
         if user:
-            entities.append({
-                "entity_type": "person",
-                "canonical_name": user,
-                "email": None,
-                "identifiers": {"slack_user_id": user},
-            })
+            entities.append(
+                {
+                    "entity_type": "person",
+                    "canonical_name": user,
+                    "email": None,
+                    "identifiers": {"slack_user_id": user},
+                }
+            )
         channel = meta.get("channel")
         if channel:
-            entities.append({
-                "entity_type": "channel",
-                "canonical_name": channel,
-                "email": None,
-                "identifiers": {"slack_channel_id": channel},
-            })
+            entities.append(
+                {
+                    "entity_type": "channel",
+                    "canonical_name": channel,
+                    "email": None,
+                    "identifiers": {"slack_channel_id": channel},
+                }
+            )
 
     elif source_type in ("github", "gitlab"):
         author = meta.get("author") or meta.get("user")
         repo = meta.get("repo")
         if author:
-            entities.append({
-                "entity_type": "person",
-                "canonical_name": author,
-                "email": meta.get("author_email"),
-                "identifiers": {f"{source_type}_login": author},
-            })
+            entities.append(
+                {
+                    "entity_type": "person",
+                    "canonical_name": author,
+                    "email": meta.get("author_email"),
+                    "identifiers": {f"{source_type}_login": author},
+                }
+            )
         if repo:
-            entities.append({
-                "entity_type": "repo",
-                "canonical_name": repo,
-                "email": None,
-                "identifiers": {f"{source_type}_repo": repo},
-            })
+            entities.append(
+                {
+                    "entity_type": "repo",
+                    "canonical_name": repo,
+                    "email": None,
+                    "identifiers": {f"{source_type}_repo": repo},
+                }
+            )
 
     elif source_type == "jira":
         for field in ("assignee_email", "reporter_email", "creator_email"):
             email = meta.get(field)
             if email:
-                entities.append({
-                    "entity_type": "person",
-                    "canonical_name": email.split("@")[0],
-                    "email": email,
-                    "identifiers": {},
-                })
+                entities.append(
+                    {
+                        "entity_type": "person",
+                        "canonical_name": email.split("@")[0],
+                        "email": email,
+                        "identifiers": {},
+                    }
+                )
         project = meta.get("project_key")
         if project:
-            entities.append({
-                "entity_type": "project",
-                "canonical_name": project,
-                "email": None,
-                "identifiers": {"jira_project_key": project},
-            })
+            entities.append(
+                {
+                    "entity_type": "project",
+                    "canonical_name": project,
+                    "email": None,
+                    "identifiers": {"jira_project_key": project},
+                }
+            )
 
     elif source_type == "linear":
         assignee_email = meta.get("assignee_email")
         creator_email = meta.get("creator_email")
         for email in filter(None, [assignee_email, creator_email]):
-            entities.append({
-                "entity_type": "person",
-                "canonical_name": email.split("@")[0],
-                "email": email,
-                "identifiers": {},
-            })
+            entities.append(
+                {
+                    "entity_type": "person",
+                    "canonical_name": email.split("@")[0],
+                    "email": email,
+                    "identifiers": {},
+                }
+            )
         team_key = meta.get("team_key")
         if team_key:
-            entities.append({
-                "entity_type": "team",
-                "canonical_name": team_key,
-                "email": None,
-                "identifiers": {"linear_team_key": team_key},
-            })
+            entities.append(
+                {
+                    "entity_type": "team",
+                    "canonical_name": team_key,
+                    "email": None,
+                    "identifiers": {"linear_team_key": team_key},
+                }
+            )
 
     elif source_type == "notion":
         page_id = meta.get("page_id")
         if page_id:
-            entities.append({
-                "entity_type": "page",
-                "canonical_name": meta.get("title", page_id),
-                "email": None,
-                "identifiers": {"notion_page_id": page_id},
-            })
+            entities.append(
+                {
+                    "entity_type": "page",
+                    "canonical_name": meta.get("title", page_id),
+                    "email": None,
+                    "identifiers": {"notion_page_id": page_id},
+                }
+            )
 
     return entities
 
@@ -493,9 +522,7 @@ def _upsert_entity(db: Any, knowledge_base_id: int, tenant_id: str, data: dict) 
 
     if email:
         existing = (
-            db.query(KBEntity)
-            .filter(KBEntity.knowledge_base_id == knowledge_base_id, KBEntity.email == email)
-            .first()
+            db.query(KBEntity).filter(KBEntity.knowledge_base_id == knowledge_base_id, KBEntity.email == email).first()
         )
     else:
         existing = (

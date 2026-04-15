@@ -6,7 +6,6 @@ Generates K6 JavaScript load test scripts from configuration.
 
 import json
 import logging
-from typing import Any
 
 from src.models.load_test import LoadTest, TargetType
 from src.models.test_scenario import TestScenario

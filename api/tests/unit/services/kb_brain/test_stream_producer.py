@@ -4,11 +4,11 @@ No real Redis required; uses AsyncMock.
 """
 
 import json
-import pytest
 from unittest.mock import AsyncMock, MagicMock, patch
 
-from src.services.company_brain.ingestion.stream_producer import StreamProducer, _stream_key
+import pytest
 
+from src.services.company_brain.ingestion.stream_producer import StreamProducer, _stream_key
 
 # ---------------------------------------------------------------------------
 # _stream_key

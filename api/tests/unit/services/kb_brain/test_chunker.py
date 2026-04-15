@@ -2,17 +2,16 @@
 Unit tests for company_brain chunker — all four strategies with dummy data.
 """
 
-import pytest
 from unittest.mock import patch
+
 from src.services.company_brain.ingestion.chunker import (
-    chunk_document,
-    _chunk_fixed,
-    _chunk_slack_thread,
-    _chunk_pr_diff,
     _chunk_by_headings,
+    _chunk_fixed,
+    _chunk_pr_diff,
+    _chunk_slack_thread,
+    chunk_document,
     get_strategy,
 )
-
 
 # ---------------------------------------------------------------------------
 # Fixtures — dummy documents

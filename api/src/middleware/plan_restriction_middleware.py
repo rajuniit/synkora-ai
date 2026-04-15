@@ -16,7 +16,7 @@ import jwt
 from sqlalchemy import select
 from starlette.requests import Request as StarletteRequest
 from starlette.responses import JSONResponse
-from starlette.types import ASGIApp, Message, Receive, Scope, Send
+from starlette.types import ASGIApp, Receive, Scope, Send
 
 from src.core.database import get_async_session_factory
 from src.models.tenant import Tenant, TenantType

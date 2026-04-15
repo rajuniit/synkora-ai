@@ -4,11 +4,9 @@ Verifies table names, column names, unique constraints, and relationships
 without a real database connection.
 """
 
-import pytest
-from sqlalchemy import inspect as sa_inspect, UniqueConstraint
+from sqlalchemy import UniqueConstraint
 
-from src.models.kb_brain import KBSyncCursor, KBEntity, KBRelationship
-
+from src.models.kb_brain import KBEntity, KBRelationship, KBSyncCursor
 
 # ---------------------------------------------------------------------------
 # KBSyncCursor

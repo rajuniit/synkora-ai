@@ -10,8 +10,8 @@ import logging
 import os
 import subprocess
 import tempfile
+from collections.abc import Callable
 from datetime import UTC, datetime
-from typing import Any, Callable
 from uuid import UUID
 
 logger = logging.getLogger(__name__)

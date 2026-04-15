@@ -81,7 +81,6 @@ async def list_agent_tools(
     """
     try:
         from src.models.agent_tool import AgentTool
-        from src.models.custom_tool import CustomTool
 
         # Convert string to UUID
         try:

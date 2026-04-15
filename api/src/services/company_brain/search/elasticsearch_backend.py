@@ -54,6 +54,7 @@ class ElasticsearchBackend(BaseSearchBackend):
             return self._client
         try:
             from elasticsearch import AsyncElasticsearch
+
             host = self._config.get("host", "localhost")
             port = self._config.get("port", 9200)
             api_key = self._config.get("api_key")
@@ -94,8 +95,12 @@ class ElasticsearchBackend(BaseSearchBackend):
                                 "source_type": {"type": "keyword"},
                                 "title": {"type": "text"},
                                 "content": {"type": "text"},
-                                "embedding": {"type": "dense_vector", "dims": dense_dim, "index": True,
-                                              "similarity": "cosine"},
+                                "embedding": {
+                                    "type": "dense_vector",
+                                    "dims": dense_dim,
+                                    "index": True,
+                                    "similarity": "cosine",
+                                },
                                 "source_url": {"type": "keyword"},
                                 "occurred_at": {"type": "date"},
                                 "storage_tier": {"type": "keyword"},
@@ -143,14 +148,12 @@ class ElasticsearchBackend(BaseSearchBackend):
             return SearchResponse(results=[], total_found=0, took_ms=0, backend_used="elasticsearch")
 
         must_filter = self._build_filter(tenant_id, filters)
-        knn_boost = self._config.get("knn_boost", 0.7)
         bm25_boost = self._config.get("bm25_boost", 0.3)
 
         body = {
             "query": {
                 "bool": {
-                    "must": [{"multi_match": {"query": query, "fields": ["title^2", "content"],
-                                             "boost": bm25_boost}}],
+                    "must": [{"multi_match": {"query": query, "fields": ["title^2", "content"], "boost": bm25_boost}}],
                     "filter": must_filter,
                 }
             },
@@ -280,7 +283,9 @@ class ElasticsearchBackend(BaseSearchBackend):
         try:
             client = self._get_client()
             health = await client.cluster.health()
-            return {"status": "ok" if health.get("status") != "red" else "degraded",
-                    "cluster_status": health.get("status")}
+            return {
+                "status": "ok" if health.get("status") != "red" else "degraded",
+                "cluster_status": health.get("status"),
+            }
         except Exception as exc:
             return {"status": "down", "error": str(exc)}

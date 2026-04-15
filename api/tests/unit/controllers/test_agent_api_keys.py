@@ -85,8 +85,8 @@ def _create_mock_api_key(key_id, tenant_id, agent_id=None, **kwargs):
     mock_api_key.is_active = kwargs.get("is_active", True)
     mock_api_key.allowed_ips = kwargs.get("allowed_ips", [])
     mock_api_key.allowed_origins = kwargs.get("allowed_origins", [])
-    mock_api_key.expires_at = kwargs.get("expires_at", None)
-    mock_api_key.last_used_at = kwargs.get("last_used_at", None)
+    mock_api_key.expires_at = kwargs.get("expires_at")
+    mock_api_key.last_used_at = kwargs.get("last_used_at")
     mock_api_key.created_at = datetime.now(UTC)
     mock_api_key.updated_at = datetime.now(UTC)
     return mock_api_key

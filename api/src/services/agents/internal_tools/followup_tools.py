@@ -7,7 +7,7 @@ particularly for Slack messages and email threads.
 import logging
 import re
 import uuid
-from datetime import UTC, datetime, timedelta, timezone
+from datetime import UTC, datetime, timedelta
 from typing import Any
 
 from sqlalchemy import and_, or_, select

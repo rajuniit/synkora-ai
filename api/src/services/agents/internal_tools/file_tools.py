@@ -14,7 +14,6 @@ import os
 import re
 import shutil
 import subprocess
-import tempfile
 from pathlib import Path
 from typing import Any
 

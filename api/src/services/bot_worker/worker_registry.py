@@ -14,7 +14,7 @@ from typing import Any
 
 import redis
 
-from ...bot_worker.redis_state import BotRedisState, WorkerInfo
+from ...bot_worker.redis_state import BotRedisState
 
 logger = logging.getLogger(__name__)
 

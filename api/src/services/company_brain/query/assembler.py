@@ -41,6 +41,7 @@ def assemble(
     """
     if max_tokens is None:
         from src.config.settings import get_settings
+
         max_tokens = getattr(get_settings(), "company_brain_context_tokens", 32_000)
 
     # 1. Deduplicate by content hash (different sources may index the same text)
@@ -59,18 +60,21 @@ def assemble(
     for i, result in enumerate(trimmed, 1):
         source_label = _source_label(result)
         context_parts.append(f"[{i}] {source_label}\n{result.content}\n")
-        citations.append({
-            "index": i,
-            "source": result.source_type,
-            "title": result.title,
-            "url": result.source_url,
-            "occurred_at": result.occurred_at,
-            "score": round(result.score, 4),
-            "metadata": {
-                k: v for k, v in (result.metadata or {}).items()
-                if k not in ("tenant_id",)  # never expose tenant_id
-            },
-        })
+        citations.append(
+            {
+                "index": i,
+                "source": result.source_type,
+                "title": result.title,
+                "url": result.source_url,
+                "occurred_at": result.occurred_at,
+                "score": round(result.score, 4),
+                "metadata": {
+                    k: v
+                    for k, v in (result.metadata or {}).items()
+                    if k not in ("tenant_id",)  # never expose tenant_id
+                },
+            }
+        )
 
     context = "\n".join(context_parts)
 
@@ -85,6 +89,7 @@ def assemble(
 # ---------------------------------------------------------------------------
 # Internal helpers
 # ---------------------------------------------------------------------------
+
 
 def _content_hash(text: str) -> str:
     return hashlib.md5(text.encode()).hexdigest()
@@ -118,7 +123,7 @@ def _rrf_rank(results: list[SearchResult], k: int = 60) -> list[SearchResult]:
         scored.append((combined, result))
 
     scored.sort(key=lambda x: x[0], reverse=True)
-    for i, (score, result) in enumerate(scored):
+    for _i, (score, result) in enumerate(scored):
         result.score = score
     return [r for _, r in scored]
 
@@ -127,6 +132,7 @@ def _approx_tokens(text: str) -> int:
     """Approximate token count without a hard tiktoken dependency."""
     try:
         import tiktoken
+
         enc = tiktoken.get_encoding("cl100k_base")
         return len(enc.encode(text))
     except Exception:

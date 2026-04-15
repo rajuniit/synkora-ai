@@ -6,17 +6,16 @@ file-system tool calls are routed to that compute target instead of
 the local platform workspace.
 """
 
-import enum
-from datetime import datetime
+from enum import StrEnum
 
-from sqlalchemy import Column, DateTime, ForeignKey, Integer, JSON, String, Text
+from sqlalchemy import JSON, Column, DateTime, ForeignKey, Integer, String, Text
 from sqlalchemy.dialects.postgresql import UUID
 from sqlalchemy.orm import relationship
 
 from src.models.base import BaseModel, TenantMixin
 
 
-class ComputeType(str, enum.Enum):
+class ComputeType(StrEnum):
     """Type of compute target."""
 
     LOCAL = "local"
@@ -24,7 +23,7 @@ class ComputeType(str, enum.Enum):
     PLATFORM_MANAGED = "platform_managed"
 
 
-class ComputeStatus(str, enum.Enum):
+class ComputeStatus(StrEnum):
     """Operational status of the compute assignment."""
 
     ACTIVE = "active"
@@ -193,16 +192,11 @@ class AgentCompute(BaseModel, TenantMixin):
             "timeout_seconds": self.timeout_seconds,
             "max_output_chars": self.max_output_chars,
             "allowed_commands_override": self.allowed_commands_override,
-            "last_connected_at": (
-                self.last_connected_at.isoformat() if self.last_connected_at else None
-            ),
+            "last_connected_at": (self.last_connected_at.isoformat() if self.last_connected_at else None),
             "error_message": self.error_message,
             "created_at": self.created_at.isoformat() if self.created_at else None,
             "updated_at": self.updated_at.isoformat() if self.updated_at else None,
         }
 
     def __repr__(self) -> str:
-        return (
-            f"<AgentCompute(id={self.id}, agent={self.agent_id}, "
-            f"type={self.compute_type}, status={self.status})>"
-        )
+        return f"<AgentCompute(id={self.id}, agent={self.agent_id}, type={self.compute_type}, status={self.status})>"

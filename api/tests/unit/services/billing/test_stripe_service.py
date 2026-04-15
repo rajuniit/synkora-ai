@@ -1,17 +1,12 @@
-from datetime import datetime
-from decimal import Decimal
-from unittest.mock import ANY, AsyncMock, MagicMock, patch
+from unittest.mock import AsyncMock, MagicMock, patch
 from uuid import uuid4
 
 import pytest
-from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from src.models.credit_topup import CreditTopup, TopupStatus
 from src.models.integration_config import IntegrationConfig
-from src.models.subscription_plan import SubscriptionPlan
-from src.models.tenant import Tenant
-from src.models.tenant_subscription import SubscriptionStatus, TenantSubscription
+from src.models.tenant_subscription import TenantSubscription
 from src.services.billing.stripe_service import StripeService
 
 

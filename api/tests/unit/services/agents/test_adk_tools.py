@@ -1,4 +1,3 @@
-import os
 import sys
 from unittest.mock import AsyncMock, MagicMock, patch
 
@@ -17,7 +16,6 @@ sys.modules["serpapi"] = mock_serpapi
 sys.modules["bs4"] = MagicMock()
 
 # Import the module we want to patch
-import src.services.agents.internal_tools.tutorial_generator as tutorial_gen
 from src.services.agents.adk_tools import (
     ADKToolRegistry,
     github_composite,

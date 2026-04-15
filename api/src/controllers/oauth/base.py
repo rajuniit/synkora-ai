@@ -9,9 +9,8 @@ SECURITY: Validates redirect URLs and URL-encodes error messages.
 
 import logging
 import uuid
-from typing import Any
 
-from fastapi import APIRouter, Depends, HTTPException, Query
+from fastapi import APIRouter, Depends, HTTPException
 from fastapi.responses import RedirectResponse
 from pydantic import BaseModel
 from sqlalchemy import select
@@ -23,11 +22,10 @@ from ...core.database import get_async_db
 from ...middleware.auth_middleware import (
     get_current_account,
     get_current_tenant_id,
-    get_optional_account,
 )
 from ...models.oauth_app import OAuthApp
 from ...models.tenant import Account
-from ...services.agents.security import decrypt_value, encrypt_value
+from ...services.agents.security import decrypt_value
 from ...services.oauth import GitHubOAuth
 from ...services.oauth.clickup_oauth import ClickUpOAuth
 from ...services.oauth.gmail_oauth import GmailOAuth
@@ -37,7 +35,7 @@ from ...services.security.oauth_security import (
     build_oauth_redirect_url,
     sanitize_redirect_url,
 )
-from ...services.security.oauth_state_service import create_oauth_state, get_oauth_state
+from ...services.security.oauth_state_service import create_oauth_state
 
 logger = logging.getLogger(__name__)
 

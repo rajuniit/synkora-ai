@@ -5,7 +5,7 @@ Tests the filtering logic that reduces the number of tools sent to the LLM
 based on message content for improved latency and reduced token costs.
 """
 
-from unittest.mock import MagicMock, patch
+from unittest.mock import MagicMock
 
 import pytest
 

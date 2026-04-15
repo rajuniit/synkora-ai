@@ -11,7 +11,7 @@ import uuid
 from datetime import UTC, datetime
 from typing import Any
 
-from sqlalchemy import func, select
+from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from src.models.wiki_article import WikiArticle, WikiCompilationJob
@@ -27,7 +27,6 @@ def _recover_partial_json(text: str) -> list[dict]:
     Attempt to recover complete article objects from a truncated JSON array.
     Extracts any fully-closed objects before the truncation point.
     """
-    import re
 
     articles = []
     # Find all complete JSON objects using brace depth tracking

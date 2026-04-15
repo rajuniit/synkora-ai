@@ -7,9 +7,9 @@ Generates mock responses in OpenAI API format.
 import asyncio
 import json
 import time
-from typing import Any, AsyncGenerator
+from collections.abc import AsyncGenerator
 
-from .base import BaseMockProvider, MockError
+from .base import BaseMockProvider
 
 
 class OpenAIMockProvider(BaseMockProvider):

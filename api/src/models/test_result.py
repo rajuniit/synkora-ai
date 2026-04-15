@@ -6,7 +6,7 @@ Database model for storing granular load test metric data points.
 
 from enum import StrEnum
 
-from sqlalchemy import Column, DateTime, Enum, Float, ForeignKey, Index, Integer, String
+from sqlalchemy import Column, DateTime, Enum, Float, ForeignKey, Index
 from sqlalchemy.dialects.postgresql import JSON, UUID
 from sqlalchemy.orm import relationship
 

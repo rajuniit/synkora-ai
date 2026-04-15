@@ -1,16 +1,10 @@
-import json
 import uuid
 from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
-from fastapi import UploadFile, status
 from fastapi.testclient import TestClient
 
 from src.controllers.agents.chat import agents_chat_router
-from src.controllers.agents.models import ChatRequest
-from src.models.agent import Agent
-from src.models.conversation import Conversation
-from src.services.agents.config import AgentConfig, ModelConfig
 
 # Mock the prompt scanner before importing the controller if possible,
 # but since we are testing the controller functions directly or via router,

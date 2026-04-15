@@ -12,8 +12,7 @@ Rendering pipeline:
 """
 
 import math
-import re
-from dataclasses import dataclass, field
+from dataclasses import dataclass
 from typing import Any
 from xml.sax.saxutils import escape
 
@@ -271,19 +270,19 @@ class DiagramRenderer:
 
     # Per-kind color palette: (gradient_start, gradient_end, stroke, text, icon_bg)
     _KIND_PALETTE: dict[str, tuple[str, str, str, str, str]] = {
-        "rounded_rect":   ("#EFF6FF", "#DBEAFE", "#93C5FD", "#1D4ED8", "#DBEAFE"),
-        "hexagon":        ("#F5F3FF", "#EDE9FE", "#C4B5FD", "#5B21B6", "#EDE9FE"),
-        "cylinder":       ("#ECFDF5", "#D1FAE5", "#6EE7B7", "#065F46", "#D1FAE5"),
-        "diamond":        ("#FFFBEB", "#FEF3C7", "#FCD34D", "#92400E", "#FEF3C7"),
-        "double_rect":    ("#EEF2FF", "#E0E7FF", "#A5B4FC", "#3730A3", "#E0E7FF"),
-        "circle":         ("#ECFEFF", "#CFFAFE", "#67E8F9", "#0E7490", "#CFFAFE"),
-        "gear":           ("#F8FAFC", "#F1F5F9", "#CBD5E1", "#334155", "#F1F5F9"),
-        "document":       ("#FFFBEB", "#FEF3C7", "#FDE68A", "#92400E", "#FEF3C7"),
-        "folder":         ("#FFF7ED", "#FFEDD5", "#FED7AA", "#9A3412", "#FFEDD5"),
-        "terminal":       ("#0F172A", "#1E293B", "#334155", "#E2E8F0", "#1E293B"),
-        "speech":         ("#F0FDF4", "#DCFCE7", "#86EFAC", "#14532D", "#DCFCE7"),
-        "rect":           ("#F9FAFB", "#F3F4F6", "#D1D5DB", "#374151", "#F3F4F6"),
-        "parallelogram":  ("#FFF1F2", "#FFE4E6", "#FCA5A5", "#991B1B", "#FFE4E6"),
+        "rounded_rect": ("#EFF6FF", "#DBEAFE", "#93C5FD", "#1D4ED8", "#DBEAFE"),
+        "hexagon": ("#F5F3FF", "#EDE9FE", "#C4B5FD", "#5B21B6", "#EDE9FE"),
+        "cylinder": ("#ECFDF5", "#D1FAE5", "#6EE7B7", "#065F46", "#D1FAE5"),
+        "diamond": ("#FFFBEB", "#FEF3C7", "#FCD34D", "#92400E", "#FEF3C7"),
+        "double_rect": ("#EEF2FF", "#E0E7FF", "#A5B4FC", "#3730A3", "#E0E7FF"),
+        "circle": ("#ECFEFF", "#CFFAFE", "#67E8F9", "#0E7490", "#CFFAFE"),
+        "gear": ("#F8FAFC", "#F1F5F9", "#CBD5E1", "#334155", "#F1F5F9"),
+        "document": ("#FFFBEB", "#FEF3C7", "#FDE68A", "#92400E", "#FEF3C7"),
+        "folder": ("#FFF7ED", "#FFEDD5", "#FED7AA", "#9A3412", "#FFEDD5"),
+        "terminal": ("#0F172A", "#1E293B", "#334155", "#E2E8F0", "#1E293B"),
+        "speech": ("#F0FDF4", "#DCFCE7", "#86EFAC", "#14532D", "#DCFCE7"),
+        "rect": ("#F9FAFB", "#F3F4F6", "#D1D5DB", "#374151", "#F3F4F6"),
+        "parallelogram": ("#FFF1F2", "#FFE4E6", "#FCA5A5", "#991B1B", "#FFE4E6"),
     }
 
     def _kind_palette(self, kind: str) -> tuple[str, str, str, str, str]:
@@ -341,7 +340,6 @@ class DiagramRenderer:
         node_fill = self.style.get("node_fill", "#f9fafb")
         node_stroke = self.style.get("node_stroke", "#e5e7eb")
         corner_radius = self.style.get("corner_radius", 8)
-        shadow_blur = self.style.get("shadow_blur", 4)
         border_width = self.style.get("border_width", 1.5)
 
         # Flow type colors
@@ -376,13 +374,13 @@ class DiagramRenderer:
         parts.append(
             '<filter id="shadow" x="-15%" y="-15%" width="140%" height="140%">'
             '<feDropShadow dx="0" dy="3" stdDeviation="6" flood-color="#000" flood-opacity="0.10"/>'
-            '</filter>'
+            "</filter>"
         )
         # Stronger shadow for containers
         parts.append(
             '<filter id="shadow-lg" x="-15%" y="-15%" width="140%" height="140%">'
             '<feDropShadow dx="0" dy="4" stdDeviation="10" flood-color="#000" flood-opacity="0.08"/>'
-            '</filter>'
+            "</filter>"
         )
 
         # Per-kind gradient defs
@@ -391,7 +389,7 @@ class DiagramRenderer:
                 f'<linearGradient id="grad-{kind}" x1="0" y1="0" x2="0" y2="1">'
                 f'<stop offset="0%" stop-color="{g_start}"/>'
                 f'<stop offset="100%" stop-color="{g_end}"/>'
-                f'</linearGradient>'
+                f"</linearGradient>"
             )
 
         # Arrow markers — larger, cleaner
@@ -400,7 +398,7 @@ class DiagramRenderer:
                 f'<marker id="arrow-{flow_type}" viewBox="0 0 12 8" refX="11" refY="4" '
                 f'markerWidth="8" markerHeight="8" orient="auto-start-reverse">'
                 f'<path d="M0,0.5 L10,4 L0,7.5 Z" fill="{color}"/>'
-                f'</marker>'
+                f"</marker>"
             )
         parts.append("</defs>")
 
@@ -521,8 +519,9 @@ class DiagramRenderer:
             # Draw a subtle ghost line for emphasis on data flows
             if flow == "data":
                 parts.append(
-                    _svg_path(path_d, stroke=color, stroke_width=border_width + 2, fill="none", dash=dash)
-                    .replace(f'stroke-width="{border_width + 2}"', f'stroke-width="{border_width + 2}" opacity="0.15"')
+                    _svg_path(path_d, stroke=color, stroke_width=border_width + 2, fill="none", dash=dash).replace(
+                        f'stroke-width="{border_width + 2}"', f'stroke-width="{border_width + 2}" opacity="0.15"'
+                    )
                 )
 
             parts.append(
@@ -542,8 +541,10 @@ class DiagramRenderer:
                         stroke_width=border_width + 0.5,
                         marker_end=f"arrow-{flow}",
                         dash=dash,
-                    ).replace(f'marker-end="url(#arrow-{flow})"',
-                               f'marker-start="url(#arrow-{flow})" marker-end="url(#arrow-{flow})"')
+                    ).replace(
+                        f'marker-end="url(#arrow-{flow})"',
+                        f'marker-start="url(#arrow-{flow})" marker-end="url(#arrow-{flow})"',
+                    )
                 )
 
             # Arrow label
@@ -590,7 +591,7 @@ class DiagramRenderer:
             use_gradients = self.style.get("use_node_gradients", True)
             nfill = node.get("fill") or (f"url(#grad-{kind})" if use_gradients else node_fill)
             nstroke = node.get("stroke") or (pal_stroke if use_gradients else node_stroke)
-            node_text_color = (pal_text if use_gradients else text_color)
+            node_text_color = pal_text if use_gradients else text_color
 
             # Render shape
             node_svg = self._render_node_shape(kind, rect, nfill, nstroke, 2.0, corner_radius, True)
@@ -601,6 +602,7 @@ class DiagramRenderer:
             if icon_name:
                 try:
                     from src.services.diagrams.icons import get_icon_svg
+
                     icon_size = 28
                     icon_x = rect.cx - icon_size / 2
                     icon_y = rect.y + 10
@@ -650,7 +652,8 @@ class DiagramRenderer:
             if len(label_lines) == 1:
                 parts.append(
                     _svg_text(
-                        rect.cx, text_y,
+                        rect.cx,
+                        text_y,
                         label_lines[0],
                         font_size=label_size,
                         fill=node_text_color,
@@ -665,7 +668,8 @@ class DiagramRenderer:
                 for i, line in enumerate(label_lines):
                     parts.append(
                         _svg_text(
-                            rect.cx, start_y + i * line_h,
+                            rect.cx,
+                            start_y + i * line_h,
                             line,
                             font_size=label_size,
                             fill=node_text_color,
@@ -691,8 +695,8 @@ class DiagramRenderer:
         """Render a comparison / feature-matrix table."""
         title = spec.get("title", "")
         subtitle = spec.get("subtitle", "")
-        columns = spec.get("columns", [])   # str or {"label": str, "color": str}
-        rows = spec.get("rows", [])         # {"label": str, "values": [...]}
+        columns = spec.get("columns", [])  # str or {"label": str, "color": str}
+        rows = spec.get("rows", [])  # {"label": str, "values": [...]}
 
         font_family = self.style.get("font_family", "system-ui, sans-serif")
         bg_color = self.style.get("background_color", "#FFFFFF")
@@ -736,16 +740,35 @@ class DiagramRenderer:
             "</filter>"
         )
         parts.append("</defs>")
-        parts.append(f'<rect x="0" y="0" width="{canvas_width}" height="{canvas_height:.0f}" fill="{bg_color}" stroke="none"/>')
+        parts.append(
+            f'<rect x="0" y="0" width="{canvas_width}" height="{canvas_height:.0f}" fill="{bg_color}" stroke="none"/>'
+        )
 
         ty = 40
         if title:
-            parts.append(_svg_text(canvas_width / 2, ty, title, font_size=self.style.get("title_size", 22),
-                                   fill=text_color, font_family=font_family, font_weight="700"))
+            parts.append(
+                _svg_text(
+                    canvas_width / 2,
+                    ty,
+                    title,
+                    font_size=self.style.get("title_size", 22),
+                    fill=text_color,
+                    font_family=font_family,
+                    font_weight="700",
+                )
+            )
             ty += 28
         if subtitle:
-            parts.append(_svg_text(canvas_width / 2, ty, subtitle, font_size=13,
-                                   fill=self.style.get("subtitle_color", "#6b7280"), font_family=font_family))
+            parts.append(
+                _svg_text(
+                    canvas_width / 2,
+                    ty,
+                    subtitle,
+                    font_size=13,
+                    fill=self.style.get("subtitle_color", "#6b7280"),
+                    font_family=font_family,
+                )
+            )
 
         # Table shadow + outline
         parts.append(
@@ -775,8 +798,17 @@ class DiagramRenderer:
                 f'<rect x="{cx:.1f}" y="{table_top:.1f}" width="{COL_W}" height="{HEADER_H}" '
                 f'fill="{col_color}" stroke="{node_stroke}" stroke-width="0.5"/>'
             )
-            parts.append(_svg_text(cx + COL_W / 2, table_top + HEADER_H / 2, col_label,
-                                   font_size=13, fill="#FFFFFF", font_family=font_family, font_weight="700"))
+            parts.append(
+                _svg_text(
+                    cx + COL_W / 2,
+                    table_top + HEADER_H / 2,
+                    col_label,
+                    font_size=13,
+                    fill="#FFFFFF",
+                    font_family=font_family,
+                    font_weight="700",
+                )
+            )
 
         # Data rows
         for ri, row in enumerate(rows):
@@ -789,9 +821,18 @@ class DiagramRenderer:
                 f'<rect x="{table_left:.1f}" y="{row_y:.1f}" width="{ROW_LABEL_W}" height="{ROW_H}" '
                 f'fill="{row_bg}" stroke="{node_stroke}" stroke-width="0.5"/>'
             )
-            parts.append(_svg_text(table_left + 16, row_y + ROW_H / 2, row_label,
-                                   font_size=13, fill=text_color, font_family=font_family,
-                                   font_weight="500", anchor="start"))
+            parts.append(
+                _svg_text(
+                    table_left + 16,
+                    row_y + ROW_H / 2,
+                    row_label,
+                    font_size=13,
+                    fill=text_color,
+                    font_family=font_family,
+                    font_weight="500",
+                    anchor="start",
+                )
+            )
 
             for ci, val in enumerate(values[:n_cols]):
                 vx = table_left + ROW_LABEL_W + ci * COL_W
@@ -807,23 +848,37 @@ class DiagramRenderer:
                 elif val_str in ("✗", "✘", "No", "no", "false", "False", "—", "-"):
                     val_color = "#EF4444"
                     val_str = "✗"
-                parts.append(_svg_text(vx + COL_W / 2, row_y + ROW_H / 2, val_str,
-                                       font_size=13, fill=val_color, font_family=font_family,
-                                       font_weight="600" if val_str in ("✓", "✗") else "normal"))
+                parts.append(
+                    _svg_text(
+                        vx + COL_W / 2,
+                        row_y + ROW_H / 2,
+                        val_str,
+                        font_size=13,
+                        fill=val_color,
+                        font_family=font_family,
+                        font_weight="600" if val_str in ("✓", "✗") else "normal",
+                    )
+                )
 
         # Grid lines
         for ri in range(1, n_rows + 1):
             dy = table_top + HEADER_H + ri * ROW_H
             if dy < table_top + table_height:
-                parts.append(f'<line x1="{table_left:.1f}" y1="{dy:.1f}" x2="{table_left + table_width:.1f}" y2="{dy:.1f}" '
-                             f'stroke="{node_stroke}" stroke-width="0.5"/>')
+                parts.append(
+                    f'<line x1="{table_left:.1f}" y1="{dy:.1f}" x2="{table_left + table_width:.1f}" y2="{dy:.1f}" '
+                    f'stroke="{node_stroke}" stroke-width="0.5"/>'
+                )
         vx0 = table_left + ROW_LABEL_W
-        parts.append(f'<line x1="{vx0:.1f}" y1="{table_top:.1f}" x2="{vx0:.1f}" y2="{table_top + table_height:.1f}" '
-                     f'stroke="{node_stroke}" stroke-width="1.5"/>')
+        parts.append(
+            f'<line x1="{vx0:.1f}" y1="{table_top:.1f}" x2="{vx0:.1f}" y2="{table_top + table_height:.1f}" '
+            f'stroke="{node_stroke}" stroke-width="1.5"/>'
+        )
         for ci in range(1, n_cols):
             vx = table_left + ROW_LABEL_W + ci * COL_W
-            parts.append(f'<line x1="{vx:.1f}" y1="{table_top:.1f}" x2="{vx:.1f}" y2="{table_top + table_height:.1f}" '
-                         f'stroke="{node_stroke}" stroke-width="0.5"/>')
+            parts.append(
+                f'<line x1="{vx:.1f}" y1="{table_top:.1f}" x2="{vx:.1f}" y2="{table_top + table_height:.1f}" '
+                f'stroke="{node_stroke}" stroke-width="0.5"/>'
+            )
 
         parts.append("</svg>")
         return "\n".join(parts)
@@ -832,8 +887,8 @@ class DiagramRenderer:
         """Render a Gantt-style timeline / roadmap."""
         title = spec.get("title", "")
         subtitle = spec.get("subtitle", "")
-        periods = spec.get("periods", [])   # ["Q1","Q2","Q3","Q4"] or ["Week 1", ...]
-        tracks = spec.get("tracks", [])     # [{"label":..., "start":0, "end":2, "color":...}]
+        periods = spec.get("periods", [])  # ["Q1","Q2","Q3","Q4"] or ["Week 1", ...]
+        tracks = spec.get("tracks", [])  # [{"label":..., "start":0, "end":2, "color":...}]
         milestones = spec.get("milestones", [])  # [{"label":..., "at":2.5, "color":"#EF4444"}]
 
         font_family = self.style.get("font_family", "system-ui, sans-serif")
@@ -880,20 +935,38 @@ class DiagramRenderer:
             "</filter>"
         )
         parts.append("</defs>")
-        parts.append(f'<rect x="0" y="0" width="{canvas_width}" height="{canvas_height:.0f}" fill="{bg_color}" stroke="none"/>')
+        parts.append(
+            f'<rect x="0" y="0" width="{canvas_width}" height="{canvas_height:.0f}" fill="{bg_color}" stroke="none"/>'
+        )
 
         ty = 38
         if title:
-            parts.append(_svg_text(canvas_width / 2, ty, title, font_size=self.style.get("title_size", 22),
-                                   fill=text_color, font_family=font_family, font_weight="700"))
+            parts.append(
+                _svg_text(
+                    canvas_width / 2,
+                    ty,
+                    title,
+                    font_size=self.style.get("title_size", 22),
+                    fill=text_color,
+                    font_family=font_family,
+                    font_weight="700",
+                )
+            )
             ty += 28
         if subtitle:
-            parts.append(_svg_text(canvas_width / 2, ty, subtitle, font_size=13,
-                                   fill=self.style.get("subtitle_color", "#6b7280"), font_family=font_family))
+            parts.append(
+                _svg_text(
+                    canvas_width / 2,
+                    ty,
+                    subtitle,
+                    font_size=13,
+                    fill=self.style.get("subtitle_color", "#6b7280"),
+                    font_family=font_family,
+                )
+            )
 
         period_area_x = chart_left + LABEL_W
         header_bg = self.style.get("container_fill", "#F8FAFC")
-        corner_radius = self.style.get("corner_radius", 6)
 
         # Period headers
         for pi, period in enumerate(periods):
@@ -902,8 +975,17 @@ class DiagramRenderer:
                 f'<rect x="{px:.1f}" y="{axis_y:.1f}" width="{PERIOD_W}" height="{AXIS_H}" '
                 f'fill="{header_bg}" stroke="{node_stroke}" stroke-width="0.5"/>'
             )
-            parts.append(_svg_text(px + PERIOD_W / 2, axis_y + AXIS_H / 2, str(period),
-                                   font_size=12, fill=text_color, font_family=font_family, font_weight="600"))
+            parts.append(
+                _svg_text(
+                    px + PERIOD_W / 2,
+                    axis_y + AXIS_H / 2,
+                    str(period),
+                    font_size=12,
+                    fill=text_color,
+                    font_family=font_family,
+                    font_weight="600",
+                )
+            )
 
         # Vertical grid lines (drawn first behind rows)
         for pi in range(n_periods + 1):
@@ -923,9 +1005,18 @@ class DiagramRenderer:
                 f'fill="{row_bg}" stroke="{node_stroke}" stroke-width="0.5"/>'
             )
             label = track.get("label", f"Task {ti + 1}")
-            parts.append(_svg_text(chart_left + LABEL_W - 12, track_y + TRACK_H / 2, label,
-                                   font_size=13, fill=text_color, font_family=font_family,
-                                   font_weight="500", anchor="end"))
+            parts.append(
+                _svg_text(
+                    chart_left + LABEL_W - 12,
+                    track_y + TRACK_H / 2,
+                    label,
+                    font_size=13,
+                    fill=text_color,
+                    font_family=font_family,
+                    font_weight="500",
+                    anchor="end",
+                )
+            )
 
             start = float(track.get("start", 0))
             end = float(track.get("end", 1))
@@ -941,8 +1032,17 @@ class DiagramRenderer:
             if bar_w > 60:
                 r, g, b = _hex_to_rgb(color)
                 bar_text = "#FFFFFF" if (0.299 * r + 0.587 * g + 0.114 * b) < 160 else "#1f2937"
-                parts.append(_svg_text(bar_x + bar_w / 2, bar_y + BAR_H / 2, label,
-                                       font_size=11, fill=bar_text, font_family=font_family, font_weight="600"))
+                parts.append(
+                    _svg_text(
+                        bar_x + bar_w / 2,
+                        bar_y + BAR_H / 2,
+                        label,
+                        font_size=11,
+                        fill=bar_text,
+                        font_family=font_family,
+                        font_weight="600",
+                    )
+                )
 
         # Row separator lines
         parts.append(
@@ -970,8 +1070,17 @@ class DiagramRenderer:
                 f'stroke="{ms_color}" stroke-width="1.5" stroke-dasharray="4,3"/>'
             )
             if ms_label:
-                parts.append(_svg_text(ms_x, ms_y - d_size - 5, ms_label,
-                                       font_size=11, fill=ms_color, font_family=font_family, font_weight="600"))
+                parts.append(
+                    _svg_text(
+                        ms_x,
+                        ms_y - d_size - 5,
+                        ms_label,
+                        font_size=11,
+                        fill=ms_color,
+                        font_family=font_family,
+                        font_weight="600",
+                    )
+                )
 
         parts.append("</svg>")
         return "\n".join(parts)
@@ -1021,8 +1130,17 @@ class DiagramRenderer:
         parts.append(f'<rect x="0" y="0" width="{canvas_w}" height="{canvas_h}" fill="{bg_color}" stroke="none"/>')
 
         if title:
-            parts.append(_svg_text(canvas_w / 2, 36, title, font_size=self.style.get("title_size", 22),
-                                   fill=text_color, font_family=font_family, font_weight="700"))
+            parts.append(
+                _svg_text(
+                    canvas_w / 2,
+                    36,
+                    title,
+                    font_size=self.style.get("title_size", 22),
+                    fill=text_color,
+                    font_family=font_family,
+                    font_weight="700",
+                )
+            )
 
         # Draw branch connectors + leaves first (behind center)
         for bi, branch in enumerate(branches):
@@ -1059,25 +1177,37 @@ class DiagramRenderer:
                 r, g, b_val = _hex_to_rgb(color)
                 leaf_fill = f"rgba({r},{g},{b_val},0.10)"
                 parts.append(
-                    f'<rect x="{lx - LEAF_W/2:.1f}" y="{ly - LEAF_H/2:.1f}" '
+                    f'<rect x="{lx - LEAF_W / 2:.1f}" y="{ly - LEAF_H / 2:.1f}" '
                     f'width="{LEAF_W}" height="{LEAF_H}" rx="16" '
                     f'fill="{leaf_fill}" stroke="{color}" stroke-width="1.5"/>'
                 )
                 child_label = child if isinstance(child, str) else child.get("label", str(child))
-                parts.append(_svg_text(lx, ly, child_label, font_size=11,
-                                       fill=text_color, font_family=font_family, font_weight="500"))
+                parts.append(
+                    _svg_text(
+                        lx, ly, child_label, font_size=11, fill=text_color, font_family=font_family, font_weight="500"
+                    )
+                )
 
             # Branch node
             r_c, g_c, b_c = _hex_to_rgb(color)
             luma = 0.299 * r_c + 0.587 * g_c + 0.114 * b_c
             branch_text_color = "#FFFFFF" if luma < 160 else "#1f2937"
             parts.append(
-                f'<rect x="{bx - BRANCH_W/2:.1f}" y="{by - BRANCH_H/2:.1f}" '
+                f'<rect x="{bx - BRANCH_W / 2:.1f}" y="{by - BRANCH_H / 2:.1f}" '
                 f'width="{BRANCH_W}" height="{BRANCH_H}" rx="21" '
                 f'fill="{color}" stroke="none" filter="url(#mm-shadow)"/>'
             )
-            parts.append(_svg_text(bx, by, branch_label, font_size=13,
-                                   fill=branch_text_color, font_family=font_family, font_weight="700"))
+            parts.append(
+                _svg_text(
+                    bx,
+                    by,
+                    branch_label,
+                    font_size=13,
+                    fill=branch_text_color,
+                    font_family=font_family,
+                    font_weight="700",
+                )
+            )
 
         # Center node (on top)
         node_fill = self.style.get("node_fill", "#FFFFFF")
@@ -1090,8 +1220,17 @@ class DiagramRenderer:
         line_h = 16
         start_y = cy - (len(center_lines) - 1) * line_h / 2
         for li, line in enumerate(center_lines):
-            parts.append(_svg_text(cx, start_y + li * line_h, line, font_size=14,
-                                   fill=text_color, font_family=font_family, font_weight="700"))
+            parts.append(
+                _svg_text(
+                    cx,
+                    start_y + li * line_h,
+                    line,
+                    font_size=14,
+                    fill=text_color,
+                    font_family=font_family,
+                    font_weight="700",
+                )
+            )
 
         parts.append("</svg>")
         return "\n".join(parts)
@@ -1157,11 +1296,22 @@ class DiagramRenderer:
             f"</marker>"
         )
         parts.append("</defs>")
-        parts.append(f'<rect x="0" y="0" width="{canvas_width}" height="{canvas_height}" fill="{bg_color}" stroke="none"/>')
+        parts.append(
+            f'<rect x="0" y="0" width="{canvas_width}" height="{canvas_height}" fill="{bg_color}" stroke="none"/>'
+        )
 
         if title:
-            parts.append(_svg_text(canvas_width / 2, 40, title, font_size=self.style.get("title_size", 22),
-                                   fill=text_color, font_family=font_family, font_weight="700"))
+            parts.append(
+                _svg_text(
+                    canvas_width / 2,
+                    40,
+                    title,
+                    font_size=self.style.get("title_size", 22),
+                    fill=text_color,
+                    font_family=font_family,
+                    font_weight="700",
+                )
+            )
 
         # Build rects for routing
         ent_rects: dict[str, Rect] = {}
@@ -1177,18 +1327,45 @@ class DiagramRenderer:
             sp, tp = self._auto_ports(r1, r2)
             p1, p2 = r1.port(sp), r2.port(tp)
             path_d = self._route_edge(p1, p2, sp, tp)
-            parts.append(f'<path d="{path_d}" stroke="{rel_color}" stroke-width="1.5" fill="none" marker-end="url(#er-arrow)"/>')
+            parts.append(
+                f'<path d="{path_d}" stroke="{rel_color}" stroke-width="1.5" fill="none" marker-end="url(#er-arrow)"/>'
+            )
             label = rel.get("label", "")
             from_card = rel.get("from_card", "1")
             to_card = rel.get("to_card", "N")
             mid_x, mid_y = (p1.x + p2.x) / 2, (p1.y + p2.y) / 2
             if label:
-                parts.append(_svg_text(mid_x, mid_y - 10, label, font_size=11,
-                                       fill=rel_color, font_family=font_family, font_weight="600"))
-            parts.append(_svg_text(p1.x + (10 if sp == "right" else -10), p1.y - 8, from_card,
-                                   font_size=11, fill=text_color, font_family=font_family))
-            parts.append(_svg_text(p2.x + (10 if tp == "left" else -10), p2.y - 8, to_card,
-                                   font_size=11, fill=text_color, font_family=font_family))
+                parts.append(
+                    _svg_text(
+                        mid_x,
+                        mid_y - 10,
+                        label,
+                        font_size=11,
+                        fill=rel_color,
+                        font_family=font_family,
+                        font_weight="600",
+                    )
+                )
+            parts.append(
+                _svg_text(
+                    p1.x + (10 if sp == "right" else -10),
+                    p1.y - 8,
+                    from_card,
+                    font_size=11,
+                    fill=text_color,
+                    font_family=font_family,
+                )
+            )
+            parts.append(
+                _svg_text(
+                    p2.x + (10 if tp == "left" else -10),
+                    p2.y - 8,
+                    to_card,
+                    font_size=11,
+                    fill=text_color,
+                    font_family=font_family,
+                )
+            )
 
         # Entities
         for ent in entities:
@@ -1211,15 +1388,23 @@ class DiagramRenderer:
                 f'<rect x="{x}" y="{y + HEADER_H - corner_radius}" width="{ENT_W}" height="{corner_radius}" '
                 f'fill="{hdr_color}" stroke="none"/>'
             )
-            parts.append(_svg_text(x + ENT_W / 2, y + HEADER_H / 2, label,
-                                   font_size=14, fill="#FFFFFF", font_family=font_family, font_weight="700"))
+            parts.append(
+                _svg_text(
+                    x + ENT_W / 2,
+                    y + HEADER_H / 2,
+                    label,
+                    font_size=14,
+                    fill="#FFFFFF",
+                    font_family=font_family,
+                    font_weight="700",
+                )
+            )
 
             # Attributes
             for ai, attr in enumerate(attributes):
                 ay = y + HEADER_H + ai * ATTR_H
                 parts.append(
-                    f'<line x1="{x}" y1="{ay}" x2="{x + ENT_W}" y2="{ay}" '
-                    f'stroke="{node_stroke}" stroke-width="0.5"/>'
+                    f'<line x1="{x}" y1="{ay}" x2="{x + ENT_W}" y2="{ay}" stroke="{node_stroke}" stroke-width="0.5"/>'
                 )
                 attr_name = attr.get("name", str(attr)) if isinstance(attr, dict) else str(attr)
                 attr_type = attr.get("type", "") if isinstance(attr, dict) else ""
@@ -1231,9 +1416,18 @@ class DiagramRenderer:
                 elif is_fk:
                     display = f"FK  {display}"
                 attr_color = "#B45309" if is_pk else ("#6366F1" if is_fk else text_color)
-                parts.append(_svg_text(x + 10, ay + ATTR_H / 2, display,
-                                       font_size=12, fill=attr_color, font_family=font_family,
-                                       font_weight="600" if is_pk else "normal", anchor="start"))
+                parts.append(
+                    _svg_text(
+                        x + 10,
+                        ay + ATTR_H / 2,
+                        display,
+                        font_size=12,
+                        fill=attr_color,
+                        font_family=font_family,
+                        font_weight="600" if is_pk else "normal",
+                        anchor="start",
+                    )
+                )
 
         parts.append("</svg>")
         return "\n".join(parts)
@@ -1280,12 +1474,12 @@ class DiagramRenderer:
 
         rel_styles: dict[str, tuple[str, bool, bool]] = {
             # type → (color, dashed, hollow_arrowhead)
-            "extends":     ("#8B5CF6", False, True),
-            "implements":  ("#6366F1", True,  True),
+            "extends": ("#8B5CF6", False, True),
+            "implements": ("#6366F1", True, True),
             "association": ("#3B82F6", False, False),
             "aggregation": ("#10B981", False, False),
             "composition": ("#F59E0B", False, False),
-            "dependency":  ("#9CA3AF", True,  False),
+            "dependency": ("#9CA3AF", True, False),
         }
 
         parts: list[str] = []
@@ -1311,11 +1505,22 @@ class DiagramRenderer:
             "</filter>"
         )
         parts.append("</defs>")
-        parts.append(f'<rect x="0" y="0" width="{canvas_width}" height="{canvas_height}" fill="{bg_color}" stroke="none"/>')
+        parts.append(
+            f'<rect x="0" y="0" width="{canvas_width}" height="{canvas_height}" fill="{bg_color}" stroke="none"/>'
+        )
 
         if title:
-            parts.append(_svg_text(canvas_width / 2, 38, title, font_size=self.style.get("title_size", 22),
-                                   fill=text_color, font_family=font_family, font_weight="700"))
+            parts.append(
+                _svg_text(
+                    canvas_width / 2,
+                    38,
+                    title,
+                    font_size=self.style.get("title_size", 22),
+                    fill=text_color,
+                    font_family=font_family,
+                    font_weight="700",
+                )
+            )
 
         cls_rects: dict[str, Rect] = {}
         for cls in classes:
@@ -1332,15 +1537,23 @@ class DiagramRenderer:
             sp, tp = self._auto_ports(r1, r2)
             p1, p2 = r1.port(sp), r2.port(tp)
             path_d = self._route_edge(p1, p2, sp, tp)
-            dash_attr = f' stroke-dasharray="8,5"' if is_dashed else ""
+            dash_attr = ' stroke-dasharray="8,5"' if is_dashed else ""
             parts.append(
                 f'<path d="{path_d}" stroke="{rc}" stroke-width="1.5" fill="none"'
                 f'{dash_attr} marker-end="url(#cls-{rel_type})"/>'
             )
             label = rel.get("label", "")
             if label:
-                parts.append(_svg_text((p1.x + p2.x) / 2 + 8, (p1.y + p2.y) / 2 - 8,
-                                       label, font_size=11, fill=rc, font_family=font_family))
+                parts.append(
+                    _svg_text(
+                        (p1.x + p2.x) / 2 + 8,
+                        (p1.y + p2.y) / 2 - 8,
+                        label,
+                        font_size=11,
+                        fill=rc,
+                        font_family=font_family,
+                    )
+                )
 
         # Classes
         header_fill = self.style.get("container_fill", "#EFF6FF")
@@ -1370,29 +1583,72 @@ class DiagramRenderer:
                 f'fill="{header_fill}" stroke="none"/>'
             )
             if stereotype:
-                parts.append(_svg_text(x + CLASS_W / 2, y + 14, stereotype,
-                                       font_size=10, fill="#6B7280", font_family=font_family))
-                parts.append(_svg_text(x + CLASS_W / 2, y + 30, name,
-                                       font_size=13, fill=text_color, font_family=font_family, font_weight="700"))
+                parts.append(
+                    _svg_text(
+                        x + CLASS_W / 2, y + 14, stereotype, font_size=10, fill="#6B7280", font_family=font_family
+                    )
+                )
+                parts.append(
+                    _svg_text(
+                        x + CLASS_W / 2,
+                        y + 30,
+                        name,
+                        font_size=13,
+                        fill=text_color,
+                        font_family=font_family,
+                        font_weight="700",
+                    )
+                )
             else:
-                parts.append(_svg_text(x + CLASS_W / 2, y + HEADER_H / 2, name,
-                                       font_size=14, fill=text_color, font_family=font_family, font_weight="700"))
+                parts.append(
+                    _svg_text(
+                        x + CLASS_W / 2,
+                        y + HEADER_H / 2,
+                        name,
+                        font_size=14,
+                        fill=text_color,
+                        font_family=font_family,
+                        font_weight="700",
+                    )
+                )
 
             # Attribute section
             attr_y = y + HEADER_H
-            parts.append(f'<line x1="{x}" y1="{attr_y}" x2="{x + CLASS_W}" y2="{attr_y}" '
-                         f'stroke="{node_stroke}" stroke-width="1"/>')
+            parts.append(
+                f'<line x1="{x}" y1="{attr_y}" x2="{x + CLASS_W}" y2="{attr_y}" '
+                f'stroke="{node_stroke}" stroke-width="1"/>'
+            )
             for ai, attr in enumerate(attributes):
-                parts.append(_svg_text(x + 10, attr_y + SECTION_H / 2 + ai * SECTION_H, str(attr),
-                                       font_size=12, fill=text_color, font_family=font_family, anchor="start"))
+                parts.append(
+                    _svg_text(
+                        x + 10,
+                        attr_y + SECTION_H / 2 + ai * SECTION_H,
+                        str(attr),
+                        font_size=12,
+                        fill=text_color,
+                        font_family=font_family,
+                        anchor="start",
+                    )
+                )
 
             # Methods section
             meth_y = y + HEADER_H + attrs_h
-            parts.append(f'<line x1="{x}" y1="{meth_y}" x2="{x + CLASS_W}" y2="{meth_y}" '
-                         f'stroke="{node_stroke}" stroke-width="1"/>')
+            parts.append(
+                f'<line x1="{x}" y1="{meth_y}" x2="{x + CLASS_W}" y2="{meth_y}" '
+                f'stroke="{node_stroke}" stroke-width="1"/>'
+            )
             for mi, meth in enumerate(methods):
-                parts.append(_svg_text(x + 10, meth_y + SECTION_H / 2 + mi * SECTION_H, str(meth),
-                                       font_size=12, fill=text_color, font_family=font_family, anchor="start"))
+                parts.append(
+                    _svg_text(
+                        x + 10,
+                        meth_y + SECTION_H / 2 + mi * SECTION_H,
+                        str(meth),
+                        font_size=12,
+                        fill=text_color,
+                        font_family=font_family,
+                        anchor="start",
+                    )
+                )
 
         parts.append("</svg>")
         return "\n".join(parts)
@@ -1409,11 +1665,10 @@ class DiagramRenderer:
         bg_color = self.style.get("background_color", "#FFFFFF")
         text_color = self.style.get("text_color", "#1f2937")
 
-        UC_RX = 85     # half-width of ellipse
-        UC_RY = 30     # half-height of ellipse
-        ACTOR_H = 80   # total actor stick-figure height (head + body + legs)
+        UC_RX = 85  # half-width of ellipse
+        UC_RY = 30  # half-height of ellipse
         UC_V_GAP = 70  # vertical gap between use cases
-        UC_H_GAP = 220 # horizontal gap between use case columns
+        UC_H_GAP = 220  # horizontal gap between use case columns
         ACTOR_MARGIN = 100  # horizontal margin for actor columns
         SYS_PAD_X = 50
         SYS_PAD_Y = 50
@@ -1453,11 +1708,22 @@ class DiagramRenderer:
             f"</marker>"
         )
         parts.append("</defs>")
-        parts.append(f'<rect x="0" y="0" width="{canvas_width}" height="{canvas_height}" fill="{bg_color}" stroke="none"/>')
+        parts.append(
+            f'<rect x="0" y="0" width="{canvas_width}" height="{canvas_height}" fill="{bg_color}" stroke="none"/>'
+        )
 
         if title:
-            parts.append(_svg_text(canvas_width / 2, 36, title, font_size=self.style.get("title_size", 22),
-                                   fill=text_color, font_family=font_family, font_weight="700"))
+            parts.append(
+                _svg_text(
+                    canvas_width / 2,
+                    36,
+                    title,
+                    font_size=self.style.get("title_size", 22),
+                    fill=text_color,
+                    font_family=font_family,
+                    font_weight="700",
+                )
+            )
 
         # System boundary
         sys_stroke = self.style.get("container_stroke", "#D1D5DB")
@@ -1466,9 +1732,18 @@ class DiagramRenderer:
             f'<rect x="{sys_left}" y="{sys_top}" width="{sys_w}" height="{sys_h}" '
             f'rx="8" fill="{sys_fill}" stroke="{sys_stroke}" stroke-width="1.5" stroke-dasharray="8,4"/>'
         )
-        parts.append(_svg_text(sys_left + 14, sys_top + 18, system_label,
-                               font_size=13, fill=self.style.get("container_label_color", "#6B7280"),
-                               font_family=font_family, font_weight="600", anchor="start"))
+        parts.append(
+            _svg_text(
+                sys_left + 14,
+                sys_top + 18,
+                system_label,
+                font_size=13,
+                fill=self.style.get("container_label_color", "#6B7280"),
+                font_family=font_family,
+                font_weight="600",
+                anchor="start",
+            )
+        )
 
         # Use case positions
         uc_positions: dict[str, tuple[float, float]] = {}
@@ -1511,8 +1786,11 @@ class DiagramRenderer:
                         f'stroke="{rel_color}" stroke-width="1.5" stroke-dasharray="6,4" '
                         f'marker-end="url(#uc-arrow)"/>'
                     )
-                    parts.append(_svg_text(mid_x, mid_y - 8, f"«{rel_type}»",
-                                           font_size=10, fill=rel_color, font_family=font_family))
+                    parts.append(
+                        _svg_text(
+                            mid_x, mid_y - 8, f"«{rel_type}»", font_size=10, fill=rel_color, font_family=font_family
+                        )
+                    )
 
         # Use cases (ellipses)
         uc_fill = self.style.get("node_fill", "#FFFFFF")
@@ -1526,8 +1804,17 @@ class DiagramRenderer:
             )
             uc_lines = self._wrap_label(label, 16)
             for li, ln in enumerate(uc_lines[:2]):
-                parts.append(_svg_text(ucx, ucy + (li - (len(uc_lines) - 1) / 2) * 15, ln,
-                                       font_size=12, fill=text_color, font_family=font_family, font_weight="500"))
+                parts.append(
+                    _svg_text(
+                        ucx,
+                        ucy + (li - (len(uc_lines) - 1) / 2) * 15,
+                        ln,
+                        font_size=12,
+                        fill=text_color,
+                        font_family=font_family,
+                        font_weight="500",
+                    )
+                )
 
         # Actors (stick figures)
         for actor in actors:
@@ -1544,19 +1831,28 @@ class DiagramRenderer:
                 f'fill="{self.style.get("node_fill", "#F3F4F6")}" stroke="{text_color}" stroke-width="1.5"/>'
             )
             # Body
-            parts.append(f'<line x1="{ax:.1f}" y1="{body_top + head_r:.1f}" x2="{ax:.1f}" y2="{body_top + head_r + 28:.1f}" '
-                         f'stroke="{text_color}" stroke-width="1.5"/>')
+            parts.append(
+                f'<line x1="{ax:.1f}" y1="{body_top + head_r:.1f}" x2="{ax:.1f}" y2="{body_top + head_r + 28:.1f}" '
+                f'stroke="{text_color}" stroke-width="1.5"/>'
+            )
             # Arms
-            parts.append(f'<line x1="{ax - 17:.1f}" y1="{body_top + head_r + 10:.1f}" x2="{ax + 17:.1f}" y2="{body_top + head_r + 10:.1f}" '
-                         f'stroke="{text_color}" stroke-width="1.5"/>')
+            parts.append(
+                f'<line x1="{ax - 17:.1f}" y1="{body_top + head_r + 10:.1f}" x2="{ax + 17:.1f}" y2="{body_top + head_r + 10:.1f}" '
+                f'stroke="{text_color}" stroke-width="1.5"/>'
+            )
             # Legs
-            parts.append(f'<line x1="{ax:.1f}" y1="{body_top + head_r + 28:.1f}" x2="{ax - 13:.1f}" y2="{body_top + head_r + 50:.1f}" '
-                         f'stroke="{text_color}" stroke-width="1.5"/>')
-            parts.append(f'<line x1="{ax:.1f}" y1="{body_top + head_r + 28:.1f}" x2="{ax + 13:.1f}" y2="{body_top + head_r + 50:.1f}" '
-                         f'stroke="{text_color}" stroke-width="1.5"/>')
+            parts.append(
+                f'<line x1="{ax:.1f}" y1="{body_top + head_r + 28:.1f}" x2="{ax - 13:.1f}" y2="{body_top + head_r + 50:.1f}" '
+                f'stroke="{text_color}" stroke-width="1.5"/>'
+            )
+            parts.append(
+                f'<line x1="{ax:.1f}" y1="{body_top + head_r + 28:.1f}" x2="{ax + 13:.1f}" y2="{body_top + head_r + 50:.1f}" '
+                f'stroke="{text_color}" stroke-width="1.5"/>'
+            )
             # Label
-            parts.append(_svg_text(ax, ay + 46, label, font_size=12, fill=text_color,
-                                   font_family=font_family, font_weight="600"))
+            parts.append(
+                _svg_text(ax, ay + 46, label, font_size=12, fill=text_color, font_family=font_family, font_weight="600")
+            )
 
         parts.append("</svg>")
         return "\n".join(parts)
@@ -1594,10 +1890,10 @@ class DiagramRenderer:
         # Layout constants
         PARTICIPANT_W = 150
         PARTICIPANT_H = 54
-        COL_SPACING = 200   # center-to-center
+        COL_SPACING = 200  # center-to-center
         MARGIN_X = 80
-        NOTE_AREA = 180     # extra right margin when notes are present
-        MSG_SPACING = 68    # vertical gap between messages
+        NOTE_AREA = 180  # extra right margin when notes are present
+        MSG_SPACING = 68  # vertical gap between messages
 
         n = len(participants)
         has_notes = any(m.get("note") for m in messages)
@@ -1656,20 +1952,35 @@ class DiagramRenderer:
         parts.append("</defs>")
 
         # Background
-        parts.append(f'<rect x="0" y="0" width="{canvas_width}" height="{canvas_height:.0f}" fill="{bg_color}" stroke="none"/>')
+        parts.append(
+            f'<rect x="0" y="0" width="{canvas_width}" height="{canvas_height:.0f}" fill="{bg_color}" stroke="none"/>'
+        )
 
         # Title + subtitle
         if title:
             title_size = self.style.get("title_size", 24)
             parts.append(
-                _svg_text(canvas_width / 2, title_y, title, font_size=title_size,
-                          fill=text_color, font_family=font_family, font_weight="700")
+                _svg_text(
+                    canvas_width / 2,
+                    title_y,
+                    title,
+                    font_size=title_size,
+                    fill=text_color,
+                    font_family=font_family,
+                    font_weight="700",
+                )
             )
         if subtitle:
             sub_y = title_y + (28 if title else 0)
             parts.append(
-                _svg_text(canvas_width / 2, sub_y, subtitle, font_size=13,
-                          fill=self.style.get("subtitle_color", "#6b7280"), font_family=font_family)
+                _svg_text(
+                    canvas_width / 2,
+                    sub_y,
+                    subtitle,
+                    font_size=13,
+                    fill=self.style.get("subtitle_color", "#6b7280"),
+                    font_family=font_family,
+                )
             )
 
         # Participant boxes
@@ -1691,8 +2002,15 @@ class DiagramRenderer:
                 f'stroke-width="1.5" filter="url(#seq-shadow)"/>'
             )
             parts.append(
-                _svg_text(cx, py + PARTICIPANT_H / 2, label, font_size=13,
-                          fill=label_color, font_family=font_family, font_weight="700")
+                _svg_text(
+                    cx,
+                    py + PARTICIPANT_H / 2,
+                    label,
+                    font_size=13,
+                    fill=label_color,
+                    font_family=font_family,
+                    font_weight="700",
+                )
             )
 
         # Lifelines
@@ -1700,8 +2018,7 @@ class DiagramRenderer:
         for i in range(n):
             cx = p_centers[i]
             parts.append(
-                _svg_line(cx, lifeline_start_y, cx, lifeline_end_y,
-                          stroke=lifeline_color, stroke_width=1.5, dash="8,5")
+                _svg_line(cx, lifeline_start_y, cx, lifeline_end_y, stroke=lifeline_color, stroke_width=1.5, dash="8,5")
             )
 
         # Messages
@@ -1741,12 +2058,11 @@ class DiagramRenderer:
 
             if is_self:
                 # Small right-side loop
-                loop_w = 50
                 loop_h = 30
                 lx = x1 + PARTICIPANT_W / 2
                 dash_svg = f' stroke-dasharray="{dash}"' if dash else ""
                 parts.append(
-                    f'<path d="M{x1:.1f},{y:.1f} L{lx:.1f},{y:.1f} L{lx:.1f},{y+loop_h:.1f} L{x1:.1f},{y+loop_h:.1f}" '
+                    f'<path d="M{x1:.1f},{y:.1f} L{lx:.1f},{y:.1f} L{lx:.1f},{y + loop_h:.1f} L{x1:.1f},{y + loop_h:.1f}" '
                     f'stroke="{line_color}" stroke-width="1.5" fill="none"'
                     f'{dash_svg} marker-end="url(#{marker_id})"/>'
                 )
@@ -1756,8 +2072,15 @@ class DiagramRenderer:
                     label_x = lx + 8
                     for li, ln in enumerate(label_lines[:3]):
                         parts.append(
-                            _svg_text(label_x, y + li * 14 - 4, ln, font_size=11,
-                                      fill=text_color, font_family=font_family, anchor="start")
+                            _svg_text(
+                                label_x,
+                                y + li * 14 - 4,
+                                ln,
+                                font_size=11,
+                                fill=text_color,
+                                font_family=font_family,
+                                anchor="start",
+                            )
                         )
             else:
                 # Horizontal arrow
@@ -1767,8 +2090,7 @@ class DiagramRenderer:
                 ax2 = x2 - (offset if x2 > x1 else -offset)
 
                 parts.append(
-                    _svg_line(ax1, y, ax2, y, stroke=line_color, stroke_width=1.5,
-                              marker_end=marker_id, dash=dash)
+                    _svg_line(ax1, y, ax2, y, stroke=line_color, stroke_width=1.5, marker_end=marker_id, dash=dash)
                 )
 
                 # Label — split on \n and render multiple lines above the arrow
@@ -1781,10 +2103,15 @@ class DiagramRenderer:
                     for li, ln in enumerate(label_lines[:4]):
                         is_first = li == 0
                         parts.append(
-                            _svg_text(label_x, base_y + li * 14, ln,
-                                      font_size=11 if n_lines > 1 else 12,
-                                      fill=text_color, font_family=font_family,
-                                      font_weight="600" if is_first else "normal")
+                            _svg_text(
+                                label_x,
+                                base_y + li * 14,
+                                ln,
+                                font_size=11 if n_lines > 1 else 12,
+                                fill=text_color,
+                                font_family=font_family,
+                                font_weight="600" if is_first else "normal",
+                            )
                         )
 
             # Note box (right margin)
@@ -1796,13 +2123,19 @@ class DiagramRenderer:
                 note_lines = [nl.strip() for nl in note.replace("\\n", "\n").split("\n")]
                 note_h = max(28, 16 + len(note_lines) * 14)
                 parts.append(
-                    f'<rect x="{note_x:.1f}" y="{y - note_h/2:.1f}" width="{note_w}" height="{note_h}" '
+                    f'<rect x="{note_x:.1f}" y="{y - note_h / 2:.1f}" width="{note_w}" height="{note_h}" '
                     f'rx="4" fill="{note_fill}" stroke="{note_stroke_c}" stroke-width="1"/>'
                 )
                 for ni, nl in enumerate(note_lines[:3]):
                     parts.append(
-                        _svg_text(note_x + note_w / 2, y - (len(note_lines) - 1) * 7 + ni * 14,
-                                  nl, font_size=10, fill="#374151", font_family=font_family)
+                        _svg_text(
+                            note_x + note_w / 2,
+                            y - (len(note_lines) - 1) * 7 + ni * 14,
+                            nl,
+                            font_size=10,
+                            fill="#374151",
+                            font_family=font_family,
+                        )
                     )
 
         # Bottom participant boxes (repeat headers for long diagrams)
@@ -1821,8 +2154,15 @@ class DiagramRenderer:
                     f'rx="{corner_radius}" fill="{color}" stroke="{node_stroke}" stroke-width="1.5"/>'
                 )
                 parts.append(
-                    _svg_text(cx, py + PARTICIPANT_H / 2, label, font_size=13,
-                              fill=label_color, font_family=font_family, font_weight="700")
+                    _svg_text(
+                        cx,
+                        py + PARTICIPANT_H / 2,
+                        label,
+                        font_size=13,
+                        fill=label_color,
+                        font_family=font_family,
+                        font_weight="700",
+                    )
                 )
 
         parts.append("</svg>")
@@ -1996,10 +2336,7 @@ class DiagramRenderer:
             # Slightly wider diamond for readability
             hw = rect.width * 0.55
             hh = rect.height * 0.55
-            points = (
-                f"{cx:.1f},{cy - hh:.1f} {cx + hw:.1f},{cy:.1f} "
-                f"{cx:.1f},{cy + hh:.1f} {cx - hw:.1f},{cy:.1f}"
-            )
+            points = f"{cx:.1f},{cy - hh:.1f} {cx + hw:.1f},{cy:.1f} {cx:.1f},{cy + hh:.1f} {cx - hw:.1f},{cy:.1f}"
             return (
                 f'<polygon points="{points}" fill="{fill}" stroke="{stroke}" '
                 f'stroke-width="{stroke_width}"{filter_attr}/>'

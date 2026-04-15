@@ -86,7 +86,7 @@ class DNSService:
         """
         records = {"A": [], "AAAA": [], "CNAME": [], "TXT": [], "MX": []}
 
-        for record_type in records.keys():
+        for record_type in records:
             try:
                 answers = self.resolver.resolve(domain, record_type)
                 records[record_type] = [str(rdata) for rdata in answers]

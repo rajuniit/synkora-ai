@@ -5,7 +5,7 @@ Tests the 1Password integration for secrets, vaults, and items.
 """
 
 import sys
-from unittest.mock import AsyncMock, MagicMock, patch
+from unittest.mock import MagicMock
 
 import pytest
 

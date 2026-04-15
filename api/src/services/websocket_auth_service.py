@@ -10,7 +10,6 @@ import re
 from uuid import UUID
 
 from sqlalchemy import select
-from sqlalchemy.ext.asyncio import AsyncSession
 
 from src.core.database import get_async_session_factory
 from src.models.agent import Agent

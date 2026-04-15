@@ -4,8 +4,6 @@ Note: These tests focus on testing the task structure and basic patterns
 since the actual task execution requires complex mock setups.
 """
 
-import sys
-from datetime import datetime, timedelta
 from unittest.mock import MagicMock, Mock, patch
 from uuid import uuid4
 

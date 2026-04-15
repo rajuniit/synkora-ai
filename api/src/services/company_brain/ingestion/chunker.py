@@ -20,7 +20,7 @@ from typing import Any
 
 logger = logging.getLogger(__name__)
 
-_DEFAULT_CHUNK_SIZE = 1_500   # tokens
+_DEFAULT_CHUNK_SIZE = 1_500  # tokens
 _DEFAULT_CHUNK_OVERLAP = 150  # tokens
 
 
@@ -28,12 +28,13 @@ _DEFAULT_CHUNK_OVERLAP = 150  # tokens
 # Public API
 # ---------------------------------------------------------------------------
 
+
 def get_strategy(source_type: str) -> str:
     """Return the chunking strategy name for a source_type from settings."""
     from src.config.settings import get_settings
+
     settings = get_settings()
-    raw = getattr(settings, "company_brain_chunking_strategies",
-                  '{"default":"fixed"}')
+    raw = getattr(settings, "company_brain_chunking_strategies", '{"default":"fixed"}')
     try:
         mapping: dict[str, str] = json.loads(raw)
     except Exception:
@@ -76,8 +77,7 @@ def chunk_document(
     try:
         texts = handler(doc, chunk_size, chunk_overlap)
     except Exception as exc:
-        logger.warning("Chunker '%s' failed for doc %s: %s — falling back to fixed",
-                       strategy, doc.get("id"), exc)
+        logger.warning("Chunker '%s' failed for doc %s: %s — falling back to fixed", strategy, doc.get("id"), exc)
         texts = _chunk_fixed(doc, chunk_size, chunk_overlap)
 
     if not texts:
@@ -88,12 +88,14 @@ def chunk_document(
     for i, text in enumerate(texts):
         if not text or not text.strip():
             continue
-        chunks.append({
-            **base_meta,
-            "chunk_index": i,
-            "chunk_count": len(texts),
-            "chunk_content": text.strip(),
-        })
+        chunks.append(
+            {
+                **base_meta,
+                "chunk_index": i,
+                "chunk_count": len(texts),
+                "chunk_content": text.strip(),
+            }
+        )
     return chunks
 
 
@@ -101,10 +103,12 @@ def chunk_document(
 # Strategy implementations
 # ---------------------------------------------------------------------------
 
+
 def _count_tokens(text: str) -> int:
     """Approximate token count without importing tiktoken (no hard dep)."""
     try:
         import tiktoken
+
         enc = tiktoken.get_encoding("cl100k_base")
         return len(enc.encode(text))
     except Exception:
@@ -112,9 +116,7 @@ def _count_tokens(text: str) -> int:
         return max(1, len(text) // 4)
 
 
-def _chunk_fixed(
-    doc: dict[str, Any], chunk_size: int, chunk_overlap: int
-) -> list[str]:
+def _chunk_fixed(doc: dict[str, Any], chunk_size: int, chunk_overlap: int) -> list[str]:
     """Split text into fixed-size overlapping chunks (token-based)."""
     text = doc.get("content", "")
     if not text:
@@ -122,6 +124,7 @@ def _chunk_fixed(
 
     try:
         import tiktoken
+
         enc = tiktoken.get_encoding("cl100k_base")
         tokens = enc.encode(text)
         chunks = []
@@ -150,9 +153,7 @@ def _chunk_fixed(
         return chunks
 
 
-def _chunk_slack_thread(
-    doc: dict[str, Any], chunk_size: int, chunk_overlap: int
-) -> list[str]:
+def _chunk_slack_thread(doc: dict[str, Any], chunk_size: int, chunk_overlap: int) -> list[str]:
     """
     Slack thread strategy: keep the entire thread as one chunk if it fits;
     otherwise split at message boundaries rather than mid-message.
@@ -165,11 +166,7 @@ def _chunk_slack_thread(
     if not messages:
         return _chunk_fixed(doc, chunk_size, chunk_overlap)
 
-    formatted = "\n".join(
-        f"[{m.get('user', 'unknown')}]: {m.get('text', '')}"
-        for m in messages
-        if m.get("text")
-    )
+    formatted = "\n".join(f"[{m.get('user', 'unknown')}]: {m.get('text', '')}" for m in messages if m.get("text"))
 
     if _count_tokens(formatted) <= chunk_size:
         return [formatted]
@@ -185,7 +182,7 @@ def _chunk_slack_thread(
         if current_tokens + line_tokens > chunk_size and current_lines:
             chunks.append("\n".join(current_lines))
             current_lines = current_lines[-3:]  # keep last 3 messages for context
-            current_tokens = sum(_count_tokens(l) for l in current_lines)
+            current_tokens = sum(_count_tokens(ln) for ln in current_lines)
         current_lines.append(line)
         current_tokens += line_tokens
 
@@ -195,9 +192,7 @@ def _chunk_slack_thread(
     return chunks
 
 
-def _chunk_pr_diff(
-    doc: dict[str, Any], chunk_size: int, chunk_overlap: int
-) -> list[str]:
+def _chunk_pr_diff(doc: dict[str, Any], chunk_size: int, chunk_overlap: int) -> list[str]:
     """
     GitHub PR / GitLab MR strategy: split at file diff boundaries.
 
@@ -231,9 +226,7 @@ def _chunk_pr_diff(
     return _chunk_fixed(doc, chunk_size, chunk_overlap)
 
 
-def _chunk_by_headings(
-    doc: dict[str, Any], chunk_size: int, chunk_overlap: int
-) -> list[str]:
+def _chunk_by_headings(doc: dict[str, Any], chunk_size: int, chunk_overlap: int) -> list[str]:
     """
     Document strategy (Confluence / Notion): split at Markdown heading boundaries.
 

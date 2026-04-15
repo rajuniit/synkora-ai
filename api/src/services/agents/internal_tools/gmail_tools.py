@@ -8,7 +8,6 @@ import logging
 from datetime import UTC
 from typing import Any
 
-from google.auth.transport.requests import Request
 from google.oauth2.credentials import Credentials
 from googleapiclient.discovery import build
 from googleapiclient.errors import HttpError
@@ -97,7 +96,6 @@ async def _get_gmail_service(runtime_context: Any) -> Any:
 
         # Check if token is expired and refresh if needed
         if user_token.token_expires_at:
-            from datetime import timezone
 
             now = datetime.now(UTC)
             expires_at = user_token.token_expires_at

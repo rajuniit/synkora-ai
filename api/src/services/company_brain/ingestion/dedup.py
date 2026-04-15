@@ -49,10 +49,12 @@ class RedisSetDedup:
 
     def _get_redis(self) -> Any:
         from src.config.redis import get_redis
+
         return get_redis()
 
     async def _get_async_redis(self) -> Any:
         from src.config.redis import get_redis_async
+
         return get_redis_async()
 
     async def is_seen(self, tenant_id: str, source_type: str, external_id: str) -> bool:
@@ -72,9 +74,7 @@ class RedisSetDedup:
         pipe.expire(key, self._ttl_seconds)
         await pipe.execute()
 
-    async def mark_seen_batch(
-        self, tenant_id: str, source_type: str, external_ids: list[str]
-    ) -> None:
+    async def mark_seen_batch(self, tenant_id: str, source_type: str, external_ids: list[str]) -> None:
         """Batch version of mark_seen — uses a single pipeline."""
         if not external_ids:
             return
@@ -86,9 +86,7 @@ class RedisSetDedup:
         pipe.expire(key, self._ttl_seconds)
         await pipe.execute()
 
-    async def filter_unseen(
-        self, tenant_id: str, source_type: str, external_ids: list[str]
-    ) -> list[str]:
+    async def filter_unseen(self, tenant_id: str, source_type: str, external_ids: list[str]) -> list[str]:
         """Return only the external_ids not yet seen (batch check)."""
         if not external_ids:
             return []
@@ -101,7 +99,7 @@ class RedisSetDedup:
             pipe.sismember(key, m)
         results = await pipe.execute()
 
-        return [eid for eid, seen in zip(external_ids, results) if not seen]
+        return [eid for eid, seen in zip(external_ids, results, strict=False) if not seen]
 
 
 class PostgresDedup:
@@ -112,14 +110,14 @@ class PostgresDedup:
     same data source type.  Always consistent with the actual indexed state.
     """
 
-    async def filter_unseen(
-        self, tenant_id: str, source_type: str, external_ids: list[str]
-    ) -> list[str]:
+    async def filter_unseen(self, tenant_id: str, source_type: str, external_ids: list[str]) -> list[str]:
         if not external_ids:
             return []
         try:
             import asyncpg
+
             from src.config.settings import get_settings
+
             settings = get_settings()
             conn = await asyncpg.connect(settings.database_url)
             try:
@@ -151,9 +149,7 @@ class PostgresDedup:
     async def mark_seen(self, tenant_id: str, source_type: str, external_id: str) -> None:
         pass  # PG dedup reads from the actual table; no separate state to update
 
-    async def mark_seen_batch(
-        self, tenant_id: str, source_type: str, external_ids: list[str]
-    ) -> None:
+    async def mark_seen_batch(self, tenant_id: str, source_type: str, external_ids: list[str]) -> None:
         pass
 
 
@@ -167,6 +163,7 @@ def get_dedup_backend(backend_type: str | None = None) -> RedisSetDedup | Postgr
       3. default: redis_set
     """
     from src.config.settings import get_settings
+
     settings = get_settings()
     resolved = backend_type or getattr(settings, "company_brain_dedup_backend", "redis_set")
     ttl_days = getattr(settings, "company_brain_dedup_ttl_days", 7)

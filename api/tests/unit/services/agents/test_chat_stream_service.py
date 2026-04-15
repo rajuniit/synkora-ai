@@ -1,12 +1,9 @@
 """Tests for chat_stream_service.py."""
 
-import asyncio
-from dataclasses import dataclass
 from unittest.mock import AsyncMock, MagicMock, Mock, patch
 from uuid import uuid4
 
 import pytest
-from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 

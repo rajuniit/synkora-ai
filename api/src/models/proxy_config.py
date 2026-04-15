@@ -7,7 +7,7 @@ Database model for storing LLM proxy gateway configurations.
 import secrets
 from enum import StrEnum
 
-from sqlalchemy import Boolean, Column, Enum, Index, Integer, String, Text
+from sqlalchemy import Boolean, Column, Enum, Index, Integer, String
 from sqlalchemy.dialects.postgresql import JSON
 from sqlalchemy.orm import relationship
 

@@ -13,7 +13,6 @@ from elasticsearch.exceptions import AuthenticationException, ConnectionError
 
 from src.services.search.elasticsearch_service import ElasticsearchService
 
-
 # ---------------------------------------------------------------------------
 # Helpers
 # ---------------------------------------------------------------------------

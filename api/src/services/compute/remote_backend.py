@@ -220,9 +220,8 @@ class RemoteSSHComputeSession:
             parent = os.path.dirname(path)
             if parent:
                 await conn.run(f"mkdir -p {shlex.quote(parent)}", timeout=30)
-            async with conn.start_sftp_client() as sftp:
-                async with await sftp.open(path, "w") as fh:
-                    await fh.write(content)
+            async with conn.start_sftp_client() as sftp, await sftp.open(path, "w") as fh:
+                await fh.write(content)
             return {"success": True, "error": ""}
         except Exception as e:
             logger.error(f"SSH write_file error on {self._host}: {e}")

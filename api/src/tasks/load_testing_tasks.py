@@ -37,7 +37,6 @@ def execute_load_test(self, test_run_id: str) -> dict[str, Any]:
 
     try:
         from src.models.load_test import LoadTest, LoadTestStatus
-        from src.models.test_result import MetricType, PercentileType, TestResult
         from src.models.test_run import TestRun, TestRunStatus
         from src.models.test_scenario import TestScenario
         from src.services.load_testing.k6_executor import K6Executor
@@ -535,7 +534,7 @@ def _publish_event(test_run_id: str, data: dict) -> None:
 def _store_metric(db, test_run_id: str, data: dict) -> None:
     """Store a metric data point in the database."""
     try:
-        from src.models.test_result import MetricType, PercentileType, TestResult
+        from src.models.test_result import MetricType, TestResult
 
         metric_name = data.get("metric")
         if not metric_name:

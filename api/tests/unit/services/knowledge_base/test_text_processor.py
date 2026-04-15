@@ -42,7 +42,7 @@ class TestCleanText:
     def test_newline_collapsed_to_space(self, processor):
         result = processor.clean_text("line1\nline2")
         assert "\n" not in result
-        assert "line1 line2" == result
+        assert result == "line1 line2"
 
 
 @pytest.mark.unit

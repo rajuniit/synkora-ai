@@ -8,20 +8,19 @@ import hmac
 import json
 import time
 import uuid
-import pytest
-from fastapi.testclient import TestClient
-from fastapi import FastAPI
 from unittest.mock import AsyncMock, MagicMock, patch
 
-from src.controllers.kb_webhooks import (
-    public_router,
-    _verify_timestamp,
-    _verify_signature,
-    _slack_event_to_document,
-    _extract_signing_secret,
-)
-from fastapi import HTTPException
+import pytest
+from fastapi import FastAPI, HTTPException
+from fastapi.testclient import TestClient
 
+from src.controllers.kb_webhooks import (
+    _extract_signing_secret,
+    _slack_event_to_document,
+    _verify_signature,
+    _verify_timestamp,
+    public_router,
+)
 
 # ---------------------------------------------------------------------------
 # Helpers

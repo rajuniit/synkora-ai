@@ -8,9 +8,6 @@ import hashlib
 import hmac
 import time
 
-import pytest
-from fastapi import HTTPException
-
 from src.services.webhooks.signature_verifier import SignatureVerifier
 
 

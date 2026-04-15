@@ -12,8 +12,7 @@ from fastapi.testclient import TestClient
 from src.controllers.scheduled_tasks import router
 from src.core.database import get_async_db
 from src.middleware.auth_middleware import get_current_account, get_current_tenant_id
-from src.models.scheduled_task import ScheduledTask, TaskExecution
-from src.services.scheduler.scheduler_service import SchedulerService
+from src.models.scheduled_task import ScheduledTask
 
 
 @pytest.fixture

@@ -8,7 +8,6 @@ from fastapi.testclient import TestClient
 from src.controllers.agents.conversations import agents_conversations_router
 from src.core.database import get_async_db
 from src.middleware.auth_middleware import get_current_account, get_current_tenant_id
-from src.models.agent import Agent
 
 
 def setup_db_execute_mock(mock_db, return_value):
