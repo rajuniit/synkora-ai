@@ -81,6 +81,4 @@ def downgrade() -> None:
         "agent_computes",
         sa.Column("container_id", sa.Text, nullable=True),
     )
-    op.drop_index("ix_tenant_compute_configs_backend", table_name="tenant_compute_configs")
-    op.drop_index("ix_tenant_compute_configs_tenant_id", table_name="tenant_compute_configs")
     op.drop_table("tenant_compute_configs")
