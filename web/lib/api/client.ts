@@ -176,6 +176,10 @@ interface ExtendedAPIClient extends APIClient {
   deleteWidget: typeof widgets.deleteWidget
   regenerateWidgetKey: typeof widgets.regenerateWidgetKey
   getWidgetEmbedCode: typeof widgets.getWidgetEmbedCode
+  regenerateIdentitySecret: typeof widgets.regenerateIdentitySecret
+  getWidgetRoutes: typeof widgets.getWidgetRoutes
+  setWidgetRoutes: typeof widgets.setWidgetRoutes
+  deleteWidgetRoute: typeof widgets.deleteWidgetRoute
 
   // Slack Bots
   getSlackBots: typeof slackBots.getSlackBots
@@ -387,6 +391,10 @@ export const apiClient: ExtendedAPIClient = Object.assign(_apiClient, {
   deleteWidget: widgets.deleteWidget,
   regenerateWidgetKey: widgets.regenerateWidgetKey,
   getWidgetEmbedCode: widgets.getWidgetEmbedCode,
+  regenerateIdentitySecret: widgets.regenerateIdentitySecret,
+  getWidgetRoutes: widgets.getWidgetRoutes,
+  setWidgetRoutes: widgets.setWidgetRoutes,
+  deleteWidgetRoute: widgets.deleteWidgetRoute,
 
   // Slack Bots
   getSlackBots: slackBots.getSlackBots,
