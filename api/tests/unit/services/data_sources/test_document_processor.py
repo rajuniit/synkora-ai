@@ -158,15 +158,19 @@ class TestDocumentProcessor:
                 processor.text_processor.chunk_text.return_value = [{"text": "chunk content", "metadata": {}}]
 
                 # Mock execute calls in order:
-                # 1. DataSourceDocument check (line ~172) → scalar_one_or_none → None (new)
-                # 2. Document/KB doc check (line ~243) → scalar_one_or_none → None (new)
+                # 1. DataSourceDocument check → scalar_one_or_none → None (new doc)
+                # 2. Document/KB doc check → scalar_one_or_none → None (new doc)
+                # 3. Post-loop count query → scalar_one → 1 (for KB stats update)
                 mock_result_none = MagicMock()
                 mock_result_none.scalar_one_or_none.return_value = None
 
                 mock_result_none2 = MagicMock()
                 mock_result_none2.scalar_one_or_none.return_value = None
 
-                mock_db_session.execute = AsyncMock(side_effect=[mock_result_none, mock_result_none2])
+                mock_result_count = MagicMock()
+                mock_result_count.scalar_one.return_value = 1
+
+                mock_db_session.execute = AsyncMock(side_effect=[mock_result_none, mock_result_none2, mock_result_count])
 
                 # Mock Image extraction
                 processor._extract_and_store_images = AsyncMock()
