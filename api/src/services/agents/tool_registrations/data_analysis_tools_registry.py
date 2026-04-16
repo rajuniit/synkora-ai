@@ -157,7 +157,8 @@ def register_data_analysis_tools(registry: Any):
         name="generate_chart_from_data",
         description=(
             "Generate a visualization from CSV or JSON string data. Use this for uploaded files or raw data strings. "
-            "For database query results, use internal_generate_chart instead.\n\n"
+            "For database query results, use internal_generate_chart instead. "
+            "IMPORTANT: After calling this tool the chart is automatically rendered in the UI — do NOT embed any image URL or markdown image syntax in your response. Simply describe the chart you created.\n\n"
             "Chart.js types (basic): bar, line, pie, doughnut, scatter\n"
             "Recharts types (advanced): area, stacked_bar, radar, treemap, funnel\n"
             "Plotly types (statistical): heatmap, box, violin, candlestick, waterfall\n\n"

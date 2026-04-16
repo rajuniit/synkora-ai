@@ -987,7 +987,7 @@ Supports: Git, GitHub CLI, npm, pip, Docker, file operations (ls, cat, mkdir, et
 
         self.register_tool(
             name="internal_generate_chart",
-            description="Generate Chart.js visualization from database query results. Automatically detects appropriate chart type or accepts custom configuration.",
+            description="Generate Chart.js visualization from database query results. Automatically detects appropriate chart type or accepts custom configuration. IMPORTANT: After calling this tool the chart is automatically rendered in the UI — do NOT embed any image URL or markdown image syntax in your response. Simply describe the chart you created.",
             parameters={
                 "type": "object",
                 "properties": {
@@ -1010,7 +1010,7 @@ Supports: Git, GitHub CLI, npm, pip, Docker, file operations (ls, cat, mkdir, et
 
         self.register_tool(
             name="internal_query_and_chart",
-            description="Execute a database query and automatically generate a chart from the results in one step. Combines query execution and visualization.",
+            description="Execute a database query and automatically generate a chart from the results in one step. Combines query execution and visualization. IMPORTANT: After calling this tool the chart is automatically rendered in the UI — do NOT embed any image URL or markdown image syntax in your response. Simply describe the chart you created.",
             parameters={
                 "type": "object",
                 "properties": {
