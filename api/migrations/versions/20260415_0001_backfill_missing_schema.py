@@ -72,10 +72,7 @@ def upgrade() -> None:
             ) STORED
             """
         )
-        op.execute(
-            "CREATE INDEX IF NOT EXISTS ix_dsd_search_vector "
-            "ON data_source_documents USING gin(search_vector)"
-        )
+        op.execute("CREATE INDEX IF NOT EXISTS ix_dsd_search_vector ON data_source_documents USING gin(search_vector)")
 
     # ------------------------------------------------------------------
     # 3. Extend DataSourceType enum

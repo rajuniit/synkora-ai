@@ -264,6 +264,13 @@ class ADKToolRegistry:
 
         register_diagram_tools(self)
 
+        # Infographic generation tools
+        from src.services.agents.tool_registrations.infographic_tools_registry import (
+            register_infographic_tools,
+        )
+
+        register_infographic_tools(self)
+
         # Recall.ai meeting bot tools - use modular registry
         from src.services.agents.tool_registrations.recall_tools_registry import register_recall_tools
 
