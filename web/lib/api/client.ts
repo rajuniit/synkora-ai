@@ -138,6 +138,10 @@ interface ExtendedAPIClient extends APIClient {
   deleteDataSource: typeof dataSources.deleteDataSource
   syncDataSource: typeof dataSources.syncDataSource
   getDataSourceSyncHistory: typeof dataSources.getDataSourceSyncHistory
+  getStreamHealth: typeof dataSources.getStreamHealth
+  updateDataSourceConfig: typeof dataSources.updateDataSourceConfig
+  activateDataSource: typeof dataSources.activateDataSource
+  deactivateDataSource: typeof dataSources.deactivateDataSource
 
   // OAuth
   getOAuthApps: typeof oauth.getOAuthApps
@@ -349,6 +353,10 @@ export const apiClient: ExtendedAPIClient = Object.assign(_apiClient, {
   deleteDataSource: dataSources.deleteDataSource,
   syncDataSource: dataSources.syncDataSource,
   getDataSourceSyncHistory: dataSources.getDataSourceSyncHistory,
+  getStreamHealth: dataSources.getStreamHealth,
+  updateDataSourceConfig: dataSources.updateDataSourceConfig,
+  activateDataSource: dataSources.activateDataSource,
+  deactivateDataSource: dataSources.deactivateDataSource,
 
   // OAuth
   getOAuthApps: oauth.getOAuthApps,

@@ -474,7 +474,6 @@ def flush_usage_analytics(self):
     async def _flush() -> int:
         from src.config.redis import get_redis
         from src.core.database import create_celery_async_session
-        from src.models.usage_analytics import UsageAnalytics
         from src.services.billing.usage_tracking_service import USAGE_REDIS_PREFIX
 
         redis = get_redis()

@@ -5,10 +5,11 @@ WebSocket manager for real-time communication.
 import asyncio
 import logging
 import os
-from typing import Any, Awaitable, Callable
+from collections.abc import Awaitable, Callable
+from typing import Any
 from uuid import UUID
 
-from fastapi import WebSocket, WebSocketException, status
+from fastapi import WebSocket
 from pydantic import BaseModel
 
 logger = logging.getLogger(__name__)
@@ -739,7 +740,6 @@ class DistributedConnectionManager(ConnectionManager):
 
 
 # Import asyncio for the distributed manager
-import asyncio
 
 # Global connection manager instance - use distributed version for K8s
 # Falls back to local-only mode if Redis is unavailable

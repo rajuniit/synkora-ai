@@ -219,8 +219,6 @@ class ProfileService:
         Returns:
             True if code is valid, False otherwise
         """
-        import hmac
-        import time
 
         try:
             import pyotp

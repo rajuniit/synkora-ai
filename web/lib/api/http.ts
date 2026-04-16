@@ -38,9 +38,11 @@ export class APIClient {
         const originalRequest = error.config as any
 
         // Skip token refresh for authentication endpoints (login, signup, etc.)
+        // NOTE: '/oauth/' alone is too broad — it would match /api/v1/oauth/apps CRUD.
+        // Only skip refresh for the actual OAuth flow URLs (authorize/callback/redirect).
         const url = originalRequest?.url || ''
         const isAuthEndpoint = url.includes('/auth/') ||
-                              url.includes('/oauth/') ||
+                              /\/oauth\/[^/]+\/(authorize|callback|redirect)/.test(url) ||
                               url.includes('/signin') ||
                               url.includes('/signup') ||
                               url.includes('/login') ||

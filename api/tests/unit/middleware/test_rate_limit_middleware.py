@@ -4,7 +4,7 @@ Unit tests for Rate Limit Middleware.
 Tests rate limiting logic, key extraction, and path-based limits.
 """
 
-from unittest.mock import AsyncMock, MagicMock, patch
+from unittest.mock import MagicMock, patch
 
 import pytest
 

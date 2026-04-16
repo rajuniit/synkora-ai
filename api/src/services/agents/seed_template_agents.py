@@ -10,7 +10,6 @@ import logging
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from src.models.agent import Agent
 from src.models.agent_template import AgentTemplate
 
 logger = logging.getLogger(__name__)

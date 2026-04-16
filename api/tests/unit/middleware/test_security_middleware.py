@@ -7,9 +7,7 @@ These tests verify the security middleware functionality including:
 """
 
 import re
-from unittest.mock import AsyncMock, Mock
-
-import pytest
+from unittest.mock import Mock
 
 
 class TestInputSanitizationMiddleware:

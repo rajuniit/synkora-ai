@@ -8,7 +8,6 @@ When a user logs out, their tokens are blacklisted until they expire.
 import hashlib
 import logging
 import uuid
-from datetime import datetime
 
 from src.config import settings
 

@@ -4,7 +4,8 @@ import asyncio
 import json
 import logging
 import re
-from typing import Any, Callable
+from collections.abc import Callable
+from typing import Any
 
 _EMOJI_RE = re.compile(r"[^\x00-\x7F]+")
 

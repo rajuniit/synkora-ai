@@ -60,6 +60,8 @@ dependencies = [
     "google-auth-httplib2>=0.2.0",
     "google-api-python-client>=2.185.0",
     "gspread>=6.0.0,<7.0.0",
+    # Remote Compute (SSH backend for AgentCompute remote_server type)
+    "asyncssh>=2.14.0,<3.0.0",
     # Data Source Integrations
     "slack-sdk>=3.33.0,<4.0.0",
     "slack-bolt>=1.21.0,<2.0.0",
@@ -142,6 +144,11 @@ llm = [
     "openai>=1.59.0,<2.0.0",
     "anthropic>=0.42.0,<1.0.0",
     "tiktoken>=0.9.0,<1.0.0",
+]
+
+diagrams = [
+    # Optional server-side PNG export for diagram generation
+    "cairosvg>=2.7.0,<3.0.0",
 ]
 
 vector = [

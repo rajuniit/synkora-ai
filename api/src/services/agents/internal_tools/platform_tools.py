@@ -76,6 +76,13 @@ PLATFORM_TOOL_CATALOG = {
         "description": "Parse and extract text from PDFs, Word docs, Excel files",
         "requires_oauth": [],
     },
+    "kb_ingest_tools": {
+        "description": (
+            "Crawl any public URL and save it to a knowledge base, or add manual how-to guides and "
+            "reference content directly to a knowledge base for future agent retrieval."
+        ),
+        "requires_oauth": [],
+    },
     "github_tools": {
         "description": "Full GitHub: search repos, read/create issues, open PRs, manage branches and commits",
         "requires_oauth": ["github"],
@@ -502,6 +509,7 @@ TOOL_CATEGORY_TO_CAPABILITY_ID: dict[str, str] = {
     "elasticsearch_tools": "database-analytics",
     "data_analysis_tools": "database-analytics",
     "document_tools": "documents",
+    "kb_ingest_tools": "knowledge-base",
     "github_tools": "code-github",
     "gitlab_tools": "code-github",
     "slack_tools": "communication",

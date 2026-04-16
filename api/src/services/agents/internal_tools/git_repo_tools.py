@@ -7,7 +7,6 @@ All operations work on the local filesystem within the agent workspace.
 
 import logging
 import os
-import shutil
 import uuid
 from typing import Any
 
@@ -15,10 +14,13 @@ from .git_helpers import (
     MAX_CLONE_TIMEOUT,
     MAX_REPO_SIZE_MB,
     _convert_https_to_ssh,
-    _get_repo_size,
     _get_workspace_path,
-    _run_git_command,
-    _validate_repo_path,
+    async_get_repo_size,
+    async_makedirs,
+    async_path_exists,
+    async_rmtree,
+    async_run_git_command,
+    async_validate_repo_path,
 )
 
 logger = logging.getLogger(__name__)
@@ -105,20 +107,22 @@ async def internal_git_clone_repo(
                 logger.debug(f"Pre-clone size check skipped: {_pre_check_err}")
 
         repos_dir = os.path.join(workspace_path, "repos")
-        os.makedirs(repos_dir, exist_ok=True)
+        await async_makedirs(repos_dir, config)
 
         repo_dir = os.path.join(repos_dir, f"git_{uuid.uuid4().hex[:12]}")
         logger.info(f"Cloning '{repo_url}' into {repo_dir}")
 
-        result = _run_git_command(["git", "clone", repo_url, repo_dir], timeout=MAX_CLONE_TIMEOUT)
+        result = await async_run_git_command(
+            ["git", "clone", repo_url, repo_dir], working_directory=None, config=config, timeout=MAX_CLONE_TIMEOUT
+        )
 
         if not result["success"]:
-            shutil.rmtree(repo_dir, ignore_errors=True)
+            await async_rmtree(repo_dir, config)
             return {"success": False, "error": f"Failed to clone repository: {result['error']}", "repo_path": None}
 
-        repo_size = _get_repo_size(repo_dir)
+        repo_size = await async_get_repo_size(repo_dir, config)
         if repo_size > MAX_REPO_SIZE_MB:
-            shutil.rmtree(repo_dir, ignore_errors=True)
+            await async_rmtree(repo_dir, config)
             return {
                 "success": False,
                 "error": f"Repository size ({repo_size:.1f}MB) exceeds maximum allowed size ({MAX_REPO_SIZE_MB}MB)",
@@ -167,14 +171,14 @@ async def internal_git_add_remote(
                     tenant_id, "background_tasks"
                 )
                 workspace_path = get_workspace_manager().get_or_create_workspace(tenant_id, conversation_id)
-        is_valid, error = _validate_repo_path(repo_path, workspace_path)
+        is_valid, error = await async_validate_repo_path(repo_path, workspace_path, config)
         if not is_valid:
             return {"success": False, "error": error}
 
-        if not os.path.exists(repo_path):
+        if not await async_path_exists(repo_path, config):
             return {"success": False, "error": f"Repository path does not exist: {repo_path}"}
 
-        check_result = _run_git_command(["git", "remote", "get-url", remote_name], repo_path)
+        check_result = await async_run_git_command(["git", "remote", "get-url", remote_name], repo_path, config)
 
         if check_result["success"]:
             existing_url = check_result["output"]
@@ -186,14 +190,16 @@ async def internal_git_add_remote(
                 }
 
             logger.info(f"Updating remote '{remote_name}' URL")
-            update_result = _run_git_command(["git", "remote", "set-url", remote_name, remote_url], repo_path)
+            update_result = await async_run_git_command(
+                ["git", "remote", "set-url", remote_name, remote_url], repo_path, config
+            )
             if not update_result["success"]:
                 return {"success": False, "error": f"Failed to update remote URL: {update_result['error']}"}
 
             return {"success": True, "message": f"Updated remote '{remote_name}' URL to {remote_url}", "updated": True}
 
         logger.info(f"Adding remote '{remote_name}' with URL: {remote_url}")
-        add_result = _run_git_command(["git", "remote", "add", remote_name, remote_url], repo_path)
+        add_result = await async_run_git_command(["git", "remote", "add", remote_name, remote_url], repo_path, config)
         if not add_result["success"]:
             return {"success": False, "error": f"Failed to add remote: {add_result['error']}"}
 
@@ -221,7 +227,7 @@ async def internal_git_cleanup_repo(repo_path: str, config: dict[str, Any] | Non
         Dictionary with success status and message.
     """
     try:
-        if not os.path.exists(repo_path):
+        if not await async_path_exists(repo_path, config):
             return {"success": True, "message": "Repository path does not exist (already cleaned up)"}
 
         workspace_path = _get_workspace_path(config)
@@ -237,12 +243,12 @@ async def internal_git_cleanup_repo(repo_path: str, config: dict[str, Any] | Non
                     tenant_id, "background_tasks"
                 )
                 workspace_path = get_workspace_manager().get_or_create_workspace(tenant_id, conversation_id)
-        is_valid, error = _validate_repo_path(repo_path, workspace_path)
+        is_valid, error = await async_validate_repo_path(repo_path, workspace_path, config)
         if not is_valid:
             return {"success": False, "error": f"Can only cleanup directories within workspace. {error}"}
 
         logger.info(f"Cleaning up repository at {repo_path}")
-        shutil.rmtree(repo_path, ignore_errors=True)
+        await async_rmtree(repo_path, config)
         return {"success": True, "message": f"Successfully cleaned up repository at {repo_path}"}
 
     except Exception as e:

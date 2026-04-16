@@ -7,7 +7,7 @@ requests return immediately.
 
 import asyncio
 import logging
-from typing import Any
+from typing import Any  # noqa: F401 — used in inline type hints inside async functions
 
 from src.celery_app import celery_app
 
@@ -102,10 +102,11 @@ def analyze_app_store_reviews(
 async def _process_kb_documents(data_source_id: int, tenant_id: str, documents: list[dict[str, Any]]) -> None:
     from sqlalchemy import select
 
-    from src.core.database import async_session_factory
+    from src.core.database import create_celery_async_session
     from src.models.data_source import DataSource
     from src.services.data_sources.document_processor import DocumentProcessor
 
+    async_session_factory = create_celery_async_session()
     async with async_session_factory() as db:
         result = await db.execute(select(DataSource).filter(DataSource.id == data_source_id))
         data_source = result.scalar_one_or_none()
@@ -117,103 +118,180 @@ async def _process_kb_documents(data_source_id: int, tenant_id: str, documents: 
         result = await processor.process_documents(data_source=data_source, documents=documents)
         logger.info(f"KB document processing done for data_source={data_source_id}: {result}")
 
+        # Auto-recompile wiki if this KB already has wiki articles
+        if data_source.knowledge_base_id and result.get("documents_processed", 0) > 0:
+            from src.models.wiki_article import WikiArticle
+            from src.tasks.knowledge_compiler_task import compile_single_knowledge_wiki
+
+            wiki_check = await db.execute(
+                select(WikiArticle.id).filter(WikiArticle.knowledge_base_id == data_source.knowledge_base_id).limit(1)
+            )
+            if wiki_check.scalar_one_or_none():
+                compile_single_knowledge_wiki.delay(data_source.knowledge_base_id, str(data_source.tenant_id))
+                logger.info(f"Triggered wiki recompile for KB {data_source.knowledge_base_id}")
+
 
 async def _crawl_and_process_kb(
     data_source_id: int, tenant_id: str, url: str, max_pages: int, include_subpages: bool
 ) -> None:
+    """
+    Crawl a website and embed its pages into a knowledge base.
+
+    Uses concurrent HTTP fetching (up to CRAWL_CONCURRENCY parallel requests)
+    and processes pages in batches of CRAWL_BATCH_SIZE to avoid holding the
+    entire site in memory at once.
+    """
     import asyncio as _asyncio
     from urllib.parse import urljoin, urlparse
 
-    import requests
+    import httpx
     from bs4 import BeautifulSoup
     from sqlalchemy import select
 
-    from src.core.database import async_session_factory
+    from src.core.database import create_celery_async_session
     from src.models.data_source import DataSource
     from src.services.data_sources.document_processor import DocumentProcessor
     from src.services.security.url_validator import validate_url
 
-    parsed_url = urlparse(url)
-    documents = []
-    visited_urls: set[str] = set()
-    urls_to_crawl = [url]
+    async_session_factory = create_celery_async_session()
 
-    while urls_to_crawl and len(documents) < max_pages:
-        current_url = urls_to_crawl.pop(0)
-        if current_url in visited_urls:
-            continue
-        visited_urls.add(current_url)
+    CRAWL_CONCURRENCY = 10  # max parallel HTTP requests
+    CRAWL_BATCH_SIZE = 20  # pages to embed per DB batch
 
+    parsed_base = urlparse(url)
+    visited: set[str] = set()
+    queue: list[str] = [url]
+    semaphore = _asyncio.Semaphore(CRAWL_CONCURRENCY)
+    headers = {"User-Agent": "AI-Agent/1.0 (Web Crawler)"}
+
+    async def fetch_page(client: httpx.AsyncClient, page_url: str) -> dict[str, Any] | None:
+        """Fetch and parse a single page. Returns doc dict or None on failure."""
+        is_valid, err = validate_url(
+            page_url, allowed_schemes=["http", "https"], block_private_ips=True, resolve_dns=True
+        )
+        if not is_valid:
+            logger.warning(f"SSRF blocked: {page_url} — {err}")
+            return None
         try:
-            is_url_valid, url_error = validate_url(
-                current_url, allowed_schemes=["http", "https"], block_private_ips=True, resolve_dns=True
-            )
-            if not is_url_valid:
-                logger.warning(f"SSRF blocked during crawl: {current_url} - {url_error}")
-                continue
-
-            headers = {"User-Agent": "Mozilla/5.0 (compatible; AIBot/1.0)"}
-            loop = _asyncio.get_running_loop()
-            response = await loop.run_in_executor(
-                None, lambda u=current_url: requests.get(u, headers=headers, timeout=30)
-            )
-            response.raise_for_status()
-
+            async with semaphore:
+                response = await client.get(page_url, follow_redirects=True, timeout=20)
+            if response.status_code >= 400:
+                return None
             soup = BeautifulSoup(response.content, "html.parser")
-            title = soup.title.string if soup.title else current_url
+            title = soup.title.string.strip() if soup.title and soup.title.string else page_url
+            for tag in soup(["script", "style", "nav", "footer", "header", "aside", "noscript"]):
+                tag.decompose()
+            lines = [ln.strip() for ln in soup.get_text(separator="\n").splitlines() if ln.strip()]
+            text = "\n".join(lines)
+            if not text:
+                return None
 
-            for script in soup(["script", "style", "nav", "footer", "header"]):
-                script.decompose()
+            # Discover subpage links
+            new_links: list[str] = []
+            if include_subpages:
+                for a in soup.find_all("a", href=True):
+                    href = a["href"]
+                    if href.startswith(("#", "mailto:", "javascript:", "tel:")):
+                        continue
+                    full = urljoin(page_url, href).split("#")[0].rstrip("/")
+                    parsed_full = urlparse(full)
+                    if parsed_full.netloc == parsed_base.netloc and full not in visited:
+                        new_links.append(full)
 
-            text_content = soup.get_text(separator="\n", strip=True)
-            lines = [line.strip() for line in text_content.splitlines() if line.strip()]
-            text_content = "\n".join(lines)
+            return {
+                "id": page_url,
+                "text": text,
+                "new_links": new_links,
+                "metadata": {
+                    "title": title,
+                    "url": page_url,
+                    "source_type": "web",
+                    "upload_source": "crawl",
+                },
+            }
+        except Exception as exc:
+            logger.warning(f"Failed to fetch {page_url}: {exc}")
+            return None
 
-            if text_content:
-                documents.append(
-                    {
-                        "id": current_url,
-                        "text": text_content,
-                        "metadata": {
-                            "title": title,
-                            "url": current_url,
-                            "source_type": "web",
-                            "upload_source": "crawl",
-                        },
-                    }
-                )
-                logger.info(f"Crawled: {current_url}")
-
-            if include_subpages and len(documents) < max_pages:
-                for link in soup.find_all("a", href=True):
-                    href = link["href"]
-                    full_url = urljoin(current_url, href)
-                    parsed_full = urlparse(full_url)
-                    if (
-                        parsed_full.netloc == parsed_url.netloc
-                        and full_url not in visited_urls
-                        and not href.startswith(("#", "mailto:", "javascript:"))
-                    ):
-                        urls_to_crawl.append(full_url)
-
-        except Exception as e:
-            logger.warning(f"Failed to crawl {current_url}: {e}")
-            continue
-
-    if not documents:
-        logger.warning(f"No content extracted from {url} for data_source={data_source_id}")
-        return
-
+    # Resolve data source once upfront; cache scalar fields before session closes
+    _kb_id: int | None = None
+    _ds_tenant_id: str | None = None
     async with async_session_factory() as db:
         result = await db.execute(select(DataSource).filter(DataSource.id == data_source_id))
         data_source = result.scalar_one_or_none()
-        if not data_source:
-            logger.error(f"DataSource {data_source_id} not found after crawl")
-            return
+        if data_source:
+            _kb_id = data_source.knowledge_base_id
+            _ds_tenant_id = str(data_source.tenant_id)
+    if not data_source:
+        logger.error(f"DataSource {data_source_id} not found — aborting crawl")
+        return
 
-        processor = DocumentProcessor(db)
-        result = await processor.process_documents(data_source=data_source, documents=documents)
-        logger.info(f"Crawl+process done for data_source={data_source_id}, pages={len(documents)}: {result}")
+    total_processed = 0
+    batch: list[dict[str, Any]] = []
+
+    async with httpx.AsyncClient(headers=headers) as client:
+        while queue and (total_processed + len(batch)) < max_pages:
+            # Build a round of concurrent fetches from the current queue
+            remaining = max_pages - total_processed - len(batch)
+            round_urls: list[str] = []
+            while queue and len(round_urls) < CRAWL_CONCURRENCY and len(round_urls) < remaining:
+                candidate = queue.pop(0)
+                if candidate not in visited:
+                    visited.add(candidate)
+                    round_urls.append(candidate)
+
+            if not round_urls:
+                break
+
+            results = await _asyncio.gather(*[fetch_page(client, u) for u in round_urls])
+
+            for doc in results:
+                if doc is None:
+                    continue
+                new_links = doc.pop("new_links", [])
+                batch.append(doc)
+                # Enqueue discovered links
+                for link in new_links:
+                    if link not in visited and len(queue) < max_pages * 2:
+                        queue.append(link)
+
+            # Flush batch to DB when it reaches CRAWL_BATCH_SIZE or queue is empty
+            if len(batch) >= CRAWL_BATCH_SIZE or (not queue and batch):
+                logger.info(f"Processing batch of {len(batch)} pages for data_source={data_source_id}")
+                async with async_session_factory() as db:
+                    result = await db.execute(select(DataSource).filter(DataSource.id == data_source_id))
+                    ds = result.scalar_one_or_none()
+                    if ds:
+                        processor = DocumentProcessor(db)
+                        res = await processor.process_documents(data_source=ds, documents=batch)
+                        total_processed += res.get("documents_processed", len(batch))
+                        logger.info(f"Batch done: {res}")
+                batch = []
+
+    # Final partial batch
+    if batch:
+        async with async_session_factory() as db:
+            result = await db.execute(select(DataSource).filter(DataSource.id == data_source_id))
+            ds = result.scalar_one_or_none()
+            if ds:
+                processor = DocumentProcessor(db)
+                res = await processor.process_documents(data_source=ds, documents=batch)
+                total_processed += res.get("documents_processed", len(batch))
+
+    logger.info(f"Crawl complete for data_source={data_source_id}: {total_processed} pages processed")
+
+    # Auto-recompile wiki if this KB already has wiki articles
+    if total_processed > 0 and _kb_id:
+        from src.models.wiki_article import WikiArticle
+        from src.tasks.knowledge_compiler_task import compile_single_knowledge_wiki
+
+        async with async_session_factory() as db_check:
+            wiki_check = await db_check.execute(
+                select(WikiArticle.id).filter(WikiArticle.knowledge_base_id == _kb_id).limit(1)
+            )
+            if wiki_check.scalar_one_or_none():
+                compile_single_knowledge_wiki.delay(_kb_id, _ds_tenant_id)
+                logger.info(f"Triggered wiki recompile for KB {_kb_id}")
 
 
 async def _analyze_app_store_reviews(
@@ -227,10 +305,11 @@ async def _analyze_app_store_reviews(
 ) -> None:
     import uuid
 
-    from src.core.database import async_session_factory
+    from src.core.database import create_celery_async_session
     from src.services.agents.config import ModelConfig
     from src.services.app_store.review_analysis_service import ReviewAnalysisService
 
+    async_session_factory = create_celery_async_session()
     async with async_session_factory() as db:
         analysis_service = ReviewAnalysisService(db)
         llm_config = ModelConfig(provider=llm_provider, model_name=llm_model, api_key=llm_api_key)

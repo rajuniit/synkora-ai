@@ -5,6 +5,7 @@ from .agent import Agent
 from .agent_api_key import AgentApiKey
 from .agent_api_usage import AgentApiUsage
 from .agent_approval import AgentApprovalRequest, ApprovalStatus
+from .agent_compute import AgentCompute, ComputeStatus, ComputeType
 from .agent_context_file import AgentContextFile
 from .agent_domain import AgentDomain
 from .agent_knowledge_base import AgentKnowledgeBase
@@ -48,6 +49,7 @@ from .data_source import (
 from .database_connection import DatabaseConnection, DatabaseConnectionType
 from .dataset import Dataset
 from .debate_session import DebateSession
+from .diagram import Diagram
 from .document import Document, DocumentStatus
 from .document_segment import DocumentSegment
 from .followup import FollowupConfig, FollowupItem, FollowupPriority, FollowupStatus
@@ -60,6 +62,7 @@ from .human_escalation import (
     HumanEscalation,
 )
 from .integration_config import IntegrationConfig
+from .kb_brain import KBEntity, KBRelationship, KBSyncCursor
 from .knowledge_base import (
     EmbeddingProvider,
     KnowledgeBase,
@@ -134,6 +137,9 @@ __all__ = [
     "Message",
     # Agent models
     "Agent",
+    "AgentCompute",
+    "ComputeType",
+    "ComputeStatus",
     "AgentApiKey",
     "AgentApiUsage",
     "AgentContextFile",
@@ -203,6 +209,12 @@ __all__ = [
     "DatabaseConnectionType",
     # Chart models
     "Chart",
+    # KB Brain models
+    "KBSyncCursor",
+    "KBEntity",
+    "KBRelationship",
+    # Diagram models
+    "Diagram",
     # Scheduled Task models
     "ScheduledTask",
     "TaskExecution",
@@ -271,6 +283,7 @@ __all__ = [
     "EscalationReason",
     "EscalationStatus",
     "EscalationPriority",
+    # Compute models
     # Webhook models
     "AgentSubscription",
     "AgentWebhook",

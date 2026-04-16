@@ -16,8 +16,6 @@ from fastapi import status
 from fastapi.responses import JSONResponse
 from starlette.types import ASGIApp, Message, Receive, Scope, Send
 
-from src.utils.ip_utils import get_client_ip
-
 logger = logging.getLogger(__name__)
 
 

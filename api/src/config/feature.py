@@ -333,6 +333,111 @@ class WorkspaceConfig(BaseSettings):
     )
 
 
+class ComputeConfig(BaseSettings):
+    """synkora-sandbox service configuration."""
+
+    sandbox_service_url: str | None = Field(
+        default=None,
+        description="URL of the synkora-sandbox service (e.g. http://synkora-sandbox:5004)",
+    )
+
+    sandbox_api_key: str | None = Field(
+        default=None,
+        description="Shared secret for sandbox service authentication",
+    )
+
+
+class CompanyBrainConfig(BaseSettings):
+    """
+    Company Brain (data hub) configuration.
+
+    All settings are read from environment variables — nothing is hardcoded.
+    Swap any component (search backend, queue, dedup) without changing code.
+    """
+
+    # Search backend
+    company_brain_search_backend: str = Field(
+        default="qdrant_hybrid",
+        description="Search backend: qdrant_hybrid | postgres_fts | elasticsearch | typesense",
+    )
+
+    # Ingestion queue
+    company_brain_queue_backend: str = Field(
+        default="redis_streams",
+        description="Ingestion queue backend: redis_streams | celery_only",
+    )
+    company_brain_stream_maxlen: int = Field(
+        default=500_000,
+        description="Max entries per Redis Stream per tenant per source (MAXLEN ~)",
+    )
+    company_brain_batch_size: int = Field(
+        default=100,
+        description="Number of document chunks per embedding API call",
+    )
+    company_brain_min_content_tokens: int = Field(
+        default=10,
+        description="Skip indexing documents shorter than this many tokens",
+    )
+
+    # Embedding model per source type — serialised JSON map
+    # e.g. '{"default":"text-embedding-3-small","confluence":"text-embedding-3-large"}'
+    company_brain_embedding_models: str = Field(
+        default='{"default":"text-embedding-3-small","confluence":"text-embedding-3-large","notion":"text-embedding-3-large"}',
+        description="JSON map: source_type -> embedding model name",
+    )
+
+    # Chunking strategy per source type — serialised JSON map
+    # e.g. '{"slack":"thread","github_pr":"diff","confluence":"document","default":"fixed"}'
+    company_brain_chunking_strategies: str = Field(
+        default='{"slack":"thread","github_pr":"diff","confluence":"document","notion":"document","default":"fixed"}',
+        description="JSON map: source_type -> chunking strategy (thread|diff|document|fixed)",
+    )
+
+    # Tiered storage (days)
+    company_brain_hot_days: int = Field(
+        default=90,
+        description="Documents indexed within this many days go to the hot tier (always searched)",
+    )
+    company_brain_warm_days: int = Field(
+        default=730,
+        description="Documents older than hot_days but within this threshold go to warm tier",
+    )
+
+    # Deduplication
+    company_brain_dedup_backend: str = Field(
+        default="redis_set",
+        description="Dedup backend: redis_set | postgres",
+    )
+    company_brain_dedup_ttl_days: int = Field(
+        default=7,
+        description="TTL in days for dedup keys (redis_set backend only)",
+    )
+
+    # Query layer
+    company_brain_query_router_model: str = Field(
+        default="claude-haiku-4-5-20251001",
+        description="LLM model ID used for query intent classification (cheap, fast)",
+    )
+    company_brain_context_tokens: int = Field(
+        default=32_000,
+        description="Max tokens of retrieved context passed to the answer LLM",
+    )
+    company_brain_enable_pageindex: bool = Field(
+        default=False,
+        description="Route long-form document queries through PageIndex (higher quality, higher cost)",
+    )
+
+    # Sync schedule
+    company_brain_incremental_sync_minutes: int = Field(
+        default=15,
+        description="How often incremental sync runs (minutes)",
+    )
+    company_brain_full_sync_hours: int = Field(
+        default=24,
+        description="How often a full re-sync runs (hours)",
+    )
+
+
 class FeatureConfig(BaseSettings):
     """Feature configuration combining all feature settings."""
 

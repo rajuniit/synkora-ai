@@ -7,7 +7,6 @@ Tests speech-to-text, text-to-speech, and voice API key operations.
 import io
 import uuid
 
-import pytest
 import pytest_asyncio
 from fastapi import status
 from fastapi.testclient import TestClient

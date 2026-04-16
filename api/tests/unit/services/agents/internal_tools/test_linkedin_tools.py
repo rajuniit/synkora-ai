@@ -5,7 +5,7 @@ Tests the LinkedIn API integration for profile, posting, sharing,
 and company information.
 """
 
-from unittest.mock import AsyncMock, MagicMock, patch
+from unittest.mock import AsyncMock, patch
 
 import pytest
 

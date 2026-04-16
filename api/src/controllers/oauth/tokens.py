@@ -201,17 +201,29 @@ async def get_user_connection_status(
         if not oauth_app:
             raise HTTPException(status_code=404, detail="OAuth app not found")
 
+        auth_method = oauth_app.auth_method or "oauth"
+        app_has_credentials = bool(oauth_app.api_token)  # covers api_token + basic_auth (password)
+
         result = {
             "app_id": app_id,
             "provider": oauth_app.provider,
             "app_name": oauth_app.app_name,
-            "auth_method": oauth_app.auth_method or "oauth",
+            "auth_method": auth_method,
             "connected": False,
+            "admin_connected": False,  # True when shared admin credentials are configured
             "user_token": None,
-            "app_has_token": bool(oauth_app.access_token) or bool(oauth_app.api_token),
+            "app_has_token": bool(oauth_app.access_token) or app_has_credentials,
         }
 
-        # If user is authenticated, check for their personal token
+        # For api_token / basic_auth apps there is no per-user connection —
+        # the admin-configured credentials are shared by all users automatically.
+        if auth_method in ("api_token", "basic_auth"):
+            if app_has_credentials:
+                result["connected"] = True
+                result["admin_connected"] = True
+            return result
+
+        # OAuth apps: check for the current user's personal token
         if current_account:
             token_result = await db.execute(
                 select(UserOAuthToken).filter(

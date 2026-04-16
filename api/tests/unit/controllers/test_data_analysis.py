@@ -1,7 +1,6 @@
 """Tests for data analysis controller."""
 
 import uuid
-from datetime import datetime
 from io import BytesIO
 from unittest.mock import AsyncMock, MagicMock, patch
 

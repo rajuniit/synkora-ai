@@ -1,12 +1,9 @@
 """Tests for chat_stream_service.py."""
 
-import asyncio
-from dataclasses import dataclass
 from unittest.mock import AsyncMock, MagicMock, Mock, patch
 from uuid import uuid4
 
 import pytest
-from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 
@@ -732,6 +729,15 @@ class TestStreamWithoutTools:
 
 class TestStreamWithTools:
     """Tests for _stream_with_tools method."""
+
+    @pytest.fixture(autouse=True)
+    def patch_compute_resolver(self):
+        with patch(
+            "src.services.compute.resolver.build_compute_session_for_agent",
+            new_callable=AsyncMock,
+            return_value=None,
+        ):
+            yield
 
     @pytest.mark.asyncio
     async def test_stream_with_tools_text_event(

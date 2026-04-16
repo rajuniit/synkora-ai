@@ -33,6 +33,7 @@ interface OAuthApp {
 interface UserConnection {
   app_id: number
   connected: boolean
+  admin_connected?: boolean
   auth_method?: string
   user_token?: {
     id: string
@@ -396,7 +397,9 @@ export default function OAuthAppsPage() {
   }
 
   const isAuthorized = (app: OAuthApp) => {
-    return app.auth_method === 'api_token' ? app.has_api_token : app.has_access_token
+    if (app.auth_method === 'api_token') return app.has_api_token
+    if (app.auth_method === 'basic_auth') return app.has_api_token // password stored = configured
+    return app.has_access_token
   }
 
   const isUserConnected = (appId: number) => {
@@ -490,6 +493,8 @@ export default function OAuthAppsPage() {
               <div className="grid gap-3">
                 {apps.map((app) => {
                   const config = getConfig(app.provider)
+                  const connStatus = userConnections[app.id]
+                  const isAdminShared = connStatus?.admin_connected === true
                   const userConnected = isUserConnected(app.id)
                   const userConnection = getUserConnection(app.id)
 
@@ -507,8 +512,19 @@ export default function OAuthAppsPage() {
                             <div className="flex items-center gap-2">
                               <h3 className="font-semibold text-gray-900">{config.name}</h3>
                               <span className="text-xs text-gray-500">({app.app_name})</span>
+                              {isAdminShared && (
+                                <span className="inline-flex items-center gap-1 px-1.5 py-0.5 bg-violet-100 text-violet-700 text-xs font-medium rounded">
+                                  <Shield className="w-3 h-3" />
+                                  Admin
+                                </span>
+                              )}
                             </div>
-                            {userConnected && userConnection ? (
+                            {isAdminShared ? (
+                              <p className="text-sm text-emerald-600 flex items-center gap-1">
+                                <CheckCircle className="w-3.5 h-3.5" />
+                                Connected via admin setup
+                              </p>
+                            ) : userConnected && userConnection ? (
                               <p className="text-sm text-emerald-600 flex items-center gap-1">
                                 <CheckCircle className="w-3.5 h-3.5" />
                                 {userConnection.provider_email || userConnection.provider_username || 'Connected'}
@@ -522,6 +538,11 @@ export default function OAuthAppsPage() {
                         <div className="flex items-center gap-2">
                           {loadingConnections ? (
                             <span className="text-xs text-gray-400">Loading...</span>
+                          ) : isAdminShared ? (
+                            <span className="inline-flex items-center gap-1.5 px-3 py-1.5 text-sm font-medium text-emerald-700 bg-emerald-50 border border-emerald-200 rounded-lg">
+                              <CheckCircle className="w-4 h-4" />
+                              Connected
+                            </span>
                           ) : userConnected ? (
                             <button
                               onClick={() => userConnection?.id && handleDisconnectUser(userConnection.id, app.id)}
@@ -605,7 +626,12 @@ export default function OAuthAppsPage() {
                                 {authorized ? (
                                   <span className="text-emerald-600 flex items-center gap-1">
                                     <CheckCircle className="w-3 h-3" />
-                                    App Authorized
+                                    {app.auth_method === 'basic_auth' ? 'Configured' : 'App Authorized'}
+                                  </span>
+                                ) : app.auth_method === 'basic_auth' ? (
+                                  <span className="text-amber-600 flex items-center gap-1">
+                                    <AlertCircle className="w-3 h-3" />
+                                    Missing Credentials
                                   </span>
                                 ) : (
                                   <span className="text-amber-600 flex items-center gap-1">
@@ -618,7 +644,7 @@ export default function OAuthAppsPage() {
                           </div>
 
                           <div className="flex items-center gap-1">
-                            {!authorized && (
+                            {!authorized && app.auth_method !== 'basic_auth' && (
                               <button
                                 onClick={() => handleAuthorize(app, false)}
                                 className="px-3 py-1.5 text-sm font-medium text-white bg-amber-500 rounded-lg hover:bg-amber-600 transition-colors"

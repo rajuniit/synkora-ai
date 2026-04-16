@@ -15,6 +15,8 @@ from .celery import CeleryConfig
 from .database import DatabaseConfig
 from .feature import (
     BotWorkerConfig,
+    CompanyBrainConfig,
+    ComputeConfig,
     DomainConfig,
     FileUploadConfig,
     HttpConfig,
@@ -57,6 +59,11 @@ class AppConfig(BaseSettings):
         description="API port",
     )
 
+    api_base_url: str = Field(
+        default="http://localhost:5001",
+        description="Public-facing base URL of the API server (used to construct webhook URLs).",
+    )
+
     @property
     def is_development(self) -> bool:
         """Check if running in development mode."""
@@ -90,6 +97,8 @@ class Settings(
     DomainConfig,
     BotWorkerConfig,
     WorkspaceConfig,
+    ComputeConfig,
+    CompanyBrainConfig,
 ):
     """Main application settings combining all config modules."""
 

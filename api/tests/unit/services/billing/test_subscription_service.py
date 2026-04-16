@@ -5,7 +5,6 @@ from uuid import uuid4
 import pytest
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from src.models.credit_transaction import TransactionType
 from src.models.subscription_plan import PlanTier, SubscriptionPlan
 from src.models.tenant_subscription import SubscriptionStatus, TenantSubscription
 from src.services.billing.subscription_service import SubscriptionService

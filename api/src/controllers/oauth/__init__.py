@@ -44,6 +44,7 @@ from .gitlab import router as gitlab_router
 from .google import router as google_router
 from .jira import router as jira_router
 from .linkedin import router as linkedin_router
+from .micromobility import router as micromobility_router
 from .slack import router as slack_router
 from .tokens import router as tokens_router
 from .twitter import router as twitter_router
@@ -62,6 +63,7 @@ router.include_router(google_router)
 router.include_router(slack_router)
 router.include_router(zoom_router)
 router.include_router(jira_router)
+router.include_router(micromobility_router)
 router.include_router(clickup_router)
 router.include_router(twitter_router)
 router.include_router(linkedin_router)

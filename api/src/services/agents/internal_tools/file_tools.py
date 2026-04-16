@@ -14,7 +14,6 @@ import os
 import re
 import shutil
 import subprocess
-import tempfile
 from pathlib import Path
 from typing import Any
 
@@ -612,6 +611,14 @@ async def internal_read_file(
         - encoding: "base64"
         - error: Error message (if any)
     """
+    # Route to remote compute session when configured
+    from src.services.compute.resolver import get_compute_session_from_config
+
+    _cs = await get_compute_session_from_config(config)
+    if _cs is not None and _cs.is_remote:
+        _max = max_lines if max_lines else 200
+        return await _cs.read_file(file_path, start_line=start_line, max_lines=_max)
+
     try:
         # Validate file path
         is_valid, error_msg = _validate_file_path(file_path, config=config)
@@ -771,6 +778,13 @@ async def internal_write_file(
     Returns:
         Dictionary indicating success or error
     """
+    # Route to remote compute session when configured
+    from src.services.compute.resolver import get_compute_session_from_config
+
+    _cs = await get_compute_session_from_config(config)
+    if _cs is not None and _cs.is_remote:
+        return await _cs.write_file(file_path, content)
+
     try:
         # Validate file path (don't require existence since we're creating)
         is_valid, error_msg = _validate_file_path(file_path, must_exist=False, config=config)
@@ -955,6 +969,13 @@ async def internal_create_directory(directory_path: str, config: dict[str, Any] 
     Returns:
         Dictionary indicating success or error
     """
+    # Route to remote compute session when configured
+    from src.services.compute.resolver import get_compute_session_from_config
+
+    _cs = await get_compute_session_from_config(config)
+    if _cs is not None and _cs.is_remote:
+        return await _cs.create_dir(directory_path)
+
     try:
         # Validate directory path
         is_valid, error_msg = _validate_directory_path(directory_path, must_exist=False, config=config)
@@ -985,6 +1006,32 @@ async def internal_list_directory(
     Returns:
         Dictionary containing directory listing
     """
+    # Route to remote compute session when configured
+    from src.services.compute.resolver import get_compute_session_from_config
+
+    _cs = await get_compute_session_from_config(config)
+    if _cs is not None and _cs.is_remote:
+        result = await _cs.list_dir(directory_path)
+        if not result["success"]:
+            return {"error": result["error"]}
+        # Adapt to the format callers expect
+        entries = result.get("entries", [])
+        if not include_hidden:
+            entries = [e for e in entries if not e["name"].startswith(".")]
+        items = [
+            {
+                "name": e["name"],
+                "type": "directory" if e["is_dir"] else "file",
+                "size": e["size"],
+            }
+            for e in entries
+        ]
+        return {
+            "path": directory_path,
+            "items": items,
+            "total_items": len(items),
+        }
+
     try:
         # Validate directory path
         is_valid, error_msg = _validate_directory_path(directory_path, config=config)

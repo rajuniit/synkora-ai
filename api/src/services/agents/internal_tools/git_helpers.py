@@ -6,11 +6,12 @@ core _run_git_command utility used by git_repo_tools, git_branch_tools,
 and git_commit_tools.
 """
 
+import asyncio
 import logging
 import os
 import re
+import shutil
 import subprocess
-import tempfile
 from typing import Any
 from urllib.parse import urlparse
 
@@ -221,3 +222,138 @@ def _get_repo_size(repo_path: str) -> float:
             if os.path.exists(filepath):
                 total_size += os.path.getsize(filepath)
     return total_size / (1024 * 1024)
+
+
+# ---------------------------------------------------------------------------
+# Async helpers — route through compute session when remote
+# ---------------------------------------------------------------------------
+
+
+async def async_run_git_command(
+    command: list[str],
+    working_directory: str | None = None,
+    config: dict[str, Any] | None = None,
+    timeout: int = 300,
+) -> dict[str, Any]:
+    """Run a git command, routing through the compute session when configured."""
+    from src.services.compute.resolver import get_compute_session_from_config
+
+    _cs = await get_compute_session_from_config(config)
+    if _cs is not None and _cs.is_remote:
+        return await _cs.exec_command(command=command, cwd=working_directory, timeout=timeout)
+    return await asyncio.get_event_loop().run_in_executor(
+        None, lambda: _run_git_command(command, working_directory, timeout)
+    )
+
+
+async def async_path_exists(path: str, config: dict[str, Any] | None = None) -> bool:
+    """Check if a path exists, routing through the compute session when configured."""
+    from src.services.compute.resolver import get_compute_session_from_config
+
+    _cs = await get_compute_session_from_config(config)
+    if _cs is not None and _cs.is_remote:
+        return await _cs.file_exists(path)
+    return os.path.exists(path)
+
+
+async def async_makedirs(path: str, config: dict[str, Any] | None = None) -> None:
+    """Create a directory (and parents), routing through the compute session when configured."""
+    from src.services.compute.resolver import get_compute_session_from_config
+
+    _cs = await get_compute_session_from_config(config)
+    if _cs is not None and _cs.is_remote:
+        await _cs.create_dir(path)
+        return
+    os.makedirs(path, exist_ok=True)
+
+
+async def async_rmtree(path: str, config: dict[str, Any] | None = None) -> None:
+    """Remove a directory tree, routing through the compute session when configured."""
+    from src.services.compute.resolver import get_compute_session_from_config
+
+    _cs = await get_compute_session_from_config(config)
+    if _cs is not None and _cs.is_remote:
+        await _cs.exec_command(["rm", "-rf", path])
+        return
+    shutil.rmtree(path, ignore_errors=True)
+
+
+async def async_get_repo_size(path: str, config: dict[str, Any] | None = None) -> float:
+    """Get repository size in MB, routing through the compute session when configured."""
+    from src.services.compute.resolver import get_compute_session_from_config
+
+    _cs = await get_compute_session_from_config(config)
+    if _cs is not None and _cs.is_remote:
+        result = await _cs.exec_command(["du", "-sm", path])
+        if result.get("success") and result.get("output"):
+            try:
+                return float(result["output"].split()[0])
+            except (ValueError, IndexError):
+                pass
+        return 0.0
+    return await asyncio.get_event_loop().run_in_executor(None, lambda: _get_repo_size(path))
+
+
+async def async_write_file(path: str, content: str, config: dict[str, Any] | None = None) -> dict[str, Any]:
+    """Write a text file, routing through the compute session when configured."""
+    from src.services.compute.resolver import get_compute_session_from_config
+
+    _cs = await get_compute_session_from_config(config)
+    if _cs is not None and _cs.is_remote:
+        return await _cs.write_file(path, content)
+    try:
+        os.makedirs(os.path.dirname(path), exist_ok=True) if os.path.dirname(path) else None
+        with open(path, "w", encoding="utf-8") as fh:
+            fh.write(content)
+        return {"success": True}
+    except Exception as e:
+        return {"success": False, "error": str(e)}
+
+
+async def async_write_file_bytes(path: str, content: bytes, config: dict[str, Any] | None = None) -> dict[str, Any]:
+    """Write binary content to a file, routing through the compute session when configured."""
+    from src.services.compute.resolver import get_compute_session_from_config
+
+    _cs = await get_compute_session_from_config(config)
+    if _cs is not None and _cs.is_remote:
+        return await _cs.write_file_bytes(path, content)
+    try:
+        os.makedirs(os.path.dirname(path), exist_ok=True) if os.path.dirname(path) else None
+        with open(path, "wb") as fh:
+            fh.write(content)
+        return {"success": True}
+    except Exception as e:
+        return {"success": False, "error": str(e)}
+
+
+async def async_read_file_bytes(path: str, config: dict[str, Any] | None = None) -> bytes | None:
+    """Read binary file content, routing through the compute session when configured."""
+    from src.services.compute.resolver import get_compute_session_from_config
+
+    _cs = await get_compute_session_from_config(config)
+    if _cs is not None and _cs.is_remote:
+        return await _cs.read_file_bytes(path)
+    try:
+        with open(path, "rb") as fh:
+            return fh.read()
+    except Exception:
+        return None
+
+
+async def async_validate_repo_path(
+    repo_path: str, workspace_path: str | None, config: dict[str, Any] | None = None
+) -> tuple[bool, str | None]:
+    """Validate repo path is within workspace, using string comparison for remote sessions."""
+    from src.services.compute.resolver import get_compute_session_from_config
+
+    _cs = await get_compute_session_from_config(config)
+    if _cs is not None and _cs.is_remote:
+        if not workspace_path:
+            return False, "No workspace path configured. Repository operations require a valid workspace."
+        if not (repo_path.startswith(workspace_path + "/") or repo_path == workspace_path):
+            return (
+                False,
+                f"Repository path '{repo_path}' is outside the workspace directory. Use workspace path: {workspace_path}",
+            )
+        return True, None
+    return _validate_repo_path(repo_path, workspace_path)

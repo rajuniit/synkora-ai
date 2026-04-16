@@ -5,7 +5,7 @@ Tests the Twitter API integration for timeline, bookmarks, posting,
 searching, and user operations.
 """
 
-from unittest.mock import AsyncMock, MagicMock, patch
+from unittest.mock import AsyncMock, patch
 
 import pytest
 

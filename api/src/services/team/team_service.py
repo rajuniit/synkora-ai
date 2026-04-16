@@ -1,7 +1,6 @@
 """Team management service."""
 
 import logging
-import os
 import secrets
 from datetime import UTC, datetime, timedelta
 from uuid import UUID

@@ -1,6 +1,5 @@
 """Tests for CronValidator."""
 
-import pytest
 
 from src.services.scheduler.cron_validator import CronValidator
 

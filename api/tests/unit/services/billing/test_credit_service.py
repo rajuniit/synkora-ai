@@ -6,7 +6,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from src.models.credit_balance import CreditBalance
 from src.models.credit_transaction import ActionType as ActionTypeEnum
-from src.models.credit_transaction import CreditTransaction, TransactionType
+from src.models.credit_transaction import TransactionType
 from src.services.billing.credit_service import CreditService
 
 

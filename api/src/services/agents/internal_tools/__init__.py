@@ -13,6 +13,12 @@ from src.services.agents.internal_tools.database_tools import (
     internal_query_and_chart,
     internal_query_database,
 )
+
+# Diagram tools
+from src.services.agents.internal_tools.diagram_tools import (
+    internal_generate_diagram,
+    internal_generate_quick_diagram,
+)
 from src.services.agents.internal_tools.elasticsearch_tools import (
     internal_elasticsearch_get_index_stats,
     internal_elasticsearch_list_indices,
@@ -78,6 +84,12 @@ from src.services.agents.internal_tools.hackernews_tools import (
     internal_hackernews_get_trending_topics,
     internal_hackernews_get_user,
     internal_hackernews_search,
+)
+
+# KB ingest tools
+from src.services.agents.internal_tools.kb_ingest_tools import (
+    internal_kb_add_text,
+    internal_kb_crawl_url,
 )
 
 # LinkedIn tools
@@ -315,4 +327,10 @@ __all__ = [
     "internal_spawn_agent",
     "internal_check_task",
     "internal_list_background_tasks",
+    # Diagram tools
+    "internal_generate_diagram",
+    "internal_generate_quick_diagram",
+    # KB ingest tools
+    "internal_kb_crawl_url",
+    "internal_kb_add_text",
 ]

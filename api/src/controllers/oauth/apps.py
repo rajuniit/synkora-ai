@@ -16,7 +16,7 @@ from ...middleware.auth_middleware import get_current_tenant_id, get_optional_ac
 from ...models.oauth_app import OAuthApp
 from ...models.tenant import Account
 from ...models.user_oauth_token import UserOAuthToken
-from ...services.agents.security import decrypt_value, encrypt_value
+from ...services.agents.security import encrypt_value
 from .base import (
     OAuthAppCreate,
     OAuthAppUpdate,
@@ -164,8 +164,8 @@ async def create_oauth_app(
     """Create a new OAuth app."""
     try:
         # Validate authentication method and required fields
-        if data.auth_method not in ["oauth", "api_token"]:
-            raise HTTPException(status_code=400, detail="auth_method must be 'oauth' or 'api_token'")
+        if data.auth_method not in ["oauth", "api_token", "basic_auth"]:
+            raise HTTPException(status_code=400, detail="auth_method must be 'oauth', 'api_token', or 'basic_auth'")
 
         if data.auth_method == "oauth":
             if not all([data.client_id, data.client_secret, data.redirect_uri]):
@@ -175,6 +175,11 @@ async def create_oauth_app(
         elif data.auth_method == "api_token":
             if not data.api_token:
                 raise HTTPException(status_code=400, detail="api_token is required for API token method")
+        elif data.auth_method == "basic_auth":
+            if not data.api_token:
+                raise HTTPException(
+                    status_code=400, detail="password (api_token field) is required for basic_auth method"
+                )
 
         # Check if app with same provider and name exists for this tenant
         existing_result = await db.execute(
@@ -203,7 +208,7 @@ async def create_oauth_app(
 
         if data.auth_method == "oauth" and data.client_secret:
             encrypted_secret = encrypt_value(data.client_secret)
-        elif data.auth_method == "api_token" and data.api_token:
+        elif data.auth_method in ("api_token", "basic_auth") and data.api_token:
             encrypted_api_token = encrypt_value(data.api_token)
 
         # Create new OAuth app
@@ -260,8 +265,8 @@ async def update_oauth_app(
             raise HTTPException(status_code=404, detail="OAuth app not found")
 
         # Validate auth method if changing
-        if data.auth_method is not None and data.auth_method not in ["oauth", "api_token"]:
-            raise HTTPException(status_code=400, detail="auth_method must be 'oauth' or 'api_token'")
+        if data.auth_method is not None and data.auth_method not in ["oauth", "api_token", "basic_auth"]:
+            raise HTTPException(status_code=400, detail="auth_method must be 'oauth', 'api_token', or 'basic_auth'")
 
         # Update fields if provided
         if data.app_name is not None:

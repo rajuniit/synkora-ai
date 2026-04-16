@@ -7,8 +7,6 @@ Handles OAuth 2.0 authentication flow for Google Calendar API access.
 import logging
 from typing import Any
 
-import aiohttp
-
 from .base_oauth import BaseOAuthService
 from .http_client import get_aiohttp_session
 

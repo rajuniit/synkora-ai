@@ -4,7 +4,7 @@ Scheduler service for managing scheduled tasks
 
 import logging
 import uuid
-from datetime import UTC, datetime, timezone
+from datetime import UTC, datetime
 from typing import Any
 
 from croniter import croniter
@@ -250,7 +250,6 @@ class SchedulerService:
         Returns:
             List of ScheduledTask that are due
         """
-        from datetime import timezone
 
         now = datetime.now(UTC)
 
@@ -281,7 +280,7 @@ class SchedulerService:
         Returns:
             True if task is due, False otherwise
         """
-        from datetime import timedelta, timezone
+        from datetime import timedelta
 
         # Handle cron-based scheduling
         if task.schedule_type == "cron" and task.cron_expression:
@@ -316,7 +315,6 @@ class SchedulerService:
         Returns:
             True if task is due, False otherwise
         """
-        from datetime import timezone
 
         try:
             # If task has never run, it's due to run now

@@ -12,6 +12,8 @@ from typing import Any
 
 from src.services.storage.s3_storage import get_s3_storage
 
+from .git_helpers import async_makedirs, async_path_exists, async_read_file_bytes, async_write_file_bytes
+
 logger = logging.getLogger(__name__)
 
 
@@ -86,12 +88,13 @@ async def internal_s3_upload_file(
         if not is_valid:
             return {"error": error}
 
-        if not os.path.exists(file_path):
+        if not await async_path_exists(file_path, config):
             return {"error": f"File not found: {file_path}"}
 
-        # Read file content
-        with open(file_path, "rb") as f:
-            file_content = f.read()
+        # Read file content (routes through sandbox when remote)
+        file_content = await async_read_file_bytes(file_path, config)
+        if file_content is None:
+            return {"error": f"Failed to read file: {file_path}"}
 
         # Default s3_key to filename
         if not s3_key:
@@ -119,7 +122,7 @@ async def internal_s3_upload_file(
             "s3_uri": result["url"],
             "presigned_url": presigned_url,
             "bucket": result["bucket"],
-            "size": os.path.getsize(file_path),
+            "size": len(file_content),
         }
 
     except Exception as e:
@@ -159,11 +162,8 @@ async def internal_s3_upload_directory(
         if not is_valid:
             return {"error": error}
 
-        if not os.path.exists(directory_path):
+        if not await async_path_exists(directory_path, config):
             return {"error": f"Directory not found: {directory_path}"}
-
-        if not os.path.isdir(directory_path):
-            return {"error": f"Path is not a directory: {directory_path}"}
 
         # Initialize S3 service
         s3_service = get_s3_storage()
@@ -175,39 +175,45 @@ async def internal_s3_upload_directory(
         uploaded_files = []
         failed_files = []
 
-        # Walk through directory and upload all files
-        for root, _dirs, files in os.walk(directory_path):
-            for file in files:
-                file_path = os.path.join(root, file)
-                relative_path = os.path.relpath(file_path, directory_path)
-                s3_key = f"{base_prefix}/{relative_path}"
+        from src.services.compute.resolver import get_compute_session_from_config
 
-                try:
-                    # Read file content
-                    with open(file_path, "rb") as f:
-                        file_content = f.read()
+        _cs = await get_compute_session_from_config(config)
 
-                    # Upload file
-                    result = s3_service.upload_file(file_content=file_content, key=s3_key, metadata=metadata)
+        if _cs is not None and _cs.is_remote:
+            # Remote: enumerate files via find, read each via compute session
+            find_r = await _cs.exec_command(["find", directory_path, "-type", "f"])
+            all_files = [f for f in find_r.get("output", "").splitlines() if f.strip()] if find_r.get("success") else []
+        else:
+            if not os.path.isdir(directory_path):
+                return {"error": f"Path is not a directory: {directory_path}"}
+            all_files = []
+            for root, _dirs, files in os.walk(directory_path):
+                for file in files:
+                    all_files.append(os.path.join(root, file))
 
-                    # Generate presigned URL
-                    presigned_url = s3_service.generate_presigned_url(key=s3_key, expiration=86400 * 7)
+        for file_path in all_files:
+            relative_path = os.path.relpath(file_path, directory_path)
+            s3_key = f"{base_prefix}/{relative_path}"
+            try:
+                file_content = await async_read_file_bytes(file_path, config)
+                if file_content is None:
+                    raise ValueError(f"Could not read file: {file_path}")
 
-                    uploaded_files.append(
-                        {
-                            "filename": relative_path,
-                            "s3_key": s3_key,
-                            "s3_uri": result["url"],
-                            "presigned_url": presigned_url,
-                            "size": os.path.getsize(file_path),
-                        }
-                    )
-
-                    logger.info(f"Uploaded {relative_path} to S3")
-
-                except Exception as e:
-                    logger.error(f"Failed to upload {relative_path}: {e}")
-                    failed_files.append({"filename": relative_path, "error": str(e)})
+                result = s3_service.upload_file(file_content=file_content, key=s3_key, metadata=metadata)
+                presigned_url = s3_service.generate_presigned_url(key=s3_key, expiration=86400 * 7)
+                uploaded_files.append(
+                    {
+                        "filename": relative_path,
+                        "s3_key": s3_key,
+                        "s3_uri": result["url"],
+                        "presigned_url": presigned_url,
+                        "size": len(file_content),
+                    }
+                )
+                logger.info(f"Uploaded {relative_path} to S3")
+            except Exception as e:
+                logger.error(f"Failed to upload {relative_path}: {e}")
+                failed_files.append({"filename": relative_path, "error": str(e)})
 
         if not uploaded_files:
             return {"error": "No files were uploaded successfully"}
@@ -270,9 +276,8 @@ async def internal_s3_download_file(
         if output_path:
             parent_dir = os.path.dirname(output_path)
             if parent_dir:
-                os.makedirs(parent_dir, exist_ok=True)
-            with open(output_path, "wb") as f:
-                f.write(file_content)
+                await async_makedirs(parent_dir, config)
+            await async_write_file_bytes(output_path, file_content, config)
             logger.info(f"Downloaded S3 file to: {output_path}")
 
         return {

@@ -4,7 +4,7 @@ import logging
 from uuid import UUID
 
 from fastapi import APIRouter, Depends, HTTPException, Query
-from sqlalchemy import func, select
+from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from src.core.database import get_async_db
@@ -248,7 +248,6 @@ async def get_proxy_usage(
         proxy_config = await _get_proxy_config(db, config_id, tenant_id)
 
         # Get usage stats from Redis
-        from datetime import timedelta
 
         from src.config.redis import get_redis_async
 

@@ -4,11 +4,9 @@ Base Mock Provider
 Abstract base class for mock LLM providers.
 """
 
-import asyncio
 import random
-import time
 from abc import ABC, abstractmethod
-from typing import Any, AsyncGenerator
+from collections.abc import AsyncGenerator
 
 # Lorem ipsum words for generating mock responses
 LOREM_WORDS = [

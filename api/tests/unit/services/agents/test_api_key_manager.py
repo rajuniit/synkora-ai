@@ -1,6 +1,5 @@
 """Unit tests for APIKeyManager (agents/security.py)."""
 
-import os
 
 import pytest
 from cryptography.fernet import Fernet, InvalidToken

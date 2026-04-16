@@ -30,7 +30,8 @@ import {
   Globe,
   Cpu,
   Bell,
-  Bot
+  Bot,
+  Server
 } from 'lucide-react'
 import { apiClient } from '@/lib/api/client'
 import { getLLMConfigs } from '@/lib/api/agent-llm-configs'
@@ -335,6 +336,13 @@ export default function AgentViewPage() {
                     >
                       <Database className="w-4 h-4 text-blue-600" />
                       Database Connections
+                    </button>
+                    <button
+                      onClick={() => router.push(`/agents/${agentName}/compute`)}
+                      className="w-full flex items-center gap-2 px-3 py-2 text-gray-700 rounded-lg hover:bg-gray-50 transition-all text-sm"
+                    >
+                      <Server className="w-4 h-4 text-violet-600" />
+                      Compute
                     </button>
                     <button
                       onClick={() => router.push(`/agents/${agentName}/voice`)}

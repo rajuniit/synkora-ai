@@ -14,7 +14,7 @@ from typing import Any
 from fastapi import APIRouter, Depends, HTTPException, Request, status
 from fastapi.responses import StreamingResponse
 from pydantic import BaseModel, ConfigDict, Field
-from sqlalchemy import func, select
+from sqlalchemy import delete, func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import joinedload
 
@@ -690,10 +690,8 @@ async def set_widget_routes(
                     detail=f"Agent {route.agent_id} not found or belongs to a different tenant",
                 )
 
-        # Delete existing routes
-        existing_result = await db.execute(select(WidgetAgentRoute).filter(WidgetAgentRoute.widget_id == widget_uuid))
-        for old_route in existing_result.scalars().all():
-            await db.delete(old_route)
+        # Delete existing routes with a single statement (avoids flush/ordering issues)
+        await db.execute(delete(WidgetAgentRoute).where(WidgetAgentRoute.widget_id == widget_uuid))
 
         # Insert new routes
         for route in routes:

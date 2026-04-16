@@ -214,6 +214,15 @@ class Agent(BaseModel, StatusMixin, TenantMixin):
         "Agent", remote_side="Agent.id", backref="direct_sub_agents", foreign_keys=[parent_agent_id]
     )
 
+    # Compute assignment (1:1 optional)
+    compute = relationship(
+        "AgentCompute",
+        back_populates="agent",
+        uselist=False,
+        cascade="all, delete-orphan",
+        lazy="select",
+    )
+
     # Followup relationships
     followup_items = relationship("FollowupItem", back_populates="agent", cascade="all, delete-orphan", lazy="select")
 

@@ -555,14 +555,13 @@ class FunctionCallingHandler:
                                 "id": f"inline_{func_name}_{hash(str(chart_config))}",
                                 "title": chart_config.get("title", "Chart"),
                                 "description": chart_config.get("description", ""),
-                                "chart_type": chart_config.get(
-                                    "chart_type", "bar"
-                                ),  # ✅ Get "chart_type" from chart_config
-                                "library": chart_config.get("library", "chartjs"),  # Get library from chart_config
-                                "config": chart_config.get("config", {}),  # Get config from chart_config
-                                "data": chart_config.get("data", {}),  # Chart.js data format
+                                "chart_type": chart_config.get("chart_type", "bar"),
+                                "library": chart_config.get("library", "chartjs"),
+                                "config": chart_config.get("config", {}),
+                                "data": chart_config.get("data", {}),
+                                "table_data": chart_config.get("table_data"),
                                 "created_at": datetime.datetime.now().isoformat(),
-                                "inline": True,  # Indicates this is an inline chart, not stored in DB
+                                "inline": True,
                             },
                         }
                         chart_data = None  # Already handled
@@ -577,6 +576,48 @@ class FunctionCallingHandler:
                             "chart_type": chart_data.get("chart_type"),
                             "chart_config": chart_data.get("chart_config"),
                             "chart_data": chart_data.get("chart_data"),
+                        }
+
+                # Emit charts returned by analyze_data_statistics
+                if (
+                    func_name == "analyze_data_statistics"
+                    and isinstance(result, dict)
+                    and result.get("success")
+                    and "charts" in result
+                ):
+                    for stat_chart in result.get("charts", []):
+                        yield {
+                            "type": "chart",
+                            "chart": {
+                                "id": f"stat_{uuid.uuid4().hex[:8]}",
+                                "title": stat_chart.get("title", "Statistics"),
+                                "description": stat_chart.get("description", ""),
+                                "chart_type": stat_chart.get("chart_type", "bar"),
+                                "library": stat_chart.get("library", "chartjs"),
+                                "config": stat_chart.get("config", {}),
+                                "data": stat_chart.get("data", {}),
+                                "table_data": stat_chart.get("table_data"),
+                                "created_at": datetime.datetime.now().isoformat(),
+                                "inline": True,
+                            },
+                        }
+
+                # Diagram tool detection
+                if func_name in ["internal_generate_diagram", "internal_generate_quick_diagram"]:
+                    if isinstance(result, dict) and result.get("success") and "diagram" in result:
+                        diagram_info = result["diagram"]
+                        yield {
+                            "type": "diagram",
+                            "diagram": {
+                                "id": f"diag_{uuid.uuid4().hex[:8]}",
+                                "title": diagram_info.get("title", "Diagram"),
+                                "diagram_type": diagram_info.get("diagram_type", "architecture"),
+                                "style": diagram_info.get("style"),
+                                "svg_url": diagram_info.get("svg_url"),
+                                "svg_content": diagram_info.get("svg_content"),
+                                "png_url": diagram_info.get("png_url"),
+                                "created_at": datetime.datetime.now().isoformat(),
+                            },
                         }
 
             # Update conversation history with proper format
@@ -601,6 +642,25 @@ class FunctionCallingHandler:
             # Add tool results — matched by index (not name) so each call gets its own result
             for i, exec_result in enumerate(execution_results):
                 result = exec_result.result
+
+                # Strip large SVG/binary content from diagram results before sending to LLM.
+                # The SVG is already emitted as a separate SSE event for the frontend; the LLM
+                # only needs to know the diagram was generated (not the raw SVG markup).
+                if exec_result.name in ("internal_generate_diagram", "internal_generate_quick_diagram"):
+                    if isinstance(result, dict) and result.get("success") and "diagram" in result:
+                        diag = result["diagram"]
+                        result = {
+                            "success": True,
+                            "message": "Diagram generated and rendered successfully. It has been displayed to the user inline.",
+                            "diagram": {
+                                "title": diag.get("title"),
+                                "diagram_type": diag.get("diagram_type"),
+                                "style": diag.get("style"),
+                                "svg_url": diag.get("svg_url"),
+                                "png_url": diag.get("png_url"),
+                            },
+                        }
+
                 content = json.dumps(convert_to_json_serializable(result)) if not isinstance(result, str) else result
                 conversation_history.append({"role": "tool", "tool_call_id": call_ids[i], "content": content})
 

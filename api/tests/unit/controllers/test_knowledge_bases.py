@@ -11,7 +11,7 @@ from fastapi.testclient import TestClient
 from src.controllers.knowledge_bases import router
 from src.core.database import get_async_db
 from src.middleware.auth_middleware import get_current_tenant_id
-from src.models.knowledge_base import ChunkingStrategy, EmbeddingProvider, KnowledgeBaseStatus, VectorDBProvider
+from src.models.knowledge_base import KnowledgeBaseStatus
 
 
 def setup_db_execute_mock(mock_db, return_value, return_list=False):
@@ -380,6 +380,7 @@ class TestListDocuments:
         mock_doc.created_at = datetime.now(UTC)
         mock_doc.updated_at = datetime.now(UTC)
         mock_doc.doc_metadata = {}
+        mock_doc.status = MagicMock(value="completed")
 
         # First call returns KB, second returns count, third returns documents
         call_count = [0]

@@ -373,8 +373,6 @@ async def internal_recall_summarize_meeting(
         # Optionally save to knowledge base
         if save_to_knowledge_base:
             try:
-                from src.services.knowledge_base import RAGService
-
                 # Get db and knowledge base
                 db = runtime_context.db_session if hasattr(runtime_context, "db_session") else None
                 if db and knowledge_base_id:

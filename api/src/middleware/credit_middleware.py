@@ -6,7 +6,7 @@ It intercepts requests to check credit availability and deducts credits after ac
 """
 
 import logging
-from typing import Any, Dict, Optional
+from typing import Any
 from uuid import UUID
 
 from fastapi import HTTPException, Request, status

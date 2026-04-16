@@ -119,6 +119,18 @@ ROUTER_REGISTRY: list[RouteConfig] = [
         tags=["autonomous-agents"],
     ),
     RouteConfig(
+        module="src.controllers.agents.compute",
+        attribute="router",
+        prefix="/api/v1/agents",
+        tags=["agent-compute"],
+    ),
+    RouteConfig(
+        module="src.controllers.tenant_compute_config",
+        attribute="router",
+        prefix="/api/v1",
+        tags=["compute"],
+    ),
+    RouteConfig(
         module="src.controllers.agents.live_lab",
         attribute="router",
         prefix="/api/v1",
@@ -443,6 +455,13 @@ ROUTER_REGISTRY: list[RouteConfig] = [
         attribute="router",
         prefix="/api/v1",
         tags=["escalations"],
+    ),
+    # ===== KB Webhooks (real-time data source ingestion) =====
+    RouteConfig(
+        module="src.controllers.kb_webhooks",
+        attribute="public_router",
+        prefix="",
+        tags=["kb-webhooks"],
     ),
     # ===== Load Testing =====
     RouteConfig(

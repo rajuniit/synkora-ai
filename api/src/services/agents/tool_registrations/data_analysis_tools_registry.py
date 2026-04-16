@@ -155,7 +155,19 @@ def register_data_analysis_tools(registry: Any):
     # which takes DB query results — this one takes raw CSV/JSON strings from uploaded files)
     registry.register_tool(
         name="generate_chart_from_data",
-        description="Generate Chart.js visualization from CSV or JSON string data. Use this for uploaded files or raw data strings. For database query results, use internal_generate_chart instead. Supports bar, line, pie, doughnut, and scatter charts.",
+        description=(
+            "Generate a visualization from CSV or JSON string data. Use this for uploaded files or raw data strings. "
+            "For database query results, use internal_generate_chart instead.\n\n"
+            "Chart.js types (basic): bar, line, pie, doughnut, scatter\n"
+            "Recharts types (advanced): area, stacked_bar, radar, treemap, funnel\n"
+            "Plotly types (statistical): heatmap, box, violin, candlestick, waterfall\n\n"
+            "Notes:\n"
+            "- heatmap with no x/y columns builds a correlation matrix of all numeric columns\n"
+            "- box/violin visualize distributions; no x_column needed (uses all numeric columns)\n"
+            "- candlestick requires columns named open, high, low, close\n"
+            "- stacked_bar uses x_column for categories; stacks all other numeric columns\n"
+            "- funnel auto-sorts by value descending"
+        ),
         parameters={
             "type": "object",
             "properties": {
@@ -165,17 +177,33 @@ def register_data_analysis_tools(registry: Any):
                 },
                 "chart_type": {
                     "type": "string",
-                    "enum": ["bar", "line", "pie", "doughnut", "scatter"],
+                    "enum": [
+                        "bar",
+                        "line",
+                        "pie",
+                        "doughnut",
+                        "scatter",
+                        "area",
+                        "stacked_bar",
+                        "radar",
+                        "treemap",
+                        "funnel",
+                        "heatmap",
+                        "box",
+                        "violin",
+                        "candlestick",
+                        "waterfall",
+                    ],
                     "description": "Type of chart to generate",
                 },
                 "title": {"type": "string", "description": "Chart title"},
                 "x_column": {
                     "type": "string",
-                    "description": "Column name for X-axis (required for bar, line, scatter charts)",
+                    "description": "Column name for X-axis / category / label column",
                 },
                 "y_column": {
                     "type": "string",
-                    "description": "Column name for Y-axis (required for bar, line, scatter charts)",
+                    "description": "Column name for Y-axis / value column",
                 },
                 "description": {"type": "string", "description": "Optional chart description"},
             },

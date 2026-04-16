@@ -7,8 +7,6 @@ Tests conversation CRUD operations and caching.
 import uuid
 from unittest.mock import AsyncMock, MagicMock, patch
 
-import pytest
-from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from src.models.conversation import ConversationStatus
@@ -412,18 +410,17 @@ class TestGetConversationHistoryCached:
         with patch(
             "src.services.conversation_service.get_conversation_cache",
             return_value=mock_cache,
+        ), patch.object(
+            ConversationService,
+            "get_conversation_messages",
+            new_callable=AsyncMock,
+            return_value=mock_messages,
         ):
-            with patch.object(
-                ConversationService,
-                "get_conversation_messages",
-                new_callable=AsyncMock,
-                return_value=mock_messages,
-            ):
-                result = await ConversationService.get_conversation_history_cached(mock_db, conversation_id)
+            result = await ConversationService.get_conversation_history_cached(mock_db, conversation_id)
 
-                assert len(result) == 2
-                assert result[0]["role"] == "user"
-                mock_cache.set_conversation_history.assert_called_once()
+            assert len(result) == 2
+            assert result[0]["role"] == "user"
+            mock_cache.set_conversation_history.assert_called_once()
 
 
 class TestInvalidateConversationCache:

@@ -1,4 +1,3 @@
-import os
 from unittest.mock import AsyncMock, MagicMock, mock_open, patch
 
 import pytest

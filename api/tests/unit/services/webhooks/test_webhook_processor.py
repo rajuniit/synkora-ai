@@ -5,12 +5,10 @@ Tests webhook processing, event filtering, and agent execution triggering.
 """
 
 import uuid
-from datetime import datetime
 from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
 from fastapi import HTTPException
-from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from src.services.webhooks.webhook_processor import WebhookProcessor

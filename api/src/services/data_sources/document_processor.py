@@ -8,7 +8,7 @@ from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from src.models.data_source import DataSource, DataSourceDocument
-from src.models.document import Document
+from src.models.document import Document, DocumentStatus
 from src.models.knowledge_base import KnowledgeBase
 from src.services.document.image_extractor import ImageExtractor
 from src.services.knowledge_base.embedding_service import EmbeddingService
@@ -238,31 +238,56 @@ class DocumentProcessor:
                         or f"{data_source.name} - {doc['id']}"
                     )
 
-                    # Create ONE document record for the entire file
-                    kb_doc = Document(
-                        tenant_id=data_source.tenant_id,
-                        knowledge_base_id=kb.id,
-                        data_source_id=data_source.id,
-                        name=doc_name,
-                        external_id=doc["id"],
-                        external_url=doc_metadata.get("url"),
-                        source_type=data_source.type.value,
-                        content=doc["text"],  # Store full content
-                        content_type="text",
-                        doc_metadata=doc_metadata,
-                        word_count=len(doc["text"].split()),
-                        char_count=len(doc["text"]),
-                        has_images=doc_metadata.get("has_images", False),
-                        image_count=doc_metadata.get("image_count", 0),
-                        images=doc_metadata.get("images"),
-                        s3_url=doc_metadata.get("s3_url"),
-                        file_size=doc_metadata.get("file_size"),
-                        mime_type=doc_metadata.get("mime_type"),
-                        original_filename=doc_metadata.get("original_filename"),
-                        upload_source=doc_metadata.get("upload_source", "data_source"),
+                    # Upsert document: reuse stub created during upload if present
+                    existing_kb_doc = None
+                    existing_result = await self.db.execute(
+                        select(Document).filter(
+                            Document.knowledge_base_id == kb.id,
+                            Document.external_id == doc["id"],
+                        )
                     )
-                    self.db.add(kb_doc)
-                    await self.db.flush()  # Get the document ID
+                    existing_kb_doc = existing_result.scalar_one_or_none()
+
+                    if existing_kb_doc:
+                        kb_doc = existing_kb_doc
+                        kb_doc.data_source_id = data_source.id
+                        kb_doc.name = doc_name
+                        kb_doc.content = doc["text"]
+                        kb_doc.word_count = len(doc["text"].split())
+                        kb_doc.char_count = len(doc["text"])
+                        kb_doc.has_images = doc_metadata.get("has_images", False)
+                        kb_doc.image_count = doc_metadata.get("image_count", 0)
+                        kb_doc.images = doc_metadata.get("images")
+                        kb_doc.s3_url = doc_metadata.get("s3_url") or kb_doc.s3_url
+                        kb_doc.file_size = doc_metadata.get("file_size") or kb_doc.file_size
+                        kb_doc.mime_type = doc_metadata.get("mime_type") or kb_doc.mime_type
+                        kb_doc.doc_metadata = doc_metadata
+                    else:
+                        # Create a new document record
+                        kb_doc = Document(
+                            tenant_id=data_source.tenant_id,
+                            knowledge_base_id=kb.id,
+                            data_source_id=data_source.id,
+                            name=doc_name,
+                            external_id=doc["id"],
+                            external_url=doc_metadata.get("url"),
+                            source_type=data_source.type.value,
+                            content=doc["text"],
+                            content_type="text",
+                            doc_metadata=doc_metadata,
+                            word_count=len(doc["text"].split()),
+                            char_count=len(doc["text"]),
+                            has_images=doc_metadata.get("has_images", False),
+                            image_count=doc_metadata.get("image_count", 0),
+                            images=doc_metadata.get("images"),
+                            s3_url=doc_metadata.get("s3_url"),
+                            file_size=doc_metadata.get("file_size"),
+                            mime_type=doc_metadata.get("mime_type"),
+                            original_filename=doc_metadata.get("original_filename"),
+                            upload_source=doc_metadata.get("upload_source", "data_source"),
+                        )
+                        self.db.add(kb_doc)
+                    await self.db.flush()  # Ensure kb_doc.id is available
 
                     # Import DocumentSegment model
                     from src.models.document_segment import DocumentSegment
@@ -344,6 +369,9 @@ class DocumentProcessor:
                     # Mark as embedded
                     ds_doc.is_embedded = True
                     ds_doc.embedding_id = vector_ids[0] if vector_ids else None
+
+                    # Mark the KB document as fully processed
+                    kb_doc.status = DocumentStatus.COMPLETED
 
                     # Commit after each document to avoid database locks
                     await self.db.commit()

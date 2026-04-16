@@ -297,7 +297,7 @@ export function useChatMessages({ agentName }: UseChatMessagesProps): UseChatMes
                 return newMessages
               })
             } else if (data.type === 'chart') {
-              // Handle chart data - transform to match ChartData interface
+              // Handle chart data
               setMessages((prev: Message[]) => {
                 const newMessages = [...prev]
                 const lastIndex = newMessages.length - 1
@@ -306,14 +306,19 @@ export function useChatMessages({ agentName }: UseChatMessagesProps): UseChatMes
                   const currentMetadata = newMessages[lastIndex].metadata || {}
                   const currentCharts = currentMetadata.charts || []
 
-                  // Transform chart data to match ChartData interface from types.ts
-                  // Backend sends: {type: "chart", chart: {chart_type, library, title, data, ...}}
-                  const chart = data.chart || data // Support both formats
+                  // Backend sends {type: "chart", chart: {chart_type, library, title, data, table_data, ...}}
+                  // Preserve the full chart object so ChartRenderer gets library, chart_type, table_data, etc.
+                  const chart = ((data.chart ?? {}) as Record<string, unknown>)
+                  const raw = data as Record<string, unknown>
                   const chartData = {
-                    type: chart.chart_type || data.chart_type || 'bar',
-                    title: chart.title || 'Chart',
-                    data: chart.data || data.chart_data || {},
-                    config: chart.config || data.chart_config || {}
+                    chart_type: String(chart.chart_type ?? raw.chart_type ?? 'bar'),
+                    type: String(chart.chart_type ?? raw.chart_type ?? 'bar'), // legacy compat
+                    library: String(chart.library ?? 'chartjs'),
+                    title: String(chart.title ?? 'Chart'),
+                    description: String(chart.description ?? ''),
+                    data: (chart.data ?? raw.chart_data ?? {}) as any,
+                    config: (chart.config ?? raw.chart_config ?? {}) as any,
+                    table_data: chart.table_data as Array<Record<string, unknown>> | undefined,
                   }
 
                   newMessages[lastIndex] = {
@@ -321,6 +326,27 @@ export function useChatMessages({ agentName }: UseChatMessagesProps): UseChatMes
                     metadata: {
                       ...currentMetadata,
                       charts: [...currentCharts, chartData]
+                    }
+                  }
+                }
+
+                return newMessages
+              })
+            } else if (data.type === 'diagram' && data.diagram) {
+              // Handle diagram data from backend SVG rendering engine
+              setMessages((prev: Message[]) => {
+                const newMessages = [...prev]
+                const lastIndex = newMessages.length - 1
+
+                if (lastIndex >= 0 && newMessages[lastIndex].role === 'assistant') {
+                  const currentMetadata = newMessages[lastIndex].metadata || {}
+                  const currentDiagrams = currentMetadata.diagrams || []
+
+                  newMessages[lastIndex] = {
+                    ...newMessages[lastIndex],
+                    metadata: {
+                      ...currentMetadata,
+                      diagrams: [...currentDiagrams, data.diagram]
                     }
                   }
                 }

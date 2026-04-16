@@ -12,7 +12,6 @@ from sqlalchemy.orm import selectinload
 from src.core.database import get_async_db
 from src.middleware.auth_middleware import get_current_tenant_id
 from src.models.load_test import LoadTest, LoadTestStatus, TargetType
-from src.models.test_run import TestRun, TestRunStatus
 from src.models.test_scenario import TestScenario
 from src.schemas.load_testing import (
     CreateLoadTestRequest,

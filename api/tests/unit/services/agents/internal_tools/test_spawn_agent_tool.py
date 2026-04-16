@@ -6,7 +6,6 @@ or long-running tasks using Celery background execution.
 """
 
 from unittest.mock import AsyncMock, MagicMock, patch
-from uuid import uuid4
 
 import pytest
 

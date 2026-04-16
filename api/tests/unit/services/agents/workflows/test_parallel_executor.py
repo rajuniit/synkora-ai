@@ -1,7 +1,7 @@
 """Unit tests for ParallelExecutor."""
 
 import asyncio
-from unittest.mock import AsyncMock, Mock, patch
+from unittest.mock import AsyncMock, Mock
 from uuid import uuid4
 
 import pytest

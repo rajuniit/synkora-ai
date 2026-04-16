@@ -24,7 +24,6 @@ from src.core.database import get_async_db
 from src.middleware.auth_middleware import get_current_tenant_id
 from src.models.agent import Agent
 from src.services.agents.agent_manager import AgentManager
-from src.services.agents.config import AgentConfig
 from src.services.agents.implementations import ClaudeCodeAgent, CodeAgent, LLMAgent, ResearchAgent
 from src.services.cache import get_agent_cache
 from src.services.storage.s3_storage import S3StorageService

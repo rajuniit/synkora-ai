@@ -4,7 +4,7 @@ Tests for browser_tools.py - Browser Automation
 Tests the Playwright browser automation tools including SSRF protection.
 """
 
-from unittest.mock import AsyncMock, MagicMock, patch
+from unittest.mock import patch
 
 import pytest
 

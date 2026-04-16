@@ -1,11 +1,9 @@
 import subprocess
-from unittest.mock import MagicMock, patch
+from unittest.mock import patch
 
 import pytest
 
 from src.services.agents.internal_tools.command_tools import (
-    BLOCKED_PATHS,
-    SAFE_COMMANDS,
     _is_command_safe,
     _sanitize_command_for_logging,
     _validate_dangerous_flags,

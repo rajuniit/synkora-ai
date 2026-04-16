@@ -11,7 +11,7 @@ import uuid
 from datetime import UTC, datetime
 from typing import Any
 
-from sqlalchemy import func, select
+from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from src.models.wiki_article import WikiArticle, WikiCompilationJob
@@ -27,7 +27,6 @@ def _recover_partial_json(text: str) -> list[dict]:
     Attempt to recover complete article objects from a truncated JSON array.
     Extracts any fully-closed objects before the truncation point.
     """
-    import re
 
     articles = []
     # Find all complete JSON objects using brace depth tracking
@@ -235,6 +234,15 @@ class KnowledgeCompiler:
                 "total_articles": articles_created + articles_updated,
             }
             await self.db.commit()
+
+            # Queue embedding of wiki articles into the KB vector store so agents can RAG them
+            try:
+                from src.tasks.knowledge_compiler_task import embed_wiki_documents
+
+                embed_wiki_documents.delay(knowledge_base_id, tenant_id)
+                logger.info(f"Queued wiki embedding for KB {knowledge_base_id}")
+            except Exception as e:
+                logger.warning(f"Failed to queue wiki embedding: {e}")
 
             return {
                 "status": "completed",

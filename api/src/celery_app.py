@@ -4,7 +4,6 @@ Celery application configuration for scheduled tasks
 
 import json
 import logging
-import traceback
 from datetime import UTC, datetime
 
 import sentry_sdk
@@ -52,6 +51,8 @@ celery_app = Celery(
         "src.tasks.load_testing_tasks",  # Load test execution
         "src.tasks.followup_reminder_task",  # Follow-up reminders
         "src.tasks.knowledge_compiler_task",  # Knowledge wiki compilation
+        "src.tasks.kb_tasks",  # Knowledge base document processing
+        "src.tasks.company_brain_tasks",  # Company brain ingestion and sync
     ],
 )
 
@@ -98,6 +99,8 @@ celery_app.conf.update(
         "tasks.execute_scheduled_task": {"queue": "agents"},
         # Knowledge compilation to agents queue
         "tasks.compile_knowledge_wikis": {"queue": "agents"},
+        "tasks.compile_single_knowledge_wiki": {"queue": "agents"},
+        "tasks.embed_wiki_documents": {"queue": "agents"},
         # Billing tasks to billing queue
         "billing.flush_usage_analytics": {"queue": "billing"},
         "billing.deduct_credits_async": {"queue": "billing"},

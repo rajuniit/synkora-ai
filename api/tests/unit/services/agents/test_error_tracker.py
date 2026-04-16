@@ -1,6 +1,5 @@
 """Tests for FunctionCallingErrorTracker."""
 
-import pytest
 
 from src.services.agents.error_tracker import FunctionCallingErrorTracker
 

@@ -1,13 +1,10 @@
-from typing import Any
-from unittest.mock import AsyncMock, MagicMock, call, patch
+from unittest.mock import AsyncMock, MagicMock, patch
 from uuid import uuid4
 
 import pytest
-from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from src.models.data_source import DataSource, DataSourceDocument, DataSourceType
-from src.models.document import Document
 from src.models.knowledge_base import EmbeddingProvider, KnowledgeBase, VectorDBProvider
 from src.services.data_sources.document_processor import DocumentProcessor
 
@@ -160,14 +157,20 @@ class TestDocumentProcessor:
                 # Mock TextProcessor (already patched in fixture, access via processor instance)
                 processor.text_processor.chunk_text.return_value = [{"text": "chunk content", "metadata": {}}]
 
-                # Mock existing DS doc check (None = new) and count query
+                # Mock execute calls in order:
+                # 1. DataSourceDocument check → scalar_one_or_none → None (new doc)
+                # 2. Document/KB doc check → scalar_one_or_none → None (new doc)
+                # 3. Post-loop count query → scalar_one → 1 (for KB stats update)
                 mock_result_none = MagicMock()
                 mock_result_none.scalar_one_or_none.return_value = None
+
+                mock_result_none2 = MagicMock()
+                mock_result_none2.scalar_one_or_none.return_value = None
 
                 mock_result_count = MagicMock()
                 mock_result_count.scalar_one.return_value = 1
 
-                mock_db_session.execute = AsyncMock(side_effect=[mock_result_none, mock_result_count])
+                mock_db_session.execute = AsyncMock(side_effect=[mock_result_none, mock_result_none2, mock_result_count])
 
                 # Mock Image extraction
                 processor._extract_and_store_images = AsyncMock()

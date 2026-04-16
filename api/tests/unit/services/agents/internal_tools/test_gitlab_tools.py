@@ -10,14 +10,15 @@ Tests the GitLab tools for repository and project management including:
 
 from unittest.mock import AsyncMock, MagicMock, patch
 
-import httpx
 import pytest
 
+from src.services.agents.internal_tools.git_helpers import (
+    _run_git_command,
+    async_get_repo_size,
+)
 from src.services.agents.internal_tools.gitlab_tools import (
-    _get_repo_size,
     _get_workspace_path,
     _make_gitlab_request,
-    _run_git_command,
     internal_gitlab_approve_mr,
     internal_gitlab_clone_repo,
     internal_gitlab_close_mr,
@@ -922,7 +923,7 @@ class TestGitHelpers:
             assert result["success"] is False
             assert "timed out" in result["error"].lower()
 
-    def test_get_repo_size(self):
+    async def test_get_repo_size(self):
         import os
         import tempfile
 
@@ -932,7 +933,7 @@ class TestGitHelpers:
             with open(test_file, "w") as f:
                 f.write("a" * 1024)  # 1KB file
 
-            size = _get_repo_size(tmpdir)
+            size = await async_get_repo_size(tmpdir)
 
             assert size > 0
             assert size < 1  # Should be less than 1MB

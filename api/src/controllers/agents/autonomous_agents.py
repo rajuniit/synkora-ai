@@ -409,7 +409,7 @@ async def respond_to_approval(
     db: AsyncSession = Depends(get_async_db),
 ):
     """Respond to a pending approval request from the dashboard."""
-    from src.models.agent_approval import AgentApprovalRequest, ApprovalStatus
+    from src.models.agent_approval import AgentApprovalRequest
     from src.services.human_approval_service import HumanApprovalService
 
     agent = await _get_agent(agent_name, tenant_id, db)

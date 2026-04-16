@@ -145,7 +145,6 @@ async def stream_document(
         # SECURITY: Return file with controlled CORS headers
         # Note: Access-Control-Allow-Origin should be restricted to specific allowed origins
         # rather than "*" to prevent cross-site data exfiltration
-        import os
 
         return Response(
             content=file_data,

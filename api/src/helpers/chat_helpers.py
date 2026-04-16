@@ -112,6 +112,7 @@ def estimate_messages_tokens(messages: list[dict[str, Any]], model: str = "gpt-4
 def build_message_metadata(
     sources: list[dict[str, Any]] | None = None,
     charts: list[dict[str, Any]] | None = None,
+    diagrams: list[dict[str, Any]] | None = None,
     workflow_type: str | None = None,
     execution_log: list[dict[str, Any]] | None = None,
     workflow_state: dict[str, Any] | None = None,
@@ -140,6 +141,9 @@ def build_message_metadata(
 
     if charts:
         metadata["charts"] = charts
+
+    if diagrams:
+        metadata["diagrams"] = diagrams
 
     if workflow_type:
         metadata["workflow_type"] = workflow_type

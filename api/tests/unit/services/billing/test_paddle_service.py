@@ -5,11 +5,9 @@ Tests customer management, subscription handling, webhooks, and one-time charges
 """
 
 import uuid
-from datetime import datetime
 from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
-from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from src.models.tenant_subscription import SubscriptionStatus

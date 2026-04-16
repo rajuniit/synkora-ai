@@ -3,9 +3,8 @@
 Provides /healthz and /readyz endpoints for Kubernetes probes.
 """
 
-import asyncio
 import logging
-from typing import TYPE_CHECKING, Any
+from typing import TYPE_CHECKING
 
 from aiohttp import web
 

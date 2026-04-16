@@ -6,11 +6,10 @@ Generates mock responses in Anthropic API format.
 
 import asyncio
 import json
-import time
 import uuid
-from typing import Any, AsyncGenerator
+from collections.abc import AsyncGenerator
 
-from .base import BaseMockProvider, MockError
+from .base import BaseMockProvider
 
 
 class AnthropicMockProvider(BaseMockProvider):

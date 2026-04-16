@@ -13,13 +13,13 @@ Supports both gitlab.com and self-hosted GitLab instances.
 
 import logging
 import os
-import shutil
-import subprocess
 import uuid
 from typing import Any
 from urllib.parse import quote
 
 import httpx
+
+from .git_helpers import async_get_repo_size, async_makedirs, async_rmtree, async_run_git_command
 
 logger = logging.getLogger(__name__)
 
@@ -1025,45 +1025,6 @@ async def internal_gitlab_get_file(
         return {"success": False, "error": str(e)}
 
 
-def _run_git_command(command: list[str], working_directory: str | None = None, timeout: int = 300) -> dict[str, Any]:
-    """Run a git command and return the result."""
-    try:
-        env = os.environ.copy()
-        env["GIT_SSH_COMMAND"] = "ssh -o StrictHostKeyChecking=yes -o BatchMode=yes"
-
-        result = subprocess.run(
-            command, cwd=working_directory, capture_output=True, text=True, timeout=timeout, check=False, env=env
-        )
-
-        success = result.returncode == 0
-        return {
-            "success": success,
-            "output": result.stdout.strip(),
-            "error": result.stderr.strip() if not success else "",
-            "return_code": result.returncode,
-        }
-    except subprocess.TimeoutExpired:
-        return {
-            "success": False,
-            "output": "",
-            "error": f"Command timed out after {timeout} seconds",
-            "return_code": -1,
-        }
-    except Exception as e:
-        return {"success": False, "output": "", "error": str(e), "return_code": -1}
-
-
-def _get_repo_size(repo_path: str) -> float:
-    """Get repository size in MB."""
-    total_size = 0
-    for dirpath, _dirnames, filenames in os.walk(repo_path):
-        for filename in filenames:
-            filepath = os.path.join(dirpath, filename)
-            if os.path.exists(filepath):
-                total_size += os.path.getsize(filepath)
-    return total_size / (1024 * 1024)
-
-
 async def internal_gitlab_clone_repo(
     repo_url: str,
     use_ssh: bool = False,
@@ -1120,26 +1081,28 @@ async def internal_gitlab_clone_repo(
 
         # Create repos directory within workspace
         repos_dir = os.path.join(workspace_path, "repos")
-        os.makedirs(repos_dir, exist_ok=True)
+        await async_makedirs(repos_dir, config)
 
         # Generate unique directory name for the repo
         repo_dir = os.path.join(repos_dir, f"gitlab_{uuid.uuid4().hex[:12]}")
         logger.info(f"Cloning GitLab repo '{repo_url}' into {repo_dir}")
 
         # Clone the repository
-        result = _run_git_command(
+        result = await async_run_git_command(
             ["git", "clone", repo_url, repo_dir],
+            working_directory=None,
+            config=config,
             timeout=MAX_CLONE_TIMEOUT,
         )
 
         if not result["success"]:
-            shutil.rmtree(repo_dir, ignore_errors=True)
+            await async_rmtree(repo_dir, config)
             return {"success": False, "error": f"Failed to clone repository: {result['error']}", "repo_path": None}
 
         # Check repository size
-        repo_size = _get_repo_size(repo_dir)
+        repo_size = await async_get_repo_size(repo_dir, config)
         if repo_size > MAX_REPO_SIZE_MB:
-            shutil.rmtree(repo_dir, ignore_errors=True)
+            await async_rmtree(repo_dir, config)
             return {
                 "success": False,
                 "error": f"Repository size ({repo_size:.1f}MB) exceeds maximum ({MAX_REPO_SIZE_MB}MB)",

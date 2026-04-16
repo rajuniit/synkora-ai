@@ -1,6 +1,6 @@
 """Tests for SequentialExecutor."""
 
-from unittest.mock import AsyncMock, Mock, patch
+from unittest.mock import AsyncMock, Mock
 from uuid import uuid4
 
 import pytest

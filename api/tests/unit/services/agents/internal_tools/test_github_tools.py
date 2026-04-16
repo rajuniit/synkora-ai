@@ -1,8 +1,5 @@
-import os
 import subprocess
-import tempfile
-from pathlib import Path
-from unittest.mock import MagicMock, patch
+from unittest.mock import patch
 
 import pytest
 
@@ -111,8 +108,8 @@ class TestInternalGitHubTools:
                 return_value=self.MOCK_WORKSPACE,
             ),
             patch("os.makedirs"),
-            patch("src.services.agents.internal_tools.git_repo_tools._run_git_command") as mock_run,
-            patch("src.services.agents.internal_tools.git_repo_tools._get_repo_size", return_value=10.0),
+            patch("src.services.agents.internal_tools.git_repo_tools.async_run_git_command") as mock_run,
+            patch("src.services.agents.internal_tools.git_repo_tools.async_get_repo_size", return_value=10.0),
             patch("src.services.agents.internal_tools.git_repo_tools.uuid.uuid4") as mock_uuid,
             patch(
                 "src.services.agents.internal_tools.github_auth_helper.prepare_authenticated_git_url",
@@ -134,7 +131,7 @@ class TestInternalGitHubTools:
             # Too large
             mock_run.return_value = {"success": True}
             with patch(
-                "src.services.agents.internal_tools.git_repo_tools._get_repo_size", return_value=MAX_REPO_SIZE_MB + 1
+                "src.services.agents.internal_tools.git_repo_tools.async_get_repo_size", return_value=MAX_REPO_SIZE_MB + 1
             ):
                 with patch("shutil.rmtree"):
                     result = await internal_git_clone_repo("https://github.com/user/repo.git")
@@ -148,9 +145,9 @@ class TestInternalGitHubTools:
                 "src.services.agents.internal_tools.git_branch_tools._get_workspace_path",
                 return_value=self.MOCK_WORKSPACE,
             ),
-            patch("src.services.agents.internal_tools.git_branch_tools._validate_repo_path", return_value=(True, None)),
+            patch("src.services.agents.internal_tools.git_branch_tools.async_validate_repo_path", return_value=(True, None)),
             patch("os.path.exists", return_value=True),
-            patch("src.services.agents.internal_tools.git_branch_tools._run_git_command") as mock_run,
+            patch("src.services.agents.internal_tools.git_branch_tools.async_run_git_command") as mock_run,
         ):
             mock_run.return_value = {"success": True}
 
@@ -165,9 +162,9 @@ class TestInternalGitHubTools:
                 "src.services.agents.internal_tools.git_commit_tools._get_workspace_path",
                 return_value=self.MOCK_WORKSPACE,
             ),
-            patch("src.services.agents.internal_tools.git_commit_tools._validate_repo_path", return_value=(True, None)),
+            patch("src.services.agents.internal_tools.git_commit_tools.async_validate_repo_path", return_value=(True, None)),
             patch("os.path.exists", return_value=True),
-            patch("src.services.agents.internal_tools.git_commit_tools._run_git_command") as mock_run,
+            patch("src.services.agents.internal_tools.git_commit_tools.async_run_git_command") as mock_run,
         ):
             mock_run.return_value = {"success": True, "output": "M  modified.txt\nA  added.txt\n?? untracked.txt"}
 
@@ -185,9 +182,9 @@ class TestInternalGitHubTools:
                 "src.services.agents.internal_tools.git_branch_tools._get_workspace_path",
                 return_value=self.MOCK_WORKSPACE,
             ),
-            patch("src.services.agents.internal_tools.git_branch_tools._validate_repo_path", return_value=(True, None)),
+            patch("src.services.agents.internal_tools.git_branch_tools.async_validate_repo_path", return_value=(True, None)),
             patch("os.path.exists", return_value=True),
-            patch("src.services.agents.internal_tools.git_branch_tools._run_git_command") as mock_run,
+            patch("src.services.agents.internal_tools.git_branch_tools.async_run_git_command") as mock_run,
         ):
             mock_run.return_value = {"success": True}
             result = await internal_git_switch_branch(self.MOCK_REPO_PATH, "main")
@@ -200,9 +197,9 @@ class TestInternalGitHubTools:
                 "src.services.agents.internal_tools.git_branch_tools._get_workspace_path",
                 return_value=self.MOCK_WORKSPACE,
             ),
-            patch("src.services.agents.internal_tools.git_branch_tools._validate_repo_path", return_value=(True, None)),
+            patch("src.services.agents.internal_tools.git_branch_tools.async_validate_repo_path", return_value=(True, None)),
             patch("os.path.exists", return_value=True),
-            patch("src.services.agents.internal_tools.git_branch_tools._run_git_command") as mock_run,
+            patch("src.services.agents.internal_tools.git_branch_tools.async_run_git_command") as mock_run,
         ):
             mock_run.return_value = {"success": True, "output": "* main\n  feature"}
 
@@ -218,9 +215,9 @@ class TestInternalGitHubTools:
                 "src.services.agents.internal_tools.git_branch_tools._get_workspace_path",
                 return_value=self.MOCK_WORKSPACE,
             ),
-            patch("src.services.agents.internal_tools.git_branch_tools._validate_repo_path", return_value=(True, None)),
+            patch("src.services.agents.internal_tools.git_branch_tools.async_validate_repo_path", return_value=(True, None)),
             patch("os.path.exists", return_value=True),
-            patch("src.services.agents.internal_tools.git_branch_tools._run_git_command") as mock_run,
+            patch("src.services.agents.internal_tools.git_branch_tools.async_run_git_command") as mock_run,
         ):
             mock_run.return_value = {"success": True, "output": "Updated"}
             result = await internal_git_pull_changes(self.MOCK_REPO_PATH)
@@ -233,9 +230,9 @@ class TestInternalGitHubTools:
                 "src.services.agents.internal_tools.git_commit_tools._get_workspace_path",
                 return_value=self.MOCK_WORKSPACE,
             ),
-            patch("src.services.agents.internal_tools.git_commit_tools._validate_repo_path", return_value=(True, None)),
+            patch("src.services.agents.internal_tools.git_commit_tools.async_validate_repo_path", return_value=(True, None)),
             patch("os.path.exists", return_value=True),
-            patch("src.services.agents.internal_tools.git_commit_tools._run_git_command") as mock_run,
+            patch("src.services.agents.internal_tools.git_commit_tools.async_run_git_command") as mock_run,
         ):
             mock_run.return_value = {"success": True, "output": "diff content"}
             result = await internal_git_get_diff(self.MOCK_REPO_PATH)
@@ -249,9 +246,9 @@ class TestInternalGitHubTools:
                 "src.services.agents.internal_tools.git_commit_tools._get_workspace_path",
                 return_value=self.MOCK_WORKSPACE,
             ),
-            patch("src.services.agents.internal_tools.git_commit_tools._validate_repo_path", return_value=(True, None)),
+            patch("src.services.agents.internal_tools.git_commit_tools.async_validate_repo_path", return_value=(True, None)),
             patch("os.path.exists", return_value=True),
-            patch("src.services.agents.internal_tools.git_commit_tools._run_git_command") as mock_run,
+            patch("src.services.agents.internal_tools.git_commit_tools.async_run_git_command") as mock_run,
         ):
             mock_run.return_value = {"success": True, "output": "abc1234 Initial commit\ndef5678 Second commit"}
 
@@ -267,9 +264,9 @@ class TestInternalGitHubTools:
                 "src.services.agents.internal_tools.git_commit_tools._get_workspace_path",
                 return_value=self.MOCK_WORKSPACE,
             ),
-            patch("src.services.agents.internal_tools.git_commit_tools._validate_repo_path", return_value=(True, None)),
+            patch("src.services.agents.internal_tools.git_commit_tools.async_validate_repo_path", return_value=(True, None)),
             patch("os.path.exists", return_value=True),
-            patch("src.services.agents.internal_tools.git_commit_tools._run_git_command") as mock_run,
+            patch("src.services.agents.internal_tools.git_commit_tools.async_run_git_command") as mock_run,
         ):
             mock_run.return_value = {"success": True}
             result = await internal_git_cherry_pick(self.MOCK_REPO_PATH, "abc1234")
@@ -282,9 +279,9 @@ class TestInternalGitHubTools:
                 "src.services.agents.internal_tools.git_commit_tools._get_workspace_path",
                 return_value=self.MOCK_WORKSPACE,
             ),
-            patch("src.services.agents.internal_tools.git_commit_tools._validate_repo_path", return_value=(True, None)),
+            patch("src.services.agents.internal_tools.git_commit_tools.async_validate_repo_path", return_value=(True, None)),
             patch("os.path.exists", return_value=True),
-            patch("src.services.agents.internal_tools.git_commit_tools._run_git_command") as mock_run,
+            patch("src.services.agents.internal_tools.git_commit_tools.async_run_git_command") as mock_run,
         ):
             mock_run.return_value = {"success": True}
             result = await internal_git_revert_commit(self.MOCK_REPO_PATH, "abc1234")
@@ -297,9 +294,9 @@ class TestInternalGitHubTools:
                 "src.services.agents.internal_tools.git_commit_tools._get_workspace_path",
                 return_value=self.MOCK_WORKSPACE,
             ),
-            patch("src.services.agents.internal_tools.git_commit_tools._validate_repo_path", return_value=(True, None)),
+            patch("src.services.agents.internal_tools.git_commit_tools.async_validate_repo_path", return_value=(True, None)),
             patch("os.path.exists", return_value=True),
-            patch("src.services.agents.internal_tools.git_commit_tools._run_git_command") as mock_run,
+            patch("src.services.agents.internal_tools.git_commit_tools.async_run_git_command") as mock_run,
         ):
             mock_run.side_effect = [
                 {"success": True},  # git config user.email
@@ -331,9 +328,9 @@ class TestInternalGitHubTools:
                 "src.services.agents.internal_tools.git_repo_tools._get_workspace_path",
                 return_value=self.MOCK_WORKSPACE,
             ),
-            patch("src.services.agents.internal_tools.git_repo_tools._validate_repo_path", return_value=(True, None)),
+            patch("src.services.agents.internal_tools.git_repo_tools.async_validate_repo_path", return_value=(True, None)),
             patch("os.path.exists", return_value=True),
-            patch("src.services.agents.internal_tools.git_repo_tools._run_git_command") as mock_run,
+            patch("src.services.agents.internal_tools.git_repo_tools.async_run_git_command") as mock_run,
         ):
             # Remote doesn't exist, add it
             mock_run.side_effect = [
@@ -357,7 +354,7 @@ class TestInternalGitHubTools:
                 "src.services.agents.internal_tools.git_repo_tools._get_workspace_path",
                 return_value=self.MOCK_WORKSPACE,
             ),
-            patch("src.services.agents.internal_tools.git_repo_tools._validate_repo_path", return_value=(True, None)),
+            patch("src.services.agents.internal_tools.git_repo_tools.async_validate_repo_path", return_value=(True, None)),
             patch("os.path.exists", return_value=True),
             patch("shutil.rmtree") as mock_rm,
         ):
@@ -373,7 +370,7 @@ class TestInternalGitHubTools:
                 return_value=self.MOCK_WORKSPACE,
             ),
             patch(
-                "src.services.agents.internal_tools.git_repo_tools._validate_repo_path",
+                "src.services.agents.internal_tools.git_repo_tools.async_validate_repo_path",
                 return_value=(False, "Path outside workspace"),
             ),
             patch("os.path.exists", return_value=True),

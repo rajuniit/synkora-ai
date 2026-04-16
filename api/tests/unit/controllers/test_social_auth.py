@@ -1,13 +1,11 @@
 """Tests for social auth controller."""
 
 import uuid
-from datetime import datetime
 from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
 from fastapi import FastAPI, status
 from fastapi.testclient import TestClient
-from sqlalchemy import select
 
 from src.controllers.social_auth import router
 from src.core.database import get_async_db

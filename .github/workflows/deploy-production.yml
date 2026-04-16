@@ -138,6 +138,24 @@ jobs:
           docker builder prune -f
           df -h
 
+      - name: Build and push sandbox service image
+        uses: docker/build-push-action@v5
+        with:
+          context: ./services/sandbox
+          file: ./services/sandbox/Dockerfile
+          push: true
+          platforms: linux/amd64
+          tags: |
+            ${{ env.ECR_REGISTRY }}/synkora-sandbox:${{ github.ref_name }}
+            ${{ env.ECR_REGISTRY }}/synkora-sandbox:latest
+          cache-from: type=gha,scope=sandbox
+          cache-to: type=gha,mode=max,scope=sandbox
+
+      - name: Clean up after sandbox build
+        run: |
+          docker builder prune -f
+          df -h
+
       - name: Build and push Frontend image
         uses: docker/build-push-action@v5
         with:
@@ -200,6 +218,8 @@ jobs:
             --namespace=${{ env.NAMESPACE }} \
             --from-literal=ML_SERVICE_URL="${{ vars.K8S_ML_SERVICE_URL }}" \
             --from-literal=SCRAPER_SERVICE_URL="${{ vars.K8S_SCRAPER_SERVICE_URL }}" \
+            --from-literal=SANDBOX_SERVICE_URL="${{ vars.K8S_SANDBOX_SERVICE_URL }}" \
+            --from-literal=SANDBOX_API_KEY="${{ secrets.K8S_SANDBOX_API_KEY }}" \
             --from-literal=SECRET_KEY="${{ secrets.K8S_SECRET_KEY }}" \
             --from-literal=JWT_SECRET_KEY="${{ secrets.K8S_JWT_SECRET_KEY }}" \
             --from-literal=ENCRYPTION_KEY="${{ secrets.K8S_ENCRYPTION_KEY }}" \
@@ -251,9 +271,10 @@ jobs:
           kubectl apply -f k8s/application/synkora-frontend-service.yml
           kubectl apply -f k8s/application/synkora-frontend-ingress.yml
 
-          # ML and scraper services
+          # ML, scraper and sandbox services
           kubectl apply -f k8s/application/ml-service-deployment.yaml
           kubectl apply -f k8s/application/scraper-service-deployment.yaml
+          kubectl apply -f k8s/application/sandbox-service-deployment.yaml
 
           # API and autoscaling
           kubectl apply -f k8s/application/api-deployment.yml
@@ -332,13 +353,14 @@ jobs:
           fi
           echo "Migration completed successfully."
 
-      - name: Deploy ML and scraper services
+      - name: Deploy ML, scraper and sandbox services
         run: |
           IMAGE_TAG="${{ github.ref_name }}"
           kubectl set image deployment/synkora-ml ml=${{ env.ECR_REGISTRY }}/synkora-ml:${IMAGE_TAG} -n ${{ env.NAMESPACE }}
           kubectl set image deployment/synkora-scraper scraper=${{ env.ECR_REGISTRY }}/synkora-scraper:${IMAGE_TAG} -n ${{ env.NAMESPACE }}
+          kubectl set image deployment/synkora-sandbox sandbox=${{ env.ECR_REGISTRY }}/synkora-sandbox:${IMAGE_TAG} -n ${{ env.NAMESPACE }}
 
-      - name: Wait for ML and scraper rollouts
+      - name: Wait for ML, scraper and sandbox rollouts
         run: |
           if ! kubectl rollout status deployment/synkora-ml -n ${{ env.NAMESPACE }} --timeout=600s; then
             echo "ML service deployment failed, rolling back..."
@@ -348,6 +370,11 @@ jobs:
           if ! kubectl rollout status deployment/synkora-scraper -n ${{ env.NAMESPACE }} --timeout=600s; then
             echo "Scraper service deployment failed, rolling back..."
             kubectl rollout undo deployment/synkora-scraper -n ${{ env.NAMESPACE }}
+            exit 1
+          fi
+          if ! kubectl rollout status deployment/synkora-sandbox -n ${{ env.NAMESPACE }} --timeout=600s; then
+            echo "Sandbox service deployment failed, rolling back..."
+            kubectl rollout undo deployment/synkora-sandbox -n ${{ env.NAMESPACE }}
             exit 1
           fi
 

@@ -18,7 +18,6 @@ from src.services.slack.formatters import (
     format_text_for_slack,
 )
 
-
 # ---------------------------------------------------------------------------
 # format_text_for_slack — edge cases
 # ---------------------------------------------------------------------------

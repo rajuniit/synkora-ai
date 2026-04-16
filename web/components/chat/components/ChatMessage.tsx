@@ -12,6 +12,8 @@ import { vscDarkPlus } from 'react-syntax-highlighter/dist/esm/styles/prism'
 import { SourcesList } from './SourceCard'
 import { VoicePlayer } from './VoicePlayer'
 import { ChartRenderer } from '@/components/charts/ChartRenderer'
+import { MermaidDiagram } from '@/components/diagrams/MermaidDiagram'
+import { DiagramRenderer } from '@/components/diagrams/DiagramRenderer'
 import { MarkdownViewer, detectMarkdownUrls } from './MarkdownViewer'
 import { DocumentViewer, detectDocumentUrls } from './DocumentViewer'
 import { ToolStatusDisplay } from './ToolStatusDisplay'
@@ -291,6 +293,15 @@ export function ChatMessage({
                   const language = match ? match[1] : ''
                   const codeString = String(children).replace(/\n$/, '')
 
+                  // Mermaid diagram: render as visual diagram instead of code block
+                  if (language === 'mermaid') {
+                    return (
+                      <div className="my-4">
+                        <MermaidDiagram code={codeString} />
+                      </div>
+                    )
+                  }
+
                   // In react-markdown v9, block code is wrapped in <pre>.
                   // We detect inline code by: no language class AND no newlines in content.
                   const isInline = !className && !codeString.includes('\n')
@@ -479,7 +490,7 @@ export function ChatMessage({
 
         {/* Charts */}
         {message.metadata?.charts && message.metadata.charts.length > 0 && (
-          <div className="mt-3 space-y-3">
+          <div className={`mt-3 ${message.metadata.charts.length >= 2 ? 'grid grid-cols-1 sm:grid-cols-2 gap-3' : 'space-y-3'}`}>
             {message.metadata.charts.map((chart: any, index: number) => {
               const chartData = {
                 id: `chart-${index}`,
@@ -489,10 +500,20 @@ export function ChatMessage({
                 library: chart.library || 'chartjs',
                 config: chart.config || {},
                 data: chart.data,
+                table_data: chart.table_data,
                 created_at: new Date().toISOString(),
               }
               return <ChartRenderer key={index} chart={chartData} />
             })}
+          </div>
+        )}
+
+        {/* Diagrams */}
+        {message.metadata?.diagrams && message.metadata.diagrams.length > 0 && (
+          <div className="mt-3 space-y-3">
+            {message.metadata.diagrams.map((diagram: any, index: number) => (
+              <DiagramRenderer key={diagram.id || index} diagram={diagram} />
+            ))}
           </div>
         )}
 

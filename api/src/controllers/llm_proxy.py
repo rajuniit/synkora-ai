@@ -4,7 +4,6 @@ Provides mock LLM endpoints for load testing without incurring real API costs.
 """
 
 import logging
-from typing import Any
 
 from fastapi import APIRouter, Depends, Header, HTTPException, Request
 from fastapi.responses import StreamingResponse

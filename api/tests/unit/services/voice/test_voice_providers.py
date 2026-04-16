@@ -13,7 +13,6 @@ import pytest
 from src.services.voice.elevenlabs_provider import ElevenLabsProvider
 from src.services.voice.openai_provider import OpenAITTSProvider, OpenAIWhisperProvider
 
-
 # ---------------------------------------------------------------------------
 # Helpers
 # ---------------------------------------------------------------------------

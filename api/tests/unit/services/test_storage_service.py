@@ -7,7 +7,7 @@ import pytest
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from src.core.errors import ValidationError
-from src.models import FileSource, FileType, UploadFile
+from src.models import FileType, UploadFile
 from src.services.storage_service import StorageService
 
 

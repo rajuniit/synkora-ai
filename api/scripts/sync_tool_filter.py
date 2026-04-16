@@ -14,7 +14,6 @@ Options:
 """
 
 import argparse
-import ast
 import logging
 import re
 import sys

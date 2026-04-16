@@ -16,7 +16,10 @@ import {
   Filter,
   FileText,
   Slack,
-  Mail
+  Mail,
+  GitBranch,
+  Webhook,
+  Radio,
 } from 'lucide-react'
 import { apiClient } from '@/lib/api/client'
 
@@ -35,6 +38,8 @@ interface DataSource {
   created_at: string
   updated_at: string
 }
+
+const WEBHOOK_SOURCES = ['SLACK', 'GITHUB', 'GITLAB', 'JIRA', 'LINEAR', 'NOTION']
 
 export default function DataSourcesPage() {
   const [dataSources, setDataSources] = useState<DataSource[]>([])
@@ -121,52 +126,41 @@ export default function DataSourcesPage() {
   }
 
   const getSourceIcon = (sourceType: string) => {
-    switch (sourceType?.toLowerCase()) {
-      case 'SLACK':
-        return <Slack className="w-5 h-5" />
-      case 'GMAIL':
-        return <Mail className="w-5 h-5" />
-      default:
-        return <Database className="w-5 h-5" />
+    switch (sourceType?.toUpperCase()) {
+      case 'SLACK': return <Slack className="w-5 h-5" />
+      case 'GMAIL': return <Mail className="w-5 h-5" />
+      case 'GITHUB':
+      case 'GITLAB': return <GitBranch className="w-5 h-5" />
+      default: return <Database className="w-5 h-5" />
     }
   }
 
   const getSourceColor = (sourceType: string) => {
-    switch (sourceType?.toLowerCase()) {
-      case 'SLACK':
-        return 'bg-purple-100 text-purple-800'
-      case 'GMAIL':
-        return 'bg-red-100 text-red-800'
-      default:
-        return 'bg-gray-100 text-gray-800'
+    switch (sourceType?.toUpperCase()) {
+      case 'SLACK': return 'bg-purple-100 text-purple-800'
+      case 'GMAIL': return 'bg-red-100 text-red-800'
+      case 'GITHUB':
+      case 'GITLAB': return 'bg-gray-800 text-gray-100'
+      default: return 'bg-blue-100 text-blue-800'
     }
   }
 
   const getStatusColor = (status: string) => {
-    switch (status?.toLowerCase()) {
-      case 'active':
-        return 'bg-green-100 text-green-800'
-      case 'syncing':
-        return 'bg-blue-100 text-blue-800'
-      case 'paused':
-        return 'bg-yellow-100 text-yellow-800'
-      case 'error':
-        return 'bg-red-100 text-red-800'
-      default:
-        return 'bg-gray-100 text-gray-800'
+    switch (status?.toUpperCase()) {
+      case 'ACTIVE':   return 'bg-green-100 text-green-800'
+      case 'SYNCING':  return 'bg-blue-100 text-blue-800'
+      case 'INACTIVE': return 'bg-yellow-100 text-yellow-800'
+      case 'ERROR':    return 'bg-red-100 text-red-800'
+      default:         return 'bg-gray-100 text-gray-800'
     }
   }
 
   const getStatusIcon = (status: string) => {
-    switch (status?.toLowerCase()) {
-      case 'active':
-        return <CheckCircle className="w-3 h-3" />
-      case 'syncing':
-        return <RefreshCw className="w-3 h-3 animate-spin" />
-      case 'error':
-        return <AlertCircle className="w-3 h-3" />
-      default:
-        return <Clock className="w-3 h-3" />
+    switch (status?.toUpperCase()) {
+      case 'ACTIVE':  return <CheckCircle className="w-3 h-3" />
+      case 'SYNCING': return <RefreshCw className="w-3 h-3 animate-spin" />
+      case 'ERROR':   return <AlertCircle className="w-3 h-3" />
+      default:        return <Clock className="w-3 h-3" />
     }
   }
 
@@ -227,7 +221,7 @@ export default function DataSourcesPage() {
                 <p className="text-xs font-medium text-gray-600">Active</p>
               </div>
               <p className="text-2xl font-bold text-gray-900">
-                {dataSources.filter(s => s.status === 'active').length}
+                {dataSources.filter(s => s.status?.toUpperCase() === 'ACTIVE').length}
               </p>
             </div>
             
@@ -251,7 +245,7 @@ export default function DataSourcesPage() {
                 <p className="text-xs font-medium text-gray-600">Syncing</p>
               </div>
               <p className="text-2xl font-bold text-gray-900">
-                {dataSources.filter(s => s.status === 'syncing').length}
+                {dataSources.filter(s => s.status?.toUpperCase() === 'SYNCING').length}
               </p>
             </div>
           </div>
@@ -361,11 +355,22 @@ export default function DataSourcesPage() {
                   </div>
 
                   {/* Status Badge */}
-                  <div className="mb-3">
+                  <div className="mb-3 flex items-center gap-2 flex-wrap">
                     <span className={`inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-xs font-medium ${getStatusColor(source.status)}`}>
                       {getStatusIcon(source.status)}
-                      {source.status}
+                      {source.status?.toUpperCase()}
                     </span>
+                    {WEBHOOK_SOURCES.includes(source.type?.toUpperCase()) && !source.config?.signing_secret && (
+                      <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-xs font-medium bg-amber-100 text-amber-800">
+                        <Webhook className="w-3 h-3" />
+                        Setup needed
+                      </span>
+                    )}
+                    {source.status?.toUpperCase() === 'SYNCING' && (
+                      <span className="inline-flex items-center gap-1 text-xs font-medium text-blue-600 animate-pulse">
+                        <Radio className="w-3 h-3" /> Live
+                      </span>
+                    )}
                   </div>
 
                   {/* Stats */}

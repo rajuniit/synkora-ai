@@ -1,13 +1,13 @@
 """Tests for ModelService."""
 
-from unittest.mock import AsyncMock, MagicMock, Mock, patch
+from unittest.mock import AsyncMock, Mock, patch
 from uuid import uuid4
 
 import pytest
 
 from src.core.errors import NotFoundError, ValidationError
 from src.core.model_providers import ModelConfig, ModelResponse
-from src.models import App, Message, MessageRole, MessageStatus
+from src.models import App, MessageRole, MessageStatus
 from src.services.model_service import ModelService
 
 
@@ -183,17 +183,16 @@ class TestGenerateResponse:
         )
         mock_provider.generate = AsyncMock(return_value=mock_response)
 
-        with patch.object(model_service, "_get_provider_from_app", return_value=mock_provider):
-            with patch.object(
-                model_service,
-                "_get_model_config_from_app",
-                return_value=ModelConfig(model="gpt-4"),
-            ):
-                result = await model_service.generate_response(
-                    conversation_id=sample_conversation.id,
-                    user_message="Hello",
-                    stream=False,
-                )
+        with patch.object(model_service, "_get_provider_from_app", return_value=mock_provider), patch.object(
+            model_service,
+            "_get_model_config_from_app",
+            return_value=ModelConfig(model="gpt-4"),
+        ):
+            result = await model_service.generate_response(
+                conversation_id=sample_conversation.id,
+                user_message="Hello",
+                stream=False,
+            )
 
         assert isinstance(result, ModelResponse)
         assert result.content == "Test response"
@@ -227,17 +226,16 @@ class TestGenerateResponse:
 
         mock_provider.generate_stream = Mock(return_value=mock_stream())
 
-        with patch.object(model_service, "_get_provider_from_app", return_value=mock_provider):
-            with patch.object(
-                model_service,
-                "_get_model_config_from_app",
-                return_value=ModelConfig(model="gpt-4", stream=True),
-            ):
-                result = await model_service.generate_response(
-                    conversation_id=sample_conversation.id,
-                    user_message="Hello",
-                    stream=True,
-                )
+        with patch.object(model_service, "_get_provider_from_app", return_value=mock_provider), patch.object(
+            model_service,
+            "_get_model_config_from_app",
+            return_value=ModelConfig(model="gpt-4", stream=True),
+        ):
+            result = await model_service.generate_response(
+                conversation_id=sample_conversation.id,
+                user_message="Hello",
+                stream=True,
+            )
 
         # Result should be an async iterator
         assert hasattr(result, "__anext__")

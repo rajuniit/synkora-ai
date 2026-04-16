@@ -302,6 +302,76 @@ async def analyze_data_statistics(
                     "most_common": str(col_data.mode()[0]) if len(col_data.mode()) > 0 else None,
                 }
 
+        # Build visual chart configs for automatic chart rendering
+        charts = []
+
+        # Box plot for all numeric columns (Plotly)
+        numeric_cols_list = list(numeric_cols)
+        if numeric_cols_list:
+            box_traces = [{"type": "box", "y": df[col].dropna().tolist(), "name": col} for col in numeric_cols_list[:8]]
+            charts.append(
+                {
+                    "chart_type": "box",
+                    "library": "plotly",
+                    "title": "Numeric Column Distributions",
+                    "description": "Box plots showing spread, median, and outliers for each numeric column",
+                    "data": {"data": box_traces, "layout": {"showlegend": False}},
+                    "table_data": df.head(50).astype(object).where(df.head(50).notna(), None).to_dict(orient="records"),
+                }
+            )
+
+        # Bar chart: top values for first categorical column (if any, Recharts)
+        if categorical_cols.size > 0:
+            first_cat = categorical_cols[0]
+            vc = df[first_cat].dropna().value_counts().head(10)
+            if len(vc) > 0:
+                charts.append(
+                    {
+                        "chart_type": "bar",
+                        "library": "chartjs",
+                        "title": f"Top Values: {first_cat}",
+                        "description": f"Frequency distribution of {first_cat}",
+                        "data": {
+                            "labels": [str(k) for k in vc.index],
+                            "datasets": [
+                                {
+                                    "label": "Count",
+                                    "data": [int(v) for v in vc.values],
+                                    "backgroundColor": "rgba(99, 102, 241, 0.6)",
+                                    "borderColor": "rgba(99, 102, 241, 1)",
+                                    "borderWidth": 1,
+                                }
+                            ],
+                        },
+                    }
+                )
+
+        # Missing value chart (if any nulls exist)
+        missing = df.isnull().sum()
+        missing = missing[missing > 0]
+        if len(missing) > 0:
+            charts.append(
+                {
+                    "chart_type": "bar",
+                    "library": "chartjs",
+                    "title": "Missing Values by Column",
+                    "description": "Number of null/missing values per column",
+                    "data": {
+                        "labels": [str(k) for k in missing.index],
+                        "datasets": [
+                            {
+                                "label": "Missing count",
+                                "data": [int(v) for v in missing.values],
+                                "backgroundColor": "rgba(239, 68, 68, 0.6)",
+                                "borderColor": "rgba(239, 68, 68, 1)",
+                                "borderWidth": 1,
+                            }
+                        ],
+                    },
+                }
+            )
+
+        stats["charts"] = charts
         return stats
 
     except Exception as e:

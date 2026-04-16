@@ -21,6 +21,7 @@ export type ChatEvent =
       output_tokens?: number
     }
   | { type: 'chart'; chart?: unknown; [key: string]: unknown }
+  | { type: 'diagram'; diagram?: unknown; [key: string]: unknown }
   | {
       type: 'done'
       sources?: unknown[]

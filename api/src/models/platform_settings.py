@@ -193,6 +193,34 @@ class PlatformSettings(BaseModel):
         comment="Base URL of the frontend application (e.g., https://app.example.com or https://synkora.ai)",
     )
 
+    # Agent Compute Defaults (SSH remote execution)
+    compute_ssh_known_hosts = Column(
+        Text,
+        nullable=True,
+        comment="SSH known_hosts content for strict host-key verification (blank = accept any)",
+    )
+
+    compute_default_timeout = Column(
+        String(20),
+        nullable=False,
+        default="300",
+        comment="Default per-command timeout in seconds for remote compute sessions",
+    )
+
+    compute_default_max_output = Column(
+        String(20),
+        nullable=False,
+        default="8000",
+        comment="Default max stdout characters per remote command",
+    )
+
+    compute_default_base_path = Column(
+        String(500),
+        nullable=False,
+        default="/tmp/agent_workspace",
+        comment="Default working directory on remote compute targets",
+    )
+
     # Custom Configuration (extensible)
     custom_config = Column(
         Text,

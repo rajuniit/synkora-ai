@@ -1,4 +1,3 @@
-import pytest
 
 from src.services.slack.formatters import (
     SLACK_MAX_BLOCKS,

@@ -1,17 +1,11 @@
-from datetime import UTC, datetime, timedelta
-from decimal import Decimal
+from datetime import UTC, datetime
 from unittest.mock import AsyncMock, MagicMock, patch
 from uuid import uuid4
 
 import pytest
-from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from src.models.agent import Agent
-from src.models.agent_pricing import AgentPricing
 from src.models.agent_revenue import AgentRevenue, RevenueStatus
-from src.models.credit_transaction import CreditTransaction
-from src.models.tenant import Tenant
 from src.services.billing.revenue_service import RevenueService
 
 

@@ -6,7 +6,6 @@ Tests tool configuration management (API keys for external services).
 
 import uuid
 
-import pytest
 import pytest_asyncio
 from fastapi import status
 from fastapi.testclient import TestClient

@@ -6,7 +6,6 @@ Tests file upload, download, deletion, and presigned URL generation.
 
 import uuid
 from datetime import UTC, datetime
-from io import BytesIO
 from unittest.mock import MagicMock, patch
 
 import pytest

@@ -5,7 +5,7 @@ Routes incoming LLM requests to appropriate mock providers.
 """
 
 import logging
-from typing import Any, AsyncGenerator
+from collections.abc import AsyncGenerator
 
 from fastapi import HTTPException
 from sqlalchemy import select
@@ -145,7 +145,6 @@ class LLMProxyRouter:
             config: Proxy configuration
             tokens: Number of tokens generated
         """
-        from datetime import timedelta
 
         from src.config.redis import get_redis
 

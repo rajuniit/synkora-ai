@@ -4,8 +4,6 @@ Stripe Payment Provider
 Handles Stripe payment integration configuration and operations.
 """
 
-from typing import Dict, Optional
-
 import stripe
 
 from .base_provider import BaseIntegrationProvider

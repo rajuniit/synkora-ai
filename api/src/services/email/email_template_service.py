@@ -7,7 +7,6 @@ Branding is loaded from platform settings or can be overridden.
 
 import logging
 from dataclasses import dataclass
-from typing import Any
 from uuid import UUID
 
 from sqlalchemy import select

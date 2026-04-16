@@ -6,13 +6,16 @@ import pytest
 
 from src.services.agents.internal_tools.github_auth_helper import (
     inject_token_into_url as github_inject,
+)
+from src.services.agents.internal_tools.github_auth_helper import (
     prepare_authenticated_git_url,
 )
 from src.services.agents.internal_tools.gitlab_auth_helper import (
     inject_token_into_url as gitlab_inject,
+)
+from src.services.agents.internal_tools.gitlab_auth_helper import (
     prepare_authenticated_gitlab_url,
 )
-
 
 # ---------------------------------------------------------------------------
 # github inject_token_into_url

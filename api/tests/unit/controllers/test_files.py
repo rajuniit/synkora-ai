@@ -2,7 +2,6 @@
 
 import uuid
 from datetime import UTC, datetime
-from io import BytesIO
 from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest

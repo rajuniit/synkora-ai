@@ -10,7 +10,12 @@ import logging
 import os
 from typing import Any
 
-from .git_helpers import _get_workspace_path, _run_git_command, _validate_repo_path
+from .git_helpers import (
+    _get_workspace_path,
+    async_path_exists,
+    async_run_git_command,
+    async_validate_repo_path,
+)
 
 logger = logging.getLogger(__name__)
 
@@ -28,14 +33,14 @@ async def internal_git_get_status(repo_path: str, config: dict[str, Any] | None 
     """
     try:
         workspace_path = _get_workspace_path(config)
-        is_valid, error = _validate_repo_path(repo_path, workspace_path)
+        is_valid, error = await async_validate_repo_path(repo_path, workspace_path, config)
         if not is_valid:
             return {"success": False, "error": error}
 
-        if not os.path.exists(repo_path):
+        if not await async_path_exists(repo_path, config):
             return {"success": False, "error": f"Repository path does not exist: {repo_path}"}
 
-        result = _run_git_command(["git", "status", "--porcelain"], repo_path)
+        result = await async_run_git_command(["git", "status", "--porcelain"], repo_path, config)
         if not result["success"]:
             return {"success": False, "error": f"Failed to get status: {result['error']}"}
 
@@ -93,11 +98,11 @@ async def internal_git_get_diff(
     """
     try:
         workspace_path = _get_workspace_path(config)
-        is_valid, error = _validate_repo_path(repo_path, workspace_path)
+        is_valid, error = await async_validate_repo_path(repo_path, workspace_path, config)
         if not is_valid:
             return {"success": False, "error": error}
 
-        if not os.path.exists(repo_path):
+        if not await async_path_exists(repo_path, config):
             return {"success": False, "error": f"Repository path does not exist: {repo_path}"}
 
         command = ["git", "diff"]
@@ -106,7 +111,7 @@ async def internal_git_get_diff(
         if file_path:
             command.append(file_path)
 
-        result = _run_git_command(command, repo_path)
+        result = await async_run_git_command(command, repo_path, config)
         if not result["success"]:
             return {"success": False, "error": f"Failed to get diff: {result['error']}"}
 
@@ -140,18 +145,18 @@ async def internal_git_get_commit_history(
     """
     try:
         workspace_path = _get_workspace_path(config)
-        is_valid, error = _validate_repo_path(repo_path, workspace_path)
+        is_valid, error = await async_validate_repo_path(repo_path, workspace_path, config)
         if not is_valid:
             return {"success": False, "error": error}
 
-        if not os.path.exists(repo_path):
+        if not await async_path_exists(repo_path, config):
             return {"success": False, "error": f"Repository path does not exist: {repo_path}"}
 
         command = ["git", "log", f"--max-count={max_commits}", "--oneline", "--decorate"]
         if branch:
             command.append(branch)
 
-        result = _run_git_command(command, repo_path)
+        result = await async_run_git_command(command, repo_path, config)
         if not result["success"]:
             return {"success": False, "error": f"Failed to get commit history: {result['error']}"}
 
@@ -186,26 +191,26 @@ async def internal_git_commit_and_push(
     """
     try:
         workspace_path = _get_workspace_path(config)
-        is_valid, error = _validate_repo_path(repo_path, workspace_path)
+        is_valid, error = await async_validate_repo_path(repo_path, workspace_path, config)
         if not is_valid:
             return {"success": False, "error": error}
 
-        if not os.path.exists(repo_path):
+        if not await async_path_exists(repo_path, config):
             return {"success": False, "error": f"Repository path does not exist: {repo_path}"}
 
         # Configure git user identity if not already set (required in container environments)
         git_email = os.getenv("GIT_AGENT_EMAIL", "agent@localhost")
         git_name = os.getenv("GIT_AGENT_NAME", "AI Agent")
-        _run_git_command(["git", "config", "user.email", git_email], repo_path)
-        _run_git_command(["git", "config", "user.name", git_name], repo_path)
+        await async_run_git_command(["git", "config", "user.email", git_email], repo_path, config)
+        await async_run_git_command(["git", "config", "user.name", git_name], repo_path, config)
 
         logger.info(f"Adding all changes in {repo_path}")
-        add_result = _run_git_command(["git", "add", "."], repo_path)
+        add_result = await async_run_git_command(["git", "add", "."], repo_path, config)
         if not add_result["success"]:
             return {"success": False, "error": f"Failed to add files: {add_result['error']}"}
 
         logger.info(f"Committing changes with message: '{commit_message}'")
-        commit_result = _run_git_command(["git", "commit", "-m", commit_message], repo_path)
+        commit_result = await async_run_git_command(["git", "commit", "-m", commit_message], repo_path, config)
         if not commit_result["success"]:
             if "nothing to commit" in commit_result["output"].lower():
                 logger.info("No changes to commit")
@@ -213,7 +218,9 @@ async def internal_git_commit_and_push(
             return {"success": False, "error": f"Failed to commit: {commit_result['error']}"}
 
         logger.info(f"Pushing to origin/{branch_name}")
-        push_result = _run_git_command(["git", "push", "--set-upstream", "origin", branch_name], repo_path)
+        push_result = await async_run_git_command(
+            ["git", "push", "--set-upstream", "origin", branch_name], repo_path, config
+        )
         if not push_result["success"]:
             return {"success": False, "error": f"Failed to push: {push_result['error']}", "committed": True}
 
@@ -246,14 +253,14 @@ async def internal_git_cherry_pick(
     """
     try:
         workspace_path = _get_workspace_path(config)
-        is_valid, error = _validate_repo_path(repo_path, workspace_path)
+        is_valid, error = await async_validate_repo_path(repo_path, workspace_path, config)
         if not is_valid:
             return {"success": False, "error": error}
 
-        if not os.path.exists(repo_path):
+        if not await async_path_exists(repo_path, config):
             return {"success": False, "error": f"Repository path does not exist: {repo_path}"}
 
-        result = _run_git_command(["git", "cherry-pick", commit_hash], repo_path)
+        result = await async_run_git_command(["git", "cherry-pick", commit_hash], repo_path, config)
         if not result["success"]:
             return {"success": False, "error": f"Failed to cherry-pick commit: {result['error']}"}
 
@@ -284,14 +291,14 @@ async def internal_git_revert_commit(
     """
     try:
         workspace_path = _get_workspace_path(config)
-        is_valid, error = _validate_repo_path(repo_path, workspace_path)
+        is_valid, error = await async_validate_repo_path(repo_path, workspace_path, config)
         if not is_valid:
             return {"success": False, "error": error}
 
-        if not os.path.exists(repo_path):
+        if not await async_path_exists(repo_path, config):
             return {"success": False, "error": f"Repository path does not exist: {repo_path}"}
 
-        result = _run_git_command(["git", "revert", "--no-edit", commit_hash], repo_path)
+        result = await async_run_git_command(["git", "revert", "--no-edit", commit_hash], repo_path, config)
         if not result["success"]:
             return {"success": False, "error": f"Failed to revert commit: {result['error']}"}
 

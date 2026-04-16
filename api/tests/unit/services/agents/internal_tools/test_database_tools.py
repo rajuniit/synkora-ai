@@ -6,9 +6,6 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from src.models.database_connection import DatabaseConnection
 from src.services.agents.internal_tools.database_tools import (
-    _execute_elasticsearch_query,
-    _execute_postgresql_query,
-    _execute_sqlite_query,
     internal_generate_chart,
     internal_get_database_schema,
     internal_list_database_connections,

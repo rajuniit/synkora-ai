@@ -694,7 +694,7 @@ async def internal_start_jira_sprint(
     try:
         jira_config = await _get_jira_credentials(runtime_context, tool_name="internal_start_jira_sprint")
 
-        from datetime import datetime, timezone
+        from datetime import datetime
 
         update_data = {"state": "active"}
 
@@ -734,7 +734,7 @@ async def internal_close_jira_sprint(
     try:
         jira_config = await _get_jira_credentials(runtime_context, tool_name="internal_close_jira_sprint")
 
-        from datetime import datetime, timezone
+        from datetime import datetime
 
         update_data = {
             "state": "closed",

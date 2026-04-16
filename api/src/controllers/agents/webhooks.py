@@ -349,7 +349,7 @@ async def receive_webhook(webhook_token: str, request: Request, db: AsyncSession
         content_type = headers.get("content-type", "")
         if "application/x-www-form-urlencoded" in content_type:
             # GitHub (and others) can send payload as form-encoded: payload=<url-encoded-json>
-            from urllib.parse import parse_qs, unquote_plus
+            from urllib.parse import parse_qs
 
             parsed = parse_qs(payload.decode("utf-8"))
             raw_json = parsed.get("payload", [None])[0]

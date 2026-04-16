@@ -347,17 +347,19 @@ async def internal_google_drive_upload_file(
 
         headers["Content-Type"] = f"multipart/related; boundary={boundary}"
 
-        async with aiohttp.ClientSession() as session:
-            async with session.post(
+        async with (
+            aiohttp.ClientSession() as session,
+            session.post(
                 f"{DRIVE_API_BASE}/files?uploadType=multipart&fields=id,name,mimeType,webViewLink",
                 headers=headers,
                 data=body,
-            ) as response:
-                if response.status not in [200, 201]:
-                    error_text = await response.text()
-                    raise Exception(f"Failed to upload file: {error_text}")
+            ) as response,
+        ):
+            if response.status not in [200, 201]:
+                error_text = await response.text()
+                raise Exception(f"Failed to upload file: {error_text}")
 
-                return await response.json()
+            return await response.json()
 
     except Exception as e:
         logger.error(f"Error uploading Drive file: {e}", exc_info=True)
@@ -534,15 +536,17 @@ async def internal_google_drive_create_folder(
         if parent_folder_id:
             metadata["parents"] = [parent_folder_id]
 
-        async with aiohttp.ClientSession() as session:
-            async with session.post(
+        async with (
+            aiohttp.ClientSession() as session,
+            session.post(
                 f"{DRIVE_API_BASE}/files", headers=headers, json=metadata, params={"fields": "id,name,webViewLink"}
-            ) as response:
-                if response.status not in [200, 201]:
-                    error_text = await response.text()
-                    raise Exception(f"Failed to create folder: {error_text}")
+            ) as response,
+        ):
+            if response.status not in [200, 201]:
+                error_text = await response.text()
+                raise Exception(f"Failed to create folder: {error_text}")
 
-                return await response.json()
+            return await response.json()
 
     except Exception as e:
         logger.error(f"Error creating Drive folder: {e}", exc_info=True)
@@ -645,18 +649,20 @@ async def internal_google_drive_share_file(
 
         permission = {"type": "user", "role": role, "emailAddress": email}
 
-        async with aiohttp.ClientSession() as session:
-            async with session.post(
+        async with (
+            aiohttp.ClientSession() as session,
+            session.post(
                 f"{DRIVE_API_BASE}/files/{file_id}/permissions",
                 headers=headers,
                 json=permission,
                 params={"sendNotificationEmail": str(send_notification).lower()},
-            ) as response:
-                if response.status not in [200, 201]:
-                    error_text = await response.text()
-                    raise Exception(f"Failed to share file: {error_text}")
+            ) as response,
+        ):
+            if response.status not in [200, 201]:
+                error_text = await response.text()
+                raise Exception(f"Failed to share file: {error_text}")
 
-                return await response.json()
+            return await response.json()
 
     except Exception as e:
         logger.error(f"Error sharing Drive file: {e}", exc_info=True)
@@ -688,17 +694,19 @@ async def internal_google_drive_get_permissions(file_id: str, **kwargs) -> dict[
     try:
         headers = {"Authorization": f"Bearer {access_token}", "Accept": "application/json"}
 
-        async with aiohttp.ClientSession() as session:
-            async with session.get(
+        async with (
+            aiohttp.ClientSession() as session,
+            session.get(
                 f"{DRIVE_API_BASE}/files/{file_id}/permissions",
                 headers=headers,
                 params={"fields": "permissions(id,type,role,emailAddress,displayName)"},
-            ) as response:
-                if response.status != 200:
-                    error_text = await response.text()
-                    raise Exception(f"Failed to get permissions: {error_text}")
+            ) as response,
+        ):
+            if response.status != 200:
+                error_text = await response.text()
+                raise Exception(f"Failed to get permissions: {error_text}")
 
-                return await response.json()
+            return await response.json()
 
     except Exception as e:
         logger.error(f"Error getting Drive permissions: {e}", exc_info=True)
@@ -732,15 +740,17 @@ async def internal_google_drive_remove_permission(file_id: str, permission_id: s
     try:
         headers = {"Authorization": f"Bearer {access_token}"}
 
-        async with aiohttp.ClientSession() as session:
-            async with session.delete(
+        async with (
+            aiohttp.ClientSession() as session,
+            session.delete(
                 f"{DRIVE_API_BASE}/files/{file_id}/permissions/{permission_id}", headers=headers
-            ) as response:
-                if response.status != 204:
-                    error_text = await response.text()
-                    raise Exception(f"Failed to remove permission: {error_text}")
+            ) as response,
+        ):
+            if response.status != 204:
+                error_text = await response.text()
+                raise Exception(f"Failed to remove permission: {error_text}")
 
-                return {"success": True, "message": "Permission removed successfully"}
+            return {"success": True, "message": "Permission removed successfully"}
 
     except Exception as e:
         logger.error(f"Error removing Drive permission: {e}", exc_info=True)
@@ -1002,21 +1012,23 @@ async def internal_google_sheets_read_range(
     try:
         headers = {"Authorization": f"Bearer {access_token}", "Accept": "application/json"}
 
-        async with aiohttp.ClientSession() as session:
-            async with session.get(
+        async with (
+            aiohttp.ClientSession() as session,
+            session.get(
                 f"{SHEETS_API_BASE}/spreadsheets/{spreadsheet_id}/values/{range_name}", headers=headers
-            ) as response:
-                if response.status != 200:
-                    error_text = await response.text()
-                    raise Exception(f"Failed to read range: {error_text}")
+            ) as response,
+        ):
+            if response.status != 200:
+                error_text = await response.text()
+                raise Exception(f"Failed to read range: {error_text}")
 
-                data = await response.json()
-                return {
-                    "spreadsheet_id": spreadsheet_id,
-                    "range": data.get("range"),
-                    "values": data.get("values", []),
-                    "row_count": len(data.get("values", [])),
-                }
+            data = await response.json()
+            return {
+                "spreadsheet_id": spreadsheet_id,
+                "range": data.get("range"),
+                "values": data.get("values", []),
+                "row_count": len(data.get("values", [])),
+            }
 
     except Exception as e:
         logger.error(f"Error reading Google Sheet range: {e}", exc_info=True)
@@ -1054,25 +1066,27 @@ async def internal_google_sheets_write_range(
 
         body = {"values": values}
 
-        async with aiohttp.ClientSession() as session:
-            async with session.put(
+        async with (
+            aiohttp.ClientSession() as session,
+            session.put(
                 f"{SHEETS_API_BASE}/spreadsheets/{spreadsheet_id}/values/{range_name}",
                 headers=headers,
                 json=body,
                 params={"valueInputOption": "USER_ENTERED"},
-            ) as response:
-                if response.status != 200:
-                    error_text = await response.text()
-                    raise Exception(f"Failed to write range: {error_text}")
+            ) as response,
+        ):
+            if response.status != 200:
+                error_text = await response.text()
+                raise Exception(f"Failed to write range: {error_text}")
 
-                data = await response.json()
-                return {
-                    "spreadsheet_id": spreadsheet_id,
-                    "updated_range": data.get("updatedRange"),
-                    "updated_rows": data.get("updatedRows"),
-                    "updated_columns": data.get("updatedColumns"),
-                    "updated_cells": data.get("updatedCells"),
-                }
+            data = await response.json()
+            return {
+                "spreadsheet_id": spreadsheet_id,
+                "updated_range": data.get("updatedRange"),
+                "updated_rows": data.get("updatedRows"),
+                "updated_columns": data.get("updatedColumns"),
+                "updated_cells": data.get("updatedCells"),
+            }
 
     except Exception as e:
         logger.error(f"Error writing to Google Sheet: {e}", exc_info=True)
