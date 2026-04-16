@@ -157,14 +157,16 @@ class TestDocumentProcessor:
                 # Mock TextProcessor (already patched in fixture, access via processor instance)
                 processor.text_processor.chunk_text.return_value = [{"text": "chunk content", "metadata": {}}]
 
-                # Mock existing DS doc check (None = new) and count query
+                # Mock execute calls in order:
+                # 1. DataSourceDocument check (line ~172) → scalar_one_or_none → None (new)
+                # 2. Document/KB doc check (line ~243) → scalar_one_or_none → None (new)
                 mock_result_none = MagicMock()
                 mock_result_none.scalar_one_or_none.return_value = None
 
-                mock_result_count = MagicMock()
-                mock_result_count.scalar_one.return_value = 1
+                mock_result_none2 = MagicMock()
+                mock_result_none2.scalar_one_or_none.return_value = None
 
-                mock_db_session.execute = AsyncMock(side_effect=[mock_result_none, mock_result_count])
+                mock_db_session.execute = AsyncMock(side_effect=[mock_result_none, mock_result_none2])
 
                 # Mock Image extraction
                 processor._extract_and_store_images = AsyncMock()

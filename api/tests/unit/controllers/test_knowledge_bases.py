@@ -380,6 +380,7 @@ class TestListDocuments:
         mock_doc.created_at = datetime.now(UTC)
         mock_doc.updated_at = datetime.now(UTC)
         mock_doc.doc_metadata = {}
+        mock_doc.status = MagicMock(value="completed")
 
         # First call returns KB, second returns count, third returns documents
         call_count = [0]
