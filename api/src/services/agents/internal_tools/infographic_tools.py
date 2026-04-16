@@ -120,9 +120,9 @@ async def internal_generate_infographic(
     svg_url: str | None = None
     png_url: str | None = None
 
-    tenant_id  = (config or {}).get("tenant_id", "default")
-    date_path  = datetime.now(UTC).strftime("%Y-%m-%d")
-    file_id    = uuid.uuid4().hex[:12]
+    tenant_id = (config or {}).get("tenant_id", "default")
+    date_path = datetime.now(UTC).strftime("%Y-%m-%d")
+    file_id = uuid.uuid4().hex[:12]
     svg_s3_key = f"infographics/{tenant_id}/{date_path}/{file_id}.svg"
 
     try:
@@ -168,16 +168,13 @@ async def internal_generate_infographic(
     inline_svg = svg_content if len(svg_content) < 64_000 else None
 
     return {
-        "success":     True,
-        "title":       spec_dict.get("title"),
-        "theme":       spec_dict.get("theme", "dark"),
-        "svg_url":     svg_url,
-        "png_url":     png_url,
+        "success": True,
+        "title": spec_dict.get("title"),
+        "theme": spec_dict.get("theme", "dark"),
+        "svg_url": svg_url,
+        "png_url": png_url,
         "svg_content": inline_svg,
-        "note": (
-            "Use svg_url or png_url to post the infographic to Slack "
-            "via the slack_post_blocks tool."
-        ),
+        "note": ("Use svg_url or png_url to post the infographic to Slack via the slack_post_blocks tool."),
     }
 
 
@@ -231,36 +228,38 @@ async def internal_generate_slack_infographic(
         Same shape as ``internal_generate_infographic``.
     """
     try:
-        kpis_list       = json.loads(kpis)
-        bar_data_list   = json.loads(bar_chart_data)
-        stories_list    = json.loads(stories)
+        kpis_list = json.loads(kpis)
+        bar_data_list = json.loads(bar_chart_data)
+        stories_list = json.loads(stories)
     except json.JSONDecodeError as exc:
         return {"success": False, "error": f"Invalid JSON parameter: {exc}"}
 
     sections: list[dict] = [
-        {"type": "kpi_row",   "items": kpis_list},
+        {"type": "kpi_row", "items": kpis_list},
         {"type": "divider"},
         {"type": "bar_chart", "title": bar_chart_title, "data": bar_data_list},
         {"type": "divider"},
-        {"type": "stories",   "title": "Top Stories",   "items": stories_list},
+        {"type": "stories", "title": "Top Stories", "items": stories_list},
     ]
 
     if heatmap_data:
         try:
             hm = json.loads(heatmap_data)
             sections.append({"type": "divider"})
-            sections.append({
-                "type":  "heatmap",
-                "title": "Hourly Activity (this week)",
-                "data":  hm,
-            })
+            sections.append(
+                {
+                    "type": "heatmap",
+                    "title": "Hourly Activity (this week)",
+                    "data": hm,
+                }
+            )
         except json.JSONDecodeError:
             logger.warning("heatmap_data is not valid JSON — skipping heatmap section")
 
     spec_dict = {
-        "title":    title,
-        "date":     date,
-        "theme":    theme,
+        "title": title,
+        "date": date,
+        "theme": theme,
         "sections": sections,
     }
 

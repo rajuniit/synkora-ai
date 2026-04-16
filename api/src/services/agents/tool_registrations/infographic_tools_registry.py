@@ -18,8 +18,8 @@ def register_infographic_tools(registry) -> None:
             "(CEO briefing, weekly digest, channel activity summary, etc.).\n\n"
             "━━ THEMES ━━\n"
             "Named presets (pass as string): aurora | midnight | carbon | sunset | emerald\n"
-            "Custom dict: {\"bg\":\"#0B0B0D\",\"palette\":[\"#F97316\",\"#3B82F6\"],\"card_bg\":\"#131316\",...}\n"
-            "Partial override: {\"preset\":\"midnight\",\"palette\":[\"#custom1\",\"#custom2\"]}\n\n"
+            'Custom dict: {"bg":"#0B0B0D","palette":["#F97316","#3B82F6"],"card_bg":"#131316",...}\n'
+            'Partial override: {"preset":"midnight","palette":["#custom1","#custom2"]}\n\n'
             "━━ SECTION TYPES ━━\n\n"
             "kpi_row — Row of stat cards (numbers + labels + optional trend badge)\n"
             '  {"type":"kpi_row","items":[{"label":"Messages","value":342,"change":"+12%","trend":"up"}]}\n'
@@ -134,9 +134,9 @@ def register_infographic_tools(registry) -> None:
             "2. Aggregate: message counts per channel, top discussions, key decisions\n"
             "3. Call this tool with the aggregated data\n"
             "4. Post the returned png_url to Slack via internal_slack_send_message or blocks\n\n"
-            "kpis format:        '[{\"label\":\"Messages\",\"value\":342,\"change\":\"+12%\",\"trend\":\"up\"}]'\n"
-            "bar_chart_data:     '[{\"label\":\"#engineering\",\"value\":120}]'\n"
-            "stories format:     '[{\"headline\":\"...\",\"body\":\"...\",\"channel\":\"#eng\",\"author\":\"Alice\"}]'\n"
+            'kpis format:        \'[{"label":"Messages","value":342,"change":"+12%","trend":"up"}]\'\n'
+            'bar_chart_data:     \'[{"label":"#engineering","value":120}]\'\n'
+            'stories format:     \'[{"headline":"...","body":"...","channel":"#eng","author":"Alice"}]\'\n'
             "heatmap_data:       '[[0,2,0,...], ...]'  — 7 rows x 24 cols (optional)"
         ),
         parameters={
