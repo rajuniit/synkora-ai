@@ -28,6 +28,10 @@ RUN apt-get update && apt-get install -y \
     libxml2 \
     libxmlsec1 \
     pkg-config \
+    libcairo2-dev \
+    libpango1.0-dev \
+    libgdk-pixbuf2.0-dev \
+    libffi-dev \
     nodejs \
     npm \
     && rm -rf /var/lib/apt/lists/*
@@ -40,7 +44,7 @@ RUN pip install --no-cache-dir uv==${UV_VERSION}
 COPY pyproject.toml uv.lock ./
 
 # Install dependencies with dev packages
-RUN uv pip install --system -e ".[dev]"
+RUN uv pip install --system -e ".[dev,diagrams]"
 
 # Force xmlsec & lxml to link to correct system-level libxml2/libxmlsec
 RUN pip uninstall -y lxml xmlsec && \
