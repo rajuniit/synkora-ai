@@ -69,7 +69,9 @@ class SlackOutputProvider:
     """Sends outputs to Slack channels."""
 
     @staticmethod
-    async def send(oauth_app: OAuthApp | None, config: dict[str, Any], message: str, slack_bot: SlackBot | None = None) -> dict[str, Any]:
+    async def send(
+        oauth_app: OAuthApp | None, config: dict[str, Any], message: str, slack_bot: SlackBot | None = None
+    ) -> dict[str, Any]:
         """
         Send message to Slack channel.
 
@@ -370,7 +372,9 @@ class AgentOutputService:
             # Send to provider
             provider = self.providers.get(output_config.provider)
             if output_config.provider == OutputProvider.SLACK:
-                result = await provider.send(oauth_app, output_config.config, delivery.formatted_output, slack_bot=slack_bot)
+                result = await provider.send(
+                    oauth_app, output_config.config, delivery.formatted_output, slack_bot=slack_bot
+                )
             else:
                 result = await provider.send(oauth_app, output_config.config, delivery.formatted_output)
 

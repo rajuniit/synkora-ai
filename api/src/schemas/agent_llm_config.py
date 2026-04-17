@@ -32,9 +32,7 @@ class AgentLLMConfigBase(BaseModel):
             "priority (int, lower=preferred), is_fallback (bool)"
         ),
     )
-    routing_weight: float | None = Field(
-        None, description="Weight for round_robin routing (0.0-1.0, default 1.0)"
-    )
+    routing_weight: float | None = Field(None, description="Weight for round_robin routing (0.0-1.0, default 1.0)")
 
 
 class AgentLLMConfigCreate(AgentLLMConfigBase):

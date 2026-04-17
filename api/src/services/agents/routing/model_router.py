@@ -37,8 +37,8 @@ _FAST_MODEL_NAMES: frozenset[str] = frozenset(
         "gemini-flash-2.0",
         "mistral-small-latest",
         "mixtral-8x7b-instruct",
-        "llama-3.1-8b-instant",   # Groq
-        "llama3-8b-8192",          # Groq
+        "llama-3.1-8b-instant",  # Groq
+        "llama3-8b-8192",  # Groq
     }
 )
 
@@ -236,10 +236,7 @@ class ModelRouter:
         fallback_only = [c for c in configs if self._is_fallback_only(c)]
 
         # Find configs that explicitly list this intent
-        intent_matched = [
-            c for c in non_fallback
-            if intent in (self._routing_rules(c).get("intents") or [])
-        ]
+        intent_matched = [c for c in non_fallback if intent in (self._routing_rules(c).get("intents") or [])]
 
         # Also filter by complexity gate when classification is available
         if classification and intent_matched:
@@ -261,10 +258,7 @@ class ModelRouter:
             primary = self._default_config(non_fallback) if non_fallback else self._default_config(configs)
             ordered_fallbacks = [c for c in configs if str(c.id) != str(primary.id)]
 
-        logger.info(
-            f"[intent] intent={intent} → {primary.model_name} "
-            f"(matched={len(intent_matched)} configs)"
-        )
+        logger.info(f"[intent] intent={intent} → {primary.model_name} (matched={len(intent_matched)} configs)")
 
         return RoutingDecision(
             primary_config_id=str(primary.id),

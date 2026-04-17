@@ -73,8 +73,7 @@ _RAW_PATTERNS: dict[str, list[str]] = {
 
 # Compile once at import time
 INTENT_PATTERNS: dict[str, list[re.Pattern]] = {
-    intent: [re.compile(p, re.IGNORECASE) for p in patterns]
-    for intent, patterns in _RAW_PATTERNS.items()
+    intent: [re.compile(p, re.IGNORECASE) for p in patterns] for intent, patterns in _RAW_PATTERNS.items()
 }
 
 # ---------------------------------------------------------------------------
@@ -82,33 +81,53 @@ INTENT_PATTERNS: dict[str, list[re.Pattern]] = {
 # ---------------------------------------------------------------------------
 _COMPLEXITY_SIGNALS: list[tuple[str, float, re.Pattern]] = [
     # Length-based
-    ("long_query_200", 0.25, re.compile(r"(?s).{800,}")),        # > ~200 words
-    ("long_query_80", 0.12, re.compile(r"(?s).{300,}")),          # > ~80 words
+    ("long_query_200", 0.25, re.compile(r"(?s).{800,}")),  # > ~200 words
+    ("long_query_80", 0.12, re.compile(r"(?s).{300,}")),  # > ~80 words
     # Multi-step reasoning
-    ("multi_step", 0.20, re.compile(
-        r"\b(then|after that|next step|step \d|first .{0,30} then|finally|additionally|furthermore)\b",
-        re.IGNORECASE,
-    )),
+    (
+        "multi_step",
+        0.20,
+        re.compile(
+            r"\b(then|after that|next step|step \d|first .{0,30} then|finally|additionally|furthermore)\b",
+            re.IGNORECASE,
+        ),
+    ),
     # Architectural / technical depth
-    ("architecture", 0.20, re.compile(
-        r"\b(design|architect|trade-off|bottleneck|scalab|performance|optim|refactor|migrate|integrate)\b",
-        re.IGNORECASE,
-    )),
+    (
+        "architecture",
+        0.20,
+        re.compile(
+            r"\b(design|architect|trade-off|bottleneck|scalab|performance|optim|refactor|migrate|integrate)\b",
+            re.IGNORECASE,
+        ),
+    ),
     # Code + explanation combo
-    ("code_explain", 0.15, re.compile(
-        r"(explain|why|how).{0,50}(code|function|algorithm|approach)",
-        re.IGNORECASE,
-    )),
+    (
+        "code_explain",
+        0.15,
+        re.compile(
+            r"(explain|why|how).{0,50}(code|function|algorithm|approach)",
+            re.IGNORECASE,
+        ),
+    ),
     # Comparative / evaluative
-    ("comparative", 0.10, re.compile(
-        r"\b(compare|versus|vs\.?|difference between|which is better|pros and cons|trade.?off)\b",
-        re.IGNORECASE,
-    )),
+    (
+        "comparative",
+        0.10,
+        re.compile(
+            r"\b(compare|versus|vs\.?|difference between|which is better|pros and cons|trade.?off)\b",
+            re.IGNORECASE,
+        ),
+    ),
     # Constraints / requirements
-    ("constraints", 0.10, re.compile(
-        r"\b(must|should|require|constraint|limitation|edge case|handle|consider)\b.{0,60}\b(also|and|but|however)\b",
-        re.IGNORECASE,
-    )),
+    (
+        "constraints",
+        0.10,
+        re.compile(
+            r"\b(must|should|require|constraint|limitation|edge case|handle|consider)\b.{0,60}\b(also|and|but|however)\b",
+            re.IGNORECASE,
+        ),
+    ),
 ]
 
 

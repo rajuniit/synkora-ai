@@ -138,7 +138,9 @@ class MultiProviderLLMClient:
             if self.config.api_base:
                 kwargs["base_url"] = self.config.api_base
             self._client = AsyncOpenAI(**kwargs)
-            logger.info(f"Initialized OpenAI-compatible client (provider={self.provider}) with model: {self.config.model_name}")
+            logger.info(
+                f"Initialized OpenAI-compatible client (provider={self.provider}) with model: {self.config.model_name}"
+            )
         except ImportError:
             raise ImportError("openai package not installed. Install with: pip install openai")
 

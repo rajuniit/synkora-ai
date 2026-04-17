@@ -277,12 +277,12 @@ def register_slack_tools(registry):
             "dividers, and formatted text.\n\n"
             "PRIMARY USE-CASE — posting infographic images:\n"
             "After calling internal_generate_infographic, post the result to Slack like this:\n\n"
-            '[\n'
+            "[\n"
             '  {"type": "section", "text": {"type": "mrkdwn", "text": "*Daily Briefing*"}},\n'
             '  {"type": "image",\n'
             '   "image_url": "<png_url from infographic result>",\n'
             '   "alt_text": "Daily Operations Briefing"}\n'
-            ']\n\n'
+            "]\n\n"
             "The image block requires a publicly accessible URL. Use the png_url or svg_url "
             "returned by internal_generate_infographic (uploaded to S3). "
             "If S3 is not configured, use internal_slack_upload_file with svg_content instead.\n\n"

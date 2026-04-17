@@ -739,7 +739,6 @@ async def internal_slack_upload_file(
         if not file_content:
             return {"success": False, "error": "file_content is required"}
 
-
         # Use files_upload_v2 if available (newer SDK), fall back to files_upload
         upload_kwargs: dict[str, Any] = {
             "channels": channel_id,

@@ -602,7 +602,7 @@ class DistributedConnectionManager(ConnectionManager):
                 master_name,
                 password=os.getenv("REDIS_PASSWORD"),
                 decode_responses=True,
-                socket_timeout=None,     # no timeout for pub/sub reads
+                socket_timeout=None,  # no timeout for pub/sub reads
                 socket_connect_timeout=5.0,
             )
         else:
@@ -610,7 +610,7 @@ class DistributedConnectionManager(ConnectionManager):
             return aioredis.from_url(
                 redis_url,
                 decode_responses=True,
-                socket_timeout=None,     # no timeout for pub/sub reads
+                socket_timeout=None,  # no timeout for pub/sub reads
                 socket_connect_timeout=5.0,
             )
 
@@ -684,10 +684,7 @@ class DistributedConnectionManager(ConnectionManager):
             except asyncio.CancelledError:
                 return
             except Exception as e:
-                logger.warning(
-                    f"Redis pub/sub listener error: {e}. "
-                    f"Reconnecting in {backoff:.0f}s..."
-                )
+                logger.warning(f"Redis pub/sub listener error: {e}. Reconnecting in {backoff:.0f}s...")
                 await asyncio.sleep(backoff)
                 backoff = min(backoff * 2, 60.0)
 
