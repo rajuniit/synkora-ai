@@ -126,16 +126,11 @@ async def internal_generate_infographic(
     svg_s3_key = f"infographics/{tenant_id}/{date_path}/{file_id}.svg"
 
     try:
-        from src.services.agents.internal_tools.storage_tools import internal_s3_upload_file
+        from src.services.storage.s3_storage import get_s3_storage
 
-        result = await internal_s3_upload_file(
-            file_content=svg_content,
-            file_path=svg_s3_key,
-            content_type="image/svg+xml",
-            config=config,
-        )
-        if isinstance(result, dict) and result.get("success"):
-            svg_url = result.get("url") or result.get("presigned_url")
+        s3 = get_s3_storage()
+        s3.upload_file(file_content=svg_content.encode(), key=svg_s3_key, content_type="image/svg+xml")
+        svg_url = s3.generate_presigned_url(key=svg_s3_key, expiration=86400 * 7)
     except Exception:
         logger.debug("S3 SVG upload skipped (not configured or unavailable)")
 
@@ -150,14 +145,11 @@ async def internal_generate_infographic(
             )
             png_s3_key = svg_s3_key.replace(".svg", ".png")
 
-            result = await internal_s3_upload_file(
-                file_content=png_bytes,
-                file_path=png_s3_key,
-                content_type="image/png",
-                config=config,
-            )
-            if isinstance(result, dict) and result.get("success"):
-                png_url = result.get("url") or result.get("presigned_url")
+            from src.services.storage.s3_storage import get_s3_storage
+
+            _s3 = get_s3_storage()
+            _s3.upload_file(file_content=png_bytes, key=png_s3_key, content_type="image/png")
+            png_url = _s3.generate_presigned_url(key=png_s3_key, expiration=86400 * 7)
         except ImportError:
             logger.debug("cairosvg not installed — PNG export skipped")
         except Exception as exc:
