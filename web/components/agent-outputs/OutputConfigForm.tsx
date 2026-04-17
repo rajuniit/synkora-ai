@@ -1,10 +1,8 @@
 'use client';
 
 import { useState } from 'react';
-import { Save, Loader2, AlertCircle, Info } from 'lucide-react';
-import { Button } from '@/components/ui/Button';
+import { Save, Loader2 } from 'lucide-react';
 import { useOAuthApps } from '@/hooks/useAgentOutputs';
-import toast from 'react-hot-toast';
 import type {
   OutputConfig,
   CreateOutputConfigData,
@@ -20,15 +18,26 @@ interface OutputConfigFormProps {
   onCancel: () => void;
 }
 
+/**
+ * Encode the selected connection into a single string value.
+ * Slack bots use "bot:<uuid>", OAuth apps use "oauth:<id>".
+ */
+function encodeConnectionValue(output?: OutputConfig): string {
+  if (output?.slack_bot_id) return `bot:${output.slack_bot_id}`;
+  if (output?.oauth_app_id) return `oauth:${output.oauth_app_id}`;
+  return '';
+}
+
 export function OutputConfigForm({ output, onSubmit, onCancel }: OutputConfigFormProps) {
-  const { oauthApps, getAppsByProvider } = useOAuthApps();
+  const { slackBots, getAppsByProvider } = useOAuthApps();
   const [loading, setLoading] = useState(false);
   const [provider, setProvider] = useState<OutputProvider>(output?.provider || 'slack');
-  
+
   // Form fields
   const [name, setName] = useState(output?.name || '');
   const [description, setDescription] = useState(output?.description || '');
-  const [oauthAppId, setOauthAppId] = useState<number | undefined>(output?.oauth_app_id);
+  // Combined connection value: "bot:<uuid>" or "oauth:<id>"
+  const [connectionValue, setConnectionValue] = useState<string>(encodeConnectionValue(output));
   const [isEnabled, setIsEnabled] = useState(output?.is_enabled ?? true);
   const [sendOnWebhook, setSendOnWebhook] = useState(output?.send_on_webhook_trigger ?? true);
   const [sendOnChat, setSendOnChat] = useState(output?.send_on_chat_completion ?? false);
@@ -37,8 +46,11 @@ export function OutputConfigForm({ output, onSubmit, onCancel }: OutputConfigFor
   const [outputTemplate, setOutputTemplate] = useState(output?.output_template || '');
 
   // Provider-specific config
-  const [slackChannel, setSlackChannel] = useState<string>(
-    (output?.config as SlackOutputConfig)?.channel || ''
+  const [slackChannelId, setSlackChannelId] = useState<string>(
+    (output?.config as any)?.channel_id || ''
+  );
+  const [slackChannelName, setSlackChannelName] = useState<string>(
+    (output?.config as any)?.channel_name || ''
   );
   const [emailTo, setEmailTo] = useState<string>(
     (output?.config as EmailOutputConfig)?.to?.join(', ') || ''
@@ -64,11 +76,11 @@ export function OutputConfigForm({ output, onSubmit, onCancel }: OutputConfigFor
       let config: any = {};
 
       if (provider === 'slack') {
-        config = { channel: slackChannel };
+        config = { channel_id: slackChannelId, channel_name: slackChannelName };
       } else if (provider === 'email') {
         config = {
-          to: emailTo.split(',').map(e => e.trim()).filter(Boolean),
-          subject: emailSubject,
+          recipients: emailTo.split(',').map((e) => e.trim()).filter(Boolean),
+          subject_template: emailSubject,
         };
       } else if (provider === 'webhook') {
         config = {
@@ -78,11 +90,21 @@ export function OutputConfigForm({ output, onSubmit, onCancel }: OutputConfigFor
         };
       }
 
+      // Parse connection value
+      let oauthAppId: number | undefined;
+      let slackBotId: string | undefined;
+      if (connectionValue.startsWith('bot:')) {
+        slackBotId = connectionValue.slice(4);
+      } else if (connectionValue.startsWith('oauth:')) {
+        oauthAppId = parseInt(connectionValue.slice(6), 10);
+      }
+
       const data: CreateOutputConfigData = {
         name,
         description: description || undefined,
         provider,
         oauth_app_id: oauthAppId,
+        slack_bot_id: slackBotId,
         config,
         output_template: outputTemplate || undefined,
         is_enabled: isEnabled,
@@ -100,7 +122,8 @@ export function OutputConfigForm({ output, onSubmit, onCancel }: OutputConfigFor
     }
   };
 
-  const providerApps = getAppsByProvider(provider);
+  const slackOAuthApps = getAppsByProvider('slack');
+  const emailApps = getAppsByProvider('email');
 
   return (
     <form onSubmit={handleSubmit} className="p-6">
@@ -145,9 +168,12 @@ export function OutputConfigForm({ output, onSubmit, onCancel }: OutputConfigFor
           </label>
           <select
             value={provider}
-            onChange={(e) => setProvider(e.target.value as OutputProvider)}
+            onChange={(e) => {
+              setProvider(e.target.value as OutputProvider);
+              setConnectionValue('');
+            }}
             disabled={!!output}
-                className="w-full px-3 py-2 text-sm border border-gray-300 rounded-lg focus:ring-2 focus:ring-red-500 focus:border-transparent disabled:opacity-50 disabled:cursor-not-allowed"
+            className="w-full px-3 py-2 text-sm border border-gray-300 rounded-lg focus:ring-2 focus:ring-red-500 focus:border-transparent disabled:opacity-50 disabled:cursor-not-allowed"
             required
           >
             <option value="slack">Slack</option>
@@ -161,28 +187,68 @@ export function OutputConfigForm({ output, onSubmit, onCancel }: OutputConfigFor
           )}
         </div>
 
-        {/* OAuth App Selection (for Slack and Email) */}
-        {(provider === 'slack' || provider === 'email') && (
+        {/* Connection Selection for Slack */}
+        {provider === 'slack' && (
           <div>
             <label className="block text-sm font-medium text-gray-700 mb-1.5">
-              {provider === 'slack' ? 'Slack App' : 'Email Configuration'} <span className="text-red-500">*</span>
+              Slack Connection <span className="text-red-500">*</span>
             </label>
             <select
-              value={oauthAppId?.toString() || ''}
-              onChange={(e) => setOauthAppId(parseInt(e.target.value))}
+              value={connectionValue}
+              onChange={(e) => setConnectionValue(e.target.value)}
               className="w-full px-3 py-2 text-sm border border-gray-300 rounded-lg focus:ring-2 focus:ring-red-500 focus:border-transparent"
               required
             >
-              <option value="">Select {provider} app</option>
-              {providerApps.map((app) => (
-                <option key={app.id} value={app.id.toString()}>
+              <option value="">Select Slack connection</option>
+              {slackBots.length > 0 && (
+                <optgroup label="Slack Bots (Bot Token)">
+                  {slackBots.map((bot) => (
+                    <option key={bot.id} value={`bot:${bot.id}`}>
+                      {bot.name}{bot.slack_team_name ? ` — ${bot.slack_team_name}` : ''}
+                    </option>
+                  ))}
+                </optgroup>
+              )}
+              {slackOAuthApps.length > 0 && (
+                <optgroup label="OAuth Apps (User Token)">
+                  {slackOAuthApps.map((app) => (
+                    <option key={app.id} value={`oauth:${app.id}`}>
+                      {app.name}
+                    </option>
+                  ))}
+                </optgroup>
+              )}
+            </select>
+            {slackBots.length === 0 && slackOAuthApps.length === 0 && (
+              <p className="text-xs text-gray-600 mt-1">
+                No Slack connections found. Add a Slack Bot or OAuth App first.
+              </p>
+            )}
+          </div>
+        )}
+
+        {/* Connection Selection for Email */}
+        {provider === 'email' && (
+          <div>
+            <label className="block text-sm font-medium text-gray-700 mb-1.5">
+              Email Configuration <span className="text-red-500">*</span>
+            </label>
+            <select
+              value={connectionValue}
+              onChange={(e) => setConnectionValue(e.target.value)}
+              className="w-full px-3 py-2 text-sm border border-gray-300 rounded-lg focus:ring-2 focus:ring-red-500 focus:border-transparent"
+              required
+            >
+              <option value="">Select email app</option>
+              {emailApps.map((app) => (
+                <option key={app.id} value={`oauth:${app.id}`}>
                   {app.name}
                 </option>
               ))}
             </select>
-            {providerApps.length === 0 && (
+            {emailApps.length === 0 && (
               <p className="text-xs text-gray-600 mt-1">
-                No {provider} apps configured. Please set up OAuth app first.
+                No email apps configured. Please set up an OAuth app first.
               </p>
             )}
           </div>
@@ -190,21 +256,35 @@ export function OutputConfigForm({ output, onSubmit, onCancel }: OutputConfigFor
 
         {/* Provider-Specific Configuration */}
         {provider === 'slack' && (
-          <div>
-            <label className="block text-sm font-medium text-gray-700 mb-1.5">
-              Channel or User <span className="text-red-500">*</span>
-            </label>
-            <input
-              type="text"
-              value={slackChannel}
-              onChange={(e) => setSlackChannel(e.target.value)}
-              placeholder="#channel or @username"
-              className="w-full px-3 py-2 text-sm border border-gray-300 rounded-lg focus:ring-2 focus:ring-red-500 focus:border-transparent"
-              required
-            />
-            <p className="text-xs text-gray-600 mt-1">
-              Use # for channels or @ for direct messages
-            </p>
+          <div className="space-y-3">
+            <div>
+              <label className="block text-sm font-medium text-gray-700 mb-1.5">
+                Channel ID <span className="text-red-500">*</span>
+              </label>
+              <input
+                type="text"
+                value={slackChannelId}
+                onChange={(e) => setSlackChannelId(e.target.value)}
+                placeholder="C0123456789"
+                className="w-full px-3 py-2 text-sm border border-gray-300 rounded-lg focus:ring-2 focus:ring-red-500 focus:border-transparent"
+                required
+              />
+              <p className="text-xs text-gray-600 mt-1">
+                Slack channel ID (starts with C). Right-click a channel in Slack → Copy link to find it.
+              </p>
+            </div>
+            <div>
+              <label className="block text-sm font-medium text-gray-700 mb-1.5">
+                Channel Name (optional)
+              </label>
+              <input
+                type="text"
+                value={slackChannelName}
+                onChange={(e) => setSlackChannelName(e.target.value)}
+                placeholder="#general"
+                className="w-full px-3 py-2 text-sm border border-gray-300 rounded-lg focus:ring-2 focus:ring-red-500 focus:border-transparent"
+              />
+            </div>
           </div>
         )}
 

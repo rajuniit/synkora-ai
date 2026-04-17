@@ -1,13 +1,15 @@
 'use client'
 
-import { useState } from 'react'
+import { useState, useEffect } from 'react'
 import { useParams} from 'next/navigation'
 import { ArrowLeft, X, AlertTriangle } from 'lucide-react'
 import Link from 'next/link'
 import toast from 'react-hot-toast'
 import { LLMConfigForm, LLMConfigList } from '@/components/agents/llm-configs'
+import RoutingModePanel from '@/components/agents/llm-configs/RoutingModePanel'
 import { useLLMConfigManager } from '@/hooks/useAgentLLMConfigs'
-import { AgentLLMConfig, AgentLLMConfigCreate, AgentLLMConfigUpdate } from '@/types/agent-llm-config'
+import { AgentLLMConfig, AgentLLMConfigCreate, AgentLLMConfigUpdate, RoutingMode } from '@/types/agent-llm-config'
+import { updateAgent, getAgent } from '@/lib/api/agents'
 
 export default function AgentLLMConfigsPage() {
   const params = useParams()
@@ -27,6 +29,24 @@ export default function AgentLLMConfigsPage() {
   const [isSubmitting, setIsSubmitting] = useState(false)
   const [deletingConfigId, setDeletingConfigId] = useState<string | null>(null)
   const [isDeleting, setIsDeleting] = useState(false)
+  const [routingMode, setRoutingMode] = useState<RoutingMode>('fixed')
+  const [routingConfig, setRoutingConfig] = useState<Record<string, any>>({})
+
+  // Load current routing settings from agent
+  useEffect(() => {
+    if (!agentName) return
+    getAgent(agentName).then((agent: any) => {
+      if (agent?.routing_mode) setRoutingMode(agent.routing_mode as RoutingMode)
+      if (agent?.routing_config) setRoutingConfig(agent.routing_config)
+    }).catch(() => {/* agent may not exist yet */})
+  }, [agentName])
+
+  const handleSaveRouting = async (mode: RoutingMode, config: Record<string, any>) => {
+    await updateAgent(agentName, { routing_mode: mode, routing_config: config })
+    setRoutingMode(mode)
+    setRoutingConfig(config)
+    toast.success('Routing mode updated')
+  }
 
   const handleAdd = () => {
     setEditingConfig(undefined)
@@ -183,15 +203,23 @@ export default function AgentLLMConfigsPage() {
             />
           </div>
         ) : (
-          <div className="bg-white rounded-lg shadow-sm border border-gray-200 p-6">
+          <div>
+            {/* Routing mode panel */}
+            <RoutingModePanel
+              agentName={agentName}
+              currentMode={routingMode}
+              routingConfig={routingConfig}
+              onSave={handleSaveRouting}
+            />
+
+            <div className="bg-white rounded-lg shadow-sm border border-gray-200 p-6">
             <div className="mb-6">
               <h2 className="text-lg font-semibold text-gray-900 mb-2">
-                About AI Model Config
+                Model Configurations
               </h2>
               <p className="text-sm text-gray-600">
-                Configure multiple AI models for your agent. The agent will use the default
-                configuration for most requests, and can fall back to other enabled configurations
-                if needed. You can also specify different models for different use cases.
+                Add multiple models and configure routing rules on each to control which queries
+                each model handles. The routing mode above determines how the agent picks between them.
               </p>
             </div>
 
@@ -204,6 +232,7 @@ export default function AgentLLMConfigsPage() {
               onToggleEnabled={handleToggleEnabled}
               isLoading={isLoading}
             />
+          </div>
           </div>
         )}
       </div>

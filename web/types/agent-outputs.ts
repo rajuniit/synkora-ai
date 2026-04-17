@@ -14,6 +14,7 @@ export interface OutputConfig {
   description?: string;
   provider: OutputProvider;
   oauth_app_id?: number;
+  slack_bot_id?: string;
   config: Record<string, any>;
   conditions?: Record<string, any>;
   output_template?: string;
@@ -52,6 +53,7 @@ export interface CreateOutputConfigData {
   description?: string;
   provider: OutputProvider;
   oauth_app_id?: number;
+  slack_bot_id?: string;
   config: Record<string, any>;
   conditions?: Record<string, any>;
   output_template?: string;
@@ -66,6 +68,7 @@ export interface UpdateOutputConfigData {
   name?: string;
   description?: string;
   oauth_app_id?: number;
+  slack_bot_id?: string;
   config?: Record<string, any>;
   conditions?: Record<string, any>;
   output_template?: string;
@@ -103,5 +106,13 @@ export interface OAuthApp {
   id: number;
   name: string;
   provider: string;
+  is_active: boolean;
+}
+
+// Slack bot for dropdowns
+export interface SlackBot {
+  id: string;
+  name: string;
+  slack_team_name?: string;
   is_active: boolean;
 }

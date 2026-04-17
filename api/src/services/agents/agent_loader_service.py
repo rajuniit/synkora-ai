@@ -17,6 +17,8 @@ from src.services.agents.agent_manager import AgentManager
 from src.services.agents.config import AgentConfig, ModelConfig, ToolConfig
 from src.services.agents.implementations import ClaudeCodeAgent, CodeAgent, LLMAgent, ResearchAgent
 from src.services.agents.llm_provider_presets import get_model_preset
+from src.services.agents.routing.intent_classifier import classify_query
+from src.services.agents.routing.model_router import RoutingDecision, get_router
 from src.services.agents.security import decrypt_value
 from src.services.cache import get_agent_cache
 
@@ -34,6 +36,8 @@ class AgentLoadResult:
         loading_time: float = 0.0,
         error: str | None = None,
         is_workflow: bool = False,
+        fallback_config_ids: list[str] | None = None,
+        routing_decision: Any | None = None,
     ):
         self.db_agent = db_agent
         self.agent = agent
@@ -41,6 +45,8 @@ class AgentLoadResult:
         self.loading_time = loading_time
         self.error = error
         self.is_workflow = is_workflow
+        self.fallback_config_ids: list[str] = fallback_config_ids or []
+        self.routing_decision = routing_decision
 
 
 class AgentLoaderService:
@@ -118,25 +124,39 @@ class AgentLoaderService:
 
         return Agent(**agent_data)
 
-    async def load_agent(self, agent_name: str, db: AsyncSession, llm_config_id: str | None = None) -> AgentLoadResult:
+    async def load_agent(
+        self,
+        agent_name: str,
+        db: AsyncSession,
+        llm_config_id: str | None = None,
+        query: str | None = None,
+        conversation_history: list[dict[str, Any]] | None = None,
+    ) -> AgentLoadResult:
         """
-        Load agent from cache or database.
+        Load agent from cache or database, with optional intelligent model routing.
+
+        When the agent has routing_mode != "fixed" and a query is provided, the
+        router classifies the query and selects the most cost-effective LLM config.
 
         Args:
             agent_name: Name of the agent
             db: Database session
-            llm_config_id: Specific LLM config ID (optional)
+            llm_config_id: Explicit LLM config ID override (bypasses routing)
+            query: User message (used by router for intent/complexity classification)
+            conversation_history: Prior turns (used by router for complexity scoring)
 
         Returns:
-            AgentLoadResult with loaded agent and metadata
+            AgentLoadResult with loaded agent, routing decision, and fallback IDs
         """
         start_time = time.time()
 
         # Fast path: agent is already warm in the in-process registry AND in Redis.
         # Skip db.merge() entirely — reconstruct db_agent from Redis data as a
         # detached object (all hot-path attribute accesses are scalar columns).
-        # Bypass when llm_config_id is set — that requires a fresh DB config load.
-        if not llm_config_id:
+        # Bypass when:
+        #   - llm_config_id is set (needs fresh DB config)
+        #   - query is set (routing may select a different config)
+        if not llm_config_id and not query:
             in_memory_agent = self.agent_manager.registry.get(agent_name)
             if in_memory_agent and in_memory_agent.llm_client:
                 cached_data = await self.cache.get_agent_config(agent_name)
@@ -186,9 +206,28 @@ class AgentLoaderService:
                 db_agent=db_agent, cache_hit=cache_hit, loading_time=time.time() - start_time, is_workflow=True
             )
 
+        # Run model routing if a query was provided and routing is non-fixed
+        routing_decision = None
+        effective_config_id = llm_config_id  # explicit override wins
+        fallback_config_ids: list[str] = []
+
+        agent_routing_mode = getattr(db_agent, "routing_mode", "fixed") or "fixed"
+
+        if query and not llm_config_id and agent_routing_mode != "fixed":
+            routing_decision, effective_config_id, fallback_config_ids = await self._run_routing(
+                db_agent=db_agent,
+                query=query,
+                conversation_history=conversation_history,
+                db=db,
+            )
+
         # Load regular agent into memory
         agent = await self._load_agent_to_memory(
-            agent_name=agent_name, db_agent=db_agent, cached_data=cached_data, llm_config_id=llm_config_id, db=db
+            agent_name=agent_name,
+            db_agent=db_agent,
+            cached_data=cached_data,
+            llm_config_id=effective_config_id,
+            db=db,
         )
 
         return AgentLoadResult(
@@ -198,6 +237,8 @@ class AgentLoaderService:
             loading_time=time.time() - start_time,
             is_workflow=False,
             error=agent.get("error") if isinstance(agent, dict) else None,
+            fallback_config_ids=fallback_config_ids,
+            routing_decision=routing_decision,
         )
 
     async def _load_from_cache(self, cached_data: dict[str, Any], db: AsyncSession) -> Agent:
@@ -262,6 +303,8 @@ class AgentLoaderService:
             "observability_config": db_agent.observability_config,
             "workflow_type": db_agent.workflow_type,
             "workflow_config": db_agent.workflow_config,
+            "routing_mode": getattr(db_agent, "routing_mode", "fixed") or "fixed",
+            "routing_config": getattr(db_agent, "routing_config", None),
             "status": db_agent.status,
             "tenant_id": str(db_agent.tenant_id),
             "created_at": db_agent.created_at.isoformat() if db_agent.created_at else None,
@@ -339,6 +382,58 @@ class AgentLoaderService:
         except Exception as e:
             logger.error(f"Failed to create agent: {e}")
             return {"error": f"Failed to create agent: {str(e)}"}
+
+    async def _run_routing(
+        self,
+        db_agent: Agent,
+        query: str,
+        conversation_history: list[dict[str, Any]] | None,
+        db: AsyncSession,
+    ) -> tuple[RoutingDecision | None, str | None, list[str]]:
+        """
+        Classify the query and pick the best LLM config using the model router.
+
+        Returns:
+            (RoutingDecision, selected_config_id, fallback_config_ids)
+        """
+        from src.models.agent_llm_config import AgentLLMConfig
+
+        try:
+            # Load all enabled configs for this agent
+            stmt = (
+                select(AgentLLMConfig)
+                .where(AgentLLMConfig.agent_id == db_agent.id, AgentLLMConfig.enabled)
+                .order_by(AgentLLMConfig.display_order, AgentLLMConfig.created_at)
+            )
+            result = await db.execute(stmt)
+            all_configs = list(result.scalars().all())
+
+            if not all_configs:
+                return None, None, []
+
+            # Classify the query (< 1ms, zero API cost)
+            classification = classify_query(query, conversation_history)
+
+            # Run the router
+            router = get_router()
+            decision = router.select(
+                routing_mode=getattr(db_agent, "routing_mode", "fixed") or "fixed",
+                routing_config=getattr(db_agent, "routing_config", None),
+                llm_configs=all_configs,
+                classification=classification,
+                explicit_config_id=None,
+            )
+
+            logger.info(
+                f"[routing] agent={db_agent.agent_name} {decision} "
+                f"intent={classification.intent} complexity={classification.complexity:.2f}"
+            )
+
+            return decision, decision.primary_config_id, decision.fallback_config_ids
+
+        except Exception as e:
+            logger.warning(f"[routing] Failed for agent '{db_agent.agent_name}', using default: {e}")
+            return None, None, []
 
     async def _resolve_llm_config(
         self, db_agent: Agent, cached_data: dict[str, Any] | None, llm_config_id: str | None, db: AsyncSession

@@ -353,6 +353,27 @@ export function useChatMessages({ agentName }: UseChatMessagesProps): UseChatMes
 
                 return newMessages
               })
+            } else if (data.type === 'infographic' && data.infographic) {
+              // Handle infographic data from backend rendering engine
+              setMessages((prev: Message[]) => {
+                const newMessages = [...prev]
+                const lastIndex = newMessages.length - 1
+
+                if (lastIndex >= 0 && newMessages[lastIndex].role === 'assistant') {
+                  const currentMetadata = newMessages[lastIndex].metadata || {}
+                  const currentInfographics = currentMetadata.infographics || []
+
+                  newMessages[lastIndex] = {
+                    ...newMessages[lastIndex],
+                    metadata: {
+                      ...currentMetadata,
+                      infographics: [...currentInfographics, data.infographic]
+                    }
+                  }
+                }
+
+                return newMessages
+              })
             } else if (data.type === 'error') {
               console.error('Streaming error:', data.error)
               if (elapsedInterval) {

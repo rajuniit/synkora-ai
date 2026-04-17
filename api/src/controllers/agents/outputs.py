@@ -16,6 +16,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from src.core.database import get_async_db
 from src.middleware.auth_middleware import get_current_account, get_current_tenant_id
 from src.models import Agent, AgentOutputConfig, AgentOutputDelivery, OAuthApp, OutputProvider
+from src.models.slack_bot import SlackBot
 from src.services.agent_output_service import AgentOutputService
 
 router = APIRouter()
@@ -32,6 +33,7 @@ class OutputConfigBase(BaseModel):
     description: str | None = Field(None, description="Optional description")
     provider: OutputProvider = Field(..., description="Output provider type")
     oauth_app_id: int | None = Field(None, description="OAuth app ID (for Slack/Email)")
+    slack_bot_id: str | None = Field(None, description="Slack bot UUID (alternative to oauth_app_id for Slack)")
     config: dict = Field(..., description="Provider-specific configuration")
     conditions: dict | None = Field(None, description="Conditional routing rules")
     output_template: str | None = Field(None, description="Jinja2 template for formatting")
@@ -54,6 +56,7 @@ class OutputConfigUpdate(BaseModel):
     name: str | None = None
     description: str | None = None
     oauth_app_id: int | None = None
+    slack_bot_id: str | None = None
     config: dict | None = None
     conditions: dict | None = None
     output_template: str | None = None
@@ -194,8 +197,22 @@ async def create_output_config(
                 detail=f"OAuth app provider '{oauth_app.provider}' doesn't match output provider '{data.provider.value}'",
             )
 
-    # Create output config
-    config = AgentOutputConfig(agent_id=agent_id, tenant_id=tenant_id, **data.model_dump())
+    # Verify Slack bot if provided
+    slack_bot_uuid = None
+    if data.slack_bot_id:
+        try:
+            slack_bot_uuid = UUID(data.slack_bot_id)
+        except ValueError:
+            raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Invalid slack_bot_id format")
+        result = await db.execute(
+            select(SlackBot).filter(SlackBot.id == slack_bot_uuid, SlackBot.tenant_id == tenant_id)
+        )
+        if not result.scalar_one_or_none():
+            raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Slack bot not found")
+
+    # Create output config — exclude slack_bot_id from model_dump since it's stored as UUID
+    config_data = data.model_dump(exclude={"slack_bot_id"})
+    config = AgentOutputConfig(agent_id=agent_id, tenant_id=tenant_id, slack_bot_id=slack_bot_uuid, **config_data)
 
     db.add(config)
     await db.commit()
@@ -278,9 +295,20 @@ async def update_output_config(
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Output configuration not found")
 
     # Update fields
-    update_data = data.model_dump(exclude_unset=True)
+    update_data = data.model_dump(exclude_unset=True, exclude={"slack_bot_id"})
     for field, value in update_data.items():
         setattr(config, field, value)
+
+    # Handle slack_bot_id separately to ensure UUID conversion
+    if "slack_bot_id" in data.model_fields_set:
+        raw = data.slack_bot_id
+        if raw is not None:
+            try:
+                config.slack_bot_id = UUID(raw)
+            except ValueError:
+                raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Invalid slack_bot_id format")
+        else:
+            config.slack_bot_id = None
 
     await db.commit()
     await db.refresh(config)

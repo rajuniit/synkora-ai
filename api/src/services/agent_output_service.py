@@ -23,6 +23,8 @@ from src.models import (
     OAuthApp,
     OutputProvider,
 )
+from src.models.slack_bot import SlackBot
+from src.services.agents.security import decrypt_value
 
 logger = logging.getLogger(__name__)
 
@@ -67,22 +69,33 @@ class SlackOutputProvider:
     """Sends outputs to Slack channels."""
 
     @staticmethod
-    async def send(oauth_app: OAuthApp, config: dict[str, Any], message: str) -> dict[str, Any]:
+    async def send(oauth_app: OAuthApp | None, config: dict[str, Any], message: str, slack_bot: SlackBot | None = None) -> dict[str, Any]:
         """
         Send message to Slack channel.
 
         Args:
-            oauth_app: OAuth app with Slack credentials
-            config: Channel configuration {"channel_id": "C123", "channel_name": "#general"}
+            oauth_app: OAuth app with Slack credentials (or None if using slack_bot)
+            config: Channel configuration {"channel": "#general"} or {"channel_id": "C123"}
             message: Message to send
+            slack_bot: SlackBot with encrypted bot token (alternative to oauth_app)
 
         Returns:
             Response from Slack API
         """
-        if oauth_app.auth_method == "api_token":
-            token = oauth_app.api_token
+        if slack_bot is not None:
+            # Use Slack bot token (xoxb-*)
+            raw_token = slack_bot.slack_bot_token
+            try:
+                token = decrypt_value(raw_token)
+            except Exception:
+                token = raw_token  # Already decrypted or plaintext
+        elif oauth_app is not None:
+            if oauth_app.auth_method == "api_token":
+                token = oauth_app.api_token
+            else:
+                token = oauth_app.access_token
         else:
-            token = oauth_app.access_token
+            raise ValueError("Either oauth_app or slack_bot must be provided")
 
         if not token:
             raise ValueError("No Slack token available")
@@ -282,12 +295,21 @@ class AgentOutputService:
                 result = await self.db.execute(select(OAuthApp).filter(OAuthApp.id == output_config.oauth_app_id))
                 oauth_app = result.scalar_one_or_none()
 
+            # Get Slack bot if needed
+            slack_bot = None
+            if output_config.slack_bot_id:
+                result = await self.db.execute(select(SlackBot).filter(SlackBot.id == output_config.slack_bot_id))
+                slack_bot = result.scalar_one_or_none()
+
             # Send to provider
             provider = self.providers.get(output_config.provider)
             if not provider:
                 raise ValueError(f"Unknown provider: {output_config.provider}")
 
-            result = await provider.send(oauth_app, output_config.config, formatted_output)
+            if output_config.provider == OutputProvider.SLACK:
+                result = await provider.send(oauth_app, output_config.config, formatted_output, slack_bot=slack_bot)
+            else:
+                result = await provider.send(oauth_app, output_config.config, formatted_output)
 
             # Update delivery as successful
             delivery.status = DeliveryStatus.DELIVERED
@@ -339,9 +361,18 @@ class AgentOutputService:
                 result = await self.db.execute(select(OAuthApp).filter(OAuthApp.id == output_config.oauth_app_id))
                 oauth_app = result.scalar_one_or_none()
 
+            # Get Slack bot if needed
+            slack_bot = None
+            if output_config.slack_bot_id:
+                result = await self.db.execute(select(SlackBot).filter(SlackBot.id == output_config.slack_bot_id))
+                slack_bot = result.scalar_one_or_none()
+
             # Send to provider
             provider = self.providers.get(output_config.provider)
-            result = await provider.send(oauth_app, output_config.config, delivery.formatted_output)
+            if output_config.provider == OutputProvider.SLACK:
+                result = await provider.send(oauth_app, output_config.config, delivery.formatted_output, slack_bot=slack_bot)
+            else:
+                result = await provider.send(oauth_app, output_config.config, delivery.formatted_output)
 
             # Update as successful
             delivery.status = DeliveryStatus.DELIVERED

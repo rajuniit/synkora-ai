@@ -20,6 +20,7 @@ from src.schemas.agent_llm_config import (
 )
 from src.services.agents.llm_config_service import LLMConfigService
 from src.services.agents.llm_provider_presets import (
+    get_all_models_for_comparison,
     get_all_providers,
     get_provider_models,
     get_provider_preset,
@@ -150,6 +151,8 @@ async def create_llm_config(
             is_default=config_data.is_default,
             display_order=config_data.display_order,
             enabled=enabled,
+            routing_rules=config_data.routing_rules,
+            routing_weight=config_data.routing_weight,
         )
 
         await db.commit()
@@ -173,6 +176,8 @@ async def create_llm_config(
             is_default=config.is_default,
             display_order=config.display_order,
             enabled=config.enabled,
+            routing_rules=config.routing_rules,
+            routing_weight=config.routing_weight,
             created_at=config.created_at.isoformat(),
             updated_at=config.updated_at.isoformat(),
         )
@@ -202,9 +207,47 @@ def list_llm_providers():
     ]
 
 
+@providers_router.get("/llm-providers/compare")
+def compare_llm_models(
+    filter: str | None = None,
+    sort_by: str | None = None,
+):
+    """Return a flat list of all models across all providers with comparison metadata.
+
+    Query params:
+      filter  – "open_source" | "cheap" | "fast" | "quality"
+      sort_by – "quality" (default) | "cost" | "speed"
+    """
+    models = get_all_models_for_comparison()
+
+    # Apply filters
+    if filter == "open_source":
+        models = [m for m in models if m.get("is_open_source")]
+    elif filter == "cheap":
+        models = [m for m in models if m.get("cost_input_per_1m") is not None and m["cost_input_per_1m"] <= 1.0]
+    elif filter == "fast":
+        models = [m for m in models if m.get("speed_tier") == "fast"]
+    elif filter == "quality":
+        models = [m for m in models if m.get("quality_score") is not None and m["quality_score"] >= 9.0]
+
+    # Apply sorting
+    if sort_by == "cost":
+        models.sort(key=lambda m: (m.get("cost_input_per_1m") is None, m.get("cost_input_per_1m") or 0))
+    elif sort_by == "speed":
+        _speed_order = {"fast": 0, "medium": 1, "slow": 2}
+        models.sort(key=lambda m: _speed_order.get(m.get("speed_tier") or "", 3))
+    else:
+        # Default: quality descending, unknowns last
+        models.sort(key=lambda m: -(m.get("quality_score") or 0))
+
+    return models
+
+
 @providers_router.get("/llm-providers/{provider_id}")
 def get_llm_provider(provider_id: str):
     """Get details for a specific LLM provider including available models."""
+    from src.services.agents.llm_provider_presets import enrich_model_with_comparison
+
     provider = get_provider_preset(provider_id)
     if not provider:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=f"Provider '{provider_id}' not found")
@@ -229,8 +272,15 @@ def get_llm_provider(provider_id: str):
                 "additional_params": m.additional_params,
                 "max_input_tokens": m.max_input_tokens,
                 "max_output_tokens": m.max_output_tokens,
+                "cost_input_per_1m": em.cost_input_per_1m,
+                "cost_output_per_1m": em.cost_output_per_1m,
+                "is_open_source": em.is_open_source,
+                "quality_score": em.quality_score,
+                "speed_tier": em.speed_tier,
+                "tags": em.tags,
             }
             for m in (provider.models or [])
+            for em in [enrich_model_with_comparison(m)]
         ],
     }
 
@@ -238,6 +288,8 @@ def get_llm_provider(provider_id: str):
 @providers_router.get("/llm-providers/{provider_id}/models")
 def list_provider_models(provider_id: str):
     """List all models for a specific provider."""
+    from src.services.agents.llm_provider_presets import enrich_model_with_comparison
+
     models = get_provider_models(provider_id)
     if not models:
         provider = get_provider_preset(provider_id)
@@ -247,15 +299,24 @@ def list_provider_models(provider_id: str):
 
     return [
         {
-            "name": m.name,
-            "model_name": m.model_name,
-            "description": m.description,
-            "default_temperature": m.default_temperature,
-            "default_max_tokens": m.default_max_tokens,
-            "default_top_p": m.default_top_p,
-            "additional_params": m.additional_params,
+            "name": em.name,
+            "model_name": em.model_name,
+            "description": em.description,
+            "default_temperature": em.default_temperature,
+            "default_max_tokens": em.default_max_tokens,
+            "default_top_p": em.default_top_p,
+            "additional_params": em.additional_params,
+            "max_input_tokens": em.max_input_tokens,
+            "max_output_tokens": em.max_output_tokens,
+            "cost_input_per_1m": em.cost_input_per_1m,
+            "cost_output_per_1m": em.cost_output_per_1m,
+            "is_open_source": em.is_open_source,
+            "quality_score": em.quality_score,
+            "speed_tier": em.speed_tier,
+            "tags": em.tags,
         }
         for m in models
+        for em in [enrich_model_with_comparison(m)]
     ]
 
 
@@ -294,6 +355,8 @@ async def list_llm_configs(
             is_default=config.is_default,
             display_order=config.display_order,
             enabled=config.enabled,
+            routing_rules=config.routing_rules,
+            routing_weight=config.routing_weight,
             created_at=config.created_at.isoformat(),
             updated_at=config.updated_at.isoformat(),
         )
@@ -336,6 +399,8 @@ async def get_llm_config(
         is_default=config.is_default,
         display_order=config.display_order,
         enabled=config.enabled,
+        routing_rules=config.routing_rules,
+        routing_weight=config.routing_weight,
         created_at=config.created_at.isoformat(),
         updated_at=config.updated_at.isoformat(),
     )
@@ -388,6 +453,8 @@ async def update_llm_config(
             is_default=config.is_default,
             display_order=config.display_order,
             enabled=config.enabled,
+            routing_rules=config.routing_rules,
+            routing_weight=config.routing_weight,
             created_at=config.created_at.isoformat(),
             updated_at=config.updated_at.isoformat(),
         )
@@ -474,6 +541,8 @@ async def set_default_config(
             is_default=config.is_default,
             display_order=config.display_order,
             enabled=config.enabled,
+            routing_rules=config.routing_rules,
+            routing_weight=config.routing_weight,
             created_at=config.created_at.isoformat(),
             updated_at=config.updated_at.isoformat(),
         )
@@ -519,6 +588,8 @@ async def reorder_configs(
                 is_default=config.is_default,
                 display_order=config.display_order,
                 enabled=config.enabled,
+                routing_rules=config.routing_rules,
+                routing_weight=config.routing_weight,
                 created_at=config.created_at.isoformat(),
                 updated_at=config.updated_at.isoformat(),
             )

@@ -174,7 +174,10 @@ async def internal_generate_infographic(
         "svg_url": svg_url,
         "png_url": png_url,
         "svg_content": inline_svg,
-        "note": ("Use svg_url or png_url to post the infographic to Slack via the slack_post_blocks tool."),
+        "note": (
+            "To post to Slack: use internal_slack_post_blocks with an image block containing png_url or svg_url. "
+            "If S3 is not configured and svg_content is present, use internal_slack_upload_file instead."
+        ),
     }
 
 

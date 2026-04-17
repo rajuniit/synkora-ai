@@ -31,6 +31,8 @@ class LLMConfigService:
         is_default: bool = False,
         display_order: int = 0,
         enabled: bool = True,
+        routing_rules: dict | None = None,
+        routing_weight: float | None = None,
     ) -> AgentLLMConfig:
         """Create a new LLM configuration."""
 
@@ -56,6 +58,8 @@ class LLMConfigService:
             is_default=is_default,
             display_order=display_order,
             enabled=enabled,
+            routing_rules=routing_rules,
+            routing_weight=routing_weight,
         )
 
         session.add(config)

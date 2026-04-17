@@ -49,6 +49,9 @@ class AgentOutputConfig(BaseModel, TenantMixin):
     oauth_app_id = Column(
         Integer, ForeignKey("oauth_apps.id", ondelete="SET NULL"), nullable=True, index=True
     )  # For Slack/Email via OAuth
+    slack_bot_id = Column(
+        UUID(as_uuid=True), ForeignKey("slack_bots.id", ondelete="SET NULL"), nullable=True, index=True
+    )  # For Slack via bot token (alternative to oauth_app_id)
 
     # Output configuration
     provider = Column(Enum(OutputProvider), nullable=False, index=True)
@@ -82,6 +85,7 @@ class AgentOutputConfig(BaseModel, TenantMixin):
     # Relationships
     agent = relationship("Agent", backref=backref("output_configs", passive_deletes=True))
     oauth_app = relationship("OAuthApp", backref="agent_outputs")
+    slack_bot = relationship("SlackBot", foreign_keys=[slack_bot_id])
     deliveries = relationship("AgentOutputDelivery", back_populates="output_config", cascade="all, delete-orphan")
 
     def to_dict(self, include_stats=False):
@@ -90,6 +94,7 @@ class AgentOutputConfig(BaseModel, TenantMixin):
             "id": str(self.id),
             "agent_id": str(self.agent_id),
             "oauth_app_id": self.oauth_app_id,
+            "slack_bot_id": str(self.slack_bot_id) if self.slack_bot_id else None,
             "tenant_id": str(self.tenant_id),
             "provider": self.provider.value if self.provider else None,
             "name": self.name,

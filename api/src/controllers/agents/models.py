@@ -61,6 +61,14 @@ class UpdateAgentRequest(BaseModel):
     workflow_config: dict[str, Any] | None = Field(None, description="Workflow configuration")
     role_id: str | None = Field(None, description="Optional role template ID for role-based agents")
     human_contact_id: str | None = Field(None, description="Optional human contact ID for escalation")
+    routing_mode: str | None = Field(
+        None,
+        description="Model routing mode: fixed | round_robin | cost_opt | intent | latency_opt",
+    )
+    routing_config: dict[str, Any] | None = Field(
+        None,
+        description="Routing configuration: quality_floor (0.0-1.0), max_cost_per_1k (USD), etc.",
+    )
 
 
 class ExecuteAgentRequest(BaseModel):

@@ -791,6 +791,8 @@ async def get_agent(
                 "is_adk_workflow_enabled": db_agent.workflow_type is not None,
                 "workflow_type": db_agent.workflow_type,
                 "workflow_config": db_agent.workflow_config,
+                "routing_mode": getattr(db_agent, "routing_mode", "fixed") or "fixed",
+                "routing_config": getattr(db_agent, "routing_config", None),
                 "created_at": db_agent.created_at.isoformat(),
                 "updated_at": db_agent.updated_at.isoformat(),
                 "stats": stats,
@@ -994,6 +996,16 @@ async def update_agent(
             db_agent.role_id = uuid.UUID(request.role_id) if request.role_id else None
         if request.human_contact_id is not None:
             db_agent.human_contact_id = uuid.UUID(request.human_contact_id) if request.human_contact_id else None
+        if request.routing_mode is not None:
+            valid_modes = {"fixed", "round_robin", "cost_opt", "intent", "latency_opt"}
+            if request.routing_mode not in valid_modes:
+                raise HTTPException(
+                    status_code=status.HTTP_400_BAD_REQUEST,
+                    detail=f"Invalid routing_mode '{request.routing_mode}'. Valid values: {sorted(valid_modes)}",
+                )
+            db_agent.routing_mode = request.routing_mode
+        if request.routing_config is not None:
+            db_agent.routing_config = request.routing_config
 
         await db.commit()
         await db.refresh(db_agent)

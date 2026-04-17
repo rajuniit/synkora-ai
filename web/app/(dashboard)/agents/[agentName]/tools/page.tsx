@@ -187,6 +187,14 @@ const TOOL_GROUPS: ToolGroup[] = [
     expanded: false
   },
   {
+    id: 'infographic',
+    name: 'Infographic Tools',
+    description: 'Generate rich infographics, visual reports, and Slack-ready infographic images',
+    icon: Package,
+    tools: [],
+    expanded: false
+  },
+  {
     id: 'docker',
     name: 'Docker',
     description: 'Query Docker container logs and monitor running services',
@@ -780,6 +788,8 @@ export default function AgentToolsPage() {
         groupId = 'file_system';
       } else if (toolName === 'internal_generate_diagram' || toolName === 'internal_generate_quick_diagram') {
         groupId = 'diagram';
+      } else if (toolName === 'internal_generate_infographic' || toolName === 'internal_generate_slack_infographic') {
+        groupId = 'infographic';
       } else if (toolName === 'internal_generate_chart' || toolName === 'internal_query_and_chart') {
         groupId = 'charts';
       } else if (toolName === 'generate_chart_from_data') {

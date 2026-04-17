@@ -620,6 +620,22 @@ class FunctionCallingHandler:
                             },
                         }
 
+                # Infographic tool detection
+                if func_name in ["internal_generate_infographic", "internal_generate_slack_infographic"]:
+                    if isinstance(result, dict) and result.get("success"):
+                        yield {
+                            "type": "infographic",
+                            "infographic": {
+                                "id": f"infog_{uuid.uuid4().hex[:8]}",
+                                "title": result.get("title", "Infographic"),
+                                "theme": result.get("theme", "dark"),
+                                "svg_url": result.get("svg_url"),
+                                "svg_content": result.get("svg_content"),
+                                "png_url": result.get("png_url"),
+                                "created_at": datetime.datetime.now().isoformat(),
+                            },
+                        }
+
             # Update conversation history with proper format
             # Generate UNIQUE tool_call IDs per call so parallel calls to the same tool
             # each get their own ID and their own result message.
@@ -659,6 +675,17 @@ class FunctionCallingHandler:
                                 "svg_url": diag.get("svg_url"),
                                 "png_url": diag.get("png_url"),
                             },
+                        }
+
+                # Strip SVG content from infographic results — already emitted as a separate SSE event.
+                if exec_result.name in ("internal_generate_infographic", "internal_generate_slack_infographic"):
+                    if isinstance(result, dict) and result.get("success"):
+                        result = {
+                            "success": True,
+                            "message": "Infographic generated and rendered successfully. It has been displayed to the user inline.",
+                            "title": result.get("title"),
+                            "svg_url": result.get("svg_url"),
+                            "png_url": result.get("png_url"),
                         }
 
                 content = json.dumps(convert_to_json_serializable(result)) if not isinstance(result, str) else result
