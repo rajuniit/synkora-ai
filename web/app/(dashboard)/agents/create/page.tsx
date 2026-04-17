@@ -854,40 +854,133 @@ function Step2AIModel({ formData, setFormData }: any) {
                   />
                 </div>
               )}
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-3 max-h-[400px] overflow-y-auto pr-1">
-                {filteredModels.map((model, index) => (
-                  <button
-                    key={model.model_name}
-                    onClick={() => handleModelSelect(model.model_name)}
-                    className={`relative p-4 rounded-2xl border-2 transition-all text-left ${
-                      formData.llm_model === model.model_name
-                        ? 'border-primary-500 bg-primary-50 shadow-lg shadow-primary-500/20'
-                        : 'border-gray-200 hover:border-primary-300 hover:shadow-md bg-white'
-                    }`}
-                  >
-                    {index === 0 && !modelSearch && (
-                      <span className="absolute -top-2 -right-2 px-2 py-1 bg-green-500 text-white text-[10px] font-bold rounded-full shadow-sm">
-                        RECOMMENDED
-                      </span>
-                    )}
-                    <div className={`font-bold text-base mb-1 ${
-                      formData.llm_model === model.model_name ? 'text-primary-900' : 'text-gray-900'
-                    }`}>
-                      {model.name}
-                    </div>
-                    <div className="text-xs text-gray-400 mb-1 font-mono truncate">
-                      {model.model_name}
-                    </div>
-                    <div className="text-sm text-gray-500 line-clamp-2">
-                      {model.description}
-                    </div>
-                    {formData.llm_model === model.model_name && (
-                      <div className="absolute top-4 right-4 w-6 h-6 bg-primary-500 rounded-full flex items-center justify-center">
-                        <Check size={14} className="text-white" />
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-4 max-h-[560px] overflow-y-auto pr-1">
+                {filteredModels.map((model, index) => {
+                  const isSelected = formData.llm_model === model.model_name
+                  const score = model.quality_score
+                  const qualityPct = score !== null ? (score / 10) * 100 : null
+                  const qualityBarColor = score !== null
+                    ? score >= 9 ? 'bg-green-500' : score >= 8 ? 'bg-amber-400' : 'bg-gray-300'
+                    : ''
+                  const qualityTextColor = score !== null
+                    ? score >= 9 ? 'text-green-600' : score >= 8 ? 'text-amber-600' : 'text-gray-500'
+                    : ''
+
+                  return (
+                    <button
+                      key={model.model_name}
+                      onClick={() => handleModelSelect(model.model_name)}
+                      className={`relative flex flex-col gap-0 rounded-2xl border-2 text-left transition-all duration-150 overflow-hidden ${
+                        isSelected
+                          ? 'border-primary-500 shadow-lg shadow-primary-500/15'
+                          : 'border-gray-200 bg-white hover:border-gray-300 hover:shadow-md'
+                      }`}
+                    >
+                      {/* Coloured top accent strip */}
+                      <div className={`h-1 w-full ${isSelected ? 'bg-primary-500' : 'bg-transparent'}`} />
+
+                      {/* Body */}
+                      <div className={`flex-1 px-5 pt-4 pb-3 ${isSelected ? 'bg-primary-50' : ''}`}>
+
+                        {/* Name row */}
+                        <div className="flex items-start justify-between gap-2 mb-1">
+                          <div className="flex items-center gap-2 flex-wrap">
+                            <span className={`font-bold text-base leading-tight ${isSelected ? 'text-primary-900' : 'text-gray-900'}`}>
+                              {model.name}
+                            </span>
+                            {index === 0 && !modelSearch && (
+                              <span className="px-2 py-0.5 bg-green-100 text-green-700 text-xs font-semibold rounded-full">
+                                Recommended
+                              </span>
+                            )}
+                            {model.is_open_source && (
+                              <span className="px-2 py-0.5 bg-violet-100 text-violet-700 text-xs font-semibold rounded-full">
+                                Open Source
+                              </span>
+                            )}
+                          </div>
+                          {isSelected && (
+                            <div className="shrink-0 w-6 h-6 bg-primary-500 rounded-full flex items-center justify-center">
+                              <Check size={13} className="text-white" />
+                            </div>
+                          )}
+                        </div>
+
+                        {/* Model ID */}
+                        <p className="text-xs text-gray-400 font-mono truncate mb-3">
+                          {model.model_name}
+                        </p>
+
+                        {/* Description */}
+                        <p className="text-sm text-gray-600 leading-relaxed line-clamp-2 mb-4">
+                          {model.description}
+                        </p>
                       </div>
-                    )}
-                  </button>
-                ))}
+
+                      {/* Metrics panel — always-visible footer */}
+                      <div className={`grid grid-cols-3 divide-x border-t px-0 ${
+                        isSelected
+                          ? 'bg-primary-100/60 border-primary-200 divide-primary-200'
+                          : 'bg-gray-50 border-gray-100 divide-gray-100'
+                      }`}>
+
+                        {/* Quality */}
+                        <div className="px-4 py-3">
+                          <p className="text-[10px] font-semibold uppercase tracking-widest text-gray-400 mb-1.5">Quality</p>
+                          {score !== null ? (
+                            <>
+                              <p className={`text-xl font-bold tabular-nums leading-none ${qualityTextColor}`}>
+                                {score.toFixed(1)}
+                              </p>
+                              <div className="mt-1.5 h-1 w-full bg-gray-200 rounded-full overflow-hidden">
+                                <div className={`h-full rounded-full ${qualityBarColor}`} style={{ width: `${qualityPct}%` }} />
+                              </div>
+                            </>
+                          ) : (
+                            <p className="text-sm text-gray-400">—</p>
+                          )}
+                        </div>
+
+                        {/* Speed */}
+                        <div className="px-4 py-3">
+                          <p className="text-[10px] font-semibold uppercase tracking-widest text-gray-400 mb-1.5">Speed</p>
+                          {model.speed_tier ? (
+                            <span className={`inline-flex items-center gap-1.5 px-2.5 py-1 rounded-lg text-xs font-bold ${
+                              model.speed_tier === 'fast'   ? 'bg-green-100 text-green-700' :
+                              model.speed_tier === 'medium' ? 'bg-amber-100 text-amber-700' :
+                                                              'bg-red-100 text-red-700'
+                            }`}>
+                              {model.speed_tier === 'fast' && <Zap className="w-3 h-3" />}
+                              {model.speed_tier.charAt(0).toUpperCase() + model.speed_tier.slice(1)}
+                            </span>
+                          ) : (
+                            <p className="text-sm text-gray-400">—</p>
+                          )}
+                        </div>
+
+                        {/* Cost */}
+                        <div className="px-4 py-3">
+                          <p className="text-[10px] font-semibold uppercase tracking-widest text-gray-400 mb-1.5">Cost / 1M</p>
+                          {model.cost_input_per_1m === null ? (
+                            <p className="text-sm text-gray-400">—</p>
+                          ) : model.cost_input_per_1m === 0 ? (
+                            <p className="text-sm font-bold text-green-600">Free</p>
+                          ) : (
+                            <>
+                              <p className="text-sm font-bold text-gray-800 tabular-nums leading-tight">
+                                ${model.cost_input_per_1m}
+                              </p>
+                              <p className="text-xs text-gray-400 tabular-nums mt-0.5">
+                                ${model.cost_output_per_1m} out
+                              </p>
+                            </>
+                          )}
+                        </div>
+
+                      </div>
+                    </button>
+                  )
+                })}
               </div>
               {filteredModels.length === 0 && modelSearch && (
                 <p className="text-sm text-gray-500 mt-3 text-center py-4">
@@ -997,6 +1090,7 @@ function Step2AIModel({ formData, setFormData }: any) {
           </div>
         </div>
       )}
+
     </div>
   )
 }

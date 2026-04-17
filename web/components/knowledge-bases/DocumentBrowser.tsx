@@ -67,6 +67,16 @@ export default function DocumentBrowser({
     fetchDocuments()
   }, [page, searchQuery, sourceTypeFilter, hasImagesFilter, sortBy, sortOrder])
 
+  // Poll while any document is still processing so status updates without manual refresh
+  useEffect(() => {
+    const hasPending = documents.some(
+      (doc) => doc.status === 'PENDING' || doc.status === 'PROCESSING'
+    )
+    if (!hasPending) return
+    const timer = setInterval(fetchDocuments, 5000)
+    return () => clearInterval(timer)
+  }, [documents])
+
   const fetchDocuments = async () => {
     try {
       setLoading(true)

@@ -63,6 +63,22 @@ class AgentLLMConfig(BaseModel, TenantMixin):
 
     enabled = Column(Boolean, nullable=False, default=True, index=True, comment="Whether this config is enabled")
 
+    # Routing fields
+    routing_rules = Column(
+        JSONB,
+        nullable=True,
+        comment=(
+            "Per-config routing rules: "
+            "intents (list), min_complexity (float), max_complexity (float), "
+            "cost_per_1k_input (float USD), cost_per_1k_output (float USD), "
+            "priority (int, lower=preferred), is_fallback (bool)"
+        ),
+    )
+
+    routing_weight = Column(
+        Float, nullable=True, comment="Weight for round_robin/weighted random routing (0.0–1.0, default 1.0)"
+    )
+
     # Relationships
     agent = relationship("Agent", back_populates="llm_configs")
 

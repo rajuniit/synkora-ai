@@ -987,13 +987,13 @@ Supports: Git, GitHub CLI, npm, pip, Docker, file operations (ls, cat, mkdir, et
 
         self.register_tool(
             name="internal_generate_chart",
-            description="Generate Chart.js visualization from database query results. Automatically detects appropriate chart type or accepts custom configuration. IMPORTANT: After calling this tool the chart is automatically rendered in the UI — do NOT embed any image URL or markdown image syntax in your response. Simply describe the chart you created.",
+            description="Generate Chart.js visualization from database query results. Automatically detects appropriate chart type or accepts custom configuration. IMPORTANT: After calling this tool the chart is automatically rendered in the UI — do NOT embed any image URL or markdown image syntax in your response. Simply describe the chart you created. IMPORTANT: You MUST call the data-fetching tool (e.g. internal_micromobility_list_trips, internal_query_database) first and pass its EXACT raw result as query_result. Do NOT construct query_result from memory or from previously displayed text — always fetch fresh data immediately before calling this tool.",
             parameters={
                 "type": "object",
                 "properties": {
                     "query_result": {
                         "type": "object",
-                        "description": "Result from internal_query_database containing data to visualize",
+                        "description": "The exact raw result returned by a data-fetching tool (e.g. internal_micromobility_list_trips, internal_query_database). Must be called immediately before this tool — do not pass reconstructed or summarised data.",
                     },
                     "chart_type": {
                         "type": "string",
@@ -1854,7 +1854,8 @@ _ACTION_TOOL_NAMES: frozenset[str] = frozenset(
         # Slack
         "internal_slack_send_message",
         "internal_slack_send_dm",
-        "internal_slack_post_message",
+        "internal_slack_post_blocks",
+        "internal_slack_upload_file",
         # GitHub
         "internal_github_create_issue",
         "internal_github_comment_on_issue",

@@ -677,6 +677,8 @@ class TestUpdateAgent:
         # These must be None or valid UUID strings, not Mock objects
         request.role_id = None
         request.human_contact_id = None
+        request.routing_mode = None
+        request.routing_config = None
 
         with (
             patch("src.controllers.agents.index.agent_manager") as mock_manager,

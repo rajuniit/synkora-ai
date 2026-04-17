@@ -517,6 +517,39 @@ export function ChatMessage({
           </div>
         )}
 
+        {/* Infographics */}
+        {message.metadata?.infographics && message.metadata.infographics.length > 0 && (
+          <div className="mt-3 space-y-3">
+            {message.metadata.infographics.map((infographic: any, index: number) => (
+              <div key={infographic.id || index} className="rounded-lg overflow-hidden border border-gray-200 bg-gray-900">
+                {infographic.title && (
+                  <div className="px-4 py-2 text-xs font-medium text-gray-400 border-b border-gray-700">
+                    {infographic.title}
+                  </div>
+                )}
+                {infographic.svg_content ? (
+                  <div
+                    className="w-full overflow-auto"
+                    dangerouslySetInnerHTML={{ __html: infographic.svg_content }}
+                  />
+                ) : infographic.png_url ? (
+                  <img
+                    src={infographic.png_url}
+                    alt={infographic.title || 'Infographic'}
+                    className="w-full h-auto"
+                  />
+                ) : infographic.svg_url ? (
+                  <img
+                    src={infographic.svg_url}
+                    alt={infographic.title || 'Infographic'}
+                    className="w-full h-auto"
+                  />
+                ) : null}
+              </div>
+            ))}
+          </div>
+        )}
+
         {/* Message Actions - Inline compact design */}
         {!isStreaming && (
           <div className="flex items-center gap-1 mt-3 pt-2">

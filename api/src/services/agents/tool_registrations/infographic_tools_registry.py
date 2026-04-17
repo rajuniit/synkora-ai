@@ -14,6 +14,8 @@ def register_infographic_tools(registry) -> None:
         name="internal_generate_infographic",
         description=(
             "Generate a data-driven infographic from a structured JSON spec and upload it to S3.\n\n"
+            "IMPORTANT: After calling this tool the infographic image is automatically rendered in the chat UI — "
+            "do NOT describe it as a table or embed any image URL in your response. Simply say the infographic has been generated.\n\n"
             "Use this after querying the knowledge base or Slack to produce a visual report "
             "(CEO briefing, weekly digest, channel activity summary, etc.).\n\n"
             "━━ THEMES ━━\n"
@@ -101,7 +103,8 @@ def register_infographic_tools(registry) -> None:
             "  ]\n"
             "}\n\n"
             "Returns: svg_url, png_url (if cairosvg installed), svg_content (if small enough).\n"
-            "Post the result to Slack using internal_slack_post_blocks with an image block."
+            "Post the result to Slack: use internal_slack_post_blocks with an image block (when png_url/svg_url is available) "
+            "or internal_slack_upload_file with svg_content (when S3 is not configured)."
         ),
         parameters={
             "type": "object",

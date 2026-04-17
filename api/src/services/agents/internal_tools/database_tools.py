@@ -491,6 +491,11 @@ async def internal_generate_chart(
         # The LLM may pass query results with or without a "success" key
         data = clean_query_result.get("data", [])
 
+        # If data is a paginated API response (e.g. micromobility list_trips returns
+        # {"count": N, "next": ..., "results": [...]}), extract the actual rows.
+        if isinstance(data, dict) and "results" in data:
+            data = data["results"]
+
         # Validate that we have data to work with
         if not data:
             error_msg = clean_query_result.get("error", "No data available to generate chart")

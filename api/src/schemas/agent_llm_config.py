@@ -3,6 +3,7 @@ Pydantic schemas for agent LLM configurations.
 """
 
 from datetime import datetime
+from typing import Any
 from uuid import UUID
 
 from pydantic import BaseModel, ConfigDict, Field
@@ -22,6 +23,16 @@ class AgentLLMConfigBase(BaseModel):
     is_default: bool = Field(False, description="Whether this is the default config")
     display_order: int = Field(0, description="Display order")
     enabled: bool = Field(True, description="Whether this config is enabled")
+    routing_rules: dict[str, Any] | None = Field(
+        None,
+        description=(
+            "Routing rules for this config: intents (list of intent tags), "
+            "min_complexity (0.0-1.0), max_complexity (0.0-1.0), "
+            "cost_per_1k_input (USD), cost_per_1k_output (USD), "
+            "priority (int, lower=preferred), is_fallback (bool)"
+        ),
+    )
+    routing_weight: float | None = Field(None, description="Weight for round_robin routing (0.0-1.0, default 1.0)")
 
 
 class AgentLLMConfigCreate(AgentLLMConfigBase):
@@ -45,6 +56,8 @@ class AgentLLMConfigUpdate(BaseModel):
     is_default: bool | None = Field(None, description="Whether this is the default config")
     display_order: int | None = Field(None, description="Display order")
     enabled: bool | None = Field(None, description="Whether this config is enabled")
+    routing_rules: dict[str, Any] | None = Field(None, description="Routing rules for this config")
+    routing_weight: float | None = Field(None, description="Weight for round_robin routing")
 
 
 class AgentLLMConfigResponse(AgentLLMConfigBase):

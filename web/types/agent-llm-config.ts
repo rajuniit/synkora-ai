@@ -2,6 +2,45 @@
  * Types for Agent LLM Configuration
  */
 
+export type RoutingMode = 'fixed' | 'round_robin' | 'cost_opt' | 'intent' | 'latency_opt'
+
+export const ROUTING_MODE_LABELS: Record<RoutingMode, string> = {
+  fixed: 'Fixed',
+  round_robin: 'Round Robin',
+  cost_opt: 'Cost Optimized',
+  intent: 'Intent-Based',
+  latency_opt: 'Latency Optimized',
+}
+
+export const ROUTING_MODE_DESCRIPTIONS: Record<RoutingMode, string> = {
+  fixed: 'Always use the default model. No routing overhead.',
+  round_robin: 'Distribute requests across models by weight. Good for load balancing and A/B testing.',
+  cost_opt: 'Use the cheapest model that can handle the query complexity. Best for cost reduction.',
+  intent: 'Match the model to the query type (code, math, creative, etc.). Best for quality per task.',
+  latency_opt: 'Always prefer the fastest model. Best for real-time chat.',
+}
+
+export const INTENT_OPTIONS = [
+  { value: 'code', label: 'Code' },
+  { value: 'math', label: 'Math' },
+  { value: 'research', label: 'Research' },
+  { value: 'creative', label: 'Creative Writing' },
+  { value: 'data_analysis', label: 'Data Analysis' },
+  { value: 'simple_qa', label: 'Simple Q&A' },
+  { value: 'reasoning', label: 'Complex Reasoning' },
+  { value: 'general', label: 'General' },
+]
+
+export interface RoutingRules {
+  intents?: string[]
+  min_complexity?: number
+  max_complexity?: number
+  cost_per_1k_input?: number
+  cost_per_1k_output?: number
+  priority?: number
+  is_fallback?: boolean
+}
+
 export interface AgentLLMConfig {
   id: string;
   agent_id: string;
@@ -17,6 +56,8 @@ export interface AgentLLMConfig {
   is_default: boolean;
   display_order: number;
   enabled: boolean;
+  routing_rules?: RoutingRules;
+  routing_weight?: number;
   created_at: string;
   updated_at: string;
 }
@@ -34,6 +75,8 @@ export interface AgentLLMConfigCreate {
   is_default?: boolean;
   display_order?: number;
   enabled?: boolean;
+  routing_rules?: RoutingRules;
+  routing_weight?: number;
 }
 
 export interface AgentLLMConfigUpdate {
@@ -49,6 +92,8 @@ export interface AgentLLMConfigUpdate {
   is_default?: boolean;
   display_order?: number;
   enabled?: boolean;
+  routing_rules?: RoutingRules;
+  routing_weight?: number;
 }
 
 export interface AgentLLMConfigReorder {

@@ -44,6 +44,7 @@ class StreamState:
     assistant_chunks: list[str]
     chart_data: list[dict[str, Any]]
     diagram_data: list[dict[str, Any]] = None
+    infographic_data: list[dict[str, Any]] = None
     total_output_tokens: int = 0
     first_token_time: float | None = None
     tool_start_times: dict[str, float] = None  # Track tool execution start times
@@ -51,6 +52,8 @@ class StreamState:
     def __post_init__(self):
         if self.diagram_data is None:
             self.diagram_data = []
+        if self.infographic_data is None:
+            self.infographic_data = []
         if self.tool_start_times is None:
             self.tool_start_times = {}
 
@@ -188,6 +191,8 @@ class ChatStreamService:
                 agent_name=agent_name,
                 db=db,
                 llm_config_id=llm_config_id,
+                query=message,
+                conversation_history=conversation_history,
             )
 
             if load_result.error:
@@ -351,42 +356,79 @@ class ChatStreamService:
 
             trace_id = self._create_trace(agent, agent_name, message, final_tool_names)
 
-            if final_tool_names:
-                async for event in self._stream_with_tools(
-                    agent=agent,
-                    db_agent=db_agent,
-                    prompt=system_prompt,
-                    messages=structured_messages,
-                    tool_names=final_tool_names,
-                    trace_id=trace_id,
-                    conversation_uuid=conversation_uuid,
-                    user_message_id=user_message_saved.id if user_message_saved else None,
-                    start_time=start_time,
-                    state=state,
-                    db=db,
-                    user_id=user_id,
-                    shared_state=shared_state,
-                    caller_tenant_id=tenant_id,
-                ):
-                    yield event
-            else:
-                async for event in self._stream_without_tools(
-                    agent=agent,
-                    system_prompt=system_prompt,
-                    messages=structured_messages,
-                    start_time=start_time,
-                    state=state,
-                    agent_name=agent_name,
-                ):
-                    yield event
+            # --- Fallback chain: if primary model's circuit is open, reload with
+            # the next available config before any streaming begins. --------
+            from src.services.performance.circuit_breaker import CircuitState, get_circuit_breaker
+
+            _active_agent = agent
+            for _attempt, _candidate_config_id in enumerate(
+                [None] + load_result.fallback_config_ids  # None = already-loaded primary
+            ):
+                if _attempt > 0:
+                    # Primary circuit is open — reload agent with fallback config
+                    cb_name = f"llm_{_active_agent.llm_client.provider}"
+                    cb = get_circuit_breaker(name=cb_name, failure_threshold=5, recovery_timeout=60)
+                    if cb.state != CircuitState.OPEN:
+                        break  # Primary is fine after all (recovered between checks)
+
+                    logger.warning(
+                        f"[routing] Primary model circuit open, switching to fallback "
+                        f"config {_candidate_config_id} for agent '{agent_name}'"
+                    )
+                    fallback_result = await self.agent_loader.load_agent(
+                        agent_name=agent_name,
+                        db=db,
+                        llm_config_id=_candidate_config_id,
+                    )
+                    if fallback_result.error or not fallback_result.agent:
+                        logger.warning(f"[routing] Fallback load failed: {fallback_result.error}")
+                        continue
+                    _active_agent = fallback_result.agent
+                else:
+                    _active_agent = agent
+
+                if final_tool_names:
+                    async for event in self._stream_with_tools(
+                        agent=_active_agent,
+                        db_agent=db_agent,
+                        prompt=system_prompt,
+                        messages=structured_messages,
+                        tool_names=final_tool_names,
+                        trace_id=trace_id,
+                        conversation_uuid=conversation_uuid,
+                        user_message_id=user_message_saved.id if user_message_saved else None,
+                        start_time=start_time,
+                        state=state,
+                        db=db,
+                        user_id=user_id,
+                        shared_state=shared_state,
+                        caller_tenant_id=tenant_id,
+                    ):
+                        yield event
+                else:
+                    async for event in self._stream_without_tools(
+                        agent=_active_agent,
+                        system_prompt=system_prompt,
+                        messages=structured_messages,
+                        start_time=start_time,
+                        state=state,
+                        agent_name=agent_name,
+                    ):
+                        yield event
+                break  # Successful stream — exit fallback loop
 
             end_time = time.time()
             timing_metrics = calculate_time_metrics(start_time, state.first_token_time, end_time)
+            routed_model = (
+                _active_agent.llm_client.config.model_name if _active_agent and _active_agent.llm_client else None
+            )
             metadata = {
                 **timing_metrics,
                 "input_tokens": total_input_tokens,
                 "output_tokens": state.total_output_tokens,
                 "total_tokens": total_input_tokens + state.total_output_tokens,
+                "routed_model": routed_model,
+                "routing_mode": getattr(db_agent, "routing_mode", "fixed"),
             }
             yield await generate_done_event(sources=retrieved_sources, metadata=metadata)
             final_content = "".join(state.assistant_chunks) if hasattr(state, "assistant_chunks") else ""
@@ -420,6 +462,8 @@ class ChatStreamService:
                     logger.info(f"💾 Saving {len(state.chart_data)} charts to database metadata")
                 if state.diagram_data:
                     logger.info(f"💾 Saving {len(state.diagram_data)} diagrams to database metadata")
+                if state.infographic_data:
+                    logger.info(f"💾 Saving {len(state.infographic_data)} infographics to database metadata")
 
                 assistant_message = await self.chat_service.save_assistant_message(
                     conversation_id=conversation_uuid,
@@ -427,6 +471,7 @@ class ChatStreamService:
                     sources=retrieved_sources,
                     charts=state.chart_data,
                     diagrams=state.diagram_data,
+                    infographics=state.infographic_data,
                     timing=timing_metrics,
                     usage={
                         "input_tokens": total_input_tokens,
@@ -1753,6 +1798,12 @@ class ChatStreamService:
                     state.diagram_data.append(diagram)
                     diagram_payload = {k: v for k, v in event.items() if k != "type"}
                     yield await generate_sse_event("diagram", diagram_payload)
+
+                elif event["type"] == "infographic":
+                    infographic = event.get("infographic", {})
+                    state.infographic_data.append(infographic)
+                    infographic_payload = {k: v for k, v in event.items() if k != "type"}
+                    yield await generate_sse_event("infographic", infographic_payload)
 
         finally:
             # Release compute session (stops ephemeral container, closes SSH, etc.)

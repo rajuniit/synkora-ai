@@ -570,16 +570,55 @@ class DistributedConnectionManager(ConnectionManager):
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
         self._redis_pubsub = None
+        self._pubsub_redis = None
         self._subscriber_task = None
         self._pod_id = os.getenv("POD_NAME", os.getenv("HOSTNAME", "unknown"))
+
+    async def _make_pubsub_client(self):
+        """
+        Create a dedicated Redis client for pub/sub with no socket timeout.
+
+        Pub/sub holds the connection open waiting for messages indefinitely.
+        Reusing the shared async client (which has socket_timeout=5s) causes
+        the listener to raise TimeoutError every 5 seconds of silence.
+        """
+        import os
+
+        import redis.asyncio as aioredis
+
+        from src.config.settings import settings
+
+        sentinel_hosts = os.getenv("REDIS_SENTINEL_HOSTS")
+        master_name = os.getenv("REDIS_MASTER_NAME", "mymaster")
+
+        if sentinel_hosts:
+            from redis.asyncio.sentinel import Sentinel as AsyncSentinel
+
+            from src.config.redis import _parse_sentinel_hosts
+
+            hosts = _parse_sentinel_hosts(sentinel_hosts)
+            sentinel = AsyncSentinel(hosts)
+            return sentinel.master_for(
+                master_name,
+                password=os.getenv("REDIS_PASSWORD"),
+                decode_responses=True,
+                socket_timeout=None,  # no timeout for pub/sub reads
+                socket_connect_timeout=5.0,
+            )
+        else:
+            redis_url = str(settings.redis_url)
+            return aioredis.from_url(
+                redis_url,
+                decode_responses=True,
+                socket_timeout=None,  # no timeout for pub/sub reads
+                socket_connect_timeout=5.0,
+            )
 
     async def start_redis_subscriber(self) -> None:
         """Start Redis pub/sub subscriber for cross-pod messaging."""
         try:
-            from src.config.redis import get_redis_async
-
-            redis = get_redis_async()
-            self._redis_pubsub = redis.pubsub()
+            self._pubsub_redis = await self._make_pubsub_client()
+            self._redis_pubsub = self._pubsub_redis.pubsub()
 
             # Exact-match channel for global broadcasts.
             await self._redis_pubsub.subscribe(f"{self.CHANNEL_PREFIX}all")
@@ -609,32 +648,53 @@ class DistributedConnectionManager(ConnectionManager):
             await self._redis_pubsub.punsubscribe()
             await self._redis_pubsub.close()
 
+        if hasattr(self, "_pubsub_redis") and self._pubsub_redis:
+            await self._pubsub_redis.aclose()
+
         logger.info("WebSocket Redis pub/sub stopped")
 
     async def _listen_for_messages(self) -> None:
-        """Background task to listen for Redis pub/sub messages."""
+        """
+        Background task to listen for Redis pub/sub messages.
+
+        Reconnects automatically on transient errors (network blips, Redis
+        restarts) with exponential backoff up to 60 seconds.
+        """
         import json
 
-        try:
-            async for message in self._redis_pubsub.listen():
-                if message["type"] in ("message", "pmessage"):
-                    try:
-                        data = json.loads(message["data"])
+        backoff = 1.0
+        while True:
+            try:
+                async for message in self._redis_pubsub.listen():
+                    backoff = 1.0  # reset on successful receive
+                    if message["type"] in ("message", "pmessage"):
+                        try:
+                            data = json.loads(message["data"])
 
-                        # Skip messages from this pod
-                        if data.get("source_pod") == self._pod_id:
+                            # Skip messages from this pod
+                            if data.get("source_pod") == self._pod_id:
+                                continue
+
+                            channel = message.get("channel", message.get("pattern", ""))
+                            await self._handle_distributed_message(channel, data)
+                        except json.JSONDecodeError:
                             continue
+                        except Exception as e:
+                            logger.error(f"Error handling distributed WebSocket message: {e}")
+            except asyncio.CancelledError:
+                return
+            except Exception as e:
+                logger.warning(f"Redis pub/sub listener error: {e}. Reconnecting in {backoff:.0f}s...")
+                await asyncio.sleep(backoff)
+                backoff = min(backoff * 2, 60.0)
 
-                        channel = message.get("channel", message.get("pattern", ""))
-                        await self._handle_distributed_message(channel, data)
-                    except json.JSONDecodeError:
-                        continue
-                    except Exception as e:
-                        logger.error(f"Error handling distributed WebSocket message: {e}")
-        except asyncio.CancelledError:
-            pass
-        except Exception as e:
-            logger.error(f"Redis pub/sub listener error: {e}")
+                # Re-subscribe on reconnect
+                try:
+                    await self._redis_pubsub.subscribe(f"{self.CHANNEL_PREFIX}all")
+                    await self._redis_pubsub.psubscribe(f"{self.CHANNEL_PREFIX}user:*")
+                    await self._redis_pubsub.psubscribe(f"{self.CHANNEL_PREFIX}room:*")
+                except Exception:
+                    pass  # will retry on next loop iteration
 
     async def _handle_distributed_message(self, channel: str, data: dict) -> None:
         """Handle incoming message from another pod."""

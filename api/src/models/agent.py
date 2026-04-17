@@ -131,6 +131,20 @@ class Agent(BaseModel, StatusMixin, TenantMixin):
         comment="Whether this agent has an active autonomous schedule",
     )
 
+    # Model routing
+    routing_mode = Column(
+        String(30),
+        nullable=False,
+        default="fixed",
+        comment="Model routing mode: fixed | round_robin | cost_opt | intent | latency_opt",
+    )
+
+    routing_config = Column(
+        JSON,
+        nullable=True,
+        comment="Routing configuration: quality_floor, max_cost_per_1k, etc.",
+    )
+
     # ADK-style workflow agent fields
     workflow_type = Column(
         String(50),

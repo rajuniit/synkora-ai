@@ -41,10 +41,19 @@ export interface DiagramData {
   created_at?: string
 }
 
+export interface InfographicData {
+  title?: string
+  theme?: string
+  svg_url?: string
+  png_url?: string
+  svg_content?: string
+}
+
 export interface MessageMetadata {
   sources?: Source[]
   charts?: ChartData[]
   diagrams?: DiagramData[]
+  infographics?: InfographicData[]
   tables?: TableData[]
   keyPeople?: Person[]
   news?: NewsItem[]

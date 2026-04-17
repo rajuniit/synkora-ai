@@ -99,7 +99,7 @@ class MultiProviderLLMClient:
             self._initialize_mock()
         elif self.provider in ["google", "gemini"]:
             self._initialize_google()
-        elif self.provider == "openai":
+        elif self.provider in ["openai", "lm_studio", "vllm"]:
             self._initialize_openai()
         elif self.provider in ["anthropic", "claude"]:
             self._initialize_anthropic()
@@ -130,12 +130,17 @@ class MultiProviderLLMClient:
             raise ImportError("google-genai package not installed. Install with: pip install google-genai")
 
     def _initialize_openai(self):
-        """Initialize OpenAI client."""
+        """Initialize OpenAI-compatible client (also used for LM Studio and vLLM)."""
         try:
             from openai import AsyncOpenAI
 
-            self._client = AsyncOpenAI(api_key=self.config.api_key)
-            logger.info(f"Initialized OpenAI client with model: {self.config.model_name}")
+            kwargs: dict = {"api_key": self.config.api_key or "not-required"}
+            if self.config.api_base:
+                kwargs["base_url"] = self.config.api_base
+            self._client = AsyncOpenAI(**kwargs)
+            logger.info(
+                f"Initialized OpenAI-compatible client (provider={self.provider}) with model: {self.config.model_name}"
+            )
         except ImportError:
             raise ImportError("openai package not installed. Install with: pip install openai")
 

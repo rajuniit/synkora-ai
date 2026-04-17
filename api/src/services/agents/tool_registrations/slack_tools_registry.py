@@ -22,11 +22,13 @@ def register_slack_tools(registry):
         internal_slack_add_reaction,
         internal_slack_join_channel,
         internal_slack_list_channels,
+        internal_slack_post_blocks,
         internal_slack_read_channel_messages,
         internal_slack_read_thread,
         internal_slack_search_messages,
         internal_slack_send_dm,
         internal_slack_send_message,
+        internal_slack_upload_file,
     )
 
     # Slack tools - create wrappers that inject runtime_context
@@ -93,6 +95,30 @@ def register_slack_tools(registry):
             user_id=kwargs.get("user_id"),
             text=kwargs.get("text"),
             report_back_channel_id=kwargs.get("report_back_channel_id"),
+            runtime_context=runtime_context,
+            config=config,
+        )
+
+    async def internal_slack_post_blocks_wrapper(config: dict[str, Any] | None = None, **kwargs):
+        runtime_context = config.get("_runtime_context") if config else None
+        return await internal_slack_post_blocks(
+            channel_id=kwargs.get("channel_id"),
+            blocks=kwargs.get("blocks"),
+            text=kwargs.get("text", ""),
+            thread_ts=kwargs.get("thread_ts"),
+            runtime_context=runtime_context,
+            config=config,
+        )
+
+    async def internal_slack_upload_file_wrapper(config: dict[str, Any] | None = None, **kwargs):
+        runtime_context = config.get("_runtime_context") if config else None
+        return await internal_slack_upload_file(
+            channel_id=kwargs.get("channel_id"),
+            file_content=kwargs.get("file_content"),
+            filename=kwargs.get("filename"),
+            title=kwargs.get("title", ""),
+            initial_comment=kwargs.get("initial_comment", ""),
+            thread_ts=kwargs.get("thread_ts"),
             runtime_context=runtime_context,
             config=config,
         )
@@ -244,4 +270,90 @@ def register_slack_tools(registry):
         function=internal_slack_send_dm_wrapper,
     )
 
-    logger.info("Registered 8 Slack tools")
+    registry.register_tool(
+        name="internal_slack_post_blocks",
+        description=(
+            "Post a rich Block Kit message to a Slack channel — supports images, sections, "
+            "dividers, and formatted text.\n\n"
+            "PRIMARY USE-CASE — posting infographic images:\n"
+            "After calling internal_generate_infographic, post the result to Slack like this:\n\n"
+            "[\n"
+            '  {"type": "section", "text": {"type": "mrkdwn", "text": "*Daily Briefing*"}},\n'
+            '  {"type": "image",\n'
+            '   "image_url": "<png_url from infographic result>",\n'
+            '   "alt_text": "Daily Operations Briefing"}\n'
+            "]\n\n"
+            "The image block requires a publicly accessible URL. Use the png_url or svg_url "
+            "returned by internal_generate_infographic (uploaded to S3). "
+            "If S3 is not configured, use internal_slack_upload_file with svg_content instead.\n\n"
+            "Other useful block types: section (text), divider, context (small text), "
+            "actions (buttons), header (bold title)."
+        ),
+        parameters={
+            "type": "object",
+            "properties": {
+                "channel_id": {"type": "string", "description": "Slack channel ID (e.g. 'C1234567890')"},
+                "blocks": {
+                    "type": "string",
+                    "description": "JSON array of Block Kit block objects as a string",
+                },
+                "text": {
+                    "type": "string",
+                    "description": "Fallback plain text for notifications and accessibility (recommended)",
+                    "default": "",
+                },
+                "thread_ts": {
+                    "type": "string",
+                    "description": "Optional thread timestamp to reply in thread",
+                },
+            },
+            "required": ["channel_id", "blocks"],
+        },
+        function=internal_slack_post_blocks_wrapper,
+    )
+
+    registry.register_tool(
+        name="internal_slack_upload_file",
+        description=(
+            "Upload a file (SVG, PNG, CSV, PDF, etc.) directly to a Slack channel.\n\n"
+            "PRIMARY USE-CASE — posting infographics without S3:\n"
+            "If internal_generate_infographic returns svg_content (for small infographics), "
+            "pass it here as file_content with filename='briefing.svg'. Slack renders SVG inline.\n\n"
+            "Also useful for: sharing CSV exports, PDF reports, or any file the agent generates.\n\n"
+            "Prefer internal_slack_post_blocks with image_url when you have a public S3 URL, "
+            "because that renders at full resolution. Use this tool when you only have raw content "
+            "or the URL is not publicly accessible."
+        ),
+        parameters={
+            "type": "object",
+            "properties": {
+                "channel_id": {"type": "string", "description": "Slack channel ID (e.g. 'C1234567890')"},
+                "file_content": {
+                    "type": "string",
+                    "description": "Raw file content as a string (SVG markup, CSV text, etc.)",
+                },
+                "filename": {
+                    "type": "string",
+                    "description": "Filename including extension, e.g. 'daily-briefing.svg' or 'report.csv'",
+                },
+                "title": {
+                    "type": "string",
+                    "description": "Optional display title shown above the file in Slack",
+                    "default": "",
+                },
+                "initial_comment": {
+                    "type": "string",
+                    "description": "Optional message text posted alongside the file",
+                    "default": "",
+                },
+                "thread_ts": {
+                    "type": "string",
+                    "description": "Optional thread timestamp to upload into a thread",
+                },
+            },
+            "required": ["channel_id", "file_content", "filename"],
+        },
+        function=internal_slack_upload_file_wrapper,
+    )
+
+    logger.info("Registered 10 Slack tools")

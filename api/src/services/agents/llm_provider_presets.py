@@ -5,7 +5,7 @@ LLM Provider Presets
 Predefined configurations for various LLM providers to simplify setup.
 """
 
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from typing import Any
 
 
@@ -22,6 +22,13 @@ class ModelPreset:
     additional_params: dict[str, Any] | None = None
     max_input_tokens: int | None = None  # Context window (input tokens)
     max_output_tokens: int | None = None  # Max tokens the model can generate
+    # Comparison metadata (populated via MODEL_COMPARISON_DATA lookup)
+    cost_input_per_1m: float | None = None  # USD per 1M input tokens
+    cost_output_per_1m: float | None = None  # USD per 1M output tokens
+    is_open_source: bool = False
+    quality_score: float | None = None  # 0–10 benchmark-based score
+    speed_tier: str | None = None  # "fast" | "medium" | "slow"
+    tags: list[str] = field(default_factory=list)
 
 
 @dataclass
@@ -268,6 +275,15 @@ ANTHROPIC_PRESET = ProviderPreset(
     requires_api_key=True,
     documentation_url="https://docs.anthropic.com",
     models=[
+        # Claude 4.7 Series
+        ModelPreset(
+            name="Claude Opus 4.7",
+            model_name="claude-opus-4-7",
+            description="Latest and most powerful Claude model with state-of-the-art capabilities",
+            default_max_tokens=16384,
+            max_input_tokens=200000,
+            max_output_tokens=32000,
+        ),
         # Claude 4.6 Series
         ModelPreset(
             name="Claude Opus 4.6",
@@ -440,7 +456,32 @@ GEMINI_PRESET = ProviderPreset(
     requires_api_key=True,
     documentation_url="https://ai.google.dev/docs",
     models=[
+        # Gemini 3.1 Series (Latest)
+        ModelPreset(
+            name="Gemini 3.1 Pro Preview",
+            model_name="gemini-3.1-pro-preview",
+            description="Google's current flagship reasoning model, optimized for complex agentic workflows and coding",
+            default_max_tokens=32768,
+            max_input_tokens=1000000,
+            max_output_tokens=32768,
+        ),
+        ModelPreset(
+            name="Gemini 3.1 Flash-Lite Preview",
+            model_name="gemini-3.1-flash-lite-preview",
+            description="Most cost-efficient Gemini 3.1 model for high-volume, low-latency tasks",
+            default_max_tokens=16384,
+            max_input_tokens=1000000,
+            max_output_tokens=16384,
+        ),
         # Gemini 3 Series
+        ModelPreset(
+            name="Gemini 3 Flash",
+            model_name="gemini-3-flash",
+            description="Fast multimodal model for complex agentic problems with strong reasoning",
+            default_max_tokens=16384,
+            max_input_tokens=1000000,
+            max_output_tokens=16384,
+        ),
         ModelPreset(
             name="Gemini 3 Pro",
             model_name="gemini-3-pro",
@@ -517,7 +558,24 @@ GEMINI_PRESET = ProviderPreset(
             description="Original Gemini Pro model",
             default_max_tokens=32760,
         ),
-        # Gemma Series (Google's Open Models)
+        # Gemma 4 Series (Google's Open Models — built from Gemini 3 research)
+        ModelPreset(
+            name="Gemma 4 31B",
+            model_name="gemma-4-31b-it",
+            description="Most intelligent Gemma 4 model, instruction-tuned, 31B parameters",
+            default_max_tokens=8192,
+            max_input_tokens=128000,
+            max_output_tokens=8192,
+        ),
+        ModelPreset(
+            name="Gemma 4 26B",
+            model_name="gemma-4-26b-a4b-it",
+            description="Efficient Gemma 4 model with MoE architecture, 4B active parameters",
+            default_max_tokens=8192,
+            max_input_tokens=128000,
+            max_output_tokens=8192,
+        ),
+        # Gemma 3 Series (Google's Open Models)
         ModelPreset(
             name="Gemma 3 27B",
             model_name="gemma-3-27b",
@@ -998,6 +1056,40 @@ OLLAMA_PRESET = ProviderPreset(
     default_api_base="http://localhost:11434",
     documentation_url="https://ollama.ai/",
     models=[
+        # Llama 4 Series (Meta, MoE architecture)
+        ModelPreset(
+            name="Llama 4 Maverick",
+            model_name="llama4:maverick",
+            description="Meta's most powerful open model — 17B active / 400B total params, 128 experts, 1M context, beats GPT-4o on benchmarks",
+            default_max_tokens=8192,
+            max_input_tokens=1000000,
+            max_output_tokens=8192,
+        ),
+        ModelPreset(
+            name="Llama 4 Scout",
+            model_name="llama4:scout",
+            description="Efficient Llama 4 — 17B active / 16 experts, 10M context, fits on single H100, best in class for its size",
+            default_max_tokens=8192,
+            max_input_tokens=10000000,
+            max_output_tokens=8192,
+        ),
+        # Mistral New Models
+        ModelPreset(
+            name="Mistral Small 4",
+            model_name="mistral-small4:latest",
+            description="Unified reasoning + vision + coding model, 119B/6.5B active MoE, Apache 2.0, 256K context",
+            default_max_tokens=8192,
+            max_input_tokens=256000,
+            max_output_tokens=8192,
+        ),
+        ModelPreset(
+            name="Mistral Large 3",
+            model_name="mistral-large3:latest",
+            description="Mistral's flagship open-weight model released December 2025",
+            default_max_tokens=32768,
+            max_input_tokens=128000,
+            max_output_tokens=32768,
+        ),
         # DeepSeek V3.2 Series
         ModelPreset(
             name="DeepSeek-V3.2-Speciale",
@@ -1179,7 +1271,7 @@ HUGGINGFACE_PRESET = ProviderPreset(
 
 
 LM_STUDIO_PRESET = ProviderPreset(
-    provider_id="openai",  # Uses OpenAI-compatible API
+    provider_id="lm_studio",
     provider_name="LM Studio",
     description="Run models locally with LM Studio",
     requires_api_key=False,
@@ -1763,7 +1855,7 @@ OPENROUTER_PRESET = ProviderPreset(
 
 
 VLLM_PRESET = ProviderPreset(
-    provider_id="openai",  # Uses OpenAI-compatible API
+    provider_id="vllm",
     provider_name="vLLM",
     description="High-throughput inference server",
     requires_api_key=False,
@@ -2158,6 +2250,686 @@ ALL_PROVIDER_PRESETS: dict[str, ProviderPreset] = {
     "vllm": VLLM_PRESET,
     "litellm": LITELLM_PRESET,
 }
+
+
+# ---------------------------------------------------------------------------
+# Comparison metadata for key/popular models
+# Keys are model_name strings. Fields: cost_input_per_1m, cost_output_per_1m,
+# is_open_source, quality_score (0-10), speed_tier ("fast"|"medium"|"slow"), tags.
+# ---------------------------------------------------------------------------
+MODEL_COMPARISON_DATA: dict[str, dict[str, Any]] = {
+    # ── Anthropic — corrected pricing (Opus: $5/$25, Sonnet: $3/$15, Haiku: $1/$5 per 1M) ──
+    "claude-opus-4-7": {
+        "cost_input_per_1m": 5.00,
+        "cost_output_per_1m": 25.00,
+        "quality_score": 9.9,
+        "speed_tier": "slow",
+        "tags": ["general", "coding", "reasoning", "popular"],
+    },
+    "claude-opus-4-1": {
+        "cost_input_per_1m": 5.00,
+        "cost_output_per_1m": 25.00,
+        "quality_score": 9.6,
+        "speed_tier": "slow",
+        "tags": ["general", "coding", "reasoning"],
+    },
+    "claude-opus-4": {
+        "cost_input_per_1m": 15.00,
+        "cost_output_per_1m": 75.00,
+        "quality_score": 9.5,
+        "speed_tier": "slow",
+        "tags": ["general", "coding", "reasoning"],
+    },
+    "claude-sonnet-4": {
+        "cost_input_per_1m": 3.00,
+        "cost_output_per_1m": 15.00,
+        "quality_score": 9.0,
+        "speed_tier": "medium",
+        "tags": ["general", "coding"],
+    },
+    # ── OpenAI ──────────────────────────────────────────────────────────────
+    # GPT-5.x Series — pricing not officially announced; set to None
+    "gpt-5.4-pro": {
+        "cost_input_per_1m": None,
+        "cost_output_per_1m": None,
+        "quality_score": 9.9,
+        "speed_tier": "slow",
+        "tags": ["reasoning", "coding", "general"],
+    },
+    "gpt-5.4": {
+        "cost_input_per_1m": None,
+        "cost_output_per_1m": None,
+        "quality_score": 9.7,
+        "speed_tier": "medium",
+        "tags": ["general", "coding", "vision", "popular"],
+    },
+    "gpt-5.3-instant": {
+        "cost_input_per_1m": None,
+        "cost_output_per_1m": None,
+        "quality_score": 9.3,
+        "speed_tier": "fast",
+        "tags": ["general", "popular"],
+    },
+    "gpt-5.3-instant-mini": {
+        "cost_input_per_1m": None,
+        "cost_output_per_1m": None,
+        "quality_score": 8.8,
+        "speed_tier": "fast",
+        "tags": ["general", "cheap"],
+    },
+    "gpt-5.3-codex": {
+        "cost_input_per_1m": None,
+        "cost_output_per_1m": None,
+        "quality_score": 9.5,
+        "speed_tier": "medium",
+        "tags": ["coding", "general"],
+    },
+    "gpt-5": {
+        "cost_input_per_1m": None,
+        "cost_output_per_1m": None,
+        "quality_score": 9.3,
+        "speed_tier": "medium",
+        "tags": ["general", "coding", "vision"],
+    },
+    "gpt-5-mini": {
+        "cost_input_per_1m": None,
+        "cost_output_per_1m": None,
+        "quality_score": 8.8,
+        "speed_tier": "fast",
+        "tags": ["general", "cheap"],
+    },
+    "gpt-5-nano": {
+        "cost_input_per_1m": None,
+        "cost_output_per_1m": None,
+        "quality_score": 8.2,
+        "speed_tier": "fast",
+        "tags": ["general", "cheap"],
+    },
+    # gpt-oss pricing not officially confirmed
+    "gpt-oss-120b": {
+        "cost_input_per_1m": None,
+        "cost_output_per_1m": None,
+        "is_open_source": True,
+        "quality_score": 8.8,
+        "speed_tier": "medium",
+        "tags": ["open-source", "general", "coding"],
+    },
+    "gpt-oss-20b": {
+        "cost_input_per_1m": None,
+        "cost_output_per_1m": None,
+        "is_open_source": True,
+        "quality_score": 8.0,
+        "speed_tier": "fast",
+        "tags": ["open-source", "general", "cheap"],
+    },
+    "gpt-4.1": {
+        "cost_input_per_1m": 2.00,
+        "cost_output_per_1m": 8.00,
+        "quality_score": 9.0,
+        "speed_tier": "medium",
+        "tags": ["general", "coding", "vision", "popular"],
+    },
+    "gpt-4.1-mini": {
+        "cost_input_per_1m": 0.40,
+        "cost_output_per_1m": 1.60,
+        "quality_score": 8.6,
+        "speed_tier": "fast",
+        "tags": ["general", "cheap", "popular"],
+    },
+    "gpt-4.1-nano": {
+        "cost_input_per_1m": 0.10,
+        "cost_output_per_1m": 0.40,
+        "quality_score": 8.0,
+        "speed_tier": "fast",
+        "tags": ["general", "cheap"],
+    },
+    "gpt-4.5": {
+        "cost_input_per_1m": 75.00,
+        "cost_output_per_1m": 150.00,
+        "quality_score": 9.0,
+        "speed_tier": "medium",
+        "tags": ["general", "vision"],
+    },
+    "gpt-4o": {
+        "cost_input_per_1m": 2.50,
+        "cost_output_per_1m": 10.00,
+        "quality_score": 9.2,
+        "speed_tier": "medium",
+        "tags": ["general", "vision", "coding", "popular"],
+    },
+    "gpt-4o-mini": {
+        "cost_input_per_1m": 0.15,
+        "cost_output_per_1m": 0.60,
+        "quality_score": 8.5,
+        "speed_tier": "fast",
+        "tags": ["general", "cheap", "popular"],
+    },
+    "gpt-4-turbo": {
+        "cost_input_per_1m": 10.00,
+        "cost_output_per_1m": 30.00,
+        "quality_score": 8.8,
+        "speed_tier": "medium",
+        "tags": ["general", "vision", "coding"],
+    },
+    "gpt-4-turbo-preview": {
+        "cost_input_per_1m": 10.00,
+        "cost_output_per_1m": 30.00,
+        "quality_score": 8.7,
+        "speed_tier": "medium",
+        "tags": ["general"],
+    },
+    "gpt-4": {
+        "cost_input_per_1m": 30.00,
+        "cost_output_per_1m": 60.00,
+        "quality_score": 8.5,
+        "speed_tier": "slow",
+        "tags": ["general", "coding"],
+    },
+    "gpt-3.5-turbo": {
+        "cost_input_per_1m": 0.50,
+        "cost_output_per_1m": 1.50,
+        "quality_score": 7.5,
+        "speed_tier": "fast",
+        "tags": ["general", "cheap"],
+    },
+    "gpt-3.5-turbo-16k": {
+        "cost_input_per_1m": 0.50,
+        "cost_output_per_1m": 1.50,
+        "quality_score": 7.5,
+        "speed_tier": "fast",
+        "tags": ["general", "cheap"],
+    },
+    "o4-mini": {
+        "cost_input_per_1m": 1.10,
+        "cost_output_per_1m": 4.40,
+        "quality_score": 9.4,
+        "speed_tier": "medium",
+        "tags": ["reasoning", "coding", "cheap"],
+    },
+    "o3": {
+        "cost_input_per_1m": 2.00,
+        "cost_output_per_1m": 8.00,
+        "quality_score": 9.7,
+        "speed_tier": "slow",
+        "tags": ["reasoning", "math", "coding"],
+    },
+    "o3-mini": {
+        "cost_input_per_1m": 1.10,
+        "cost_output_per_1m": 4.40,
+        "quality_score": 9.3,
+        "speed_tier": "medium",
+        "tags": ["reasoning", "math", "coding", "cheap"],
+    },
+    "o1": {
+        "cost_input_per_1m": 15.00,
+        "cost_output_per_1m": 60.00,
+        "quality_score": 9.5,
+        "speed_tier": "slow",
+        "tags": ["reasoning", "math"],
+    },
+    "o1-mini": {
+        "cost_input_per_1m": 1.10,
+        "cost_output_per_1m": 4.40,
+        "quality_score": 8.8,
+        "speed_tier": "medium",
+        "tags": ["reasoning", "cheap"],
+    },
+    "o1-preview": {
+        "cost_input_per_1m": 15.00,
+        "cost_output_per_1m": 60.00,
+        "quality_score": 9.4,
+        "speed_tier": "slow",
+        "tags": ["reasoning", "math"],
+    },
+    # ── Anthropic ────────────────────────────────────────────────────────────
+    "claude-opus-4-6": {
+        "cost_input_per_1m": 5.00,
+        "cost_output_per_1m": 25.00,
+        "quality_score": 9.8,
+        "speed_tier": "slow",
+        "tags": ["general", "coding", "reasoning", "popular"],
+    },
+    "claude-sonnet-4-6": {
+        "cost_input_per_1m": 3.00,
+        "cost_output_per_1m": 15.00,
+        "quality_score": 9.3,
+        "speed_tier": "medium",
+        "tags": ["general", "coding", "popular"],
+    },
+    "claude-opus-4-5": {
+        "cost_input_per_1m": 5.00,
+        "cost_output_per_1m": 25.00,
+        "quality_score": 9.7,
+        "speed_tier": "slow",
+        "tags": ["general", "coding", "reasoning"],
+    },
+    "claude-sonnet-4-5": {
+        "cost_input_per_1m": 3.00,
+        "cost_output_per_1m": 15.00,
+        "quality_score": 9.2,
+        "speed_tier": "medium",
+        "tags": ["general", "coding"],
+    },
+    "claude-haiku-4-5": {
+        "cost_input_per_1m": 1.00,
+        "cost_output_per_1m": 5.00,
+        "quality_score": 8.3,
+        "speed_tier": "fast",
+        "tags": ["general", "cheap", "popular"],
+    },
+    "claude-haiku-4-5-20251001": {
+        "cost_input_per_1m": 1.00,
+        "cost_output_per_1m": 5.00,
+        "quality_score": 8.3,
+        "speed_tier": "fast",
+        "tags": ["general", "cheap", "popular"],
+    },
+    "claude-3-5-sonnet-20241022": {
+        "cost_input_per_1m": 3.00,
+        "cost_output_per_1m": 15.00,
+        "quality_score": 9.1,
+        "speed_tier": "medium",
+        "tags": ["general", "coding", "vision"],
+    },
+    "claude-3-5-sonnet-20240620": {
+        "cost_input_per_1m": 3.00,
+        "cost_output_per_1m": 15.00,
+        "quality_score": 9.0,
+        "speed_tier": "medium",
+        "tags": ["general", "coding"],
+    },
+    "claude-3.5-sonnet": {
+        "cost_input_per_1m": 3.00,
+        "cost_output_per_1m": 15.00,
+        "quality_score": 9.0,
+        "speed_tier": "medium",
+        "tags": ["general", "coding"],
+    },
+    "claude-3-5-haiku-20241022": {
+        "cost_input_per_1m": 0.80,
+        "cost_output_per_1m": 4.00,
+        "quality_score": 8.0,
+        "speed_tier": "fast",
+        "tags": ["cheap", "general"],
+    },
+    "claude-3.5-haiku": {
+        "cost_input_per_1m": 0.80,
+        "cost_output_per_1m": 4.00,
+        "quality_score": 8.0,
+        "speed_tier": "fast",
+        "tags": ["cheap", "general"],
+    },
+    "claude-3-opus-20240229": {
+        "cost_input_per_1m": 15.00,
+        "cost_output_per_1m": 75.00,
+        "quality_score": 8.8,
+        "speed_tier": "slow",
+        "tags": ["general"],
+    },
+    "claude-3-sonnet-20240229": {
+        "cost_input_per_1m": 3.00,
+        "cost_output_per_1m": 15.00,
+        "quality_score": 8.2,
+        "speed_tier": "medium",
+        "tags": ["general"],
+    },
+    "claude-3-haiku-20240307": {
+        "cost_input_per_1m": 0.25,
+        "cost_output_per_1m": 1.25,
+        "quality_score": 7.8,
+        "speed_tier": "fast",
+        "tags": ["cheap", "general"],
+    },
+    "claude-3.7-sonnet": {
+        "cost_input_per_1m": 3.00,
+        "cost_output_per_1m": 15.00,
+        "quality_score": 9.2,
+        "speed_tier": "medium",
+        "tags": ["general", "coding"],
+    },
+    # ── Google Gemini (new models) ───────────────────────────────────────────
+    # gemini-3.1-pro-preview: no official pricing announced yet
+    "gemini-3.1-pro-preview": {
+        "cost_input_per_1m": None,
+        "cost_output_per_1m": None,
+        "quality_score": 9.5,
+        "speed_tier": "medium",
+        "tags": ["general", "reasoning", "coding", "vision", "popular"],
+    },
+    "gemini-3.1-flash-lite-preview": {
+        "cost_input_per_1m": 0.10,
+        "cost_output_per_1m": 0.40,
+        "quality_score": 8.8,
+        "speed_tier": "fast",
+        "tags": ["cheap", "general"],
+    },
+    "gemini-3-flash": {
+        "cost_input_per_1m": 0.30,
+        "cost_output_per_1m": 2.50,
+        "quality_score": 9.1,
+        "speed_tier": "fast",
+        "tags": ["general", "cheap", "reasoning", "popular"],
+    },
+    "gemma-4-31b-it": {
+        "cost_input_per_1m": 0.0,
+        "cost_output_per_1m": 0.0,
+        "is_open_source": True,
+        "quality_score": 8.7,
+        "speed_tier": "medium",
+        "tags": ["open-source", "general", "free"],
+    },
+    "gemma-4-26b-a4b-it": {
+        "cost_input_per_1m": 0.0,
+        "cost_output_per_1m": 0.0,
+        "is_open_source": True,
+        "quality_score": 8.5,
+        "speed_tier": "fast",
+        "tags": ["open-source", "general", "free"],
+    },
+    # ── Google Gemini ────────────────────────────────────────────────────────
+    "gemini-2.5-pro": {
+        "cost_input_per_1m": 4.00,
+        "cost_output_per_1m": 20.00,
+        "quality_score": 9.4,
+        "speed_tier": "medium",
+        "tags": ["general", "reasoning", "coding"],
+    },
+    "gemini-2.5-pro-preview-06-05": {
+        "cost_input_per_1m": 4.00,
+        "cost_output_per_1m": 20.00,
+        "quality_score": 9.4,
+        "speed_tier": "medium",
+        "tags": ["general", "reasoning", "coding"],
+    },
+    "gemini-2.5-flash": {
+        "cost_input_per_1m": 0.15,
+        "cost_output_per_1m": 0.60,
+        "quality_score": 8.9,
+        "speed_tier": "fast",
+        "tags": ["general", "cheap", "popular"],
+    },
+    "gemini-2.5-flash-lite": {
+        "cost_input_per_1m": 0.075,
+        "cost_output_per_1m": 0.30,
+        "quality_score": 8.5,
+        "speed_tier": "fast",
+        "tags": ["cheap", "general"],
+    },
+    "gemini-2.0-flash": {
+        "cost_input_per_1m": 0.10,
+        "cost_output_per_1m": 0.40,
+        "quality_score": 8.7,
+        "speed_tier": "fast",
+        "tags": ["general", "cheap", "vision", "popular"],
+    },
+    "gemini-2.0-flash-lite": {
+        "cost_input_per_1m": 0.075,
+        "cost_output_per_1m": 0.30,
+        "quality_score": 8.3,
+        "speed_tier": "fast",
+        "tags": ["cheap", "general"],
+    },
+    "gemini-2.0-flash-thinking": {
+        "cost_input_per_1m": 0.10,
+        "cost_output_per_1m": 0.40,
+        "quality_score": 9.0,
+        "speed_tier": "slow",
+        "tags": ["reasoning", "cheap"],
+    },
+    "gemini-1.5-pro": {
+        "cost_input_per_1m": 1.25,
+        "cost_output_per_1m": 5.00,
+        "quality_score": 8.8,
+        "speed_tier": "medium",
+        "tags": ["general", "vision", "coding"],
+    },
+    "gemini-1.5-flash": {
+        "cost_input_per_1m": 0.075,
+        "cost_output_per_1m": 0.30,
+        "quality_score": 8.0,
+        "speed_tier": "fast",
+        "tags": ["cheap", "general"],
+    },
+    "gemini-1.5-flash-8b": {
+        "cost_input_per_1m": 0.0375,
+        "cost_output_per_1m": 0.15,
+        "quality_score": 7.5,
+        "speed_tier": "fast",
+        "tags": ["cheap", "general"],
+    },
+    # ── Meta Llama 4 (Ollama) ────────────────────────────────────────────────
+    "llama4:maverick": {
+        "cost_input_per_1m": 0.0,
+        "cost_output_per_1m": 0.0,
+        "is_open_source": True,
+        "quality_score": 9.0,
+        "speed_tier": "medium",
+        "tags": ["open-source", "general", "vision", "coding", "free", "popular"],
+    },
+    "llama4:scout": {
+        "cost_input_per_1m": 0.0,
+        "cost_output_per_1m": 0.0,
+        "is_open_source": True,
+        "quality_score": 8.8,
+        "speed_tier": "fast",
+        "tags": ["open-source", "general", "free", "popular"],
+    },
+    # ── Mistral new models ───────────────────────────────────────────────────
+    "mistral-small4:latest": {
+        "cost_input_per_1m": 0.0,
+        "cost_output_per_1m": 0.0,
+        "is_open_source": True,
+        "quality_score": 8.8,
+        "speed_tier": "fast",
+        "tags": ["open-source", "coding", "vision", "reasoning", "free"],
+    },
+    "mistral-large3:latest": {
+        "cost_input_per_1m": 0.0,
+        "cost_output_per_1m": 0.0,
+        "is_open_source": True,
+        "quality_score": 9.0,
+        "speed_tier": "medium",
+        "tags": ["open-source", "general", "free"],
+    },
+    # ── Ollama (local / open-source / free) — keys match actual model_name values ──
+    "deepseek-v3": {
+        "cost_input_per_1m": 0.0,
+        "cost_output_per_1m": 0.0,
+        "is_open_source": True,
+        "quality_score": 8.8,
+        "speed_tier": "medium",
+        "tags": ["open-source", "coding", "reasoning", "free", "popular"],
+    },
+    "deepseek-v3.2": {
+        "cost_input_per_1m": 0.0,
+        "cost_output_per_1m": 0.0,
+        "is_open_source": True,
+        "quality_score": 9.0,
+        "speed_tier": "medium",
+        "tags": ["open-source", "coding", "reasoning", "free"],
+    },
+    "deepseek-v3.2-thinking": {
+        "cost_input_per_1m": 0.0,
+        "cost_output_per_1m": 0.0,
+        "is_open_source": True,
+        "quality_score": 9.1,
+        "speed_tier": "slow",
+        "tags": ["open-source", "reasoning", "coding", "free"],
+    },
+    "deepseek-v3.1": {
+        "cost_input_per_1m": 0.0,
+        "cost_output_per_1m": 0.0,
+        "is_open_source": True,
+        "quality_score": 8.9,
+        "speed_tier": "medium",
+        "tags": ["open-source", "coding", "reasoning", "free"],
+    },
+    "deepseek-r1": {
+        "cost_input_per_1m": 0.0,
+        "cost_output_per_1m": 0.0,
+        "is_open_source": True,
+        "quality_score": 9.2,
+        "speed_tier": "slow",
+        "tags": ["open-source", "reasoning", "math", "free", "popular"],
+    },
+    "deepseek-r1-0528": {
+        "cost_input_per_1m": 0.0,
+        "cost_output_per_1m": 0.0,
+        "is_open_source": True,
+        "quality_score": 9.3,
+        "speed_tier": "slow",
+        "tags": ["open-source", "reasoning", "math", "free"],
+    },
+    "deepseek-r1-distill-llama-70b": {
+        "cost_input_per_1m": 0.0,
+        "cost_output_per_1m": 0.0,
+        "is_open_source": True,
+        "quality_score": 8.8,
+        "speed_tier": "medium",
+        "tags": ["open-source", "reasoning", "free"],
+    },
+    "deepseek-r1-distill-qwen-32b": {
+        "cost_input_per_1m": 0.0,
+        "cost_output_per_1m": 0.0,
+        "is_open_source": True,
+        "quality_score": 8.5,
+        "speed_tier": "medium",
+        "tags": ["open-source", "reasoning", "free"],
+    },
+    "llama3:70b": {
+        "cost_input_per_1m": 0.0,
+        "cost_output_per_1m": 0.0,
+        "is_open_source": True,
+        "quality_score": 8.5,
+        "speed_tier": "medium",
+        "tags": ["open-source", "general", "free", "popular"],
+    },
+    "llama3:8b": {
+        "cost_input_per_1m": 0.0,
+        "cost_output_per_1m": 0.0,
+        "is_open_source": True,
+        "quality_score": 7.8,
+        "speed_tier": "fast",
+        "tags": ["open-source", "general", "free"],
+    },
+    "mistral:latest": {
+        "cost_input_per_1m": 0.0,
+        "cost_output_per_1m": 0.0,
+        "is_open_source": True,
+        "quality_score": 7.5,
+        "speed_tier": "fast",
+        "tags": ["open-source", "general", "free"],
+    },
+    "mixtral:8x7b": {
+        "cost_input_per_1m": 0.0,
+        "cost_output_per_1m": 0.0,
+        "is_open_source": True,
+        "quality_score": 8.0,
+        "speed_tier": "medium",
+        "tags": ["open-source", "general", "free"],
+    },
+    "codellama:34b": {
+        "cost_input_per_1m": 0.0,
+        "cost_output_per_1m": 0.0,
+        "is_open_source": True,
+        "quality_score": 7.8,
+        "speed_tier": "medium",
+        "tags": ["open-source", "coding", "free"],
+    },
+    "phi3:mini": {
+        "cost_input_per_1m": 0.0,
+        "cost_output_per_1m": 0.0,
+        "is_open_source": True,
+        "quality_score": 7.5,
+        "speed_tier": "fast",
+        "tags": ["open-source", "general", "free"],
+    },
+    # ── Together AI ──────────────────────────────────────────────────────────
+    "meta-llama/Llama-3.3-70B-Instruct-Turbo": {
+        "cost_input_per_1m": 0.88,
+        "cost_output_per_1m": 0.88,
+        "is_open_source": True,
+        "quality_score": 8.5,
+        "speed_tier": "fast",
+        "tags": ["open-source", "general", "popular"],
+    },
+    "meta-llama/Meta-Llama-3.1-8B-Instruct-Turbo": {
+        "cost_input_per_1m": 0.18,
+        "cost_output_per_1m": 0.18,
+        "is_open_source": True,
+        "quality_score": 7.8,
+        "speed_tier": "fast",
+        "tags": ["open-source", "cheap", "general"],
+    },
+    "mistralai/Mixtral-8x7B-Instruct-v0.1": {
+        "cost_input_per_1m": 0.60,
+        "cost_output_per_1m": 0.60,
+        "is_open_source": True,
+        "quality_score": 8.0,
+        "speed_tier": "medium",
+        "tags": ["open-source", "general"],
+    },
+    "deepseek-ai/DeepSeek-V3": {
+        "cost_input_per_1m": 1.25,
+        "cost_output_per_1m": 1.25,
+        "is_open_source": True,
+        "quality_score": 8.8,
+        "speed_tier": "medium",
+        "tags": ["open-source", "coding", "reasoning"],
+    },
+}
+
+
+def enrich_model_with_comparison(model: ModelPreset) -> ModelPreset:
+    """Return a copy of a ModelPreset enriched with comparison metadata if available."""
+    data = MODEL_COMPARISON_DATA.get(model.model_name)
+    if not data:
+        return model
+    return ModelPreset(
+        name=model.name,
+        model_name=model.model_name,
+        description=model.description,
+        default_temperature=model.default_temperature,
+        default_max_tokens=model.default_max_tokens,
+        default_top_p=model.default_top_p,
+        additional_params=model.additional_params,
+        max_input_tokens=model.max_input_tokens,
+        max_output_tokens=model.max_output_tokens,
+        cost_input_per_1m=data.get("cost_input_per_1m"),
+        cost_output_per_1m=data.get("cost_output_per_1m"),
+        is_open_source=data.get("is_open_source", False),
+        quality_score=data.get("quality_score"),
+        speed_tier=data.get("speed_tier"),
+        tags=data.get("tags", []),
+    )
+
+
+def get_all_models_for_comparison() -> list[dict[str, Any]]:
+    """Return a flat list of all models across all providers, enriched with comparison metadata."""
+    result = []
+    for provider in ALL_PROVIDER_PRESETS.values():
+        for model in provider.models or []:
+            enriched = enrich_model_with_comparison(model)
+            result.append(
+                {
+                    "provider_id": provider.provider_id,
+                    "provider_name": provider.provider_name,
+                    "name": enriched.name,
+                    "model_name": enriched.model_name,
+                    "description": enriched.description,
+                    "max_input_tokens": enriched.max_input_tokens,
+                    "max_output_tokens": enriched.max_output_tokens,
+                    "default_max_tokens": enriched.default_max_tokens,
+                    "cost_input_per_1m": enriched.cost_input_per_1m,
+                    "cost_output_per_1m": enriched.cost_output_per_1m,
+                    "is_open_source": enriched.is_open_source,
+                    "quality_score": enriched.quality_score,
+                    "speed_tier": enriched.speed_tier,
+                    "tags": enriched.tags,
+                    "requires_api_key": provider.requires_api_key,
+                }
+            )
+    return result
 
 
 def get_provider_preset(provider_id: str) -> ProviderPreset | None:

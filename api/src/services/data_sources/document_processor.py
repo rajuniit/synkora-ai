@@ -386,8 +386,11 @@ class DocumentProcessor:
                 except Exception as e:
                     logger.error(f"Error processing document {doc.get('id')}: {e}", exc_info=True)
                     await self.db.rollback()  # Rollback on error
-                    # Refresh kb so it is not expired after the rollback
+                    # Refresh both kb and data_source — rollback expires all tracked objects,
+                    # and accessing expired column attributes outside a greenlet_spawn context
+                    # raises MissingGreenlet in SQLAlchemy async.
                     await self.db.refresh(kb)
+                    await self.db.refresh(data_source)
                     continue
 
             # Update knowledge base stats

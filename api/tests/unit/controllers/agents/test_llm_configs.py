@@ -84,6 +84,8 @@ class TestLLMConfigsController:
         mock_config.is_default = False
         mock_config.display_order = 0
         mock_config.enabled = True
+        mock_config.routing_rules = None
+        mock_config.routing_weight = None
         mock_config.created_at = datetime.now()
         mock_config.updated_at = datetime.now()
         return mock_config

@@ -8,7 +8,8 @@ import type {
   OutputDelivery,
   CreateOutputConfigData,
   UpdateOutputConfigData,
-  OAuthApp
+  OAuthApp,
+  SlackBot
 } from '@/types/agent-outputs';
 
 // Import the apiClient instance
@@ -138,45 +139,52 @@ export function useOutputDeliveries(agentId: string, outputId: string): UseOutpu
 
 interface UseOAuthAppsResult {
   oauthApps: OAuthApp[];
+  slackBots: SlackBot[];
   loading: boolean;
   error: string | null;
   getAppsByProvider: (provider: string) => OAuthApp[];
 }
 
 /**
- * Hook to fetch OAuth apps for output configuration
+ * Hook to fetch OAuth apps and Slack bots for output configuration
  */
 export function useOAuthApps(): UseOAuthAppsResult {
   const [oauthApps, setOAuthApps] = useState<OAuthApp[]>([]);
+  const [slackBots, setSlackBots] = useState<SlackBot[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
 
   useEffect(() => {
-    const fetchOAuthApps = async () => {
+    const fetchData = async () => {
       try {
         setLoading(true);
         setError(null);
-        const data = await apiClient.getOAuthApps();
-        setOAuthApps(data.filter((app: OAuthApp) => app.is_active));
+        const [appsData, botsData] = await Promise.all([
+          apiClient.getOAuthApps(),
+          apiClient.getSlackBots(),
+        ]);
+        setOAuthApps(appsData.filter((app: OAuthApp) => app.is_active));
+        setSlackBots(botsData.filter((bot: SlackBot) => bot.is_active));
       } catch (err: any) {
-        setError(err.response?.data?.message || 'Failed to load OAuth apps');
-        console.error('Error fetching OAuth apps:', err);
+        setError(err.response?.data?.message || 'Failed to load connection data');
+        console.error('Error fetching connection data:', err);
       } finally {
         setLoading(false);
       }
     };
 
-    fetchOAuthApps();
+    fetchData();
   }, []);
 
   const getAppsByProvider = useCallback((provider: string): OAuthApp[] => {
-    return oauthApps.filter(app => 
+    return oauthApps.filter(app =>
       app.provider.toLowerCase() === provider.toLowerCase()
     );
   }, [oauthApps]);
 
   return {
     oauthApps,
+    slackBots,
     loading,
     error,
     getAppsByProvider

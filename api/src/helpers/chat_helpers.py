@@ -113,6 +113,7 @@ def build_message_metadata(
     sources: list[dict[str, Any]] | None = None,
     charts: list[dict[str, Any]] | None = None,
     diagrams: list[dict[str, Any]] | None = None,
+    infographics: list[dict[str, Any]] | None = None,
     workflow_type: str | None = None,
     execution_log: list[dict[str, Any]] | None = None,
     workflow_state: dict[str, Any] | None = None,
@@ -144,6 +145,9 @@ def build_message_metadata(
 
     if diagrams:
         metadata["diagrams"] = diagrams
+
+    if infographics:
+        metadata["infographics"] = infographics
 
     if workflow_type:
         metadata["workflow_type"] = workflow_type
