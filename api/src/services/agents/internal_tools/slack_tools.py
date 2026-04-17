@@ -739,21 +739,6 @@ async def internal_slack_upload_file(
         if not file_content:
             return {"success": False, "error": "file_content is required"}
 
-        # Encode content to bytes
-        content_bytes = file_content.encode("utf-8") if isinstance(file_content, str) else file_content
-
-        # Determine content type from filename extension
-        ext = filename.rsplit(".", 1)[-1].lower() if "." in filename else ""
-        content_type_map = {
-            "svg": "image/svg+xml",
-            "png": "image/png",
-            "jpg": "image/jpeg",
-            "jpeg": "image/jpeg",
-            "csv": "text/csv",
-            "pdf": "application/pdf",
-            "txt": "text/plain",
-        }
-        content_type = content_type_map.get(ext, "application/octet-stream")
 
         # Use files_upload_v2 if available (newer SDK), fall back to files_upload
         upload_kwargs: dict[str, Any] = {

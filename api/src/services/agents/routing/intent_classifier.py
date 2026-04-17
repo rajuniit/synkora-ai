@@ -11,7 +11,6 @@ Classification takes < 1ms and adds no cost.
 import re
 from dataclasses import dataclass
 
-
 # ---------------------------------------------------------------------------
 # Intent pattern registry
 # Each entry is a list of compiled regex patterns.  The intent with the

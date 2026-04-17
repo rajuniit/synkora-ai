@@ -592,8 +592,9 @@ class DistributedConnectionManager(ConnectionManager):
         master_name = os.getenv("REDIS_MASTER_NAME", "mymaster")
 
         if sentinel_hosts:
-            from src.config.redis import _parse_sentinel_hosts
             from redis.asyncio.sentinel import Sentinel as AsyncSentinel
+
+            from src.config.redis import _parse_sentinel_hosts
 
             hosts = _parse_sentinel_hosts(sentinel_hosts)
             sentinel = AsyncSentinel(hosts)

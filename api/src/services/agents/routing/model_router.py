@@ -196,8 +196,6 @@ class ModelRouter:
         routing_config: dict,
     ) -> RoutingDecision:
         complexity = classification.complexity if classification else 0.5
-        quality_floor = float(routing_config.get("quality_floor", 0.0))
-
         # Separate non-fallback configs from fallback-only configs
         non_fallback = [c for c in configs if not self._is_fallback_only(c)]
         fallback_only = [c for c in configs if self._is_fallback_only(c)]
@@ -212,7 +210,7 @@ class ModelRouter:
         primary = viable[0]
 
         # Build fallback: rest of viable (next cheapest) + fallback-only last
-        ordered_fallbacks = [c for c in viable[1:]] + fallback_only
+        ordered_fallbacks = list(viable[1:]) + fallback_only
 
         logger.info(
             f"[cost_opt] complexity={complexity:.2f} intent={classification.intent if classification else '?'} "
@@ -255,7 +253,7 @@ class ModelRouter:
             intent_matched.sort(key=lambda c: self._routing_rules(c).get("priority", 99))
             primary = intent_matched[0]
             # Fallbacks: remaining intent-matched → unmatched non-fallback → fallback-only
-            remaining_matched = [c for c in intent_matched[1:]]
+            remaining_matched = list(intent_matched[1:])
             unmatched = [c for c in non_fallback if str(c.id) not in {str(x.id) for x in intent_matched}]
             ordered_fallbacks = remaining_matched + unmatched + fallback_only
         else:
