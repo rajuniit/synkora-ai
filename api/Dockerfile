@@ -24,12 +24,15 @@ RUN apt-get update \
         libxmlsec1-dev \
         libxmlsec1-openssl \
         pkg-config \
+        libcairo2-dev \
+        libpango1.0-dev \
+        libgdk-pixbuf2.0-dev \
     && rm -rf /var/lib/apt/lists/*
 
 # Install Python dependencies system-wide using the lock file
 COPY pyproject.toml uv.lock ./
 ENV UV_SYSTEM_PYTHON=1
-RUN uv pip install --system --no-cache -r pyproject.toml
+RUN uv pip install --system --no-cache --extra diagrams -r pyproject.toml
 
 
 # production stage
@@ -67,6 +70,11 @@ RUN apt-get update \
         libxml2 \
         libxmlsec1 \
         libxmlsec1-openssl \
+        # cairosvg runtime libraries (SVG→PNG conversion)
+        libcairo2 \
+        libpango-1.0-0 \
+        libpangocairo-1.0-0 \
+        libgdk-pixbuf2.0-0 \
         # Node.js (Debian bookworm ships Node 18 — sufficient for npx/MCP)
         nodejs \
         npm \
