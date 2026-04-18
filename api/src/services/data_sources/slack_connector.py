@@ -320,8 +320,9 @@ class SlackConnector(BaseConnector):
 
         try:
             response = self.client.users_info(user=user_id)
-            return response["user"]["real_name"] or response["user"]["name"]
-        except SlackApiError:
+            user = response["user"]
+            return user.get("real_name") or user.get("display_name") or user.get("name") or user_id
+        except (SlackApiError, KeyError):
             return user_id
 
     async def _store_message_to_s3_and_db(
