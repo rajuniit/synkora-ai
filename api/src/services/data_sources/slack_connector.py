@@ -2,7 +2,7 @@
 
 import json
 import logging
-from datetime import datetime
+from datetime import UTC, datetime, timedelta
 from typing import Any
 
 from slack_sdk import WebClient
@@ -164,17 +164,29 @@ class SlackConnector(BaseConnector):
         documents = []
         config = self.data_source.config
 
-        # Get channels to sync
+        # Get channels to sync — support both "channel_ids" (IDs) and "channels" (names or IDs)
         channel_ids = config.get("channel_ids", [])
         include_threads = config.get("include_threads", True)
         include_private = config.get("include_private", False)
 
-        # If no specific channels, get all public channels
+        if not channel_ids:
+            # Fall back to "channels" key which may contain names or IDs
+            channels_raw = config.get("channels", [])
+            if isinstance(channels_raw, str):
+                channels_raw = [c.strip() for c in channels_raw.split(",") if c.strip()]
+            if channels_raw:
+                channel_ids = await self._resolve_channel_names(channels_raw)
+
+        # Only fall back to all channels if nothing is configured at all
         if not channel_ids:
             channel_ids = await self._get_all_channels(include_private)
 
-        # Convert since to timestamp
-        oldest = str(int(since.timestamp())) if since else "0"
+        # Default lookback for first sync — avoid fetching entire channel history
+        if since is None:
+            lookback_days = config.get("initial_sync_days", 30)
+            since = datetime.now(UTC) - timedelta(days=lookback_days)
+
+        oldest = str(int(since.timestamp()))
 
         for channel_id in channel_ids:
             try:
@@ -211,6 +223,34 @@ class SlackConnector(BaseConnector):
                 continue
 
         return documents[:limit] if limit else documents
+
+    async def _resolve_channel_names(self, names_or_ids: list[str]) -> list[str]:
+        """Resolve a mix of channel names and IDs to channel IDs."""
+        resolved = []
+        unresolved_names = []
+
+        for entry in names_or_ids:
+            # Already an ID (starts with C, G, D followed by alphanumeric)
+            if entry.startswith(("C", "G", "D")) and len(entry) >= 9:
+                resolved.append(entry)
+            else:
+                unresolved_names.append(entry.lstrip("#").lower())
+
+        if unresolved_names:
+            try:
+                response = self.client.conversations_list(
+                    types="public_channel,private_channel",
+                    exclude_archived=True,
+                    limit=1000,
+                )
+                for channel in response.get("channels", []):
+                    if channel["name"].lower() in unresolved_names:
+                        resolved.append(channel["id"])
+                        logger.info(f"Resolved channel name '{channel['name']}' to ID {channel['id']}")
+            except SlackApiError as e:
+                logger.error(f"Error resolving channel names: {e}")
+
+        return resolved
 
     async def _get_all_channels(self, include_private: bool = False) -> list[str]:
         """Get all accessible channel IDs."""
