@@ -140,6 +140,7 @@ interface ExtendedAPIClient extends APIClient {
   getDataSourceSyncHistory: typeof dataSources.getDataSourceSyncHistory
   getStreamHealth: typeof dataSources.getStreamHealth
   updateDataSourceConfig: typeof dataSources.updateDataSourceConfig
+  updateDataSource: typeof dataSources.updateDataSource
   activateDataSource: typeof dataSources.activateDataSource
   deactivateDataSource: typeof dataSources.deactivateDataSource
 
@@ -355,6 +356,7 @@ export const apiClient: ExtendedAPIClient = Object.assign(_apiClient, {
   getDataSourceSyncHistory: dataSources.getDataSourceSyncHistory,
   getStreamHealth: dataSources.getStreamHealth,
   updateDataSourceConfig: dataSources.updateDataSourceConfig,
+  updateDataSource: dataSources.updateDataSource,
   activateDataSource: dataSources.activateDataSource,
   deactivateDataSource: dataSources.deactivateDataSource,
 

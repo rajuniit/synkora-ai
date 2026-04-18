@@ -392,6 +392,8 @@ async def update_data_source(
             ds.name = request.name
         if request.config is not None:
             ds.config = request.config
+        if request.sync_enabled is not None:
+            ds.sync_enabled = request.sync_enabled
 
         await db.commit()
 

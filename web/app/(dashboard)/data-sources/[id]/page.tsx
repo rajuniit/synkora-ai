@@ -39,6 +39,7 @@ import {
   KeyRound,
   ExternalLink,
   Webhook,
+  Pencil,
 } from 'lucide-react'
 import { apiClient } from '@/lib/api/client'
 
@@ -132,6 +133,11 @@ export default function DataSourceDetailsPage() {
   const [activeTab, setActiveTab] = useState<'overview' | 'webhook' | 'stream' | 'history' | 'config'>('overview')
   const [deleteModal, setDeleteModal] = useState(false)
   const [deleting, setDeleting] = useState(false)
+  const [editModal, setEditModal] = useState(false)
+  const [saving, setSaving] = useState(false)
+  const [editName, setEditName] = useState('')
+  const [editSyncEnabled, setEditSyncEnabled] = useState(true)
+  const [editConfig, setEditConfig] = useState<Record<string, any>>({})
   const [signingSecret, setSigningSecret] = useState('')
   const [showSecret, setShowSecret] = useState(false)
   const [streamPolling, setStreamPolling] = useState(false)
@@ -250,6 +256,32 @@ export default function DataSourceDetailsPage() {
     }
   }
 
+  const openEditModal = () => {
+    if (!dataSource) return
+    setEditName(dataSource.name)
+    setEditSyncEnabled(dataSource.sync_enabled)
+    setEditConfig({ ...dataSource.config })
+    setEditModal(true)
+  }
+
+  const handleSave = async () => {
+    setSaving(true)
+    try {
+      const updated = await apiClient.updateDataSource(id, {
+        name: editName.trim(),
+        config: editConfig,
+        sync_enabled: editSyncEnabled,
+      })
+      setDataSource(updated)
+      setEditModal(false)
+      toast.success('Data source updated')
+    } catch (err) {
+      toast.error(err instanceof Error ? err.message : 'Failed to save changes')
+    } finally {
+      setSaving(false)
+    }
+  }
+
   const handleDelete = async () => {
     setDeleting(true)
     try {
@@ -333,6 +365,8 @@ export default function DataSourceDetailsPage() {
   }
 
   const isWebhookSource = WEBHOOK_SOURCES.includes(dataSource.type?.toUpperCase())
+  const hasOAuthApp = !!(dataSource as any).oauth_app
+  const usePolling = !isWebhookSource || hasOAuthApp
   const hasSigningSecret = !!(dataSource.config?.signing_secret)
   const isActive = dataSource.status?.toUpperCase() === 'ACTIVE'
   const isSyncing = dataSource.status?.toUpperCase() === 'SYNCING'
@@ -383,12 +417,15 @@ export default function DataSourceDetailsPage() {
                   <ZapOff className="w-4 h-4" /> Deactivate
                 </button>
               )}
-              {!isWebhookSource && (
+              {usePolling && (
                 <button onClick={handleSync} disabled={syncing || isSyncing || !dataSource.sync_enabled} className="inline-flex items-center gap-2 px-4 py-2 text-sm font-medium text-white bg-blue-600 rounded-lg hover:bg-blue-700 transition-colors disabled:opacity-50">
                   <RefreshCw className={`w-4 h-4 ${(syncing || isSyncing) ? 'animate-spin' : ''}`} />
                   {syncing ? 'Syncing…' : 'Sync Now'}
                 </button>
               )}
+              <button onClick={openEditModal} className="inline-flex items-center gap-2 px-4 py-2 text-sm font-medium text-gray-700 bg-gray-100 rounded-lg hover:bg-gray-200 transition-colors">
+                <Pencil className="w-4 h-4" /> Edit
+              </button>
               <button onClick={() => setDeleteModal(true)} className="inline-flex items-center gap-2 px-4 py-2 text-sm font-medium text-red-600 bg-red-50 rounded-lg hover:bg-red-100 transition-colors">
                 <Trash2 className="w-4 h-4" /> Delete
               </button>
@@ -819,6 +856,104 @@ export default function DataSourceDetailsPage() {
           </div>
         </div>
       </div>
+
+      {/* Edit Modal */}
+      {editModal && (
+        <div className="fixed inset-0 bg-black/50 flex items-center justify-center p-4 z-50">
+          <div className="bg-white rounded-2xl shadow-xl max-w-lg w-full p-6 space-y-5">
+            <div className="flex items-center justify-between">
+              <h3 className="text-lg font-semibold text-gray-900">Edit Data Source</h3>
+              <button onClick={() => setEditModal(false)} className="text-gray-400 hover:text-gray-600">
+                <XCircle className="w-5 h-5" />
+              </button>
+            </div>
+
+            <div>
+              <label className="block text-sm font-medium text-gray-700 mb-1">Name</label>
+              <input
+                type="text"
+                value={editName}
+                onChange={e => setEditName(e.target.value)}
+                className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+              />
+            </div>
+
+            <div className="flex items-center justify-between py-2">
+              <div>
+                <p className="text-sm font-medium text-gray-700">Auto Sync</p>
+                <p className="text-xs text-gray-500">Automatically sync on schedule</p>
+              </div>
+              <button
+                onClick={() => setEditSyncEnabled(v => !v)}
+                className={`relative inline-flex h-6 w-11 items-center rounded-full transition-colors ${editSyncEnabled ? 'bg-blue-600' : 'bg-gray-300'}`}
+              >
+                <span className={`inline-block h-4 w-4 transform rounded-full bg-white transition-transform ${editSyncEnabled ? 'translate-x-6' : 'translate-x-1'}`} />
+              </button>
+            </div>
+
+            {dataSource.type?.toUpperCase() === 'SLACK' && (
+              <div className="space-y-3 border-t pt-4">
+                <p className="text-sm font-semibold text-gray-700">Slack Settings</p>
+                <div>
+                  <label className="block text-xs font-medium text-gray-600 mb-1">Channels (comma-separated)</label>
+                  <input
+                    type="text"
+                    value={editConfig.channels || ''}
+                    onChange={e => setEditConfig({ ...editConfig, channels: e.target.value })}
+                    placeholder="e.g. general, engineering"
+                    className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+                  />
+                </div>
+                <div>
+                  <label className="block text-xs font-medium text-gray-600 mb-1">Sync Frequency (seconds)</label>
+                  <input
+                    type="number"
+                    min={60}
+                    value={editConfig.sync_frequency || 3600}
+                    onChange={e => setEditConfig({ ...editConfig, sync_frequency: parseInt(e.target.value) })}
+                    className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+                  />
+                </div>
+                <div className="flex gap-6">
+                  <label className="flex items-center gap-2 text-sm text-gray-700 cursor-pointer">
+                    <input type="checkbox" checked={editConfig.include_threads ?? true} onChange={e => setEditConfig({ ...editConfig, include_threads: e.target.checked })} className="w-4 h-4 rounded text-blue-600" />
+                    Include threads
+                  </label>
+                  <label className="flex items-center gap-2 text-sm text-gray-700 cursor-pointer">
+                    <input type="checkbox" checked={editConfig.include_files ?? true} onChange={e => setEditConfig({ ...editConfig, include_files: e.target.checked })} className="w-4 h-4 rounded text-blue-600" />
+                    Include files
+                  </label>
+                </div>
+              </div>
+            )}
+
+            {dataSource.type?.toUpperCase() === 'GMAIL' && (
+              <div className="space-y-3 border-t pt-4">
+                <p className="text-sm font-semibold text-gray-700">Gmail Settings</p>
+                <div>
+                  <label className="block text-xs font-medium text-gray-600 mb-1">Labels (comma-separated)</label>
+                  <input type="text" value={editConfig.labels || ''} onChange={e => setEditConfig({ ...editConfig, labels: e.target.value })} placeholder="e.g. INBOX, IMPORTANT" className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm focus:ring-2 focus:ring-blue-500" />
+                </div>
+                <div>
+                  <label className="block text-xs font-medium text-gray-600 mb-1">Search Query</label>
+                  <input type="text" value={editConfig.query || ''} onChange={e => setEditConfig({ ...editConfig, query: e.target.value })} placeholder="e.g. from:example@gmail.com" className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm focus:ring-2 focus:ring-blue-500" />
+                </div>
+                <div>
+                  <label className="block text-xs font-medium text-gray-600 mb-1">Sync Frequency (seconds)</label>
+                  <input type="number" min={60} value={editConfig.sync_frequency || 3600} onChange={e => setEditConfig({ ...editConfig, sync_frequency: parseInt(e.target.value) })} className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm focus:ring-2 focus:ring-blue-500" />
+                </div>
+              </div>
+            )}
+
+            <div className="flex gap-3 justify-end pt-2">
+              <button onClick={() => setEditModal(false)} disabled={saving} className="px-4 py-2 text-sm font-medium text-gray-700 bg-gray-100 rounded-lg hover:bg-gray-200 disabled:opacity-50">Cancel</button>
+              <button onClick={handleSave} disabled={saving || !editName.trim()} className="px-4 py-2 text-sm font-medium text-white bg-blue-600 rounded-lg hover:bg-blue-700 disabled:opacity-50 flex items-center gap-2">
+                {saving ? <><RefreshCw className="w-4 h-4 animate-spin" />Saving…</> : 'Save Changes'}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
 
       {/* Delete Modal */}
       {deleteModal && (

@@ -40,6 +40,11 @@ export async function updateDataSourceConfig(id: string, config: Record<string, 
   return data
 }
 
+export async function updateDataSource(id: string, payload: { name?: string; config?: Record<string, any>; sync_enabled?: boolean }): Promise<any> {
+  const { data } = await apiClient.axios.put(`/api/v1/data-sources/${id}`, payload)
+  return data
+}
+
 export async function activateDataSource(id: string): Promise<any> {
   const { data } = await apiClient.axios.post(`/api/v1/data-sources/${id}/activate`)
   return data
