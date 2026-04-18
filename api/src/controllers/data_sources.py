@@ -4,7 +4,7 @@ import logging
 from datetime import UTC, datetime
 from uuid import UUID
 
-from fastapi import APIRouter, BackgroundTasks, Depends, HTTPException, Query
+from fastapi import APIRouter, Depends, HTTPException, Query
 from pydantic import BaseModel, ConfigDict, Field
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -165,57 +165,6 @@ def get_connector(data_source: DataSource, db: AsyncSession):
         return DockerLogsConnector(data_source, db)
     else:
         raise ValueError(f"Unsupported data source type: {data_source.type}")
-
-
-async def run_sync_job(data_source_id: int, incremental: bool, sync_job_id: int, db: AsyncSession):
-    """Background task to run sync job."""
-    from src.models.data_source import DataSourceSyncJob
-
-    sync_job = None
-    try:
-        result_ds = await db.execute(select(DataSource).filter(DataSource.id == data_source_id))
-        data_source = result_ds.scalar_one_or_none()
-        if not data_source:
-            logger.error(f"Data source {data_source_id} not found")
-            return
-
-        # Get the sync job
-        result_sj = await db.execute(select(DataSourceSyncJob).filter(DataSourceSyncJob.id == sync_job_id))
-        sync_job = result_sj.scalar_one_or_none()
-        if not sync_job:
-            logger.error(f"Sync job {sync_job_id} not found")
-            return
-
-        connector = get_connector(data_source, db)
-        result = await connector.sync(incremental=incremental)
-
-        # Update sync job on success
-        sync_job.status = SyncStatus.COMPLETED
-        sync_job.completed_at = datetime.now(UTC)
-        sync_job.documents_processed = result.get("documents_processed", 0)
-        sync_job.documents_added = result.get("documents_added", 0)
-        sync_job.documents_updated = result.get("documents_updated", 0)
-        sync_job.documents_failed = result.get("documents_failed", 0)
-        await db.commit()
-
-        logger.info(f"Sync completed for data source {data_source.name}: {result}")
-
-    except Exception as e:
-        logger.error(f"Sync job failed for data source {data_source_id}: {e}")
-
-        # Update sync job on failure
-        if sync_job:
-            sync_job.status = SyncStatus.FAILED
-            sync_job.completed_at = datetime.now(UTC)
-            sync_job.error_message = str(e)
-            await db.commit()
-
-        # Update data source
-        result_ds = await db.execute(select(DataSource).filter(DataSource.id == data_source_id))
-        data_source = result_ds.scalar_one_or_none()
-        if data_source:
-            data_source.last_error = str(e)
-            await db.commit()
 
 
 # Endpoints
@@ -639,7 +588,6 @@ async def test_connection(
 async def trigger_sync(
     ds_id: int,
     incremental: bool = Query(True),
-    background_tasks: BackgroundTasks = BackgroundTasks(),
     tenant_id: UUID = Depends(get_current_tenant_id),
     db: AsyncSession = Depends(get_async_db),
 ):
@@ -648,7 +596,9 @@ async def trigger_sync(
     SECURITY: Requires authentication and verifies data source belongs to tenant.
     """
     try:
-        # SECURITY: Filter by tenant_id to prevent IDOR attacks
+        from src.models.data_source import DataSourceSyncJob, SyncStatus
+        from src.tasks.data_source_tasks import sync_data_source_task
+
         result = await db.execute(select(DataSource).filter(DataSource.id == ds_id, DataSource.tenant_id == tenant_id))
         ds = result.scalar_one_or_none()
 
@@ -658,20 +608,16 @@ async def trigger_sync(
         if ds.status != DataSourceStatus.ACTIVE:
             raise HTTPException(status_code=400, detail="Data source is not active. Please complete OAuth first.")
 
-        # Check if already syncing by looking at recent sync jobs
-        from src.models.data_source import DataSourceSyncJob, SyncStatus
-
+        # Prevent duplicate concurrent syncs
         result = await db.execute(
             select(DataSourceSyncJob).filter(
                 DataSourceSyncJob.data_source_id == ds_id, DataSourceSyncJob.status == SyncStatus.IN_PROGRESS
             )
         )
-        recent_sync = result.scalar_one_or_none()
-
-        if recent_sync:
+        if result.scalar_one_or_none():
             raise HTTPException(status_code=409, detail="Sync already in progress")
 
-        # Create sync job
+        # Create sync job row so frontend can poll status immediately
         sync_job = DataSourceSyncJob(
             data_source_id=ds_id, tenant_id=ds.tenant_id, status=SyncStatus.IN_PROGRESS, started_at=datetime.now(UTC)
         )
@@ -679,12 +625,10 @@ async def trigger_sync(
         await db.commit()
         await db.refresh(sync_job)
 
-        # Start background sync job
-        background_tasks.add_task(run_sync_job, ds_id, incremental, sync_job.id, db)
+        # Dispatch to Celery — API returns immediately, worker does the heavy lifting
+        sync_data_source_task.delay(data_source_id=ds_id, sync_job_id=sync_job.id, full_sync=not incremental)
 
-        job_id = f"sync_{ds_id}_{int(ds.updated_at.timestamp())}"
-
-        return SyncJobResponse(job_id=job_id, status="started", message=f"Sync job started for {ds.name}")
+        return SyncJobResponse(job_id=str(sync_job.id), status="started", message=f"Sync job started for {ds.name}")
 
     except HTTPException:
         raise
