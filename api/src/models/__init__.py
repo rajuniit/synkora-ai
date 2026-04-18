@@ -38,6 +38,7 @@ from .credit_balance import CreditBalance
 from .credit_topup import CreditTopup, TopupStatus
 from .credit_transaction import CreditTransaction, TransactionType
 from .custom_tool import AuthType, CustomTool
+from .daily_digest import DailyDigest, DigestStatus
 from .data_source import (
     DataSource,
     DataSourceDocument,

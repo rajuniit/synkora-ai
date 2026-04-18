@@ -53,6 +53,7 @@ celery_app = Celery(
         "src.tasks.knowledge_compiler_task",  # Knowledge wiki compilation
         "src.tasks.kb_tasks",  # Knowledge base document processing
         "src.tasks.company_brain_tasks",  # Company brain ingestion and sync
+        "src.tasks.digest_tasks",  # Daily digest generation for all data sources
     ],
 )
 
@@ -101,6 +102,9 @@ celery_app.conf.update(
         "tasks.compile_knowledge_wikis": {"queue": "agents"},
         "tasks.compile_single_knowledge_wiki": {"queue": "agents"},
         "tasks.embed_wiki_documents": {"queue": "agents"},
+        # Digest tasks to agents queue (LLM-heavy)
+        "tasks.generate_all_daily_digests": {"queue": "agents"},
+        "tasks.generate_data_source_digest": {"queue": "agents"},
         # Billing tasks to billing queue
         "billing.flush_usage_analytics": {"queue": "billing"},
         "billing.deduct_credits_async": {"queue": "billing"},
@@ -144,6 +148,11 @@ celery_app.conf.update(
             "task": "tasks.cleanup_stale_webhook_events",
             "schedule": crontab(minute="*/15"),  # Every 15 minutes
             "args": (30,),  # 30-minute stale threshold
+        },
+        # Generate daily digests for all active data sources at 11 PM UTC
+        "generate-daily-digests": {
+            "task": "tasks.generate_all_daily_digests",
+            "schedule": crontab(hour=23, minute=0),
         },
     },
 )

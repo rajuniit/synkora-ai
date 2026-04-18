@@ -61,6 +61,7 @@ class AppConfig(BaseSettings):
 
     api_base_url: str = Field(
         default="http://localhost:5001",
+        validation_alias="WEBHOOK_BASE_URL",
         description="Public-facing base URL of the API server (used to construct webhook URLs).",
     )
 
