@@ -1,228 +1,144 @@
-"""
-Celery tasks for data source synchronization operations.
-"""
+"""Celery tasks for data source synchronization."""
 
+import asyncio
 import logging
-import uuid
 from datetime import UTC, datetime
 from typing import Any
 
 from src.celery_app import celery_app
-from src.core.database import SessionLocal
 
 logger = logging.getLogger(__name__)
 
 
-@celery_app.task(
-    name="sync_data_source_task",
-    bind=True,
-    max_retries=3,
-    default_retry_delay=300,  # 5 minutes
-)
+@celery_app.task(name="sync_data_source_task", bind=True, max_retries=3, default_retry_delay=300)
 def sync_data_source_task(
-    self, data_source_id: str, full_sync: bool = False, tenant_id: str | None = None
+    self,
+    data_source_id: int,
+    sync_job_id: int,
+    full_sync: bool = False,
 ) -> dict[str, Any]:
     """
-    Synchronize a data source with external provider.
+    Synchronize a data source with its external provider.
 
-    Args:
-        data_source_id: Data source UUID
-        full_sync: Whether to perform full sync or incremental
-        tenant_id: Tenant ID (optional)
-
-    Returns:
-        dict: Sync results with counts and status
+    The sync job row is created by the API before dispatching this task so
+    the frontend can poll status immediately. This task runs the actual sync
+    and updates the job row with the result.
     """
-    db = SessionLocal()
-
+    logger.info(f"Starting sync for data source {data_source_id} (job={sync_job_id}, full={full_sync})")
     try:
-        from src.models.data_source import DataSource
-
-        logger.info(f"🔄 Starting sync for data source {data_source_id}")
-
-        data_source = db.query(DataSource).filter(DataSource.id == uuid.UUID(data_source_id)).first()
-
-        if not data_source:
-            logger.error(f"Data source {data_source_id} not found")
-            return {"success": False, "error": "Data source not found"}
-
-        # Route to appropriate connector based on type
-        connector_map = {
-            "GMAIL": ("src.services.data_sources.gmail_connector", "GmailConnector"),
-            "SLACK": ("src.services.data_sources.slack_connector", "SlackConnector"),
-            "GITHUB": ("src.services.data_sources.github_connector", "GitHubConnector"),
-            "GITLAB": ("src.services.data_sources.gitlab_connector", "GitLabConnector"),
-            "GOOGLE_DRIVE": ("src.services.data_sources.google_drive_connector", "GoogleDriveConnector"),
-            "TELEGRAM": ("src.services.data_sources.telegram_connector", "TelegramConnector"),
-            "JIRA": ("src.services.data_sources.jira_connector", "JiraConnector"),
-            "CLICKUP": ("src.services.data_sources.clickup_connector", "ClickUpConnector"),
-            "NOTION": ("src.services.data_sources.notion_connector", "NotionConnector"),
-            "CONFLUENCE": ("src.services.data_sources.confluence_connector", "ConfluenceConnector"),
-            "LINEAR": ("src.services.data_sources.linear_connector", "LinearConnector"),
-        }
-
-        source_type = str(data_source.type).upper()
-        if source_type not in connector_map:
-            logger.error(f"Unsupported data source type: {data_source.type}")
-            return {"success": False, "error": f"Unsupported type: {data_source.type}"}
-
-        import importlib
-
-        module_path, class_name = connector_map[source_type]
-        mod = importlib.import_module(module_path)
-        connector_cls = getattr(mod, class_name)
-        connector = connector_cls(data_source, db)
-
-        # Perform sync
-        result = connector.sync(full_sync=full_sync)
-
-        # Update last sync time
-        data_source.last_sync_at = datetime.now(UTC)
-        db.commit()
-
-        logger.info(f"✅ Sync completed for data source {data_source_id}: {result}")
-
-        return {"success": True, "data_source_id": data_source_id, "type": data_source.type, **result}
-
+        return asyncio.run(_run_sync(data_source_id, sync_job_id, full_sync))
     except Exception as exc:
-        logger.error(f"❌ Error syncing data source {data_source_id}: {exc}", exc_info=True)
+        logger.error(f"Sync task failed for data source {data_source_id}: {exc}", exc_info=True)
+        asyncio.run(_mark_sync_job_failed(sync_job_id, str(exc)))
         raise self.retry(exc=exc, countdown=300 * (2**self.request.retries))
-
-    finally:
-        db.close()
 
 
 @celery_app.task(name="sync_all_data_sources_task")
 def sync_all_data_sources_task(tenant_id: str | None = None) -> dict[str, Any]:
-    """
-    Sync all active data sources for a tenant or all tenants.
+    """Dispatch sync tasks for all active data sources."""
+    return asyncio.run(_dispatch_all_syncs(tenant_id))
 
-    Args:
-        tenant_id: Optional tenant ID to limit sync scope
 
-    Returns:
-        dict: Summary of sync operations
-    """
-    db = SessionLocal()
+# ---------------------------------------------------------------------------
+# Async implementations
+# ---------------------------------------------------------------------------
 
+
+async def _run_sync(data_source_id: int, sync_job_id: int, full_sync: bool) -> dict[str, Any]:
+    from sqlalchemy import select
+
+    from src.controllers.data_sources import get_connector
+    from src.core.database import create_celery_async_session
+    from src.models.data_source import DataSource, DataSourceSyncJob, SyncStatus
+
+    async with create_celery_async_session()() as db:
+        ds = await db.get(DataSource, data_source_id)
+        if not ds:
+            raise ValueError(f"DataSource {data_source_id} not found")
+
+        result_sj = await db.execute(select(DataSourceSyncJob).where(DataSourceSyncJob.id == sync_job_id))
+        sync_job = result_sj.scalar_one_or_none()
+        if not sync_job:
+            raise ValueError(f"SyncJob {sync_job_id} not found")
+
+        try:
+            connector = get_connector(ds, db)
+            result = await connector.sync(incremental=not full_sync)
+
+            sync_job.status = SyncStatus.COMPLETED if result.get("status") != "failed" else SyncStatus.FAILED
+            sync_job.completed_at = datetime.now(UTC)
+            sync_job.documents_processed = result.get("documents_processed", 0)
+            sync_job.documents_added = result.get("documents_added", 0)
+            sync_job.documents_updated = result.get("documents_updated", 0)
+            sync_job.documents_failed = result.get("documents_failed", 0)
+            sync_job.error_message = "; ".join(result.get("errors", [])) or None
+
+            ds.last_sync_at = datetime.now(UTC)
+            ds.last_error = sync_job.error_message
+            await db.commit()
+
+            logger.info(f"Sync completed for data source {data_source_id}: {result.get('status')}")
+            return {"success": True, "data_source_id": data_source_id, **result}
+
+        except Exception as exc:
+            sync_job.status = SyncStatus.FAILED
+            sync_job.completed_at = datetime.now(UTC)
+            sync_job.error_message = str(exc)[:500]
+            ds.last_error = str(exc)[:500]
+            await db.commit()
+            raise
+
+
+async def _mark_sync_job_failed(sync_job_id: int, error: str) -> None:
+    """Best-effort update of sync job to FAILED when the task itself errors before _run_sync can."""
     try:
-        from src.models.data_source import DataSource
+        from src.core.database import create_celery_async_session
+        from src.models.data_source import DataSourceSyncJob, SyncStatus
 
-        logger.info("🔄 Starting sync for all data sources")
+        async with create_celery_async_session()() as db:
+            sync_job = await db.get(DataSourceSyncJob, sync_job_id)
+            if sync_job and sync_job.status == SyncStatus.IN_PROGRESS:
+                sync_job.status = SyncStatus.FAILED
+                sync_job.completed_at = datetime.now(UTC)
+                sync_job.error_message = error[:500]
+                await db.commit()
+    except Exception as e:
+        logger.error(f"Failed to mark sync job {sync_job_id} as failed: {e}")
 
-        query = db.query(DataSource).filter(DataSource.is_active)
 
+async def _dispatch_all_syncs(tenant_id: str | None) -> dict[str, Any]:
+    from sqlalchemy import select
+
+    from src.core.database import create_celery_async_session
+    from src.models.data_source import DataSource, DataSourceStatus, DataSourceSyncJob, SyncStatus
+
+    async with create_celery_async_session()() as db:
+        q = select(DataSource).where(DataSource.status == DataSourceStatus.ACTIVE)
         if tenant_id:
-            query = query.filter(DataSource.tenant_id == uuid.UUID(tenant_id))
+            from uuid import UUID
 
-        data_sources = query.all()
+            q = q.where(DataSource.tenant_id == UUID(tenant_id))
+        result = await db.execute(q)
+        data_sources = result.scalars().all()
 
-        results = {"total": len(data_sources), "queued": 0, "failed": 0, "sources": []}
-
+        queued, failed = 0, 0
         for ds in data_sources:
             try:
-                # Queue individual sync task
-                sync_data_source_task.delay(data_source_id=str(ds.id), full_sync=False)
-                results["queued"] += 1
-                results["sources"].append({"id": str(ds.id), "type": ds.type, "status": "queued"})
+                sync_job = DataSourceSyncJob(
+                    data_source_id=ds.id,
+                    tenant_id=ds.tenant_id,
+                    status=SyncStatus.IN_PROGRESS,
+                    started_at=datetime.now(UTC),
+                )
+                db.add(sync_job)
+                await db.flush()
+                sync_data_source_task.delay(data_source_id=ds.id, sync_job_id=sync_job.id, full_sync=False)
+                queued += 1
             except Exception as e:
                 logger.error(f"Failed to queue sync for {ds.id}: {e}")
-                results["failed"] += 1
-                results["sources"].append({"id": str(ds.id), "type": ds.type, "status": "failed", "error": str(e)})
+                failed += 1
 
-        logger.info(f"✅ Queued {results['queued']} data source syncs")
+        await db.commit()
 
-        return results
-
-    except Exception as exc:
-        logger.error(f"❌ Error in bulk data source sync: {exc}", exc_info=True)
-        return {"success": False, "error": str(exc)}
-
-    finally:
-        db.close()
-
-
-@celery_app.task(name="process_data_source_document_task", bind=True, max_retries=3)
-def process_data_source_document_task(self, document_id: str, data_source_id: str, tenant_id: str) -> dict[str, Any]:
-    """
-    Process a document from a data source (extract, index, embed).
-
-    Args:
-        document_id: Document UUID
-        data_source_id: Data source UUID
-        tenant_id: Tenant UUID
-
-    Returns:
-        dict: Processing results
-    """
-    db = SessionLocal()
-
-    try:
-        from src.services.data_sources.document_processor import DocumentProcessor
-
-        logger.info(f"📄 Processing document {document_id} from data source {data_source_id}")
-
-        processor = DocumentProcessor(db)
-        result = processor.process_document(
-            document_id=uuid.UUID(document_id), data_source_id=uuid.UUID(data_source_id), tenant_id=uuid.UUID(tenant_id)
-        )
-
-        logger.info(f"✅ Document {document_id} processed successfully")
-
-        return result
-
-    except Exception as exc:
-        logger.error(f"❌ Error processing document {document_id}: {exc}", exc_info=True)
-        raise self.retry(exc=exc, countdown=60 * (2**self.request.retries))
-
-    finally:
-        db.close()
-
-
-@celery_app.task(name="cleanup_old_data_source_items_task")
-def cleanup_old_data_source_items_task(data_source_id: str, days_old: int = 90) -> dict[str, Any]:
-    """
-    Clean up old items from a data source.
-
-    Args:
-        data_source_id: Data source UUID
-        days_old: Delete items older than this many days
-
-    Returns:
-        dict: Cleanup results
-    """
-    db = SessionLocal()
-
-    try:
-        from datetime import timedelta
-
-        from src.models.data_source_item import DataSourceItem
-
-        logger.info(f"🧹 Cleaning up items older than {days_old} days from {data_source_id}")
-
-        cutoff_date = datetime.now(UTC) - timedelta(days=days_old)
-
-        deleted_count = (
-            db.query(DataSourceItem)
-            .filter(DataSourceItem.data_source_id == uuid.UUID(data_source_id), DataSourceItem.created_at < cutoff_date)
-            .delete()
-        )
-
-        db.commit()
-
-        logger.info(f"✅ Deleted {deleted_count} old items from data source {data_source_id}")
-
-        return {
-            "success": True,
-            "deleted_count": deleted_count,
-            "data_source_id": data_source_id,
-            "cutoff_date": cutoff_date.isoformat(),
-        }
-
-    except Exception as exc:
-        logger.error(f"❌ Error cleaning up data source {data_source_id}: {exc}", exc_info=True)
-        db.rollback()
-        return {"success": False, "error": str(exc)}
-
-    finally:
-        db.close()
+    logger.info(f"Queued {queued} data source syncs")
+    return {"queued": queued, "failed": failed}

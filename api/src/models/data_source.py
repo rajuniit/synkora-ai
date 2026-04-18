@@ -80,7 +80,7 @@ class DataSource(BaseModel, TimestampMixin):
     )
     access_token_encrypted: Mapped[str | None] = mapped_column(Text, nullable=True)
     refresh_token_encrypted: Mapped[str | None] = mapped_column(Text, nullable=True)
-    token_expires_at: Mapped[datetime | None] = mapped_column(DateTime, nullable=True)
+    token_expires_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
 
     # Configuration
     config: Mapped[dict] = mapped_column(JSON, nullable=False, default=dict)
@@ -90,8 +90,8 @@ class DataSource(BaseModel, TimestampMixin):
     # Sync settings
     sync_enabled: Mapped[bool] = mapped_column(Boolean, nullable=False, default=True)
     sync_frequency_minutes: Mapped[int] = mapped_column(Integer, nullable=False, default=60)  # Default: hourly
-    last_sync_at: Mapped[datetime | None] = mapped_column(DateTime, nullable=True)
-    next_sync_at: Mapped[datetime | None] = mapped_column(DateTime, nullable=True)
+    last_sync_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+    next_sync_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
 
     # Metadata
     total_documents: Mapped[int] = mapped_column(Integer, nullable=False, default=0)
@@ -152,12 +152,8 @@ class DataSourceDocument(BaseModel, TimestampMixin):
     is_embedded: Mapped[bool] = mapped_column(Boolean, nullable=False, default=False)
 
     # Timestamps
-    source_created_at: Mapped[datetime | None] = mapped_column(
-        DateTime, nullable=True
-    )  # Original creation time in source
-    source_updated_at: Mapped[datetime | None] = mapped_column(
-        DateTime, nullable=True
-    )  # Original update time in source
+    source_created_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+    source_updated_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
 
     # Relationships
     data_source: Mapped["DataSource"] = relationship("DataSource", back_populates="data_source_documents")
