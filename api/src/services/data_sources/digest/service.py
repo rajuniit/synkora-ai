@@ -193,7 +193,12 @@ class DigestService:
         from src.config.settings import settings
 
         if settings.openai_api_key:
-            return {"provider": "openai", "model": "gpt-4o-mini", "api_key": settings.openai_api_key, "max_tokens": 2000}
+            return {
+                "provider": "openai",
+                "model": "gpt-4o-mini",
+                "api_key": settings.openai_api_key,
+                "max_tokens": 2000,
+            }
         if settings.anthropic_api_key:
             return {
                 "provider": "anthropic",
@@ -202,7 +207,9 @@ class DigestService:
                 "max_tokens": 2000,
             }
 
-        raise RuntimeError("No LLM config available for digest generation. Add an agent LLM config or set OPENAI_API_KEY.")
+        raise RuntimeError(
+            "No LLM config available for digest generation. Add an agent LLM config or set OPENAI_API_KEY."
+        )
 
     async def _process_items(
         self,

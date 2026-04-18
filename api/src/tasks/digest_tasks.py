@@ -71,9 +71,7 @@ async def _dispatch_digest_tasks(target_date: date) -> dict[str, Any]:
     supported = set(supported_source_types())
 
     async with create_celery_async_session()() as db:
-        result = await db.execute(
-            select(DataSource).where(DataSource.status == DataSourceStatus.ACTIVE)
-        )
+        result = await db.execute(select(DataSource).where(DataSource.status == DataSourceStatus.ACTIVE))
         data_sources = result.scalars().all()
 
     queued = 0
