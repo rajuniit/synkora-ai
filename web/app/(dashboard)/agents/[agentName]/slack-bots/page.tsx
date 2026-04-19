@@ -2,7 +2,7 @@
 
 import { useState, useEffect } from "react";
 import { useParams, useRouter } from "next/navigation";
-import { Plus, Power, PowerOff, RefreshCw, Trash2, Settings, ExternalLink, Copy, Check } from "lucide-react";
+import { Plus, Power, PowerOff, RefreshCw, Trash2, Settings, ExternalLink, Copy, Check, ChevronRight } from "lucide-react";
 import toast from "react-hot-toast";
 import { apiClient } from "@/lib/api/client";
 
@@ -184,6 +184,25 @@ export default function SlackBotsPage() {
   return (
     <div className="min-h-screen bg-gradient-to-br from-red-50/60 via-white to-rose-50/40 p-4 md:p-6">
       <div className="max-w-7xl mx-auto">
+        {/* Breadcrumb */}
+        <div className="flex items-center gap-1.5 text-sm mb-4">
+          <button
+            onClick={() => router.push("/agents")}
+            className="text-gray-500 hover:text-primary-600 transition-colors"
+          >
+            Agents
+          </button>
+          <ChevronRight className="w-3.5 h-3.5 text-gray-400" />
+          <button
+            onClick={() => router.push(`/agents/${encodeURIComponent(agentName)}/view`)}
+            className="text-gray-500 hover:text-primary-600 transition-colors"
+          >
+            {agentName}
+          </button>
+          <ChevronRight className="w-3.5 h-3.5 text-gray-400" />
+          <span className="text-gray-900 font-medium">Slack Bots</span>
+        </div>
+
         {/* Header */}
         <div className="flex justify-between items-center mb-6">
           <div>

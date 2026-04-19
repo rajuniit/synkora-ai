@@ -1,8 +1,8 @@
 """Slack daily digest extractor."""
 
 import logging
+from datetime import UTC, datetime
 from datetime import date as DateType
-from datetime import datetime
 
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -45,6 +45,8 @@ class SlackDigestExtractor(BaseDigestExtractor):
             ts_str = doc.get("metadata", {}).get("timestamp", "")
             try:
                 ts = datetime.fromisoformat(ts_str) if ts_str else None
+                if ts is not None and ts.tzinfo is None:
+                    ts = ts.replace(tzinfo=UTC)
             except ValueError:
                 ts = None
 
