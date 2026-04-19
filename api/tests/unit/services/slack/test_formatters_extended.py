@@ -139,17 +139,21 @@ class TestConvertMarkdownTableToSlackBlocks:
         assert convert_markdown_table_to_slack_blocks("just some text\nno pipes here") == []
 
     def test_headers_in_bold(self):
+        # 2-col table → fields block (native Slack 2-col grid); key is bold in field text
         table = "| Name | Age |\n|------|-----|\n| Alice | 30 |"
         blocks = convert_markdown_table_to_slack_blocks(table)
         assert len(blocks) == 1
-        text = blocks[0]["text"]["text"]
-        assert "*Name | Age*" in text
+        assert "fields" in blocks[0]
+        field_texts = [f["text"] for f in blocks[0]["fields"]]
+        assert any("*Alice*" in t for t in field_texts)
 
     def test_separator_row_excluded_from_data(self):
+        # 2-col table → fields; separator row must not appear in any field text
         table = "| A | B |\n|---|---|\n| 1 | 2 |"
         blocks = convert_markdown_table_to_slack_blocks(table)
-        text = blocks[0]["text"]["text"]
-        assert "---" not in text
+        assert "fields" in blocks[0]
+        all_text = " ".join(f["text"] for f in blocks[0]["fields"])
+        assert "---" not in all_text
 
     def test_data_row_present(self):
         table = "| X |\n|---|\n| val |"
@@ -168,11 +172,11 @@ class TestConvertMarkdownTableToSlackBlocks:
         assert blocks[0]["type"] == "section"
         assert blocks[0]["text"]["type"] == "mrkdwn"
 
-    def test_headers_only_no_data_still_renders(self):
+    def test_headers_only_no_data_returns_empty(self):
+        # A table with only a header row and separator but no data rows → nothing to render
         table = "| Only | Headers |\n|------|---------|"
         blocks = convert_markdown_table_to_slack_blocks(table)
-        assert len(blocks) == 1
-        assert "*Only | Headers*" in blocks[0]["text"]["text"]
+        assert blocks == []
 
 
 # ---------------------------------------------------------------------------
