@@ -54,6 +54,7 @@ class TestSlackFormatters:
         assert clean_table_cell("  text  ") == "text"
 
     def test_convert_markdown_table_to_slack_blocks(self):
+        # 2-column key-value table → section with fields (native Slack 2-col grid)
         table = """
         | Header 1 | Header 2 |
         | --- | --- |
@@ -62,9 +63,11 @@ class TestSlackFormatters:
         blocks = convert_markdown_table_to_slack_blocks(table)
         assert len(blocks) == 1
         assert blocks[0]["type"] == "section"
-        text = blocks[0]["text"]["text"]
-        assert "*Header 1 | Header 2*" in text
-        assert "Cell 1 | Cell 2" in text
+        assert "fields" in blocks[0]
+        field_texts = [f["text"] for f in blocks[0]["fields"]]
+        # In 2-col tables the data rows become fields: first col = bold label, second = value
+        assert any("*Cell 1*" in t for t in field_texts)
+        assert any("Cell 2" in t for t in field_texts)
 
     def test_convert_markdown_table_empty(self):
         assert convert_markdown_table_to_slack_blocks("") == []
