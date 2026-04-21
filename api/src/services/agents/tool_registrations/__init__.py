@@ -19,6 +19,7 @@ from .google_drive_tools_registry import register_google_drive_tools
 from .hackernews_tools_registry import register_hackernews_tools
 from .linkedin_tools_registry import register_linkedin_tools
 from .onepassword_tools_registry import register_1password_tools
+from .openmeteo_tools_registry import register_openmeteo_tools
 from .recall_tools_registry import register_recall_tools
 from .role_tools_registry import register_role_tools
 from .scheduler_tools_registry import register_scheduler_tools
@@ -54,4 +55,5 @@ __all__ = [
     "register_github_issue_tools",
     "register_github_pr_management_tools",
     "register_github_repo_tools",
+    "register_openmeteo_tools",
 ]

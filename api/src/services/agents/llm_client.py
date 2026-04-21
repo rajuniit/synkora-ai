@@ -533,14 +533,30 @@ class MultiProviderLLMClient:
 
         return response.text if hasattr(response, "text") else str(response)
 
+    def _build_openai_params(self, max_tokens: int | None, temperature: float | None) -> dict[str, Any]:
+        """Build safe OpenAI API parameters, omitting unsupported fields.
+
+        - Uses 'max_completion_tokens' (the current standard, accepted by all models).
+        - Omits 'temperature' when None or 1.0 — reasoning models (o-series, gpt-5)
+          reject any value other than the default 1. Standard models accept it fine.
+          Users who need a specific temperature should set it in the LLM config;
+          leaving it null/1 makes the config work for all model families.
+        """
+        params: dict[str, Any] = {}
+        if max_tokens is not None:
+            params["max_completion_tokens"] = max_tokens
+        if temperature is not None and temperature != 1.0:
+            params["temperature"] = temperature
+        return params
+
     async def _generate_openai(self, prompt: str, temperature: float, max_tokens: int | None, **kwargs) -> str:
         """Generate content using OpenAI."""
-        messages = [{"role": "user", "content": prompt}]
-
         response = await self._client.chat.completions.create(
-            model=self.config.model_name, messages=messages, temperature=temperature, max_tokens=max_tokens, **kwargs
+            model=self.config.model_name,
+            messages=[{"role": "user", "content": prompt}],
+            **self._build_openai_params(max_tokens, temperature),
+            **kwargs,
         )
-
         return response.choices[0].message.content
 
     async def _generate_anthropic(self, prompt: str, temperature: float, max_tokens: int | None, **kwargs) -> str:
@@ -776,17 +792,13 @@ class MultiProviderLLMClient:
         self, prompt: str, temperature: float, max_tokens: int | None, **kwargs
     ) -> AsyncGenerator[str, None]:
         """Generate content using OpenAI with streaming."""
-        messages = [{"role": "user", "content": prompt}]
-
         stream = await self._client.chat.completions.create(
             model=self.config.model_name,
-            messages=messages,
-            temperature=temperature,
-            max_tokens=max_tokens,
+            messages=[{"role": "user", "content": prompt}],
+            **self._build_openai_params(max_tokens, temperature),
             stream=True,
             **kwargs,
         )
-
         async for chunk in stream:
             if chunk.choices[0].delta.content:
                 yield chunk.choices[0].delta.content
@@ -865,8 +877,7 @@ class MultiProviderLLMClient:
         stream = await self._client.chat.completions.create(
             model=self.config.model_name,
             messages=messages,
-            temperature=temperature,
-            max_tokens=max_tokens,
+            **self._build_openai_params(max_tokens, temperature),
             stream=True,
             **kwargs,
         )

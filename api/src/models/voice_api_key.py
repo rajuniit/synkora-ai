@@ -39,20 +39,9 @@ class VoiceApiKey(BaseModel, TenantMixin):
     is_active = Column(Boolean, nullable=False, default=True, comment="Whether the API key is active")
 
     def __repr__(self) -> str:
-        """String representation of voice API key."""
         return f"<VoiceApiKey(id={self.id}, provider='{self.provider}', is_active={self.is_active})>"
 
     def to_dict(self, exclude: set[str] | None = None) -> dict:
-        """
-        Convert to dictionary, excluding encrypted API key by default.
-
-        Args:
-            exclude: Additional fields to exclude
-
-        Returns:
-            Dictionary representation of the voice API key
-        """
         exclude = exclude or set()
-        # Always exclude encrypted API key from dict representation
         exclude.add("api_key_encrypted")
         return super().to_dict(exclude=exclude)

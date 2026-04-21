@@ -42,23 +42,25 @@ async def create_api_key(
 
     The full API key is only shown once at creation time.
     """
-    # If agent_id is provided, verify it exists and belongs to tenant
-    if request.agent_id:
-        result = await db.execute(
-            select(Agent).filter(
-                Agent.id == request.agent_id,
-                Agent.tenant_id == tenant_id,
-            )
-        )
-        agent = result.scalar_one_or_none()
+    # agent_id is required — the DB model has agent_id NOT NULL with FK to agents
+    if not request.agent_id:
+        raise HTTPException(status_code=422, detail="agent_id is required")
 
-        if not agent:
-            raise HTTPException(status_code=404, detail="Agent not found")
+    # Verify the agent exists and belongs to this tenant
+    result = await db.execute(
+        select(Agent).filter(
+            Agent.id == request.agent_id,
+            Agent.tenant_id == tenant_id,
+        )
+    )
+    agent = result.scalar_one_or_none()
+    if not agent:
+        raise HTTPException(status_code=404, detail="Agent not found")
 
     # Create API key
     api_key, plain_key = await AgentApiKeyService.create_api_key(
         db=db,
-        agent_id=request.agent_id or tenant_id,  # Use tenant_id if no agent specified
+        agent_id=request.agent_id,
         tenant_id=tenant_id,
         name=request.key_name,
         permissions=request.permissions,

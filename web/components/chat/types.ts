@@ -61,6 +61,29 @@ export interface MessageMetadata {
   usage?: TokenUsage
   timing?: TimingInfo
   workflow?: WorkflowMetadata
+  vehicle_maps?: VehicleMapData[]
+  fleet_cards?: FleetCardData[]
+  confidence?: number
+}
+
+export interface VehicleMapData {
+  id: string
+  map_url: string
+  embed_url?: string
+  center?: { lat: number; lng: number }
+  zoom?: number
+  marker_count?: number
+  distance_km?: number
+  duration_min?: number
+  profile?: string
+  created_at?: string
+}
+
+export interface FleetCardData {
+  id: string
+  tool: string
+  data: Record<string, any>
+  created_at?: string
 }
 
 export interface WorkflowMetadata {

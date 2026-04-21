@@ -22,6 +22,9 @@ export type ChatEvent =
     }
   | { type: 'chart'; chart?: unknown; [key: string]: unknown }
   | { type: 'diagram'; diagram?: unknown; [key: string]: unknown }
+  | { type: 'infographic'; infographic?: unknown; [key: string]: unknown }
+  | { type: 'vehicle_map'; map?: unknown; [key: string]: unknown }
+  | { type: 'fleet_card'; card?: unknown; [key: string]: unknown }
   | {
       type: 'done'
       sources?: unknown[]

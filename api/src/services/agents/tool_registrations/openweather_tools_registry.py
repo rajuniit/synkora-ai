@@ -1,0 +1,73 @@
+"""OpenWeather Tools Registry — weather forecast and current conditions."""
+
+import logging
+from typing import Any
+
+logger = logging.getLogger(__name__)
+
+
+def register_openweather_tools(registry) -> None:
+    from src.services.agents.internal_tools.openweather_tools import (
+        internal_get_current_weather,
+        internal_get_weather_forecast,
+    )
+
+    async def _forecast_wrapper(config: dict[str, Any] | None = None, **kwargs):
+        runtime_context = config.get("_runtime_context") if config else None
+        return await internal_get_weather_forecast(
+            config=config,
+            runtime_context=runtime_context,
+            lat=float(kwargs.get("lat", 0.0)),
+            lng=float(kwargs.get("lng", 0.0)),
+            hours_ahead=int(kwargs.get("hours_ahead", 24)),
+        )
+
+    async def _current_wrapper(config: dict[str, Any] | None = None, **kwargs):
+        runtime_context = config.get("_runtime_context") if config else None
+        return await internal_get_current_weather(
+            config=config,
+            runtime_context=runtime_context,
+            lat=float(kwargs.get("lat", 0.0)),
+            lng=float(kwargs.get("lng", 0.0)),
+        )
+
+    registry.register_tool(
+        name="internal_get_weather_forecast",
+        description=(
+            "Get hourly weather forecast for any location (lat/lng) up to 48 hours ahead. "
+            "Returns temperature, precipitation probability, wind speed, and a demand_modifier "
+            "(0.0–2.0) indicating how weather affects outdoor activity levels."
+        ),
+        parameters={
+            "type": "object",
+            "properties": {
+                "lat": {"type": "number", "description": "Latitude"},
+                "lng": {"type": "number", "description": "Longitude"},
+                "hours_ahead": {
+                    "type": "integer",
+                    "description": "Number of hours to forecast (1–48, default 24)",
+                },
+            },
+            "required": ["lat", "lng"],
+        },
+        function=_forecast_wrapper,
+    )
+
+    registry.register_tool(
+        name="internal_get_current_weather",
+        description=(
+            "Get current weather conditions for any location (lat/lng). "
+            "Returns temperature, description, wind speed, humidity, and a demand_modifier."
+        ),
+        parameters={
+            "type": "object",
+            "properties": {
+                "lat": {"type": "number", "description": "Latitude"},
+                "lng": {"type": "number", "description": "Longitude"},
+            },
+            "required": ["lat", "lng"],
+        },
+        function=_current_wrapper,
+    )
+
+    logger.info("Registered 2 OpenWeather tools")

@@ -227,56 +227,124 @@ synkora/
 ```
 
 
+## System Requirements
+
+Synkora runs ~20 Docker containers. The stack includes Elasticsearch (2 GB hard cap), Redis (2 GB configured), a sentence-transformers ML service, Playwright-based scraper, ClickHouse, and multiple Celery workers. Size accordingly.
+
+### Hardware
+
+| | Minimum | Recommended |
+|---|---------|-------------|
+| **RAM** | 16 GB | 32 GB |
+| **CPU** | 4 cores | 8+ cores |
+| **Free disk** | 40 GB | 100 GB |
+| **OS** | macOS 12+, Ubuntu 20.04+, Debian 11+, Fedora 36+, RHEL 8+ | — |
+
+> **Why so much RAM?** Elasticsearch alone is hard-capped at 2 GB and won't start on machines with less free memory. Redis is configured for up to 2 GB. The ML service loads sentence-transformer models (~1–2 GB). Running everything below 8 GB will result in OOM kills.
+
+### Per-Service Resource Breakdown
+
+| Service | RAM (idle) | Purpose |
+|---------|-----------|---------|
+| `elasticsearch` | ~1.5 GB | Full-text search (hard limit: 2 GB) |
+| `redis` | up to 2 GB | Cache, Celery broker, pub/sub |
+| `synkora-ml` | ~1–2 GB | Embeddings + reranking (sentence-transformers) |
+| `synkora-scraper` | ~512 MB | Browser automation (Playwright + Chromium) |
+| `langfuse-clickhouse` | ~512 MB | LLM observability analytics |
+| `langfuse-web` + `langfuse-worker` | ~512 MB | Langfuse UI + background jobs |
+| `api` | ~512 MB | FastAPI application server |
+| `celery-worker` (×4 workers) | ~1.5 GB | Background tasks (default, agents, billing, notifications) |
+| `postgres` + `postgres-test` | ~384 MB | PostgreSQL with pgvector |
+| `qdrant` | ~256 MB | Vector database |
+| `minio` | ~256 MB | S3-compatible object storage |
+| `bot-worker`, `celery-beat`, `docs` | ~384 MB | Slack bots, scheduler, docs |
+| **Total** | **~10–12 GB** | Plus OS + Docker daemon (~2–3 GB overhead) |
+
+### Required Software
+
+| Tool | Version | Required for |
+|------|---------|-------------|
+| Docker Engine | 24+ | All services |
+| Docker Compose v2 | 2.20+ | Orchestration (`docker compose`, not `docker-compose`) |
+| Node.js | 20+ | Frontend (local dev mode only) |
+| pnpm | 8+ | Frontend (local dev mode only) |
+| openssl | any | Secret key generation during install |
+
+> The `./install.sh` script checks all of the above automatically and will offer to install Docker if it's missing.
+
+### Ports Used
+
+| Port | Service |
+|------|---------|
+| `3005` | Web frontend |
+| `5001` | API (FastAPI) |
+| `3001` | Langfuse UI |
+| `9001` | MinIO console |
+| `9000` | MinIO S3 API |
+| `6333` | Qdrant HTTP |
+| `9200` | Elasticsearch |
+| `5438` | PostgreSQL (main) |
+| `6379` | Redis (localhost only) |
+| `8080` | Bot worker health check |
+
+All ports are configurable in `docker-compose.yml`. The installer checks for conflicts before starting.
+
+---
+
 ## Quick Start
+
+### One-Line Install (Recommended)
+
+Run the interactive installer — it handles everything: prerequisite checks, `.env` generation, database migrations, seeding, and starting all services.
+
+```bash
+git clone https://github.com/getsynkora/synkora-ai.git
+cd synkora-ai
+./install.sh
+```
+
+For CI/CD and server deployments (no prompts):
+
+```bash
+SYNKORA_ADMIN_EMAIL=admin@example.com \
+SYNKORA_ADMIN_PASSWORD=securepass123 \
+SYNKORA_LLM_PROVIDER=openai \
+SYNKORA_LLM_API_KEY=sk-... \
+./install.sh --non-interactive
+```
+
+The installer will:
+1. Check system resources (RAM, CPU, disk) and warn if below minimums
+2. Verify Docker, openssl, Node.js/pnpm are present (and offer to install Docker if missing)
+3. Detect existing installations and offer Upgrade / Reset / Quit
+4. Collect admin account details, LLM provider key, and optional Slack bot tokens
+5. Generate all `.env` files with secure random secrets
+6. Pull images, start services, run migrations, seed plans/roles/template agents
+7. Print a summary with all URLs and management commands
+
+### Manual Setup (Docker Compose)
+
+If you prefer to set up manually:
+
+```bash
+# 1. Copy and edit environment files
+cp api/.env.example api/.env
+# Edit api/.env with your configuration
+
+# 2. Start all services
+docker compose up -d
+
+# 3. Initialize the database
+docker compose exec api alembic upgrade head
+docker compose exec api python create_super_admin.py
+docker compose exec api python seed_platform_config.py
+```
 
 ### Prerequisites
 
-- Docker and Docker Compose
-- Node.js 18+ and pnpm (for local frontend development)
+- Docker and Docker Compose v2
+- Node.js 20+ and pnpm (for local frontend development)
 - Python 3.11+ and uv (for local backend development)
-
-### Using Docker Compose (Recommended)
-
-1. **Clone the repository**
-  ```bash
-  git clone https://github.com/getsynkora/synkora-ai.git
-  cd synkora-ai
-  ```
-
-2. **Start all services**
-  ```bash
-  docker-compose up -d
-  ```
-
-  This starts:
-  - PostgreSQL (port 5432)
-  - Redis (port 6379)
-  - Qdrant (ports 6333, 6334)
-  - Elasticsearch (port 9200)
-  - MinIO (ports 9000, 9001)
-  - Langfuse (port 3001)
-  - API (port 5001)
-  - Web frontend (port 3005)
-  - ML service (internal, port 5002)
-  - Scraper service (internal, port 5003)
-
-3. **Initialize the database**
-  ```bash
-  # Run migrations
-  docker-compose exec api alembic upgrade head
-
-  # Create super admin
-  docker-compose exec api python create_super_admin.py
-
-  # Seed platform configuration
-  docker-compose exec api python seed_platform_config.py
-  ```
-
-4. **Access the application**
-  - Frontend: http://localhost:3005
-  - API Docs: http://localhost:5001/api/v1/docs
-  - Langfuse: http://localhost:3001
-  - MinIO Console: http://localhost:9001 (minioadmin/minioadmin)
 
 ### Local Development
 
@@ -564,7 +632,7 @@ We welcome contributions from the community! Whether you're fixing bugs, improvi
 
 ### How to Contribute
 
-1. **Fork the repository** and create your branch from `master`
+1. **Fork the repository** and create your branch from `main`
 2. **Make your changes** following our coding standards
 3. **Add tests** for any new functionality
 4. **Run the test suite** to ensure everything passes

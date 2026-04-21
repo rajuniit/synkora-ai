@@ -486,6 +486,8 @@ async def update_widget(
                 "theme_config": widget.theme_config,
                 "rate_limit": widget.rate_limit,
                 "is_active": widget.is_active,
+                "identity_verification_required": widget.identity_verification_required,
+                "enable_agent_routing": widget.enable_agent_routing,
                 "updated_at": widget.updated_at.isoformat(),
             },
         )

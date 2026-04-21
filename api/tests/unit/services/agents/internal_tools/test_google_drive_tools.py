@@ -48,8 +48,9 @@ class TestInternalGoogleDriveListFiles:
     async def test_requires_runtime_context(self):
         from src.services.agents.internal_tools.google_drive_tools import internal_google_drive_list_files
 
-        with pytest.raises(ValueError, match="Runtime context not available"):
-            await internal_google_drive_list_files(runtime_context=None)
+        result = await internal_google_drive_list_files(runtime_context=None)
+        assert result["success"] is False
+        assert "Runtime context" in result["error"]
 
     @pytest.mark.asyncio
     async def test_lists_files_successfully(self):
@@ -98,11 +99,9 @@ class TestInternalGoogleDriveGetFile:
     async def test_requires_runtime_context(self):
         from src.services.agents.internal_tools.google_drive_tools import internal_google_drive_get_file
 
-        with pytest.raises(ValueError, match="Runtime context not available"):
-            await internal_google_drive_get_file(
-                file_id="file-123",
-                runtime_context=None,
-            )
+        result = await internal_google_drive_get_file(file_id="file-123", runtime_context=None)
+        assert result["success"] is False
+        assert "Runtime context" in result["error"]
 
 
 class TestInternalGoogleDriveDeleteFile:
@@ -112,11 +111,9 @@ class TestInternalGoogleDriveDeleteFile:
     async def test_requires_runtime_context(self):
         from src.services.agents.internal_tools.google_drive_tools import internal_google_drive_delete_file
 
-        with pytest.raises(ValueError, match="Runtime context not available"):
-            await internal_google_drive_delete_file(
-                file_id="file-123",
-                runtime_context=None,
-            )
+        result = await internal_google_drive_delete_file(file_id="file-123", runtime_context=None)
+        assert result["success"] is False
+        assert "Runtime context" in result["error"]
 
     @pytest.mark.asyncio
     async def test_deletes_file_successfully(self):
@@ -156,11 +153,9 @@ class TestInternalGoogleDriveCreateFolder:
     async def test_requires_runtime_context(self):
         from src.services.agents.internal_tools.google_drive_tools import internal_google_drive_create_folder
 
-        with pytest.raises(ValueError, match="Runtime context not available"):
-            await internal_google_drive_create_folder(
-                name="New Folder",
-                runtime_context=None,
-            )
+        result = await internal_google_drive_create_folder(name="New Folder", runtime_context=None)
+        assert result["success"] is False
+        assert "Runtime context" in result["error"]
 
 
 class TestInternalGoogleDriveMoveFile:
@@ -170,12 +165,9 @@ class TestInternalGoogleDriveMoveFile:
     async def test_requires_runtime_context(self):
         from src.services.agents.internal_tools.google_drive_tools import internal_google_drive_move_file
 
-        with pytest.raises(ValueError, match="Runtime context not available"):
-            await internal_google_drive_move_file(
-                file_id="file-123",
-                new_parent_folder_id="folder-456",
-                runtime_context=None,
-            )
+        result = await internal_google_drive_move_file(file_id="file-123", new_parent_folder_id="folder-456", runtime_context=None)
+        assert result["success"] is False
+        assert "Runtime context" in result["error"]
 
 
 class TestInternalGoogleDriveShareFile:
@@ -185,12 +177,9 @@ class TestInternalGoogleDriveShareFile:
     async def test_requires_runtime_context(self):
         from src.services.agents.internal_tools.google_drive_tools import internal_google_drive_share_file
 
-        with pytest.raises(ValueError, match="Runtime context not available"):
-            await internal_google_drive_share_file(
-                file_id="file-123",
-                email="user@example.com",
-                runtime_context=None,
-            )
+        result = await internal_google_drive_share_file(file_id="file-123", email="user@example.com", runtime_context=None)
+        assert result["success"] is False
+        assert "Runtime context" in result["error"]
 
 
 class TestInternalGoogleDriveGetPermissions:
@@ -200,11 +189,9 @@ class TestInternalGoogleDriveGetPermissions:
     async def test_requires_runtime_context(self):
         from src.services.agents.internal_tools.google_drive_tools import internal_google_drive_get_permissions
 
-        with pytest.raises(ValueError, match="Runtime context not available"):
-            await internal_google_drive_get_permissions(
-                file_id="file-123",
-                runtime_context=None,
-            )
+        result = await internal_google_drive_get_permissions(file_id="file-123", runtime_context=None)
+        assert result["success"] is False
+        assert "Runtime context" in result["error"]
 
 
 class TestInternalGoogleDriveRemovePermission:
@@ -214,12 +201,9 @@ class TestInternalGoogleDriveRemovePermission:
     async def test_requires_runtime_context(self):
         from src.services.agents.internal_tools.google_drive_tools import internal_google_drive_remove_permission
 
-        with pytest.raises(ValueError, match="Runtime context not available"):
-            await internal_google_drive_remove_permission(
-                file_id="file-123",
-                permission_id="perm-456",
-                runtime_context=None,
-            )
+        result = await internal_google_drive_remove_permission(file_id="file-123", permission_id="perm-456", runtime_context=None)
+        assert result["success"] is False
+        assert "Runtime context" in result["error"]
 
 
 class TestInternalGoogleDocsCreateDocument:
@@ -229,11 +213,9 @@ class TestInternalGoogleDocsCreateDocument:
     async def test_requires_runtime_context(self):
         from src.services.agents.internal_tools.google_drive_tools import internal_google_docs_create_document
 
-        with pytest.raises(ValueError, match="Runtime context not available"):
-            await internal_google_docs_create_document(
-                title="New Doc",
-                runtime_context=None,
-            )
+        result = await internal_google_docs_create_document(title="New Doc", runtime_context=None)
+        assert result["success"] is False
+        assert "Runtime context" in result["error"]
 
 
 class TestInternalGoogleDocsGetContent:
@@ -243,11 +225,9 @@ class TestInternalGoogleDocsGetContent:
     async def test_requires_runtime_context(self):
         from src.services.agents.internal_tools.google_drive_tools import internal_google_docs_get_content
 
-        with pytest.raises(ValueError, match="Runtime context not available"):
-            await internal_google_docs_get_content(
-                document_id="doc-123",
-                runtime_context=None,
-            )
+        result = await internal_google_docs_get_content(document_id="doc-123", runtime_context=None)
+        assert result["success"] is False
+        assert "Runtime context" in result["error"]
 
 
 class TestInternalGoogleDocsAppendContent:
@@ -257,12 +237,9 @@ class TestInternalGoogleDocsAppendContent:
     async def test_requires_runtime_context(self):
         from src.services.agents.internal_tools.google_drive_tools import internal_google_docs_append_content
 
-        with pytest.raises(ValueError, match="Runtime context not available"):
-            await internal_google_docs_append_content(
-                document_id="doc-123",
-                content="New content",
-                runtime_context=None,
-            )
+        result = await internal_google_docs_append_content(document_id="doc-123", content="New content", runtime_context=None)
+        assert result["success"] is False
+        assert "Runtime context" in result["error"]
 
 
 class TestInternalGoogleSheetsCreateSpreadsheet:
@@ -272,11 +249,9 @@ class TestInternalGoogleSheetsCreateSpreadsheet:
     async def test_requires_runtime_context(self):
         from src.services.agents.internal_tools.google_drive_tools import internal_google_sheets_create_spreadsheet
 
-        with pytest.raises(ValueError, match="Runtime context not available"):
-            await internal_google_sheets_create_spreadsheet(
-                title="New Sheet",
-                runtime_context=None,
-            )
+        result = await internal_google_sheets_create_spreadsheet(title="New Sheet", runtime_context=None)
+        assert result["success"] is False
+        assert "Runtime context" in result["error"]
 
 
 class TestInternalGoogleSheetsReadRange:
@@ -286,11 +261,9 @@ class TestInternalGoogleSheetsReadRange:
     async def test_requires_runtime_context(self):
         from src.services.agents.internal_tools.google_drive_tools import internal_google_sheets_read_range
 
-        with pytest.raises(ValueError, match="Runtime context not available"):
-            await internal_google_sheets_read_range(
-                spreadsheet_id="sheet-123",
-                runtime_context=None,
-            )
+        result = await internal_google_sheets_read_range(spreadsheet_id="sheet-123", runtime_context=None)
+        assert result["success"] is False
+        assert "Runtime context" in result["error"]
 
 
 class TestInternalGoogleSheetsWriteRange:
@@ -300,13 +273,9 @@ class TestInternalGoogleSheetsWriteRange:
     async def test_requires_runtime_context(self):
         from src.services.agents.internal_tools.google_drive_tools import internal_google_sheets_write_range
 
-        with pytest.raises(ValueError, match="Runtime context not available"):
-            await internal_google_sheets_write_range(
-                spreadsheet_id="sheet-123",
-                range_name="Sheet1!A1",
-                values=[["Hello"]],
-                runtime_context=None,
-            )
+        result = await internal_google_sheets_write_range(spreadsheet_id="sheet-123", range_name="Sheet1!A1", values=[["Hello"]], runtime_context=None)
+        assert result["success"] is False
+        assert "Runtime context" in result["error"]
 
 
 class TestInternalGoogleDriveUploadFile:
@@ -316,12 +285,9 @@ class TestInternalGoogleDriveUploadFile:
     async def test_requires_runtime_context(self):
         from src.services.agents.internal_tools.google_drive_tools import internal_google_drive_upload_file
 
-        with pytest.raises(ValueError, match="Runtime context not available"):
-            await internal_google_drive_upload_file(
-                name="test.txt",
-                content="Hello World",
-                runtime_context=None,
-            )
+        result = await internal_google_drive_upload_file(name="test.txt", content="Hello World", runtime_context=None)
+        assert result["success"] is False
+        assert "Runtime context" in result["error"]
 
 
 class TestInternalGoogleDriveUpdateFile:
@@ -331,12 +297,9 @@ class TestInternalGoogleDriveUpdateFile:
     async def test_requires_runtime_context(self):
         from src.services.agents.internal_tools.google_drive_tools import internal_google_drive_update_file
 
-        with pytest.raises(ValueError, match="Runtime context not available"):
-            await internal_google_drive_update_file(
-                file_id="file-123",
-                name="updated.txt",
-                runtime_context=None,
-            )
+        result = await internal_google_drive_update_file(file_id="file-123", name="updated.txt", runtime_context=None)
+        assert result["success"] is False
+        assert "Runtime context" in result["error"]
 
 
 class TestInternalGoogleDriveDownloadFile:
@@ -346,8 +309,6 @@ class TestInternalGoogleDriveDownloadFile:
     async def test_requires_runtime_context(self):
         from src.services.agents.internal_tools.google_drive_tools import internal_google_drive_download_file
 
-        with pytest.raises(ValueError, match="Runtime context not available"):
-            await internal_google_drive_download_file(
-                file_id="file-123",
-                runtime_context=None,
-            )
+        result = await internal_google_drive_download_file(file_id="file-123", runtime_context=None)
+        assert result["success"] is False
+        assert "Runtime context" in result["error"]

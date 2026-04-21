@@ -135,7 +135,10 @@ async def create_custom_tool(
     try:
         # Validate OpenAPI schema by parsing it
         try:
-            parser = OpenAPIParser(request.openapi_schema, request.server_url)
+            schema = request.openapi_schema
+            if not isinstance(schema, dict) or not ("openapi" in schema or "swagger" in schema or "paths" in schema):
+                raise ValueError("Schema must contain 'openapi', 'swagger', or 'paths' key")
+            parser = OpenAPIParser(schema, request.server_url)
             schema_info = parser.get_schema_info()
         except Exception as e:
             raise HTTPException(status_code=400, detail=f"Invalid OpenAPI schema: {str(e)}")
@@ -393,6 +396,7 @@ async def get_custom_tool(
         raise HTTPException(status_code=500, detail=str(e))
 
 
+@router.patch("/{tool_id}", response_model=CustomToolResponse)
 @router.put("/{tool_id}", response_model=CustomToolResponse)
 async def update_custom_tool(
     tool_id: UUID,

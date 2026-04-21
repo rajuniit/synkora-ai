@@ -100,6 +100,12 @@ class SlackEventService:
             await self._handle_app_mention(slack_bot, event, payload)
         elif event_type == "message":
             await self._handle_message_event(slack_bot, event, payload)
+        elif event_type == "app_home_opened":
+            await self._handle_app_home_opened(slack_bot, event)
+        elif event_type == "assistant_thread_started":
+            await self._handle_assistant_thread_started(slack_bot, event)
+        elif event_type == "assistant_thread_context_changed":
+            pass  # Acknowledge only
         else:
             logger.info(f"Unhandled event type: {event_type}")
 
@@ -188,6 +194,98 @@ class SlackEventService:
             client=client,
             say=None,  # Event mode uses client.chat_postMessage
         )
+
+    async def _handle_app_home_opened(self, slack_bot: SlackBot, event: dict[str, Any]) -> None:
+        """Publish the App Home tab view when a user opens it."""
+        user_id = event.get("user")
+        if not user_id:
+            return
+        client = await self._get_slack_client(slack_bot)
+        try:
+            from ...models.agent import Agent
+
+            agent = await self.db_session.get(Agent, slack_bot.agent_id)
+            agent_name = agent.agent_name if agent else slack_bot.bot_name
+            agent_desc = (agent.description or "").strip() if agent else ""
+
+            blocks: list[dict] = [
+                {"type": "header", "text": {"type": "plain_text", "text": f"Welcome to {agent_name}"}},
+            ]
+            if agent_desc:
+                blocks.append({"type": "section", "text": {"type": "mrkdwn", "text": agent_desc}})
+            blocks += [
+                {"type": "divider"},
+                {
+                    "type": "section",
+                    "text": {
+                        "type": "mrkdwn",
+                        "text": (
+                            "*How to use:*\n"
+                            "• DM me directly to start a private conversation\n"
+                            "• @mention me in any channel to get help in context\n"
+                            "• Open the AI assistant panel (bolt icon) for a focused chat"
+                        ),
+                    },
+                },
+            ]
+            if agent and agent.suggestion_prompts:
+                prompt_lines = "\n".join(
+                    f"• *{p.get('title', '')}*" + (f" — _{p.get('description', '')}_" if p.get("description") else "")
+                    for p in agent.suggestion_prompts[:5]
+                    if p.get("title")
+                )
+                if prompt_lines:
+                    blocks += [
+                        {"type": "divider"},
+                        {"type": "section", "text": {"type": "mrkdwn", "text": f"*Try asking:*\n{prompt_lines}"}},
+                    ]
+
+            await client.views_publish(user_id=user_id, view={"type": "home", "blocks": blocks})
+            logger.info(f"Published App Home for user {user_id}, bot {slack_bot.id}")
+        except Exception as e:
+            logger.warning(f"Failed to publish App Home for user {user_id}: {e}")
+
+    async def _handle_assistant_thread_started(self, slack_bot: SlackBot, event: dict[str, Any]) -> None:
+        """Set suggested prompts in the Slack AI assistant panel."""
+        thread = event.get("assistant_thread", {})
+        channel_id = thread.get("channel_id")
+        thread_ts = thread.get("thread_ts")
+        if not channel_id or not thread_ts:
+            return
+        client = await self._get_slack_client(slack_bot)
+        try:
+            from ...models.agent import Agent
+
+            agent = await self.db_session.get(Agent, slack_bot.agent_id)
+            default_prompts = [
+                {"title": "What can you do?", "message": "What are your capabilities?"},
+                {"title": "Summarize recent messages", "message": "Summarize the last 20 messages in this channel"},
+                {
+                    "title": "Help me draft a message",
+                    "message": "Help me write a professional message to my team about...",
+                },
+            ]
+            prompts = default_prompts
+            if agent and agent.suggestion_prompts:
+                built = [
+                    {
+                        "title": p.get("title", ""),
+                        "message": p.get("prompt") or p.get("description") or p.get("title", ""),
+                    }
+                    for p in agent.suggestion_prompts[:4]
+                    if p.get("title")
+                ]
+                if built:
+                    prompts = built
+
+            await client.assistant_threads_setSuggestedPrompts(
+                channel_id=channel_id,
+                thread_ts=thread_ts,
+                prompts=prompts,
+            )
+            logger.info(f"Set {len(prompts)} suggested prompts for assistant thread {thread_ts}")
+        except Exception as e:
+            logger.warning(f"Failed to set assistant suggested prompts: {e}")
 
     async def _get_slack_client(self, slack_bot: SlackBot) -> AsyncWebClient:
         """Create Slack web client for the bot.

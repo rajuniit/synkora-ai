@@ -9,17 +9,21 @@ from uuid import UUID
 from slack_bolt.adapter.socket_mode.async_handler import AsyncSocketModeHandler
 from slack_bolt.async_app import AsyncApp
 from slack_sdk.web.async_client import AsyncWebClient
-from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from ...models.conversation import Conversation, ConversationStatus
-from ...models.message import Message
-from ...models.slack_bot import SlackBot, SlackConversation
+from ...models.slack_bot import SlackBot
 from ...services.agents.agent_manager import AgentManager
 from ...services.agents.security import decrypt_value
-from .slack_status_service import SlackStatusService
+from .slack_message_handler import SlackMessageHandler
 
 logger = logging.getLogger(__name__)
+
+# Fallback prompts when agent has no suggestion_prompts configured
+_DEFAULT_SUGGESTED_PROMPTS = [
+    {"title": "What can you do?", "message": "What are your capabilities?"},
+    {"title": "Summarize recent messages", "message": "Summarize the last 20 messages in this channel"},
+    {"title": "Help me draft a message", "message": "Help me write a professional message to my team about..."},
+]
 
 
 class SlackSocketService:
@@ -149,21 +153,15 @@ class SlackSocketService:
 
         @app.event("message")
         async def handle_message(event, say, client):
-            """Handle all messages for autonomous monitoring."""
-            # Ignore bot messages and message subtypes (edits, deletions, etc.)
+            """Handle DMs; channel messages are handled via app_mention."""
             subtype = event.get("subtype")
             if subtype == "bot_message" or event.get("bot_id"):
                 return
-
-            # Ignore message subtypes like edits, deletions, etc.
             if subtype in ("message_changed", "message_deleted", "channel_join", "channel_leave"):
                 return
 
             channel_id = event.get("channel", "")
             channel_type = event.get("channel_type")
-
-            # Detect DMs: channel_type is "im" OR channel ID starts with "D"
-            # (DM channel IDs in Slack start with 'D')
             is_dm = channel_type == "im" or channel_id.startswith("D")
 
             if is_dm:
@@ -174,14 +172,24 @@ class SlackSocketService:
                     user_id=event["user"],
                     text=event.get("text", ""),
                     message_ts=event.get("ts"),
-                    thread_ts=event.get("thread_ts"),  # Support threaded DMs
+                    thread_ts=event.get("thread_ts"),
                     say=say,
                     client=client,
                 )
-                return
 
-            # For channel messages, only respond to @mentions (handled by app_mention event)
-            # This prevents the bot from responding to every message in the channel
+        @app.event("app_home_opened")
+        async def handle_app_home_opened(event, client):
+            """Render the App Home tab when a user opens it."""
+            await self._handle_app_home_opened(slack_bot=slack_bot, event=event, client=client)
+
+        @app.event("assistant_thread_started")
+        async def handle_assistant_thread_started(event, client):
+            """Inject suggested prompts when the AI assistant panel is opened."""
+            await self._handle_assistant_thread_started(slack_bot=slack_bot, event=event, client=client)
+
+        @app.event("assistant_thread_context_changed")
+        async def handle_assistant_thread_context_changed(event, client):
+            """Acknowledge context changes from the assistant panel (no action needed)."""
 
     async def _handle_message(
         self,
@@ -193,469 +201,113 @@ class SlackSocketService:
         thread_ts: str | None,
         say,
         client: AsyncWebClient,
-    ):
-        """
-        Handle incoming Slack message and generate agent response.
-
-        Args:
-            slack_bot: SlackBot instance
-            channel_id: Slack channel ID
-            user_id: Slack user ID
-            text: Message text
-            message_ts: Message timestamp
-            thread_ts: Thread timestamp (for threaded conversations)
-            say: Slack say function
-            client: Slack web client
-        """
-        try:
-            # Get or create conversation mapping
-            conversation = await self._get_or_create_conversation(
-                slack_bot=slack_bot, channel_id=channel_id, user_id=user_id, thread_ts=thread_ts
-            )
-
-            # OPTIMIZATION: Fetch user, channel, and auth info in parallel (~600ms saved)
-            user_info, channel_info, auth_info = await asyncio.gather(
-                client.users_info(user=user_id),
-                client.conversations_info(channel=channel_id),
-                client.auth_test(),
-            )
-            user_name = user_info["user"]["real_name"] or user_info["user"]["name"]
-            channel_name = channel_info.get("channel", {}).get("name", "unknown")
-            team_domain = auth_info.get("url", "").replace("https://", "").replace(".slack.com/", "")
-
-            # Generate Slack permalink
-            # Format: https://{team}.slack.com/archives/{channel_id}/p{timestamp_without_dot}
-            permalink = None
-            if message_ts and team_domain:
-                # Remove the dot from timestamp (e.g., 1234567890.123456 -> 1234567890123456)
-                ts_for_url = message_ts.replace(".", "")
-                permalink = f"https://{team_domain}.slack.com/archives/{channel_id}/p{ts_for_url}"
-
-            # Remove bot mention from text if present
-            clean_text = self._remove_bot_mention(text, slack_bot.slack_app_id)
-
-            # Extract mentions from the message, filtering out bot users
-            mentioned_users = await self._extract_user_mentions(clean_text, client)
-
-            # Enhanced message to provide context to the agent
-            # This helps the agent understand WHERE the message came from
-            mentions_info = ""
-            if mentioned_users:
-                user_list = ", ".join([f"{u['name']} ({u['id']})" for u in mentioned_users])
-                mentions_info = f", Mentioned Users: {user_list}"
-
-            permalink_info = f", Message Link: {permalink}" if permalink else ""
-
-            context_message = f"""[Slack Context: Channel #{channel_name} (ID: {channel_id}), Message Timestamp: {message_ts}{mentions_info}{permalink_info}]
-
-{clean_text}"""
-
-            # LOG: Verify context message creation
-            logger.info("CONTEXT MESSAGE CREATED:")
-            logger.info(f"   Channel: #{channel_name} (ID: {channel_id})")
-            logger.info(f"   Message TS: {message_ts}")
-            logger.info(f"   Clean Text: {clean_text[:100]}...")
-            logger.info(f"   Full Context Message: {context_message[:200]}...")
-
-            # Save user message with enhanced metadata
-            from ...models.message import MessageRole
-
-            user_message = Message(
-                conversation_id=conversation.id,
-                role=MessageRole.USER,
-                content=context_message,
-                message_metadata={
-                    "slack_user_id": user_id,
-                    "slack_user_name": user_name,
-                    "slack_channel_id": channel_id,
-                    "slack_channel_name": channel_name,
-                    "slack_message_ts": message_ts,
-                    "slack_thread_ts": thread_ts,
-                    "original_text": text,
-                },
-            )
-            self.db_session.add(user_message)
-            conversation.increment_message_count()
-            # OPTIMIZATION: Use flush() instead of commit() - saves ~100-200ms by avoiding fsync
-            # The final commit happens after assistant message is saved
-            await self.db_session.flush()
-
-            # Use native Slack status indicator instead of posting a message
-            # This shows "BotName is thinking..." without cluttering the conversation
-            status_service = SlackStatusService(client)
-            effective_thread_ts = thread_ts or message_ts
-            await status_service.set_thinking(channel_id, effective_thread_ts)
-
-            # Get agent response using the existing chat infrastructure
-            from ...models.agent import Agent
-            from ...services.agents.agent_loader_service import AgentLoaderService
-            from ...services.agents.chat_service import ChatService
-            from ...services.agents.chat_stream_service import ChatStreamService
-            from ...services.conversation_service import ConversationService
-
-            # Get agent name from database (avoid lazy loading issues)
-            agent = await self.db_session.get(Agent, slack_bot.agent_id)
-            if not agent:
-                raise ValueError(f"Agent {slack_bot.agent_id} not found")
-
-            # Load conversation history with caching support
-            conversation_history = await ConversationService.get_conversation_history_cached(
-                db=self.db_session,
-                conversation_id=conversation.id,
-                limit=30,  # Keep recent messages for context
-            )
-            logger.info(f"Loaded {len(conversation_history)} messages from conversation history")
-
-            # IMPORTANT: Fetch Slack thread history to provide full context
-            # This ensures the LLM has access to the entire thread conversation
-            thread_context = []
-
-            # For DM channels: fetch channel history so the agent has the full back-and-forth
-            if channel_id.startswith("D"):
-                try:
-                    history = await client.conversations_history(channel=channel_id, limit=50)
-                    for msg in reversed(history.get("messages", [])):
-                        if msg.get("ts") == message_ts:
-                            continue
-                        msg_text = msg.get("text", "").strip()
-                        if not msg_text:
-                            continue
-                        if msg.get("bot_id") or msg.get("subtype") == "bot_message":
-                            thread_context.append({"role": "assistant", "content": msg_text})
-                        else:
-                            thread_context.append({"role": "user", "content": msg_text})
-                    logger.info(f"Built DM history context with {len(thread_context)} messages")
-                except Exception as e:
-                    logger.warning(f"Failed to fetch DM history: {e}")
-
-            # OPTIMIZATION: Only fetch thread if this is a reply to an existing thread
-            # Skip for first messages (thread_ts is None) or messages that start a thread (thread_ts == message_ts)
-            # This saves ~300ms API call for non-threaded messages
-            effective_thread_ts = thread_ts if thread_ts and thread_ts != message_ts else None
-            if effective_thread_ts and not channel_id.startswith("D"):
-                try:
-                    thread_replies = await client.conversations_replies(
-                        channel=channel_id,
-                        ts=effective_thread_ts,
-                        limit=50,  # Get up to 50 messages from thread
-                        inclusive=True,  # Include the parent message
-                    )
-
-                    if thread_replies.get("ok") and thread_replies.get("messages"):
-                        thread_messages = thread_replies["messages"]
-                        logger.info(f"Fetched {len(thread_messages)} messages from Slack thread {effective_thread_ts}")
-
-                        # OPTIMIZATION: Batch fetch all unique user IDs in parallel (~1-4s saved)
-                        # First pass: collect unique user IDs from non-bot messages
-                        user_ids_to_fetch = set()
-                        for msg in thread_messages:
-                            if msg.get("ts") == message_ts:
-                                continue
-                            if not msg.get("bot_id") and msg.get("user") and msg.get("text", "").strip():
-                                user_ids_to_fetch.add(msg.get("user"))
-
-                        # Fetch all users in parallel
-                        user_map: dict[str, str] = {}
-                        if user_ids_to_fetch:
-                            user_tasks = [client.users_info(user=uid) for uid in user_ids_to_fetch]
-                            user_results = await asyncio.gather(*user_tasks, return_exceptions=True)
-                            for result in user_results:
-                                if isinstance(result, Exception):
-                                    continue
-                                user_data = result.get("user", {})
-                                uid = user_data.get("id")
-                                if uid:
-                                    user_map[uid] = user_data.get("real_name") or user_data.get("name", "User")
-
-                        # Second pass: build thread context using the user map
-                        for msg in thread_messages:
-                            msg_ts = msg.get("ts")
-                            # Skip the current message we're processing (it will be added by the LLM flow)
-                            if msg_ts == message_ts:
-                                continue
-
-                            msg_text = msg.get("text", "")
-                            msg_user = msg.get("user")
-                            bot_id = msg.get("bot_id")
-
-                            # Skip empty messages or system messages
-                            if not msg_text.strip():
-                                continue
-
-                            # Determine role based on whether it's from a bot or user
-                            if bot_id:
-                                thread_context.append({"role": "assistant", "content": msg_text})
-                            else:
-                                # Use cached user name from batch fetch
-                                sender_name = user_map.get(msg_user, "User") if msg_user else "User"
-                                thread_context.append({"role": "user", "content": f"[{sender_name}]: {msg_text}"})
-
-                        logger.info(f"Built thread context with {len(thread_context)} messages")
-
-                except Exception as e:
-                    logger.warning(f"Failed to fetch Slack thread history: {e}")
-
-            # Merge Slack thread context with database conversation history
-            # Thread context takes precedence as it's the authoritative source for Slack threads
-            if thread_context:
-                # Use thread context if it has more messages than DB history
-                db_history_count = len(conversation_history)
-                if len(thread_context) > db_history_count:
-                    logger.info(
-                        f"Using Slack thread context ({len(thread_context)} messages) instead of DB history ({db_history_count} messages)"
-                    )
-                    conversation_history = thread_context
-                else:
-                    logger.info(
-                        f"Keeping DB history ({len(conversation_history)} messages) over thread context ({len(thread_context)} messages)"
-                    )
-
-            # Initialize the chat stream service
-            chat_stream_service = ChatStreamService(
-                agent_loader=AgentLoaderService(self.agent_manager), chat_service=ChatService()
-            )
-
-            # Collect the streamed response
-            response_chunks = []
-            async for event_data in chat_stream_service.stream_agent_response(
-                agent_name=agent.agent_name,
-                message=context_message,  # Use the full context message with header
-                conversation_history=conversation_history,  # Pass loaded history for memory
-                conversation_id=str(conversation.id),
-                attachments=None,
-                llm_config_id=None,
-                db=self.db_session,
-                shared_state={"slack_message_ts": message_ts, "slack_channel_id": channel_id},
-            ):
-                # Parse SSE data
-                if event_data.startswith("data: "):
-                    try:
-                        import json
-
-                        event_json = json.loads(event_data[6:])  # Remove "data: " prefix
-                        if event_json.get("type") == "chunk":
-                            response_chunks.append(event_json.get("content", ""))
-                    except:
-                        pass
-
-            agent_response = "".join(response_chunks)
-
-            # Handle empty response - this happens when LLM only calls tools without generating text
-            if not agent_response or not agent_response.strip():
-                logger.warning("Agent returned empty response, using fallback message")
-                agent_response = "Done! I've processed your request."
-
-            # Format response for Slack using Block Kit
-            from .formatters import chunk_blocks, create_slack_blocks, format_text_for_slack
-
-            # Create blocks from the response
-            blocks = create_slack_blocks(agent_response)
-
-            # Double-check blocks aren't empty (shouldn't happen with fallback above)
-            if not blocks:
-                logger.warning("Block creation resulted in empty blocks, creating simple text block")
-                blocks = [{"type": "section", "text": {"type": "mrkdwn", "text": agent_response}}]
-
-            # Check if we need to chunk the response
-            if len(blocks) > 50:  # Slack's block limit
-                logger.info(f"Response has {len(blocks)} blocks, chunking required")
-                block_chunks = chunk_blocks(blocks)
-
-                # Send each chunk as a separate message in thread
-                for i, chunk in enumerate(block_chunks):
-                    fallback_text = (
-                        format_text_for_slack(agent_response) if i == 0 else f"(continued {i + 1}/{len(block_chunks)})"
-                    )
-                    await say(
-                        text=fallback_text,
-                        blocks=chunk,
-                        thread_ts=thread_ts or message_ts,  # Reply in thread to original message
-                    )
-            else:
-                # Send single message with blocks
-                # If no thread exists, start one by using the original message timestamp
-                fallback_text = format_text_for_slack(agent_response)
-                await say(
-                    text=fallback_text,
-                    blocks=blocks,
-                    thread_ts=thread_ts or message_ts,  # Reply in thread to original message
-                )
-
-            # Save agent response
-            assistant_message = Message(
-                conversation_id=conversation.id,
-                role=MessageRole.ASSISTANT,
-                content=agent_response,
-            )
-            self.db_session.add(assistant_message)
-            conversation.increment_message_count()
-            # OPTIMIZATION: Single commit for both user and assistant messages (fsync once)
-            await self.db_session.commit()
-
-            # If this is a DM reply, check whether the bot previously sent this DM
-            # on behalf of someone else and notify them immediately.
-            if channel_id.startswith("D"):
-                await self._notify_requester_if_callback(
-                    client=client,
-                    slack_bot=slack_bot,
-                    dm_channel_id=channel_id,
-                    replier_name=user_name,
-                    reply_text=clean_text,
-                    current_message_ts=message_ts,
-                )
-
-        except Exception as e:
-            logger.error(f"Error handling Slack message: {str(e)}")
-            # Rollback the session on error
-            await self.db_session.rollback()
-            await say(
-                text="Sorry, I encountered an error processing your message. Please try again.", thread_ts=thread_ts
-            )
-
-    async def _get_or_create_conversation(
-        self, slack_bot: SlackBot, channel_id: str, user_id: str, thread_ts: str | None
-    ) -> Conversation:
-        """Get existing conversation or create new one."""
-        is_dm = channel_id.startswith("D")
-
-        if is_dm:
-            # One conversation per user per DM channel — ignore thread_ts
-            stmt = select(SlackConversation).where(
-                SlackConversation.slack_bot_id == slack_bot.id,
-                SlackConversation.slack_channel_id == channel_id,
-                SlackConversation.slack_user_id == user_id,
-            )
-        else:
-            # Channel messages: separate conversation per thread
-            stmt = select(SlackConversation).where(
-                SlackConversation.slack_bot_id == slack_bot.id,
-                SlackConversation.slack_channel_id == channel_id,
-                SlackConversation.slack_user_id == user_id,
-                SlackConversation.slack_thread_ts == thread_ts,
-            )
-        result = await self.db_session.execute(stmt)
-        slack_conv = result.scalars().first()
-
-        if slack_conv:
-            # Return existing conversation
-            return await self.db_session.get(Conversation, slack_conv.conversation_id)
-
-        # Create new conversation
-        conversation = Conversation(
-            agent_id=slack_bot.agent_id, name=f"Slack conversation with {user_id}", status=ConversationStatus.ACTIVE
-        )
-        self.db_session.add(conversation)
-        await self.db_session.commit()
-        await self.db_session.refresh(conversation)
-
-        # Create mapping
-        slack_conv = SlackConversation(
-            slack_bot_id=slack_bot.id,
-            conversation_id=conversation.id,
-            slack_channel_id=channel_id,
-            slack_user_id=user_id,
-            slack_thread_ts=thread_ts,
-        )
-        self.db_session.add(slack_conv)
-        await self.db_session.commit()
-
-        return conversation
-
-    async def _notify_requester_if_callback(
-        self,
-        client: AsyncWebClient,
-        slack_bot: SlackBot,
-        dm_channel_id: str,
-        replier_name: str,
-        reply_text: str,
-        current_message_ts: str | None = None,
     ) -> None:
-        """Check Redis for a report-back callback and notify the requester if one exists."""
+        """Delegate message handling to the shared SlackMessageHandler."""
+        handler = SlackMessageHandler(self.db_session, self.agent_manager)
+        await handler.handle_message(
+            slack_bot=slack_bot,
+            channel_id=channel_id,
+            user_id=user_id,
+            text=text,
+            message_ts=message_ts,
+            thread_ts=thread_ts,
+            client=client,
+            say=say,
+        )
+
+    async def _handle_app_home_opened(self, slack_bot: SlackBot, event: dict, client: AsyncWebClient) -> None:
+        """Publish the App Home tab view when a user opens it."""
+        user_id = event.get("user")
+        if not user_id:
+            return
         try:
-            import json
+            from ...models.agent import Agent
 
-            from ...config.redis import get_redis_async
+            agent = await self.db_session.get(Agent, slack_bot.agent_id)
+            agent_name = agent.agent_name if agent else slack_bot.bot_name
+            agent_desc = (agent.description or "").strip() if agent else ""
 
-            redis = get_redis_async()
-            key = f"slack:dm_callback:{slack_bot.agent_id}:{dm_channel_id}"
-            data = await redis.get(key)
-            if not data:
-                return
+            blocks: list[dict] = [
+                {
+                    "type": "header",
+                    "text": {"type": "plain_text", "text": f"Welcome to {agent_name}"},
+                },
+            ]
+            if agent_desc:
+                blocks.append({"type": "section", "text": {"type": "mrkdwn", "text": agent_desc}})
+            blocks += [
+                {"type": "divider"},
+                {
+                    "type": "section",
+                    "text": {
+                        "type": "mrkdwn",
+                        "text": (
+                            "*How to use:*\n"
+                            "• DM me directly to start a private conversation\n"
+                            "• @mention me in any channel to get help in context\n"
+                            "• Open the AI assistant panel (bolt icon) for a focused chat"
+                        ),
+                    },
+                },
+            ]
 
-            callback = json.loads(data)
-            requester_channel_id = callback.get("requester_channel_id")
-            if not requester_channel_id:
-                return
+            # Show suggestion prompts if the agent has them configured
+            if agent and agent.suggestion_prompts:
+                prompt_lines = "\n".join(
+                    f"• *{p.get('title', '')}*" + (f" — _{p.get('description', '')}_" if p.get("description") else "")
+                    for p in agent.suggestion_prompts[:5]
+                    if p.get("title")
+                )
+                if prompt_lines:
+                    blocks += [
+                        {"type": "divider"},
+                        {
+                            "type": "section",
+                            "text": {"type": "mrkdwn", "text": f"*Try asking:*\n{prompt_lines}"},
+                        },
+                    ]
 
-            # Skip if this is the same message turn that stored the callback (e.g. self-DM
-            # where requester and DM target are the same person/channel).
-            request_message_ts = callback.get("request_message_ts")
-            if request_message_ts and current_message_ts and request_message_ts == current_message_ts:
-                logger.info(f"Skipping report-back: callback was stored this turn (ts={current_message_ts})")
-                return
-
-            # One-time notification — delete so repeat messages don't keep pinging the requester
-            await redis.delete(key)
-
-            notification = f"*[Update]* *{replier_name} replied:* {reply_text}"
-            await client.chat_postMessage(channel=requester_channel_id, text=notification)
-            logger.info(f"Notified {requester_channel_id}: {replier_name} replied in {dm_channel_id}")
-        except Exception as e:
-            logger.warning(f"Failed to send report-back notification: {e}")
-
-    def _remove_bot_mention(self, text: str, app_id: str) -> str:
-        """Remove bot mention from message text."""
-        import re
-
-        # Remove <@BOTID> mentions
-        pattern = f"<@{app_id}>"
-        return re.sub(pattern, "", text).strip()
-
-    async def _extract_user_mentions(self, text: str, client: AsyncWebClient) -> list:
-        """
-        Extract user mentions from message text and filter out bots.
-
-        Args:
-            text: Message text containing mentions
-            client: Slack web client
-
-        Returns:
-            List of dicts with user info (id, name, is_bot=False only)
-        """
-        import re
-
-        # Extract all user IDs from mentions (<@U123456>)
-        mention_pattern = r"<@([UW][A-Z0-9]+)>"
-        user_ids = re.findall(mention_pattern, text)
-
-        if not user_ids:
-            return []
-
-        # OPTIMIZATION: Fetch all mentioned users in parallel
-        unique_user_ids = list(set(user_ids))
-        user_tasks = [client.users_info(user=uid) for uid in unique_user_ids]
-        user_results = await asyncio.gather(*user_tasks, return_exceptions=True)
-
-        mentioned_users = []
-        for i, result in enumerate(user_results):
-            if isinstance(result, Exception):
-                logger.warning(f"Could not get info for user {unique_user_ids[i]}: {result}")
-                continue
-
-            user_data = result.get("user", {})
-            user_id = user_data.get("id")
-
-            # Skip bot users
-            if user_data.get("is_bot") or user_data.get("is_app_user"):
-                logger.info(f"Skipping bot user: {user_data.get('name')} ({user_id})")
-                continue
-
-            # Only include real users
-            mentioned_users.append(
-                {"id": user_id, "name": user_data.get("real_name") or user_data.get("name", "Unknown")}
+            await client.views_publish(
+                user_id=user_id,
+                view={"type": "home", "blocks": blocks},
             )
+            logger.info(f"Published App Home for user {user_id}, bot {slack_bot.id}")
+        except Exception as e:
+            logger.warning(f"Failed to publish App Home for user {user_id}: {e}")
 
-        return mentioned_users
+    async def _handle_assistant_thread_started(self, slack_bot: SlackBot, event: dict, client: AsyncWebClient) -> None:
+        """Set suggested prompts in the Slack AI assistant panel."""
+        thread = event.get("assistant_thread", {})
+        channel_id = thread.get("channel_id")
+        thread_ts = thread.get("thread_ts")
+        if not channel_id or not thread_ts:
+            return
+        try:
+            from ...models.agent import Agent
+
+            agent = await self.db_session.get(Agent, slack_bot.agent_id)
+
+            prompts = _DEFAULT_SUGGESTED_PROMPTS
+            if agent and agent.suggestion_prompts:
+                built = [
+                    {
+                        "title": p.get("title", ""),
+                        "message": p.get("prompt") or p.get("description") or p.get("title", ""),
+                    }
+                    for p in agent.suggestion_prompts[:4]
+                    if p.get("title")
+                ]
+                if built:
+                    prompts = built
+
+            await client.assistant_threads_setSuggestedPrompts(
+                channel_id=channel_id,
+                thread_ts=thread_ts,
+                prompts=prompts,
+            )
+            logger.info(f"Set {len(prompts)} suggested prompts for assistant thread {thread_ts}")
+        except Exception as e:
+            logger.warning(f"Failed to set assistant suggested prompts: {e}")
 
     async def get_bot_status(self, slack_bot_id: UUID) -> dict[str, Any]:
         """Get status of a Slack bot."""

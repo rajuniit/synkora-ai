@@ -141,6 +141,42 @@ const MicromobilityIcon = () => (
   </svg>
 )
 
+const OpenWeatherIcon = () => (
+  <svg className="w-8 h-8" viewBox="0 0 24 24" fill="none">
+    <rect width="24" height="24" rx="6" fill="#EB6E4B"/>
+    <circle cx="12" cy="10" r="3.5" stroke="white" strokeWidth="1.5"/>
+    <path d="M12 4V5.5M12 14.5V16M6 10H4.5M19.5 10H18M7.93 6.93L6.87 5.87M17.13 17.13L16.07 16.07M7.93 13.07L6.87 14.13M17.13 6.93L16.07 7.99" stroke="white" strokeWidth="1.5" strokeLinecap="round"/>
+    <path d="M7 17.5C7 16.12 8.12 15 9.5 15H16.5C17.88 15 19 16.12 19 17.5C19 18.88 17.88 20 16.5 20H9.5C8.12 20 7 18.88 7 17.5Z" fill="white" fillOpacity="0.9"/>
+  </svg>
+)
+
+const PredictHQIcon = () => (
+  <svg className="w-8 h-8" viewBox="0 0 24 24" fill="none">
+    <rect width="24" height="24" rx="6" fill="#6366F1"/>
+    <path d="M4 18L8 12L12 15L16 8L20 11" stroke="white" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"/>
+    <circle cx="20" cy="6" r="2" fill="white"/>
+  </svg>
+)
+
+const TicketmasterIcon = () => (
+  <svg className="w-8 h-8" viewBox="0 0 24 24" fill="none">
+    <rect width="24" height="24" rx="6" fill="#026CDF"/>
+    <rect x="3" y="8" width="18" height="8" rx="2" fill="white" fillOpacity="0.15" stroke="white" strokeWidth="1.5"/>
+    <circle cx="3" cy="12" r="2" fill="#026CDF" stroke="white" strokeWidth="1.5"/>
+    <circle cx="21" cy="12" r="2" fill="#026CDF" stroke="white" strokeWidth="1.5"/>
+    <path d="M10 11h4M10 13h2" stroke="white" strokeWidth="1.5" strokeLinecap="round"/>
+  </svg>
+)
+
+const MapboxIcon = () => (
+  <svg className="w-8 h-8" viewBox="0 0 24 24" fill="none">
+    <rect width="24" height="24" rx="6" fill="#000000"/>
+    <circle cx="12" cy="12" r="7" stroke="white" strokeWidth="1.5"/>
+    <circle cx="12" cy="12" r="2.5" fill="white"/>
+    <path d="M12 5V7M12 17V19M5 12H7M17 12H19" stroke="white" strokeWidth="1.5" strokeLinecap="round"/>
+  </svg>
+)
+
 const PROVIDERS = [
   {
     value: 'github',
@@ -397,6 +433,62 @@ const PROVIDERS = [
     supportsApiToken: true,
     supportsBasicAuth: true,
     apiTokenDescription: 'Paste the JWT token obtained from the login endpoint',
+  },
+  {
+    value: 'openweather',
+    label: 'OpenWeather',
+    icon: <OpenWeatherIcon />,
+    color: 'text-orange-600',
+    bgColor: 'bg-orange-50',
+    description: 'Weather forecasts and current conditions with demand impact scoring for any location',
+    defaultScopes: [],
+    redirectUri: '',
+    setupGuide: 'https://openweathermap.org/api',
+    supportsOAuth: false,
+    supportsApiToken: true,
+    apiTokenDescription: 'Use your OpenWeather API key from openweathermap.org',
+  },
+  {
+    value: 'predicthq',
+    label: 'PredictHQ',
+    icon: <PredictHQIcon />,
+    color: 'text-indigo-600',
+    bgColor: 'bg-indigo-50',
+    description: 'Event intelligence — concerts, sports, conferences with attendance-based demand multipliers',
+    defaultScopes: [],
+    redirectUri: '',
+    setupGuide: 'https://www.predicthq.com/support/how-to-find-your-api-token',
+    supportsOAuth: false,
+    supportsApiToken: true,
+    apiTokenDescription: 'Use your PredictHQ API token from the control center',
+  },
+  {
+    value: 'ticketmaster',
+    label: 'Ticketmaster',
+    icon: <TicketmasterIcon />,
+    color: 'text-blue-700',
+    bgColor: 'bg-blue-50',
+    description: 'Concerts, sports, and live events near any location for demand forecasting',
+    defaultScopes: [],
+    redirectUri: '',
+    setupGuide: 'https://developer.ticketmaster.com/products-and-docs/apis/getting-started/',
+    supportsOAuth: false,
+    supportsApiToken: true,
+    apiTokenDescription: 'Use your Ticketmaster Consumer Key (API key) from developer.ticketmaster.com',
+  },
+  {
+    value: 'mapbox',
+    label: 'Mapbox',
+    icon: <MapboxIcon />,
+    color: 'text-gray-900',
+    bgColor: 'bg-gray-100',
+    description: 'Static maps with vehicle markers, route overlays, and turn-by-turn directions',
+    defaultScopes: [],
+    redirectUri: '',
+    setupGuide: 'https://docs.mapbox.com/api/overview/#access-tokens-and-token-scopes',
+    supportsOAuth: false,
+    supportsApiToken: true,
+    apiTokenDescription: 'Use a Mapbox public access token (pk.*) from your Mapbox account',
   },
 ]
 
@@ -1040,6 +1132,112 @@ export default function CreateOAuthAppPage() {
                       </>
                     )}
                     
+                    {/* OpenWeather-specific fields */}
+                    {formData.provider === 'openweather' && (
+                      <div className="grid grid-cols-2 gap-3">
+                        <div>
+                          <label className="block text-sm font-medium text-gray-700 mb-1.5">Units</label>
+                          <select
+                            value={formData.config.units || 'metric'}
+                            onChange={(e) => setFormData({ ...formData, config: { ...formData.config, units: e.target.value } })}
+                            className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-[#ff444f] focus:border-transparent text-sm"
+                          >
+                            <option value="metric">Metric (°C, m/s)</option>
+                            <option value="imperial">Imperial (°F, mph)</option>
+                            <option value="standard">Standard (K)</option>
+                          </select>
+                        </div>
+                        <div>
+                          <label className="block text-sm font-medium text-gray-700 mb-1.5">API Version</label>
+                          <select
+                            value={formData.config.api_version || '3.0'}
+                            onChange={(e) => setFormData({ ...formData, config: { ...formData.config, api_version: e.target.value } })}
+                            className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-[#ff444f] focus:border-transparent text-sm"
+                          >
+                            <option value="3.0">One Call 3.0 (recommended)</option>
+                            <option value="2.5">Free Tier 2.5</option>
+                          </select>
+                          <p className="text-xs text-gray-500 mt-1">3.0 requires a paid subscription; falls back to 2.5 automatically</p>
+                        </div>
+                      </div>
+                    )}
+
+                    {/* PredictHQ-specific fields */}
+                    {formData.provider === 'predicthq' && (
+                      <div className="grid grid-cols-2 gap-3">
+                        <div>
+                          <label className="block text-sm font-medium text-gray-700 mb-1.5">Max Radius (km)</label>
+                          <input
+                            type="number"
+                            value={formData.config.max_radius_km || 10}
+                            onChange={(e) => setFormData({ ...formData, config: { ...formData.config, max_radius_km: Number(e.target.value) } })}
+                            className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-[#ff444f] focus:border-transparent text-sm"
+                            min={1} max={50}
+                          />
+                          <p className="text-xs text-gray-500 mt-1">Default search radius for nearby events</p>
+                        </div>
+                        <div>
+                          <label className="block text-sm font-medium text-gray-700 mb-1.5">Impact Weight</label>
+                          <input
+                            type="number"
+                            step="0.05"
+                            value={formData.config.impact_weight || 0.30}
+                            onChange={(e) => setFormData({ ...formData, config: { ...formData.config, impact_weight: Number(e.target.value) } })}
+                            className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-[#ff444f] focus:border-transparent text-sm"
+                            min={0.05} max={1.0}
+                          />
+                          <p className="text-xs text-gray-500 mt-1">Demand multiplier scale factor (0.05–1.0)</p>
+                        </div>
+                      </div>
+                    )}
+
+                    {/* Ticketmaster-specific fields */}
+                    {formData.provider === 'ticketmaster' && (
+                      <div className="grid grid-cols-2 gap-3">
+                        <div>
+                          <label className="block text-sm font-medium text-gray-700 mb-1.5">Max Radius (km)</label>
+                          <input
+                            type="number"
+                            value={formData.config.max_radius_km || 10}
+                            onChange={(e) => setFormData({ ...formData, config: { ...formData.config, max_radius_km: Number(e.target.value) } })}
+                            className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-[#ff444f] focus:border-transparent text-sm"
+                            min={1} max={50}
+                          />
+                        </div>
+                        <div>
+                          <label className="block text-sm font-medium text-gray-700 mb-1.5">Impact Weight</label>
+                          <input
+                            type="number"
+                            step="0.05"
+                            value={formData.config.impact_weight || 0.30}
+                            onChange={(e) => setFormData({ ...formData, config: { ...formData.config, impact_weight: Number(e.target.value) } })}
+                            className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-[#ff444f] focus:border-transparent text-sm"
+                            min={0.05} max={1.0}
+                          />
+                        </div>
+                      </div>
+                    )}
+
+                    {/* Mapbox-specific fields */}
+                    {formData.provider === 'mapbox' && (
+                      <div>
+                        <label className="block text-sm font-medium text-gray-700 mb-1.5">Default Map Style</label>
+                        <select
+                          value={formData.config.style || 'mapbox/streets-v12'}
+                          onChange={(e) => setFormData({ ...formData, config: { ...formData.config, style: e.target.value } })}
+                          className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-[#ff444f] focus:border-transparent text-sm"
+                        >
+                          <option value="mapbox/streets-v12">Streets (default)</option>
+                          <option value="mapbox/satellite-v9">Satellite</option>
+                          <option value="mapbox/satellite-streets-v12">Satellite + Streets</option>
+                          <option value="mapbox/light-v11">Light</option>
+                          <option value="mapbox/dark-v11">Dark</option>
+                          <option value="mapbox/outdoors-v12">Outdoors</option>
+                        </select>
+                        <p className="text-xs text-gray-500 mt-1">Default basemap style for static map images</p>
+                      </div>
+                    )}
+
                     <div>
                       <label className="block text-sm font-medium text-gray-700 mb-1.5">
                         {selectedProvider?.label} API Token *
@@ -1063,7 +1261,10 @@ export default function CreateOAuthAppPage() {
                         {formData.provider === 'onepassword' && ' For 1Password, use a Service Account Token.'}
                         {formData.provider === 'recall' && ' For Recall.ai, use your API key from the Recall.ai dashboard.'}
                         {formData.provider === 'micromobility' && ' For Micromobility, use the JWT token returned by the admin login endpoint (POST /admin-login-jwt/).'}
-
+                        {formData.provider === 'openweather' && ' Get your API key from openweathermap.org after signing up.'}
+                        {formData.provider === 'predicthq' && ' Find your API token in the PredictHQ Control Center under API Credentials.'}
+                        {formData.provider === 'ticketmaster' && ' Use the Consumer Key from your app at developer.ticketmaster.com.'}
+                        {formData.provider === 'mapbox' && ' Use a public token (pk.*) from your Mapbox account tokens page.'}
                       </p>
                     </div>
                   </div>

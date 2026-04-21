@@ -184,8 +184,30 @@ async def internal_slack_read_channel_messages(
             oldest_time = datetime.now(UTC) - timedelta(hours=hours_ago)
             oldest = str(oldest_time.timestamp())
 
-        # Get channel messages
-        response = await client.conversations_history(channel=channel_id, limit=min(limit, 1000), oldest=oldest)
+        # Get channel messages — auto-join if the bot is not yet a member
+        try:
+            response = await client.conversations_history(channel=channel_id, limit=min(limit, 1000), oldest=oldest)
+        except SlackApiError as join_err:
+            if "not_in_channel" in str(join_err):
+                logger.info(f"Bot not in channel {channel_id}, attempting auto-join")
+                try:
+                    await client.conversations_join(channel=channel_id)
+                    response = await client.conversations_history(
+                        channel=channel_id, limit=min(limit, 1000), oldest=oldest
+                    )
+                except SlackApiError as retry_err:
+                    err_str = str(retry_err)
+                    if "cant_invite_self" in err_str or "method_not_supported" in err_str:
+                        return {
+                            "success": False,
+                            "error": (
+                                f"Cannot auto-join channel {channel_id} — it may be private. "
+                                "Please invite the bot manually with /invite @bot in the channel."
+                            ),
+                        }
+                    return {"success": False, "error": f"Slack error after joining: {retry_err}"}
+            else:
+                raise
 
         # Get channel info
         channel_info = await client.conversations_info(channel=channel_id)

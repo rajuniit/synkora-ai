@@ -45,6 +45,7 @@ interface ChatMessagesProps {
   className?: string
   suggestionPrompts?: SuggestionPrompt[]
   onSuggestionClick?: (prompt: string) => void
+  onActionClick?: (text: string) => void
   chatConfig?: ChatConfig | null
   agentAvatar?: string
   userAvatar?: string
@@ -67,6 +68,7 @@ export function ChatMessages({
   className,
   suggestionPrompts = [],
   onSuggestionClick,
+  onActionClick,
   chatConfig,
   agentAvatar,
   userAvatar,
@@ -113,7 +115,7 @@ export function ChatMessages({
           chatConfig={chatConfig}
         />
       ) : (
-        <div className="space-y-6">
+        <div className="max-w-4xl mx-auto space-y-5">
           {messages.map((message, index) => {
             const isLastMessage = index === messages.length - 1
             const isStreamingMessage = isStreaming && isLastMessage
@@ -129,6 +131,7 @@ export function ChatMessages({
                 streamStartTime={isStreamingMessage ? streamStartTime : undefined}
                 onCopy={onCopyMessage}
                 onRetry={onRetry}
+                onActionClick={onActionClick}
                 chatConfig={chatConfig}
                 agentAvatar={agentAvatar}
                 userAvatar={userAvatar}

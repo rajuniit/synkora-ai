@@ -12,6 +12,7 @@ from fastapi import APIRouter, Depends, HTTPException, status
 from pydantic import BaseModel, ConfigDict, Field
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
+from sqlalchemy.orm import selectinload
 
 from src.core.database import get_async_db
 from src.middleware.auth_middleware import get_current_account, get_current_tenant_id
@@ -136,8 +137,11 @@ async def list_output_configs(
     if not agent:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Agent not found")
 
-    # Get output configs
-    result = await db.execute(select(AgentOutputConfig).filter(AgentOutputConfig.agent_id == agent.id))
+    # Get output configs — eager-load deliveries only when stats are requested
+    q = select(AgentOutputConfig).filter(AgentOutputConfig.agent_id == agent.id)
+    if include_stats:
+        q = q.options(selectinload(AgentOutputConfig.deliveries))
+    result = await db.execute(q)
     configs = result.scalars().all()
 
     return [config.to_dict(include_stats=include_stats) for config in configs]
@@ -245,13 +249,14 @@ async def get_output_config(
     Returns:
         Output configuration
     """
-    result = await db.execute(
-        select(AgentOutputConfig).filter(
-            AgentOutputConfig.id == output_id,
-            AgentOutputConfig.agent_id == agent_id,
-            AgentOutputConfig.tenant_id == tenant_id,
-        )
+    q = select(AgentOutputConfig).filter(
+        AgentOutputConfig.id == output_id,
+        AgentOutputConfig.agent_id == agent_id,
+        AgentOutputConfig.tenant_id == tenant_id,
     )
+    if include_stats:
+        q = q.options(selectinload(AgentOutputConfig.deliveries))
+    result = await db.execute(q)
     config = result.scalar_one_or_none()
 
     if not config:

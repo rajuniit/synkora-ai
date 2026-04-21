@@ -14,7 +14,6 @@ from uuid import UUID
 from sqlalchemy import and_, func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from src.models.agent import Agent
 from src.models.agent_api_key import AgentApiKey
 from src.models.agent_api_usage import AgentApiUsage
 from src.services.agents.security import decrypt_value, encrypt_value
@@ -97,13 +96,6 @@ class AgentApiKeyService:
         Returns:
             Tuple of (AgentApiKey, plain_text_key)
         """
-        # Verify agent exists
-        stmt = select(Agent).filter(Agent.id == agent_id)
-        result = await db.execute(stmt)
-        agent = result.scalar_one_or_none()
-        if not agent:
-            raise ValueError(f"Agent with ID {agent_id} not found")
-
         # Generate API key
         plain_key, hashed_key = AgentApiKeyService.generate_api_key()
 
@@ -268,6 +260,10 @@ class AgentApiKeyService:
         """
         Check if API key has required permission.
 
+        Supports both simple ("chat") and namespaced ("agent:chat") styles.
+        A namespaced permission satisfies the simple form of the same verb,
+        e.g. "agent:chat" grants "chat", "agent:read" grants "read".
+
         Args:
             api_key: API key record
             required_permission: Permission to check
@@ -275,12 +271,21 @@ class AgentApiKeyService:
         Returns:
             True if permission granted, False otherwise
         """
-        # Check for wildcard permission
+        if not api_key.permissions:
+            return False
+
+        # Wildcard grants everything
         if "*" in api_key.permissions:
             return True
 
-        # Check for specific permission
-        return required_permission in api_key.permissions
+        # Exact match
+        if required_permission in api_key.permissions:
+            return True
+
+        # Namespaced match: "scope:verb" satisfies "verb"
+        # e.g. "agent:chat" satisfies required "chat"
+        suffix = f":{required_permission}"
+        return any(perm.endswith(suffix) for perm in api_key.permissions)
 
     @staticmethod
     def check_rate_limit(api_key: AgentApiKey) -> tuple[bool, str | None]:
