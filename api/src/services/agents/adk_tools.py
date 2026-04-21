@@ -164,6 +164,44 @@ class ADKToolRegistry:
 
         register_micromobility_tools(self)
 
+        # Micromobility intelligence tools - computed fleet analytics
+        from src.services.agents.tool_registrations.micromobility_intelligence_tools_registry import (
+            register_micromobility_intelligence_tools,
+        )
+
+        register_micromobility_intelligence_tools(self)
+
+        # Micromobility event impact & IoT intelligence tools
+        from src.services.agents.tool_registrations.micromobility_event_tools_registry import (
+            register_micromobility_event_tools,
+        )
+
+        register_micromobility_event_tools(self)
+
+        # OpenWeather tools - weather forecast and current conditions (requires API key)
+        from src.services.agents.tool_registrations.openweather_tools_registry import (
+            register_openweather_tools,
+        )
+
+        register_openweather_tools(self)
+
+        # Open-Meteo tools - free weather, no API key required
+        from src.services.agents.tool_registrations.openmeteo_tools_registry import (
+            register_openmeteo_tools,
+        )
+
+        register_openmeteo_tools(self)
+
+        # Events tools - PredictHQ and Ticketmaster event discovery
+        from src.services.agents.tool_registrations.events_tools_registry import register_events_tools
+
+        register_events_tools(self)
+
+        # Mapbox tools - static maps and directions
+        from src.services.agents.tool_registrations.mapbox_tools_registry import register_mapbox_tools
+
+        register_mapbox_tools(self)
+
         # Document generation tools - use modular registry
         from src.services.agents.tool_registrations.document_tools_registry import (
             register_document_tools,

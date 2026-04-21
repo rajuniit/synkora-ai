@@ -37,11 +37,12 @@ def upgrade() -> None:
         sa.Column("updated_at", sa.DateTime(timezone=True), nullable=False, server_default=sa.text("now()")),
         sa.PrimaryKeyConstraint("id"),
         sa.UniqueConstraint("data_source_id", "digest_date", name="uq_daily_digest_source_date"),
+        if_not_exists=True,
     )
 
-    op.create_index("ix_daily_digests_data_source_id", "daily_digests", ["data_source_id"])
-    op.create_index("ix_daily_digests_tenant_date", "daily_digests", ["tenant_id", "digest_date"])
-    op.create_index("ix_daily_digests_status", "daily_digests", ["status"])
+    op.create_index("ix_daily_digests_data_source_id", "daily_digests", ["data_source_id"], if_not_exists=True)
+    op.create_index("ix_daily_digests_tenant_date", "daily_digests", ["tenant_id", "digest_date"], if_not_exists=True)
+    op.create_index("ix_daily_digests_status", "daily_digests", ["status"], if_not_exists=True)
 
 
 def downgrade() -> None:

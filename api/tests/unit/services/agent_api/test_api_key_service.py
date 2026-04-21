@@ -74,15 +74,14 @@ class TestAgentApiKeyService:
             mock_db_session.commit.assert_called_once()
 
     @pytest.mark.asyncio
-    async def test_create_api_key_agent_not_found(self, mock_db_session):
-        mock_result = MagicMock()
-        mock_result.scalar_one_or_none.return_value = None
-        mock_db_session.execute.return_value = mock_result
-
-        with pytest.raises(ValueError, match="Agent with ID .* not found"):
-            await AgentApiKeyService.create_api_key(
+    async def test_create_api_key_no_agent_validation(self, mock_db_session):
+        """Service no longer validates agent existence — that check lives in the controller."""
+        with patch("src.services.agent_api.api_key_service.encrypt_value", return_value="hashed"):
+            api_key, plain_key = await AgentApiKeyService.create_api_key(
                 mock_db_session, agent_id=uuid4(), tenant_id=uuid4(), name="Test Key", permissions=[]
             )
+        assert api_key.key_name == "Test Key"
+        assert plain_key.startswith("sk_live_")
 
     @pytest.mark.asyncio
     async def test_validate_api_key_success(self, mock_db_session, mock_api_key):

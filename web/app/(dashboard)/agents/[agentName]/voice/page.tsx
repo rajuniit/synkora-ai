@@ -17,7 +17,7 @@ interface VoiceConfig {
 interface VoiceApiKey {
   id: string
   provider: string
-  key_name: string
+  is_active: boolean
   created_at: string
 }
 
@@ -42,8 +42,7 @@ export default function AgentVoicePage() {
   const [apiKeys, setApiKeys] = useState<VoiceApiKey[]>([])
   const [showAddKey, setShowAddKey] = useState(false)
   const [newKey, setNewKey] = useState({
-    provider: 'openai',
-    key_name: '',
+    provider: 'openai_tts',
     api_key: '',
   })
 
@@ -83,7 +82,7 @@ export default function AgentVoicePage() {
   const fetchApiKeys = async () => {
     try {
       const response = await apiClient.request('GET', `/api/v1/voice/api-keys`)
-      setApiKeys(response || [])
+      setApiKeys(response?.data?.api_keys || [])
     } catch (error) {
       console.error('Failed to fetch API keys:', error)
     }
@@ -107,8 +106,8 @@ export default function AgentVoicePage() {
   }
 
   const handleAddApiKey = async () => {
-    if (!newKey.key_name || !newKey.api_key) {
-      toast.error('Please fill in all fields')
+    if (!newKey.api_key) {
+      toast.error('Please enter an API key')
       return
     }
 
@@ -116,7 +115,7 @@ export default function AgentVoicePage() {
       await apiClient.request('POST', '/api/v1/voice/api-keys', newKey)
       toast.success('API key added successfully!')
       setShowAddKey(false)
-      setNewKey({ provider: 'openai', key_name: '', api_key: '' })
+      setNewKey({ provider: 'openai_tts', api_key: '' })
       fetchApiKeys()
     } catch (error) {
       console.error('Failed to add API key:', error)
@@ -352,21 +351,10 @@ export default function AgentVoicePage() {
                         onChange={(e) => setNewKey({ ...newKey, provider: e.target.value })}
                         className="w-full px-3 py-2 text-sm border border-gray-300 rounded-lg focus:ring-2 focus:ring-red-500 focus:border-transparent"
                       >
-                        <option value="openai">OpenAI</option>
+                        <option value="openai_whisper">OpenAI Whisper (STT)</option>
+                        <option value="openai_tts">OpenAI TTS</option>
                         <option value="elevenlabs">ElevenLabs</option>
                       </select>
-                    </div>
-                    <div>
-                      <label className="block text-xs font-medium text-gray-700 mb-2">
-                        Key Name
-                      </label>
-                      <input
-                        type="text"
-                        value={newKey.key_name}
-                        onChange={(e) => setNewKey({ ...newKey, key_name: e.target.value })}
-                        placeholder="e.g., Production OpenAI Key"
-                        className="w-full px-3 py-2 text-sm border border-gray-300 rounded-lg focus:ring-2 focus:ring-red-500 focus:border-transparent"
-                      />
                     </div>
                     <div>
                       <label className="block text-xs font-medium text-gray-700 mb-2">
@@ -398,9 +386,9 @@ export default function AgentVoicePage() {
                       className="flex items-center justify-between p-3 bg-gray-50 rounded-lg border border-gray-200"
                     >
                       <div>
-                        <div className="font-medium text-gray-900 text-sm">{key.key_name}</div>
+                        <div className="font-medium text-gray-900 text-sm capitalize">{key.provider.replace(/_/g, ' ')}</div>
                         <div className="text-xs text-gray-600">
-                          {key.provider} • Added {new Date(key.created_at).toLocaleDateString()}
+                          Added {new Date(key.created_at).toLocaleDateString()}
                         </div>
                       </div>
                       <button

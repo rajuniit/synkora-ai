@@ -713,9 +713,12 @@ async def internal_browser_pdf(
     config: dict[str, Any] | None = None,
 ) -> dict[str, Any]:
     """Generate a PDF of the current page (returns base64 data)."""
-    result = await _scraper().browser_pdf(
-        session_id=session_id, page_id=page_id, format=format, print_background=print_background
-    )
+    try:
+        result = await _scraper().browser_pdf(
+            session_id=session_id, page_id=page_id, format=format, print_background=print_background
+        )
+    except Exception as exc:
+        return {"success": False, "error": f"Browser PDF failed: {exc}"}
 
     # If a local path was requested, save the decoded bytes
     if result.get("success") and path and result.get("pdf_base64"):

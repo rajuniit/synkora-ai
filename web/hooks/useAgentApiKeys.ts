@@ -4,6 +4,7 @@
  */
 
 import { useState, useCallback } from 'react';
+import toast from 'react-hot-toast';
 import * as apiKeyClient from '@/lib/api/agent-api-keys';
 import type {
   AgentApiKey,
@@ -13,6 +14,15 @@ import type {
   UsageStatsResponse,
   ApiKeyFilters,
 } from '@/types/agent-api';
+
+/** Extract the most useful error message from an API error. */
+function extractErrorMessage(err: any, fallback: string): string {
+  // FastAPI returns { detail: string } or { detail: [{msg, ...}] }
+  const detail = err?.response?.data?.detail;
+  if (typeof detail === 'string') return detail;
+  if (Array.isArray(detail) && detail[0]?.msg) return detail[0].msg;
+  return err?.message || fallback;
+}
 
 export function useAgentApiKeys() {
   const [loading, setLoading] = useState(false);
@@ -28,7 +38,9 @@ export function useAgentApiKeys() {
       const response = await apiKeyClient.getApiKeys(filters);
       return response.keys || [];
     } catch (err: any) {
-      setError(err.message || 'Failed to fetch API keys');
+      const msg = extractErrorMessage(err, 'Failed to fetch API keys');
+      setError(msg);
+      toast.error(msg);
       return [];
     } finally {
       setLoading(false);
@@ -45,7 +57,9 @@ export function useAgentApiKeys() {
       const apiKey = await apiKeyClient.getApiKey(keyId);
       return apiKey;
     } catch (err: any) {
-      setError(err.message || 'Failed to fetch API key');
+      const msg = extractErrorMessage(err, 'Failed to fetch API key');
+      setError(msg);
+      toast.error(msg);
       return null;
     } finally {
       setLoading(false);
@@ -64,7 +78,9 @@ export function useAgentApiKeys() {
         const response = await apiKeyClient.createApiKey(data);
         return response;
       } catch (err: any) {
-        setError(err.message || 'Failed to create API key');
+        const msg = extractErrorMessage(err, 'Failed to create API key');
+        setError(msg);
+        toast.error(msg);
         return null;
       } finally {
         setLoading(false);
@@ -84,7 +100,9 @@ export function useAgentApiKeys() {
         const apiKey = await apiKeyClient.updateApiKey(keyId, data);
         return apiKey;
       } catch (err: any) {
-        setError(err.message || 'Failed to update API key');
+        const msg = extractErrorMessage(err, 'Failed to update API key');
+        setError(msg);
+        toast.error(msg);
         return null;
       } finally {
         setLoading(false);
@@ -101,9 +119,12 @@ export function useAgentApiKeys() {
     setError(null);
     try {
       await apiKeyClient.deleteApiKey(keyId);
+      toast.success('API key deleted');
       return true;
     } catch (err: any) {
-      setError(err.message || 'Failed to delete API key');
+      const msg = extractErrorMessage(err, 'Failed to delete API key');
+      setError(msg);
+      toast.error(msg);
       return false;
     } finally {
       setLoading(false);
@@ -122,7 +143,9 @@ export function useAgentApiKeys() {
         const response = await apiKeyClient.regenerateApiKey(keyId);
         return response;
       } catch (err: any) {
-        setError(err.message || 'Failed to regenerate API key');
+        const msg = extractErrorMessage(err, 'Failed to regenerate API key');
+        setError(msg);
+        toast.error(msg);
         return null;
       } finally {
         setLoading(false);
@@ -142,7 +165,9 @@ export function useAgentApiKeys() {
         const apiKey = await apiKeyClient.toggleApiKeyStatus(keyId, isActive);
         return apiKey;
       } catch (err: any) {
-        setError(err.message || 'Failed to toggle API key status');
+        const msg = extractErrorMessage(err, 'Failed to toggle API key status');
+        setError(msg);
+        toast.error(msg);
         return null;
       } finally {
         setLoading(false);
@@ -162,7 +187,9 @@ export function useAgentApiKeys() {
         const apiKey = await apiKeyClient.updateApiKeyPermissions(keyId, permissions);
         return apiKey;
       } catch (err: any) {
-        setError(err.message || 'Failed to update API key permissions');
+        const msg = extractErrorMessage(err, 'Failed to update API key permissions');
+        setError(msg);
+        toast.error(msg);
         return null;
       } finally {
         setLoading(false);
@@ -189,7 +216,9 @@ export function useAgentApiKeys() {
         const apiKey = await apiKeyClient.updateApiKeyRateLimits(keyId, rateLimits);
         return apiKey;
       } catch (err: any) {
-        setError(err.message || 'Failed to update API key rate limits');
+        const msg = extractErrorMessage(err, 'Failed to update API key rate limits');
+        setError(msg);
+        toast.error(msg);
         return null;
       } finally {
         setLoading(false);
@@ -224,18 +253,16 @@ export function useApiKeyUsage() {
    * Get usage statistics for an API key
    */
   const getApiKeyUsage = useCallback(
-    async (
-      keyId: string,
-      periodStart?: string,
-      periodEnd?: string
-    ): Promise<UsageStatsResponse | null> => {
+    async (keyId: string, days: number = 30): Promise<UsageStatsResponse | null> => {
       setLoading(true);
       setError(null);
       try {
-        const stats = await apiKeyClient.getApiKeyUsage(keyId, periodStart, periodEnd);
+        const stats = await apiKeyClient.getApiKeyUsage(keyId, days);
         return stats;
       } catch (err: any) {
-        setError(err.message || 'Failed to fetch API key usage');
+        const msg = extractErrorMessage(err, 'Failed to fetch API key usage');
+        setError(msg);
+        toast.error(msg);
         return null;
       } finally {
         setLoading(false);

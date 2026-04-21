@@ -620,6 +620,49 @@ class FunctionCallingHandler:
                             },
                         }
 
+                # Mapbox static map — emit as inline image block
+                if func_name in ["internal_get_static_map", "internal_get_directions"]:
+                    if isinstance(result, dict) and result.get("success") and result.get("map_url"):
+                        yield {
+                            "type": "vehicle_map",
+                            "map": {
+                                "id": f"map_{uuid.uuid4().hex[:8]}",
+                                "map_url": result["map_url"],
+                                "embed_url": result.get("embed_url"),
+                                "center": result.get("center") or result.get("origin"),
+                                "zoom": result.get("zoom", 13),
+                                "marker_count": result.get("marker_count", 0),
+                                "distance_km": result.get("distance_km"),
+                                "duration_min": result.get("duration_min"),
+                                "profile": result.get("profile"),
+                                "created_at": datetime.datetime.now().isoformat(),
+                            },
+                        }
+
+                # Fleet health / intelligence — emit as fleet_card
+                if func_name in [
+                    "internal_micromobility_get_fleet_health",
+                    "internal_micromobility_get_zone_demand_supply",
+                    "internal_micromobility_predict_demand",
+                    "internal_micromobility_get_rebalancing_plan",
+                    "internal_micromobility_get_trip_performance",
+                    "internal_micromobility_analyze_event_impact",
+                    "internal_micromobility_get_network_health",
+                    "internal_micromobility_get_parking_compliance",
+                    "internal_micromobility_get_battery_degradation",
+                    "internal_micromobility_get_ranger_performance",
+                ]:
+                    if isinstance(result, dict) and result.get("success"):
+                        yield {
+                            "type": "fleet_card",
+                            "card": {
+                                "id": f"fleet_{uuid.uuid4().hex[:8]}",
+                                "tool": func_name,
+                                "data": result,
+                                "created_at": datetime.datetime.now().isoformat(),
+                            },
+                        }
+
                 # Infographic tool detection
                 if func_name in ["internal_generate_infographic", "internal_generate_slack_infographic"]:
                     if isinstance(result, dict) and result.get("success"):
@@ -856,12 +899,10 @@ class FunctionCallingHandler:
 
                 response = await litellm.acompletion(**completion_params)
             else:
-                # For native OpenAI client
                 response = await self.llm_client._client.chat.completions.create(
                     model=self.llm_client.config.model_name,
                     messages=messages,
-                    temperature=temperature,
-                    max_tokens=max_tokens,
+                    **self.llm_client._build_openai_params(max_tokens, temperature),
                     tools=tools,
                     tool_choice="auto",
                 )

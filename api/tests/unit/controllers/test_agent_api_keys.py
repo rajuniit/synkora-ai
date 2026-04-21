@@ -150,25 +150,12 @@ class TestCreateApiKey:
         assert response.status_code == status.HTTP_404_NOT_FOUND
 
     def test_create_api_key_without_agent_id(self, client):
-        """Test API key creation without agent_id uses tenant_id."""
+        """Test API key creation without agent_id is rejected — agent_id is required."""
         test_client, tenant_id, mock_account, mock_db, mock_service = client
-
-        key_id = uuid.uuid4()
-        plain_key = "sk_test_1234567890abcdef"
-
-        mock_api_key = _create_mock_api_key(
-            key_id,
-            tenant_id,
-            tenant_id,
-            key_name="Tenant Key",
-            key_prefix=plain_key[:12],
-        )
-
-        mock_service.create_api_key.return_value = (mock_api_key, plain_key)
 
         response = test_client.post("/api/v1/agent-api-keys", json={"key_name": "Tenant Key", "permissions": ["chat"]})
 
-        assert response.status_code == status.HTTP_200_OK
+        assert response.status_code == status.HTTP_422_UNPROCESSABLE_ENTITY
 
 
 class TestListApiKeys:

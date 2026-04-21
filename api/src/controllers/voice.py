@@ -147,7 +147,6 @@ class SaveApiKeyRequest(BaseModel):
 
     provider: str = Field(..., description="Provider name (openai_whisper, openai_tts, elevenlabs)")
     api_key: str = Field(..., description="API key to encrypt and store")
-    name: str | None = Field(None, description="Optional name for the key")
 
 
 # Endpoints
@@ -377,7 +376,6 @@ async def save_api_key(
         if existing_key:
             # Update existing key
             existing_key.api_key_encrypted = encrypt_value(request.api_key)
-            existing_key.name = request.name or existing_key.name
             existing_key.is_active = True
             message = f"API key for {request.provider} updated successfully"
         else:
@@ -386,7 +384,6 @@ async def save_api_key(
                 tenant_id=tenant_id,
                 provider=provider_enum,
                 api_key_encrypted=encrypt_value(request.api_key),
-                name=request.name or f"{request.provider} API Key",
                 is_active=True,
             )
             db.add(new_key)
@@ -427,8 +424,7 @@ async def list_api_keys(
             keys_list.append(
                 {
                     "id": str(key.id),
-                    "provider": key.provider.value,
-                    "name": key.name,
+                    "provider": key.provider,
                     "is_active": key.is_active,
                     "created_at": key.created_at.isoformat(),
                     "updated_at": key.updated_at.isoformat(),
@@ -473,7 +469,7 @@ async def delete_api_key(
         if not api_key:
             raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="API key not found")
 
-        provider_name = api_key.provider.value
+        provider_name = api_key.provider
         await db.delete(api_key)
         await db.commit()
 
@@ -545,7 +541,7 @@ async def get_usage_stats(
             usage_list.append(
                 {
                     "id": str(record.id),
-                    "provider": record.provider.value,
+                    "provider": record.provider,
                     "operation_type": record.operation_type.value,
                     "characters_processed": record.characters_processed,
                     "duration_seconds": record.duration_seconds,

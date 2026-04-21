@@ -70,27 +70,21 @@ export interface ApiKeyListResponse {
 
 export interface UsageByEndpoint {
   endpoint: string;
-  count: number;
-  total_tokens: number;
-  total_cost: number;
-  avg_response_time: number;
+  requests: number;
+  avg_response_time_ms: number;
+  error_rate: number;
 }
 
 export interface UsageStats {
   total_requests: number;
   total_tokens: number;
   total_cost: number;
-  avg_response_time: number;
-  requests_by_day: Record<string, number>;
-  tokens_by_day: Record<string, number>;
-  cost_by_day: Record<string, number>;
+  period_start: string;
+  period_end: string;
 }
 
 export interface UsageStatsResponse {
-  api_key_id: string;
-  period_start: string;
-  period_end: string;
-  stats: UsageStats;
+  overall: UsageStats;
   by_endpoint: UsageByEndpoint[];
 }
 

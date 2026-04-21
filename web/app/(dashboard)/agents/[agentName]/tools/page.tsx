@@ -356,8 +356,48 @@ const TOOL_GROUPS: ToolGroup[] = [
   },
   {
     id: 'micromobility',
-    name: 'Micromobility ',
+    name: 'Micromobility',
     description: 'Manage fleet vehicles, trips, riders, tasks, pricing, invoices, and analytics via Dashboard',
+    icon: Globe,
+    tools: [],
+    expanded: false
+  },
+  {
+    id: 'micromobility_intelligence',
+    name: 'Micromobility Intelligence',
+    description: 'AI-powered fleet analytics: health scoring, demand prediction, rebalancing plans, and batch task creation',
+    icon: Database,
+    tools: [],
+    expanded: false
+  },
+  {
+    id: 'openweather',
+    name: 'OpenWeather',
+    description: 'Get current weather conditions and hourly forecasts for any location with demand impact scoring',
+    icon: Globe,
+    tools: [],
+    expanded: false
+  },
+  {
+    id: 'events_predicthq',
+    name: 'Events (PredictHQ)',
+    description: 'Discover nearby events from PredictHQ with attendance-based demand multipliers',
+    icon: Calendar,
+    tools: [],
+    expanded: false
+  },
+  {
+    id: 'events_ticketmaster',
+    name: 'Events (Ticketmaster)',
+    description: 'Discover nearby concerts, sports and live events from Ticketmaster with demand multipliers',
+    icon: Calendar,
+    tools: [],
+    expanded: false
+  },
+  {
+    id: 'mapbox',
+    name: 'Mapbox',
+    description: 'Generate static map images with vehicle markers and route overlays, plus turn-by-turn directions',
     icon: Globe,
     tools: [],
     expanded: false
@@ -548,7 +588,7 @@ export default function AgentToolsPage() {
 
   const loadAllOAuthApps = async () => {
     try {
-      const providers = ['github', 'gitlab', 'SLACK', 'gmail', 'zoom', 'google_calendar', 'google_drive', 'clickup', 'jira', 'twitter', 'linkedin', 'recall', 'newsapi', 'micromobility'];
+      const providers = ['github', 'gitlab', 'SLACK', 'gmail', 'zoom', 'google_calendar', 'google_drive', 'clickup', 'jira', 'twitter', 'linkedin', 'recall', 'newsapi', 'micromobility', 'openweather', 'predicthq', 'ticketmaster', 'mapbox'];
       const allApps: any[] = [];
       
       for (const provider of providers) {
@@ -609,7 +649,7 @@ export default function AgentToolsPage() {
 
   const getAuthMethodForProvider = (provider: string) => {
     // Providers that only support API tokens (no OAuth flow)
-    const apiTokenOnlyProviders = ['recall', 'TELEGRAM', 'onepassword', 'newsapi', 'micromobility'];
+    const apiTokenOnlyProviders = ['recall', 'TELEGRAM', 'onepassword', 'newsapi', 'micromobility', 'openweather', 'predicthq', 'ticketmaster', 'mapbox'];
     if (apiTokenOnlyProviders.includes(provider.toLowerCase()) ||
         apiTokenOnlyProviders.includes(provider)) {
       return 'api_token';
@@ -637,7 +677,7 @@ export default function AgentToolsPage() {
       const app = providerApps[0]; // Use first available app
 
       // Providers that only support API tokens (no OAuth flow)
-      const apiTokenOnlyProviders = ['recall', 'TELEGRAM', 'onepassword', 'newsapi', 'micromobility'];
+      const apiTokenOnlyProviders = ['recall', 'TELEGRAM', 'onepassword', 'newsapi', 'micromobility', 'openweather', 'predicthq', 'ticketmaster', 'mapbox'];
       const isApiTokenOnly = apiTokenOnlyProviders.includes(provider.toLowerCase()) ||
                              apiTokenOnlyProviders.includes(provider);
 
@@ -734,8 +774,23 @@ export default function AgentToolsPage() {
         groupId = 'linkedin';
       } else if (toolName.includes('recall')) {
         groupId = 'recall';
+      } else if (toolName.includes('micromobility_get_fleet_health') ||
+                 toolName.includes('micromobility_get_zone_demand') ||
+                 toolName.includes('micromobility_predict_demand') ||
+                 toolName.includes('micromobility_get_rebalancing') ||
+                 toolName.includes('micromobility_batch_create') ||
+                 toolName.includes('micromobility_get_trip_performance')) {
+        groupId = 'micromobility_intelligence';
       } else if (toolName.includes('micromobility')) {
         groupId = 'micromobility';
+      } else if (toolName.includes('get_weather_forecast') || toolName.includes('get_current_weather')) {
+        groupId = 'openweather';
+      } else if (toolName.includes('predicthq')) {
+        groupId = 'events_predicthq';
+      } else if (toolName.includes('ticketmaster')) {
+        groupId = 'events_ticketmaster';
+      } else if (toolName.includes('static_map') || toolName.includes('get_directions') || toolName.includes('mapbox')) {
+        groupId = 'mapbox';
       }
       // Document generation tools - NEW!
       else if (toolName.includes('generate_pdf') || toolName.includes('generate_powerpoint') || 
@@ -992,7 +1047,7 @@ export default function AgentToolsPage() {
           ];
         }
 
-        // Add OAuth selector for ALL Micromobility tools
+        // Add OAuth selector for ALL Micromobility tools (raw + intelligence)
         if (tool.name.includes('micromobility')) {
           baseTool.configurable = true;
           baseTool.oauthProvider = 'micromobility';
@@ -1001,6 +1056,70 @@ export default function AgentToolsPage() {
               key: 'oauth_app_id',
               label: 'Micromobility Integration',
               description: 'Select a configured Dashboard integration (API token or username/password)',
+              placeholder: 'Select integration',
+              type: 'select',
+              options: []
+            }
+          ];
+        }
+
+        // OpenWeather tools
+        if (tool.name.includes('get_weather_forecast') || tool.name.includes('get_current_weather')) {
+          baseTool.configurable = true;
+          baseTool.oauthProvider = 'openweather';
+          baseTool.requiredFields = [
+            {
+              key: 'oauth_app_id',
+              label: 'OpenWeather API Key',
+              description: 'Select a configured OpenWeather integration (API key)',
+              placeholder: 'Select integration',
+              type: 'select',
+              options: []
+            }
+          ];
+        }
+
+        // PredictHQ events tools
+        if (tool.name.includes('predicthq')) {
+          baseTool.configurable = true;
+          baseTool.oauthProvider = 'predicthq';
+          baseTool.requiredFields = [
+            {
+              key: 'oauth_app_id',
+              label: 'PredictHQ API Key',
+              description: 'Select a configured PredictHQ integration',
+              placeholder: 'Select integration',
+              type: 'select',
+              options: []
+            }
+          ];
+        }
+
+        // Ticketmaster events tools
+        if (tool.name.includes('ticketmaster')) {
+          baseTool.configurable = true;
+          baseTool.oauthProvider = 'ticketmaster';
+          baseTool.requiredFields = [
+            {
+              key: 'oauth_app_id',
+              label: 'Ticketmaster API Key',
+              description: 'Select a configured Ticketmaster integration',
+              placeholder: 'Select integration',
+              type: 'select',
+              options: []
+            }
+          ];
+        }
+
+        // Mapbox tools
+        if (tool.name.includes('static_map') || tool.name.includes('get_directions')) {
+          baseTool.configurable = true;
+          baseTool.oauthProvider = 'mapbox';
+          baseTool.requiredFields = [
+            {
+              key: 'oauth_app_id',
+              label: 'Mapbox Access Token',
+              description: 'Select a configured Mapbox integration',
               placeholder: 'Select integration',
               type: 'select',
               options: []
@@ -1117,6 +1236,9 @@ export default function AgentToolsPage() {
   const getToolIcon = (toolName: string): string => {
     const name = toolName.toLowerCase();
     if (name.includes('micromobility')) return '🛴';
+    if (name.includes('weather')) return '🌤️';
+    if (name.includes('predicthq') || name.includes('ticketmaster')) return '🎟️';
+    if (name.includes('static_map') || name.includes('directions') || name.includes('mapbox')) return '🗺️';
     if (name.includes('recall')) return '🎥';
     if (name.includes('gitlab')) return '🦊';
     if (name.includes('twitter')) return '🐦';
@@ -1650,6 +1772,11 @@ export default function AgentToolsPage() {
                 if (group.id === 'linkedin') return 'linkedin';
                 if (group.id === 'recall') return 'recall';
                 if (group.id === 'micromobility') return 'micromobility';
+                if (group.id === 'micromobility_intelligence') return 'micromobility';
+                if (group.id === 'openweather') return 'openweather';
+                if (group.id === 'events_predicthq') return 'predicthq';
+                if (group.id === 'events_ticketmaster') return 'ticketmaster';
+                if (group.id === 'mapbox') return 'mapbox';
                 return null;
               })();
 

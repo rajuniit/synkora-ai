@@ -12,6 +12,12 @@ import {
 } from '@/types/agent-llm-config'
 import { getLLMProviders, getProviderModels, ProviderPreset, ModelPreset } from '@/lib/api/llm-providers'
 
+// Models that only support temperature=1 (OpenAI reasoning/o-series and gpt-5)
+function isReasoningModel(modelName: string): boolean {
+  const base = modelName.split('/').pop()?.toLowerCase() ?? ''
+  return /^(o1|o3|o4|gpt-5)/.test(base)
+}
+
 const PROVIDER_ICONS: Record<string, string> = {
   openai: '🤖', anthropic: '🧠', google: '🔮', gemini: '🔮',
   ollama: '🦙', huggingface: '🤗', together_ai: '🔗', cohere: '📊',
@@ -142,7 +148,9 @@ export default function LLMConfigForm({
       ...prev,
       model_name: modelName,
       // Auto-populate max_tokens with model's recommended default (only if not editing existing config)
-      ...(model?.default_max_tokens && !config ? { max_tokens: model.default_max_tokens.toString() } : {})
+      ...(model?.default_max_tokens && !config ? { max_tokens: model.default_max_tokens.toString() } : {}),
+      // Reasoning models only support temperature=1
+      ...(isReasoningModel(modelName) ? { temperature: '1' } : {}),
     }))
   }
 
@@ -171,7 +179,7 @@ export default function LLMConfigForm({
         provider: formData.provider,
         model_name: formData.model_name,
         api_base: formData.api_base.trim() || undefined,
-        temperature: parseFloat(formData.temperature) || undefined,
+        temperature: isReasoningModel(formData.model_name) ? undefined : (parseFloat(formData.temperature) || undefined),
         max_tokens: parseInt(formData.max_tokens) || undefined,
         top_p: parseFloat(formData.top_p) || undefined,
         enabled: formData.enabled, // Include enabled flag
@@ -523,10 +531,18 @@ export default function LLMConfigForm({
               value={formData.temperature}
               onChange={(e) => setFormData({ ...formData, temperature: e.target.value })}
               min="0" max="2" step="0.1"
-              className="w-full px-3 py-2 border border-gray-200 rounded-lg focus:ring-2 focus:ring-red-500 focus:border-transparent text-sm"
-              disabled={isSubmitting}
+              className={`w-full px-3 py-2 border rounded-lg text-sm ${
+                isReasoningModel(formData.model_name)
+                  ? 'border-gray-200 bg-gray-50 text-gray-400 cursor-not-allowed'
+                  : 'border-gray-200 focus:ring-2 focus:ring-red-500 focus:border-transparent'
+              }`}
+              disabled={isSubmitting || isReasoningModel(formData.model_name)}
             />
-            <p className="text-[11px] text-gray-400 mt-1">0 – 2</p>
+            {isReasoningModel(formData.model_name) ? (
+              <p className="text-[11px] text-amber-500 mt-1">Fixed at 1 — not supported by this model</p>
+            ) : (
+              <p className="text-[11px] text-gray-400 mt-1">0 – 2</p>
+            )}
           </div>
           <div>
             <label htmlFor="max_tokens" className="block text-xs font-semibold text-gray-500 uppercase tracking-wide mb-1.5">

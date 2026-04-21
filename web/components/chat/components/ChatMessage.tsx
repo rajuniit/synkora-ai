@@ -2,7 +2,7 @@
 
 import { useState, useMemo } from 'react'
 import Image from 'next/image'
-import { Copy, Check, RefreshCw, User, Sparkles, FileText, Image as ImageIcon, Download, File, ThumbsUp, ThumbsDown, Volume2 } from 'lucide-react'
+import { Copy, Check, RefreshCw, Sparkles, FileText, Image as ImageIcon, Download, File } from 'lucide-react'
 import { cn } from '@/lib/utils'
 import { Message, Attachment } from '../types'
 import ReactMarkdown from 'react-markdown'
@@ -87,6 +87,7 @@ interface ChatMessageProps {
   streamStartTime?: number | null
   onCopy?: (content: string, messageId: string) => void
   onRetry?: (messageId: string) => void
+  onActionClick?: (text: string) => void
   className?: string
   chatConfig?: ChatConfig | null
   agentAvatar?: string
@@ -107,6 +108,7 @@ export function ChatMessage({
   streamStartTime,
   onCopy,
   onRetry,
+  onActionClick,
   className,
   chatConfig,
   agentAvatar,
@@ -137,45 +139,43 @@ export function ChatMessage({
     setTimeout(() => setCopied(false), 2000)
   }
 
-  // User message
+  // User message — right-aligned dark bubble
   if (isUser) {
     return (
-      <div className={cn('group', className)}>
-        <div className="flex items-center gap-2 mb-1.5">
-          <div
-            className="w-5 h-5 rounded-full flex items-center justify-center"
-            style={{ backgroundColor: primaryColor }}
-          >
-            <User size={12} className="text-white" />
+      <div className={cn('flex justify-end group', className)}>
+        <div className="max-w-[72%]">
+          <div className="bg-gray-900 rounded-2xl px-4 py-3">
+            <p className="text-[14px] text-white leading-relaxed whitespace-pre-wrap">{message.content}</p>
+            {message.attachments && message.attachments.length > 0 && (
+              <div className="mt-2 space-y-1.5">
+                {message.attachments.map((attachment, index) => (
+                  <AttachmentPreview key={index} attachment={attachment} />
+                ))}
+              </div>
+            )}
           </div>
-          <span className="text-sm font-bold" style={{ color: primaryColor }}>You</span>
-        </div>
-        <div className="pl-7">
-          <p className="text-[15px] text-gray-800 leading-relaxed whitespace-pre-wrap">{message.content}</p>
-          {message.attachments && message.attachments.length > 0 && (
-            <div className="mt-2 space-y-1.5">
-              {message.attachments.map((attachment, index) => (
-                <AttachmentPreview key={index} attachment={attachment} />
-              ))}
-            </div>
-          )}
+          <div className="flex items-center justify-end gap-1.5 mt-1 px-1">
+            <span className="text-[10px] text-gray-400">You</span>
+            <span className="text-[10px] text-gray-300">·</span>
+            <span className="text-[10px] text-gray-400">{formatTimestamp(message.timestamp)}</span>
+          </div>
         </div>
       </div>
     )
   }
 
-  // Assistant message
+  // Assistant message — left-aligned open layout
   return (
     <div className={cn('group', className)}>
-      <div className="flex items-center gap-2 mb-1.5">
+      <div className="flex items-center gap-2 mb-3">
         {agentAvatar ? (
-          <div className="w-5 h-5 rounded-full overflow-hidden flex items-center justify-center bg-white relative">
+          <div className="w-6 h-6 rounded-full overflow-hidden flex items-center justify-center bg-white relative shrink-0">
             {agentAvatar.startsWith('http://') || agentAvatar.startsWith('https://') ? (
               <Image
                 src={agentAvatar}
                 alt="Agent"
-                width={20}
-                height={20}
+                width={24}
+                height={24}
                 className="w-full h-full object-cover"
                 unoptimized
               />
@@ -185,16 +185,19 @@ export function ChatMessage({
           </div>
         ) : (
           <div
-            className="w-5 h-5 rounded-full flex items-center justify-center"
+            className="w-6 h-6 rounded-full flex items-center justify-center shrink-0"
             style={{ background: primaryColor }}
           >
-            <Sparkles size={10} className="text-white" />
+            <Sparkles size={11} className="text-white" />
           </div>
         )}
-        <span className="text-sm font-bold" style={{ color: primaryColor }}>{agentName || 'Assistant'}</span>
+        <span className="text-sm font-bold text-gray-900">{agentName || 'Assistant'}</span>
+        {message.metadata?.confidence && (
+          <span className="text-[11px] text-gray-400">Confidence: {message.metadata.confidence}</span>
+        )}
       </div>
 
-      <div className="pl-7" style={{ fontFamily }}>
+      <div className="pl-8" style={{ fontFamily }}>
         {/* Document Viewers - Render embedded documents (PDFs, PowerPoint, Google Docs/Sheets) */}
         {/* NOTE: Only render after streaming completes to avoid loading partial/incomplete URLs */}
         {!isStreaming && (() => {
@@ -550,15 +553,427 @@ export function ChatMessage({
           </div>
         )}
 
-        {/* Message Actions - Inline compact design */}
+        {/* Vehicle Maps (Mapbox) */}
+        {message.metadata?.vehicle_maps && message.metadata.vehicle_maps.length > 0 && (
+          <div className="mt-3 space-y-3">
+            {message.metadata.vehicle_maps.map((map: any, index: number) => (
+              <div key={map.id || index} className="rounded-lg overflow-hidden border border-gray-200">
+                {(map.distance_km || map.duration_min) && (
+                  <div className="px-3 py-2 bg-gray-50 border-b border-gray-200 flex items-center gap-3 text-xs text-gray-600">
+                    {map.profile && <span className="capitalize font-medium">{map.profile}</span>}
+                    {map.distance_km && <span>📍 {map.distance_km} km</span>}
+                    {map.duration_min && <span>⏱ {map.duration_min} min</span>}
+                    {map.marker_count > 0 && <span>🔵 {map.marker_count} vehicles</span>}
+                  </div>
+                )}
+                <img
+                  src={map.map_url}
+                  alt="Map"
+                  className="w-full h-auto"
+                  style={{ maxHeight: '500px', objectFit: 'cover' }}
+                />
+                {map.embed_url && (
+                  <div className="px-3 py-2 bg-gray-50 border-t border-gray-200 text-xs">
+                    <a href={map.embed_url} target="_blank" rel="noopener noreferrer" className="text-blue-600 hover:underline">
+                      Open interactive map ↗
+                    </a>
+                  </div>
+                )}
+              </div>
+            ))}
+          </div>
+        )}
+
+        {/* Fleet Intelligence Cards */}
+        {message.metadata?.fleet_cards && message.metadata.fleet_cards.length > 0 && (
+          <div className="mt-4 space-y-6">
+            {message.metadata.fleet_cards.map((card: any, index: number) => {
+              const { data, tool } = card
+              const summary = data?.summary
+
+              const isFleetHealth = tool?.includes('fleet_health')
+              const isDemandSupply = tool?.includes('demand_supply')
+              const isPredictDemand = tool?.includes('predict_demand')
+              const isRebalancing = tool?.includes('rebalancing')
+              const isTripPerf = tool?.includes('trip_performance')
+              const isEventImpact = tool?.includes('event_impact')
+              const isNetworkHealth = tool?.includes('network_health')
+              const isParkingCompliance = tool?.includes('parking_compliance')
+              const isBatteryDegradation = tool?.includes('battery_degradation')
+              const isRangerPerf = tool?.includes('ranger_performance')
+
+              const cardTitle = isFleetHealth ? 'Fleet Health' :
+                isDemandSupply ? 'Demand vs Supply' :
+                isPredictDemand ? 'Demand Forecast' :
+                isRebalancing ? 'Rebalancing Plan' :
+                isTripPerf ? 'Trip Performance' :
+                isEventImpact ? 'Event Impact' :
+                isNetworkHealth ? 'Network Health' :
+                isParkingCompliance ? 'Parking Compliance' :
+                isBatteryDegradation ? 'Battery Degradation' :
+                isRangerPerf ? 'Ranger Performance' : 'Fleet Analytics'
+
+              const fleetStatus = isFleetHealth ? (
+                (summary?.operational_rate_pct ?? 100) >= 90 &&
+                (summary?.low_battery_count ?? 0) === 0 &&
+                (summary?.maintenance_count ?? 0) === 0
+                  ? 'healthy'
+                  : (summary?.operational_rate_pct ?? 100) >= 70 ? 'warning' : 'critical'
+              ) : null
+
+              const primaryAction = isFleetHealth && data?.low_battery?.length > 0
+                ? `Dispatch charging for ${data.low_battery.length} low-battery vehicle(s)`
+                : isFleetHealth && data?.idle?.length > 0
+                ? `Flag ${data.idle.length} idle vehicle(s) for repositioning`
+                : isRebalancing && data?.moves?.length > 0
+                ? `Confirm rebalancing — ${data.total_vehicles_to_move} vehicles`
+                : isPredictDemand
+                ? `Generate deployment plan for ${data?.service_area || 'this area'}`
+                : isDemandSupply && data?.deficit_service_areas?.length > 0
+                ? `Rebalance ${data.deficit_service_areas.length} deficit area(s)`
+                : isNetworkHealth && data?.offline_count > 0
+                ? `Dispatch rangers — ${data.offline_count} offline vehicles`
+                : isParkingCompliance && data?.non_compliant_trips > 0
+                ? `Create ${data.non_compliant_trips} relocation task(s)`
+                : isBatteryDegradation && data?.total_flagged > 0
+                ? `Schedule maintenance for ${data.total_flagged} vehicle(s)`
+                : null
+
+              // Open-flow hero number (no box, pure typography)
+              const H = ({ value, label, color = 'text-gray-900' }: { value: any; label: string; color?: string }) => (
+                <div className="text-center flex-1">
+                  <div className={`text-4xl font-black tracking-tight leading-none ${color}`}>{value ?? '—'}</div>
+                  <div className="mt-1.5 text-[10px] text-gray-400 font-medium uppercase tracking-wide">{label}</div>
+                </div>
+              )
+
+              // Open row — no background, just a thin bottom rule
+              const R = ({ left, right, sub, rightColor = 'text-gray-700' }: { left: string; sub?: string; right: any; rightColor?: string }) => (
+                <div className="flex items-center justify-between py-2.5 border-b border-gray-100 last:border-0">
+                  <div className="min-w-0 pr-4">
+                    <span className="text-sm text-gray-800">{left}</span>
+                    {sub && <span className="text-[11px] text-gray-400 ml-2">{sub}</span>}
+                  </div>
+                  <div className={`text-sm font-semibold tabular-nums shrink-0 ${rightColor}`}>{right}</div>
+                </div>
+              )
+
+              // Free-flow section: label + rows + optional inline action
+              const Section = ({ title, children, action }: { title: string; children: React.ReactNode; action?: string | null }) => (
+                <div className="mt-4">
+                  <div className="text-[10px] font-semibold text-gray-400 uppercase tracking-widest mb-2">{title}</div>
+                  {children}
+                  {action && onActionClick && !isStreaming && (
+                    <div className="flex items-center gap-3 pt-3 mt-1">
+                      <button
+                        onClick={() => onActionClick(action)}
+                        className="w-8 h-8 rounded-full bg-gray-200 hover:bg-gray-300 flex items-center justify-center shrink-0 transition-colors"
+                      >
+                        <svg width="9" height="9" viewBox="0 0 9 9" fill="currentColor" className="ml-0.5 text-gray-700"><path d="M2.5 1.5l5 3-5 3V1.5z"/></svg>
+                      </button>
+                      <span className="text-sm font-medium text-gray-700 leading-snug">{action}</span>
+                    </div>
+                  )}
+                </div>
+              )
+
+              return (
+                <div key={card.id || index}>
+
+                  {/* ── Title (open, no box) ── */}
+                  <div className="flex items-center justify-between mb-4">
+                    <div className="flex items-center gap-2">
+                      <span className="text-base font-bold text-gray-900">{cardTitle}</span>
+                    </div>
+                    <div className="flex items-center gap-2">
+                      {data?.confidence && (
+                        <span className={`text-[11px] font-semibold ${
+                          data.confidence === 'high' ? 'text-emerald-500' :
+                          data.confidence === 'medium' ? 'text-amber-500' : 'text-gray-400'
+                        }`}>
+                          {data.confidence} confidence
+                        </span>
+                      )}
+                      {fleetStatus && (
+                        <span className={`text-[11px] font-semibold flex items-center gap-1 ${
+                          fleetStatus === 'healthy' ? 'text-emerald-500' :
+                          fleetStatus === 'warning' ? 'text-amber-500' : 'text-red-500'
+                        }`}>
+                          <span className={`w-1.5 h-1.5 rounded-full ${fleetStatus === 'healthy' ? 'bg-emerald-500' : fleetStatus === 'warning' ? 'bg-amber-500' : 'bg-red-500'}`} />
+                          {fleetStatus === 'healthy' ? 'Healthy' : fleetStatus === 'warning' ? 'Attention' : 'Critical'}
+                        </span>
+                      )}
+                    </div>
+                  </div>
+
+                  {/* ── Fleet Health ── */}
+                  {isFleetHealth && summary && (
+                    <>
+                      <div className="flex gap-6 mb-5">
+                        <H value={summary.total_vehicles} label="Total Vehicles" />
+                        <H
+                          value={`${summary.operational_rate_pct ?? 0}%`}
+                          label="Operational"
+                          color={summary.operational_rate_pct >= 90 ? 'text-emerald-500' : summary.operational_rate_pct >= 70 ? 'text-amber-500' : 'text-red-500'}
+                        />
+                        <H
+                          value={summary.avg_battery_pct != null ? `${summary.avg_battery_pct}%` : '—'}
+                          label="Avg Battery"
+                          color={summary.avg_battery_pct != null && summary.avg_battery_pct < 30 ? 'text-red-500' : 'text-gray-900'}
+                        />
+                      </div>
+                      <div className="flex gap-8 mb-6">
+                        <H value={summary.low_battery_count} label="Low Battery" color={summary.low_battery_count > 0 ? 'text-red-400' : 'text-gray-200'} />
+                        <H value={summary.idle_count} label="Idle" color={summary.idle_count > 0 ? 'text-amber-400' : 'text-gray-200'} />
+                        <H value={summary.maintenance_count} label="Maintenance" color={summary.maintenance_count > 0 ? 'text-orange-400' : 'text-gray-200'} />
+                      </div>
+                      {(data.low_battery?.length > 0 || data.idle?.length > 0) && (
+                        <Section title={data.low_battery?.length > 0 ? 'Low Battery Vehicles' : 'Idle Vehicles'} action={primaryAction}>
+                          {data.low_battery?.length > 0
+                            ? data.low_battery.slice(0, 5).map((v: any, i: number) => (
+                                <R key={i} left={v.vehicle_id} sub={v.service_area}
+                                  right={<span className="flex items-center gap-2">
+                                    <span className="w-16 h-1 bg-gray-200 rounded-full overflow-hidden inline-block align-middle">
+                                      <span className="h-full bg-red-400 rounded-full block" style={{ width: `${v.battery_pct}%` }} />
+                                    </span>
+                                    {v.battery_pct}%
+                                  </span>}
+                                  rightColor="text-red-500"
+                                />
+                              ))
+                            : data.idle.slice(0, 5).map((v: any, i: number) => (
+                                <R key={i} left={v.vehicle_id} sub={v.service_area} right={`${v.idle_hours}h idle`} rightColor="text-amber-500" />
+                              ))
+                          }
+                        </Section>
+                      )}
+                      {!data.low_battery?.length && !data.idle?.length && data?.recommended_actions?.length > 0 && (
+                        <div className="text-sm text-gray-500">{data.recommended_actions[0]}</div>
+                      )}
+                    </>
+                  )}
+
+                  {/* ── Trip Performance ── */}
+                  {isTripPerf && (
+                    <>
+                      <div className="flex gap-6 mb-5">
+                        <H value={summary?.total_trips ?? data.kpis?.total_trips ?? data.total_trips ?? '—'} label="Total Trips" />
+                        <H value={(() => { const r = summary?.completion_rate_pct ?? data.kpis?.completion_rate_pct ?? data.completion_rate_pct; return r != null ? `${r}%` : '—' })()} label="Completion" color="text-emerald-500" />
+                        <H value={(() => { const r = summary?.total_revenue ?? data.kpis?.total_revenue ?? data.total_revenue; return r != null ? `$${r}` : '—' })()} label="Revenue" />
+                      </div>
+                      {(data?.top_service_areas ?? data?.top_zones)?.length > 0 && (
+                        <Section title="Top Service Areas" action={null}>
+                          {(data.top_service_areas ?? data.top_zones).slice(0, 5).map((z: any, i: number) => (
+                            <R key={i} left={z.service_area} right={`${z.trips ?? z.trip_count} trips`} />
+                          ))}
+                        </Section>
+                      )}
+                    </>
+                  )}
+
+                  {/* ── Demand vs Supply ── */}
+                  {isDemandSupply && (
+                    <>
+                      <div className="flex gap-6 mb-5">
+                        <H value={data.total_zones ?? data.zones?.length ?? '—'} label="Service Areas" />
+                        <H value={data.deficit_zones ?? data.deficit_service_areas?.length ?? 0} label="Deficit" color="text-red-400" />
+                        <H value={data.surplus_zones ?? data.surplus_service_areas?.length ?? 0} label="Surplus" color="text-emerald-400" />
+                      </div>
+                      {data?.zones?.length > 0 && (
+                        <Section title="Service Area Breakdown" action={primaryAction}>
+                          {data.zones.slice(0, 6).map((z: any, i: number) => (
+                            <R key={i} left={z.service_area} sub={`${z.available_vehicles ?? z.vehicles_available ?? '—'} vehicles`}
+                              right={z.status}
+                              rightColor={z.status === 'deficit' ? 'text-red-500' : z.status === 'surplus' ? 'text-emerald-500' : 'text-gray-400'}
+                            />
+                          ))}
+                        </Section>
+                      )}
+                    </>
+                  )}
+
+                  {/* ── Rebalancing Plan ── */}
+                  {isRebalancing && (
+                    <>
+                      <div className="flex gap-6 mb-5">
+                        <H value={data.total_vehicles_to_move ?? '—'} label="Vehicles to Move" />
+                        <H value={data.moves?.length ?? 0} label="Planned Routes" />
+                      </div>
+                      {data?.moves?.length > 0 && (
+                        <Section title="Generated Rebalancing Plan" action={primaryAction}>
+                          {data.moves.slice(0, 5).map((m: any, i: number) => (
+                            <R key={i}
+                              left={`${m.from_service_area} → ${m.to_service_area}`}
+                              right={`${m.vehicle_count} vehicles`}
+                              rightColor={m.priority === 'high' || m.priority === 'urgent' ? 'text-red-500' : 'text-gray-700'}
+                            />
+                          ))}
+                        </Section>
+                      )}
+                    </>
+                  )}
+
+                  {/* ── Event Impact ── */}
+                  {isEventImpact && (
+                    <>
+                      <div className="flex gap-6 mb-5">
+                        <H value={data.event_trips ?? '—'} label="Event Trips" />
+                        <H value={data.baseline_trips ?? '—'} label="Baseline" />
+                        <H
+                          value={data.overall_delta_pct != null ? `${data.overall_delta_pct >= 0 ? '+' : ''}${data.overall_delta_pct}%` : '—'}
+                          label="Overall Delta"
+                          color={(data.overall_delta_pct ?? 0) >= 0 ? 'text-emerald-500' : 'text-red-500'}
+                        />
+                      </div>
+                      {data?.hotspot_service_areas?.length > 0 && (
+                        <Section title="Area Impact" action={null}>
+                          {data.hotspot_service_areas.slice(0, 5).map((z: any, i: number) => (
+                            <R key={i} left={z.service_area}
+                              right={`${z.delta_pct >= 0 ? '+' : ''}${z.delta_pct}%`}
+                              rightColor={z.delta_pct >= 0 ? 'text-emerald-500' : 'text-red-500'}
+                            />
+                          ))}
+                        </Section>
+                      )}
+                    </>
+                  )}
+
+                  {/* ── Network Health ── */}
+                  {isNetworkHealth && (
+                    <>
+                      <div className="flex gap-6 mb-5">
+                        <H value={data.total_vehicles ?? '—'} label="Total Vehicles" />
+                        <H value={data.offline_count ?? 0} label="Offline" color={(data.offline_count ?? 0) > 0 ? 'text-red-400' : 'text-gray-200'} />
+                        <H value={data.offline_rate_pct != null ? `${data.offline_rate_pct}%` : '—'} label="Offline Rate" color={(data.offline_rate_pct ?? 0) > 10 ? 'text-red-500' : 'text-gray-900'} />
+                      </div>
+                      {data?.offline_service_areas?.length > 0 && (
+                        <Section title="Dead Spots" action={primaryAction}>
+                          {data.offline_service_areas.slice(0, 5).map((z: any, i: number) => (
+                            <R key={i} left={z.service_area} right={`${z.offline_rate_pct}% offline`} rightColor="text-red-500" />
+                          ))}
+                        </Section>
+                      )}
+                    </>
+                  )}
+
+                  {/* ── Parking Compliance ── */}
+                  {isParkingCompliance && (
+                    <>
+                      <div className="flex gap-6 mb-5">
+                        <H value={data.total_trips ?? '—'} label="Total Trips" />
+                        <H value={data.non_compliant_trips ?? 0} label="Non-Compliant" color={(data.non_compliant_trips ?? 0) > 0 ? 'text-orange-400' : 'text-gray-200'} />
+                        <H value={data.estimated_relocation_ranger_hours != null ? `~${data.estimated_relocation_ranger_hours}h` : '—'} label="Ranger Hours" />
+                      </div>
+                      {data?.worst_service_areas?.length > 0 && (
+                        <Section title="Worst Areas" action={primaryAction}>
+                          {data.worst_service_areas.slice(0, 5).map((z: any, i: number) => (
+                            <R key={i} left={z.service_area} right={`${z.non_compliance_rate_pct}% non-compliant`} rightColor="text-orange-500" />
+                          ))}
+                        </Section>
+                      )}
+                    </>
+                  )}
+
+                  {/* ── Battery Degradation ── */}
+                  {isBatteryDegradation && (
+                    <>
+                      <div className="flex gap-6 mb-5">
+                        <H value={data.total_checked ?? '—'} label="Checked" />
+                        <H value={data.total_flagged ?? 0} label="Flagged" color={(data.total_flagged ?? 0) > 0 ? 'text-red-400' : 'text-gray-200'} />
+                        <H value={data.avg_drain_pct_per_trip != null ? `${data.avg_drain_pct_per_trip}%` : '—'} label="Avg Drain/Trip" />
+                      </div>
+                      {data?.flagged_vehicles?.length > 0 && (
+                        <Section title="Flagged Vehicles" action={primaryAction}>
+                          {data.flagged_vehicles.slice(0, 5).map((v: any, i: number) => (
+                            <R key={i} left={v.vehicle_id} sub={`${v.trips_analysed} trips analysed`} right={`${v.avg_drain_pct_per_trip}% / trip`} rightColor="text-red-500" />
+                          ))}
+                        </Section>
+                      )}
+                    </>
+                  )}
+
+                  {/* ── Ranger Performance ── */}
+                  {isRangerPerf && (
+                    <>
+                      <div className="flex gap-6 mb-5">
+                        <H value={data.total_rangers ?? '—'} label="Rangers" />
+                        <H value={data.avg_completion_rate_pct != null ? `${data.avg_completion_rate_pct}%` : '—'} label="Avg Completion" color="text-emerald-500" />
+                        <H value={data.avg_task_duration_min != null ? `${data.avg_task_duration_min}m` : '—'} label="Avg Task Time" />
+                      </div>
+                      {data?.rangers?.length > 0 && (
+                        <Section title="Ranger Breakdown" action={null}>
+                          {data.rangers.slice(0, 5).map((r: any, i: number) => (
+                            <R key={i} left={r.ranger_name || r.ranger_id} sub={`${r.tasks_completed}/${r.tasks_total} tasks`}
+                              right={`${r.completion_rate_pct}%`}
+                              rightColor={r.completion_rate_pct >= 80 ? 'text-emerald-500' : r.completion_rate_pct >= 60 ? 'text-amber-500' : 'text-red-500'}
+                            />
+                          ))}
+                        </Section>
+                      )}
+                    </>
+                  )}
+
+                  {/* ── Demand Forecast ── */}
+                  {isPredictDemand && (
+                    <>
+                      <div className="flex gap-6 mb-5">
+                        <H
+                          value={data.predicted_demand_index != null ? `${data.predicted_demand_index}x` : '—'}
+                          label="Demand Index"
+                          color={(data.predicted_demand_index ?? 1) > 1.2 ? 'text-emerald-500' : (data.predicted_demand_index ?? 1) < 0.8 ? 'text-red-500' : 'text-gray-900'}
+                        />
+                        <H value={data.recommended_vehicle_count != null ? `${data.recommended_vehicle_count}` : '—'} label="Recommended" />
+                        <H value={data.hours_ahead != null ? `${data.hours_ahead}h` : '—'} label="Horizon" />
+                      </div>
+                      {data?.signals && (
+                        <Section title="Demand Signals" action={primaryAction}>
+                          {Object.entries(data.signals).map(([key, sig]: [string, any]) => (
+                            <R key={key}
+                              left={key.charAt(0).toUpperCase() + key.slice(1)}
+                              sub={`${Math.round(sig.weight * 100)}% weight`}
+                              right={`${sig.modifier}x`}
+                              rightColor={sig.modifier > 1.1 ? 'text-emerald-500' : sig.modifier < 0.9 ? 'text-red-500' : 'text-gray-700'}
+                            />
+                          ))}
+                        </Section>
+                      )}
+                      {data?.summary && (
+                        <p className="mt-3 text-sm text-gray-500 leading-relaxed">{data.summary}</p>
+                      )}
+                    </>
+                  )}
+
+                </div>
+              )
+            })}
+          </div>
+        )}
+
+        {/* Message Actions */}
         {!isStreaming && (
-          <div className="flex items-center gap-1 mt-3 pt-2">
+          <div className="flex items-center gap-2 mt-4 flex-wrap">
             <button
               onClick={handleCopy}
-              className="p-1.5 text-gray-400 hover:text-gray-600 hover:bg-gray-100 rounded transition-colors"
-              title="Copy message"
+              className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg border border-gray-200 text-xs font-medium text-gray-600 hover:bg-gray-50 transition-colors"
             >
-              {copied ? <Check size={14} /> : <Copy size={14} />}
+              {copied ? <Check size={12} /> : <Copy size={12} />}
+              {copied ? 'Copied' : 'Copy'}
+            </button>
+
+            <button
+              onClick={() => {
+                const blob = new Blob([message.content], { type: 'text/plain' })
+                const url = URL.createObjectURL(blob)
+                const a = document.createElement('a')
+                a.href = url
+                a.download = `response-${message.id.slice(0, 8)}.txt`
+                a.click()
+                URL.revokeObjectURL(url)
+              }}
+              className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg border border-gray-200 text-xs font-medium text-gray-600 hover:bg-gray-50 transition-colors"
+            >
+              <Download size={12} />
+              Export
             </button>
 
             <VoicePlayer text={message.content} className="flex-shrink-0" compact />
@@ -567,27 +982,21 @@ export function ChatMessage({
               <button
                 onClick={() => onRetry(message.id)}
                 className="p-1.5 text-gray-400 hover:text-gray-600 hover:bg-gray-100 rounded transition-colors"
-                title="Regenerate response"
+                title="Regenerate"
               >
-                <RefreshCw size={14} />
+                <RefreshCw size={12} />
               </button>
             )}
 
-            {/* Metrics inline */}
-            {message.metadata && (message.metadata.usage || message.metadata.timing) && (
-              <div className="flex items-center gap-2 ml-auto text-[11px] text-gray-400">
-                {message.metadata.timing?.duration && (
-                  <span>{message.metadata.timing.duration.toFixed(1)}s</span>
-                )}
-                {message.metadata.usage?.total_tokens != null && (
-                  <span>{message.metadata.usage.total_tokens.toLocaleString()} tokens</span>
-                )}
-              </div>
-            )}
-
-            <span className="text-[11px] text-gray-400 ml-2">
-              {formatTimestamp(message.timestamp)}
-            </span>
+            <div className="flex items-center gap-2 ml-auto text-[11px] text-gray-400">
+              {message.metadata?.timing?.duration && (
+                <span>{message.metadata.timing.duration.toFixed(1)}s</span>
+              )}
+              {message.metadata?.usage?.total_tokens != null && (
+                <span>{message.metadata.usage.total_tokens.toLocaleString()} tokens</span>
+              )}
+              <span>{formatTimestamp(message.timestamp)}</span>
+            </div>
           </div>
         )}
       </div>

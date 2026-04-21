@@ -45,6 +45,7 @@ class StreamState:
     chart_data: list[dict[str, Any]]
     diagram_data: list[dict[str, Any]] = None
     infographic_data: list[dict[str, Any]] = None
+    fleet_card_data: list[dict[str, Any]] = None
     total_output_tokens: int = 0
     first_token_time: float | None = None
     tool_start_times: dict[str, float] = None  # Track tool execution start times
@@ -54,6 +55,8 @@ class StreamState:
             self.diagram_data = []
         if self.infographic_data is None:
             self.infographic_data = []
+        if self.fleet_card_data is None:
+            self.fleet_card_data = []
         if self.tool_start_times is None:
             self.tool_start_times = {}
 
@@ -208,6 +211,38 @@ class ChatStreamService:
                 f"time={load_result.loading_time:.3f}s, is_workflow={is_workflow_agent}"
             )
 
+            # Register execution for Live Lab observability (done early so _track is
+            # available to all code paths including workflow and claude_code branches)
+            _execution_id = None
+            if tenant_id and db_agent:
+                try:
+                    from src.services.agents.execution_registry import execution_registry
+
+                    _execution_id = await execution_registry.register(
+                        tenant_id=tenant_id,
+                        agent_id=db_agent.id,
+                        agent_name=agent_name,
+                        trigger_source=trigger_source,
+                        trigger_detail=trigger_detail,
+                        conversation_id=conversation_id,
+                        message_preview=message,
+                    )
+                except Exception as reg_err:
+                    logger.debug(f"Failed to register execution: {reg_err}")
+
+            # Helper to store important events for Live Lab replay.
+            # Defined here (before workflow/claude_code branches) so it can be
+            # passed as a parameter to _stream_workflow_agent and
+            # _stream_claude_code_agent which are separate class methods.
+            async def _track(event_data: dict) -> None:
+                if _execution_id:
+                    try:
+                        from src.services.agents.execution_registry import execution_registry
+
+                        await execution_registry.append_event(_execution_id, event_data)
+                    except Exception:
+                        pass
+
             if is_workflow_agent:
                 async for event in self._stream_workflow_agent(
                     agent_name=agent_name,
@@ -217,6 +252,7 @@ class ChatStreamService:
                     db_agent=db_agent,
                     db=db,
                     state=state,
+                    track=_track,
                 ):
                     yield event
                 return
@@ -235,6 +271,7 @@ class ChatStreamService:
                     db=db,
                     state=state,
                     user_id=user_id,
+                    track=_track,
                 ):
                     yield event
                 return
@@ -247,34 +284,6 @@ class ChatStreamService:
 
             start_time = time.time()
             yield await generate_start_event(agent_name, start_time)
-
-            # Register execution for Live Lab observability
-            _execution_id = None
-            if tenant_id and db_agent:
-                try:
-                    from src.services.agents.execution_registry import execution_registry
-
-                    _execution_id = await execution_registry.register(
-                        tenant_id=tenant_id,
-                        agent_id=db_agent.id,
-                        agent_name=agent_name,
-                        trigger_source=trigger_source,
-                        trigger_detail=trigger_detail,
-                        conversation_id=conversation_id,
-                        message_preview=message,
-                    )
-                except Exception as reg_err:
-                    logger.debug(f"Failed to register execution: {reg_err}")
-
-            # Helper to store important events for Live Lab replay
-            async def _track(event_data: dict) -> None:
-                if _execution_id:
-                    try:
-                        from src.services.agents.execution_registry import execution_registry
-
-                        await execution_registry.append_event(_execution_id, event_data)
-                    except Exception:
-                        pass
 
             # Store the start event
             await _track({"type": "start", "agent": agent_name})
@@ -464,6 +473,8 @@ class ChatStreamService:
                     logger.info(f"💾 Saving {len(state.diagram_data)} diagrams to database metadata")
                 if state.infographic_data:
                     logger.info(f"💾 Saving {len(state.infographic_data)} infographics to database metadata")
+                if state.fleet_card_data:
+                    logger.info(f"💾 Saving {len(state.fleet_card_data)} fleet cards to database metadata")
 
                 assistant_message = await self.chat_service.save_assistant_message(
                     conversation_id=conversation_uuid,
@@ -472,6 +483,7 @@ class ChatStreamService:
                     charts=state.chart_data,
                     diagrams=state.diagram_data,
                     infographics=state.infographic_data,
+                    fleet_cards=state.fleet_card_data,
                     timing=timing_metrics,
                     usage={
                         "input_tokens": total_input_tokens,
@@ -545,6 +557,7 @@ class ChatStreamService:
         db_agent,
         db: AsyncSession,
         state: StreamState,
+        track=None,
     ) -> AsyncGenerator[str, None]:
         import asyncio
 
@@ -668,7 +681,8 @@ class ChatStreamService:
                                 "input_preview": data.get("input_preview", ""),
                             },
                         )
-                        await _track({"type": "status", "content": f"Starting: {data.get('agent_name', 'Unknown')}"})
+                        if track:
+                            await track({"type": "status", "content": f"Starting: {data.get('agent_name', 'Unknown')}"})
 
                     elif event_type == "done":
                         # Sub-agent completed
@@ -682,7 +696,10 @@ class ChatStreamService:
                                 "output_preview": data.get("output_preview", ""),
                             },
                         )
-                        await _track({"type": "status", "content": f"Completed: {data.get('agent_name', 'Unknown')}"})
+                        if track:
+                            await track(
+                                {"type": "status", "content": f"Completed: {data.get('agent_name', 'Unknown')}"}
+                            )
 
                     elif event_type == "error":
                         # Sub-agent error
@@ -838,6 +855,7 @@ class ChatStreamService:
         db: AsyncSession,
         state: StreamState,
         user_id: str | None = None,
+        track=None,
     ) -> AsyncGenerator[str, None]:
         """
         Stream responses from a Claude Code Agent using Claude Agent SDK.
@@ -937,7 +955,8 @@ class ChatStreamService:
                         status="started",
                         arguments=event.get("arguments"),
                     )
-                    await _track({"type": "tool_status", "tool_name": _tool, "status": "started"})
+                    if track:
+                        await track({"type": "tool_status", "tool_name": _tool, "status": "started"})
 
                 elif event_type == "function_result":
                     _tool = event.get("name", "unknown")
@@ -945,7 +964,8 @@ class ChatStreamService:
                         tool_name=_tool,
                         status="completed",
                     )
-                    await _track({"type": "tool_status", "tool_name": _tool, "status": "completed"})
+                    if track:
+                        await track({"type": "tool_status", "tool_name": _tool, "status": "completed"})
 
                 elif event_type == "thinking_start":
                     # Extended thinking started - emit single status event
@@ -1804,6 +1824,15 @@ class ChatStreamService:
                     state.infographic_data.append(infographic)
                     infographic_payload = {k: v for k, v in event.items() if k != "type"}
                     yield await generate_sse_event("infographic", infographic_payload)
+
+                elif event["type"] == "vehicle_map":
+                    map_payload = {k: v for k, v in event.items() if k != "type"}
+                    yield await generate_sse_event("vehicle_map", map_payload)
+
+                elif event["type"] == "fleet_card":
+                    card_payload = {k: v for k, v in event.items() if k != "type"}
+                    state.fleet_card_data.append(card_payload)
+                    yield await generate_sse_event("fleet_card", card_payload)
 
         finally:
             # Release compute session (stops ephemeral container, closes SSH, etc.)

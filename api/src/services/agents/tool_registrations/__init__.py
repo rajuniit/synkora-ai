@@ -22,6 +22,7 @@ from .onepassword_tools_registry import register_1password_tools
 from .recall_tools_registry import register_recall_tools
 from .role_tools_registry import register_role_tools
 from .scheduler_tools_registry import register_scheduler_tools
+from .openmeteo_tools_registry import register_openmeteo_tools
 from .slack_tools_registry import register_slack_tools
 from .tool_discovery_registry import register_tool_discovery_tools
 from .twitter_tools_registry import register_twitter_tools
@@ -54,4 +55,5 @@ __all__ = [
     "register_github_issue_tools",
     "register_github_pr_management_tools",
     "register_github_repo_tools",
+    "register_openmeteo_tools",
 ]

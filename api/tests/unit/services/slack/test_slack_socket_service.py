@@ -1,13 +1,12 @@
 from datetime import UTC, datetime
-from unittest.mock import AsyncMock, MagicMock, call, patch
+from unittest.mock import AsyncMock, MagicMock, patch
 from uuid import uuid4
 
 import pytest
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from src.models.agent import Agent
-from src.models.conversation import Conversation
-from src.models.slack_bot import SlackBot, SlackConversation
+from src.models.slack_bot import SlackBot
 from src.services.slack.slack_socket_service import SlackSocketService
 
 
@@ -119,204 +118,166 @@ class TestSlackSocketService:
         mock_app = MagicMock()
         service._register_event_handlers(mock_app, mock_slack_bot)
 
-        assert mock_app.event.call_count >= 2
-        calls = [call("app_mention"), call("message")]
-        mock_app.event.assert_has_calls(calls, any_order=True)
+        # All five event types must be registered
+        registered = [c.args[0] for c in mock_app.event.call_args_list]
+        assert "app_mention" in registered
+        assert "message" in registered
+        assert "app_home_opened" in registered
+        assert "assistant_thread_started" in registered
+        assert "assistant_thread_context_changed" in registered
 
     @pytest.mark.asyncio
-    async def test_handle_message_success(self, service, mock_slack_bot, mock_db_session):
-        # Mock dependencies
+    async def test_handle_message_delegates_to_handler(self, service, mock_slack_bot, mock_db_session):
+        """_handle_message must delegate fully to SlackMessageHandler.handle_message."""
         mock_client = MagicMock()
-        mock_client.users_info = AsyncMock(return_value={"user": {"real_name": "User Name", "name": "username"}})
-        mock_client.conversations_info = AsyncMock(return_value={"channel": {"name": "general"}})
-        mock_client.auth_test = AsyncMock(return_value={"url": "https://workspace.slack.com/"})
-        mock_client.chat_postMessage = AsyncMock()
-        mock_client.chat_update = AsyncMock()
-
         mock_say = AsyncMock()
 
-        mock_conversation = MagicMock(spec=Conversation, id=uuid4(), message_count=0)
+        with patch(
+            "src.services.slack.slack_socket_service.SlackMessageHandler"
+        ) as MockHandler:
+            mock_handler_instance = AsyncMock()
+            MockHandler.return_value = mock_handler_instance
 
-        # Patching inside the method imports and other internal calls
-        with (
-            patch.object(service, "_get_or_create_conversation", return_value=mock_conversation) as mock_get_conv,
-            patch.object(service, "_remove_bot_mention", return_value="hello"),
-            patch.object(service, "_extract_user_mentions", return_value=[]),
-            patch("src.services.agents.chat_stream_service.ChatStreamService") as MockChatStream,
-            patch(
-                "src.services.slack.formatters.create_slack_blocks", return_value=[{"type": "section"}]
-            ) as mock_create_blocks,
-            patch("src.services.slack.formatters.format_text_for_slack", return_value="Response"),
-            patch("src.services.slack.slack_socket_service.SlackStatusService") as MockStatusService,
-            patch("src.services.conversation_service.ConversationService") as MockConvService,
-        ):
-            # Mock status service
-            mock_status_instance = AsyncMock()
-            mock_status_instance.set_thinking = AsyncMock(return_value=True)
-            mock_status_instance.clear_thinking = AsyncMock(return_value=True)
-            MockStatusService.return_value = mock_status_instance
-
-            # Mock ConversationService
-            MockConvService.get_conversation_history_cached = AsyncMock(return_value=[])
-
-            # Setup agent
-            mock_agent = MagicMock(spec=Agent)
-            mock_agent.agent_name = "Agent Name"
-            mock_db_session.get.return_value = mock_agent
-
-            # Setup stream response mock (async generator)
-            async def async_gen(*args, **kwargs):
-                yield 'data: {"type": "chunk", "content": "Resp"}'
-                yield 'data: {"type": "chunk", "content": "onse"}'
-
-            mock_chat_stream_instance = MockChatStream.return_value
-            mock_chat_stream_instance.stream_agent_response = async_gen
-
-            # Call method
             await service._handle_message(
                 slack_bot=mock_slack_bot,
                 channel_id="C1",
                 user_id="U1",
-                text="<@BOT> hello",
+                text="hello",
                 message_ts="123456.789",
                 thread_ts="ts1",
                 say=mock_say,
                 client=mock_client,
             )
 
-            # Verify flow
-            mock_get_conv.assert_called_once()
-            mock_client.users_info.assert_called_once_with(user="U1")
-
-            # Verify DB additions (user message + assistant message)
-            assert mock_db_session.add.call_count >= 2
-
-            mock_create_blocks.assert_called_with("Response")
-
-            mock_say.assert_called_once_with(text="Response", blocks=[{"type": "section"}], thread_ts="ts1")
-
-    @pytest.mark.asyncio
-    async def test_handle_message_chunked(self, service, mock_slack_bot, mock_db_session):
-        # Mock dependencies
-        mock_client = MagicMock()
-        mock_client.users_info = AsyncMock(return_value={"user": {"real_name": "User Name", "name": "username"}})
-        mock_client.conversations_info = AsyncMock(return_value={"channel": {"name": "general"}})
-        mock_client.auth_test = AsyncMock(return_value={"url": "https://workspace.slack.com/"})
-        mock_client.chat_postMessage = AsyncMock()
-        mock_say = AsyncMock()
-        mock_conversation = MagicMock(spec=Conversation, id=uuid4(), message_count=0)
-
-        with (
-            patch.object(service, "_get_or_create_conversation", return_value=mock_conversation),
-            patch.object(service, "_remove_bot_mention", return_value="hello"),
-            patch.object(service, "_extract_user_mentions", return_value=[]),
-            patch("src.services.agents.chat_stream_service.ChatStreamService") as MockChatStream,
-            patch("src.services.slack.formatters.create_slack_blocks") as mock_create_blocks,
-            patch("src.services.slack.formatters.chunk_blocks") as mock_chunk_blocks,
-            patch("src.services.slack.formatters.format_text_for_slack", return_value="Response"),
-            patch("src.services.slack.slack_socket_service.SlackStatusService") as MockStatusService,
-            patch("src.services.conversation_service.ConversationService") as MockConvService,
-        ):
-            # Mock status service
-            mock_status_instance = AsyncMock()
-            mock_status_instance.set_thinking = AsyncMock(return_value=True)
-            mock_status_instance.clear_thinking = AsyncMock(return_value=True)
-            MockStatusService.return_value = mock_status_instance
-
-            # Mock ConversationService
-            MockConvService.get_conversation_history_cached = AsyncMock(return_value=[])
-
-            mock_agent = MagicMock(spec=Agent)
-            mock_agent.agent_name = "Agent"
-            mock_db_session.get.return_value = mock_agent
-
-            async def async_gen(*args, **kwargs):
-                yield 'data: {"type": "chunk", "content": "Long Response"}'
-
-            mock_chat_stream_instance = MockChatStream.return_value
-            mock_chat_stream_instance.stream_agent_response = async_gen
-
-            # Return many blocks to trigger chunking
-            blocks = [{"type": "section"}] * 55
-            mock_create_blocks.return_value = blocks
-
-            # Chunking logic
-            chunk1 = blocks[:50]
-            chunk2 = blocks[50:]
-            mock_chunk_blocks.return_value = [chunk1, chunk2]
-
-            await service._handle_message(
+            MockHandler.assert_called_once_with(mock_db_session, service.agent_manager)
+            mock_handler_instance.handle_message.assert_awaited_once_with(
                 slack_bot=mock_slack_bot,
                 channel_id="C1",
                 user_id="U1",
                 text="hello",
                 message_ts="123456.789",
-                thread_ts=None,
-                say=mock_say,
+                thread_ts="ts1",
                 client=mock_client,
-            )
-
-            mock_chunk_blocks.assert_called_once_with(blocks)
-            assert mock_say.call_count == 2
-
-    @pytest.mark.asyncio
-    async def test_handle_message_error(self, service, mock_slack_bot, mock_db_session):
-        mock_say = AsyncMock()
-
-        # Force error in _get_or_create_conversation
-        with patch.object(service, "_get_or_create_conversation", side_effect=Exception("Error")):
-            await service._handle_message(
-                slack_bot=mock_slack_bot,
-                channel_id="C1",
-                user_id="U1",
-                text="hello",
-                message_ts="123456.789",
-                thread_ts=None,
                 say=mock_say,
-                client=MagicMock(),
             )
 
-            mock_db_session.rollback.assert_called_once()
-            mock_say.assert_called_once()
-            assert "error" in mock_say.call_args[1]["text"]
+    @pytest.mark.asyncio
+    async def test_handle_message_error_propagates(self, service, mock_slack_bot, mock_db_session):
+        """Errors from SlackMessageHandler should propagate (handler owns error handling)."""
+        with patch(
+            "src.services.slack.slack_socket_service.SlackMessageHandler"
+        ) as MockHandler:
+            mock_handler_instance = AsyncMock()
+            mock_handler_instance.handle_message.side_effect = Exception("Handler error")
+            MockHandler.return_value = mock_handler_instance
+
+            with pytest.raises(Exception, match="Handler error"):
+                await service._handle_message(
+                    slack_bot=mock_slack_bot,
+                    channel_id="C1",
+                    user_id="U1",
+                    text="hello",
+                    message_ts="123456.789",
+                    thread_ts=None,
+                    say=AsyncMock(),
+                    client=MagicMock(),
+                )
 
     @pytest.mark.asyncio
-    async def test_get_or_create_conversation_existing(self, service, mock_slack_bot, mock_db_session):
-        # Mock DB execute result
-        mock_result = MagicMock()
-        mock_slack_conv = MagicMock(spec=SlackConversation, conversation_id=uuid4())
-        mock_result.scalar_one_or_none.return_value = mock_slack_conv
-        mock_db_session.execute.return_value = mock_result
+    async def test_handle_app_home_opened(self, service, mock_slack_bot, mock_db_session):
+        """App Home handler publishes a view with agent name and how-to instructions."""
+        mock_client = AsyncMock()
 
-        mock_conversation = MagicMock(spec=Conversation)
-        mock_db_session.get.return_value = mock_conversation
+        mock_agent = MagicMock(spec=Agent)
+        mock_agent.agent_name = "My Agent"
+        mock_agent.description = "A helpful agent."
+        mock_agent.suggestion_prompts = [
+            {"title": "Hello", "description": "Say hello"},
+        ]
+        mock_db_session.get.return_value = mock_agent
 
-        result = await service._get_or_create_conversation(mock_slack_bot, "C1", "U1", None)
+        await service._handle_app_home_opened(
+            slack_bot=mock_slack_bot,
+            event={"user": "U1"},
+            client=mock_client,
+        )
 
-        assert result == mock_conversation
-        mock_db_session.execute.assert_called_once()
+        mock_client.views_publish.assert_awaited_once()
+        call_kwargs = mock_client.views_publish.call_args[1]
+        assert call_kwargs["user_id"] == "U1"
+        view = call_kwargs["view"]
+        assert view["type"] == "home"
+        # Header block must contain agent name
+        header_text = view["blocks"][0]["text"]["text"]
+        assert "My Agent" in header_text
 
     @pytest.mark.asyncio
-    async def test_get_or_create_conversation_new(self, service, mock_slack_bot, mock_db_session):
-        # Mock DB execute result — implementation uses scalars().first(), not scalar_one_or_none()
-        mock_result = MagicMock()
-        mock_result.scalars.return_value.first.return_value = None
-        mock_db_session.execute.return_value = mock_result
+    async def test_handle_app_home_opened_no_user(self, service, mock_slack_bot):
+        """App Home handler should silently skip if event has no user field."""
+        mock_client = AsyncMock()
+        await service._handle_app_home_opened(
+            slack_bot=mock_slack_bot,
+            event={},
+            client=mock_client,
+        )
+        mock_client.views_publish.assert_not_awaited()
 
-        result = await service._get_or_create_conversation(mock_slack_bot, "C1", "U1", "ts1")
+    @pytest.mark.asyncio
+    async def test_handle_assistant_thread_started(self, service, mock_slack_bot, mock_db_session):
+        """Assistant panel handler sets suggested prompts from agent config."""
+        mock_client = AsyncMock()
 
-        assert isinstance(result, Conversation)
-        assert mock_db_session.add.call_count == 2  # Conversation + SlackConversation
-        mock_db_session.commit.assert_called()
+        mock_agent = MagicMock(spec=Agent)
+        mock_agent.suggestion_prompts = [
+            {"title": "Search", "prompt": "Search Slack for..."},
+            {"title": "Summarize", "description": "Summarize this channel"},
+        ]
+        mock_db_session.get.return_value = mock_agent
 
-    def test_remove_bot_mention(self, service):
-        text = "<@APP123> hello world"
-        result = service._remove_bot_mention(text, "APP123")
-        assert result == "hello world"
+        await service._handle_assistant_thread_started(
+            slack_bot=mock_slack_bot,
+            event={"assistant_thread": {"channel_id": "C1", "thread_ts": "ts1"}},
+            client=mock_client,
+        )
 
-        text = "hello <@APP123>"
-        result = service._remove_bot_mention(text, "APP123")
-        assert result == "hello"
+        mock_client.assistant_threads_setSuggestedPrompts.assert_awaited_once()
+        call_kwargs = mock_client.assistant_threads_setSuggestedPrompts.call_args[1]
+        assert call_kwargs["channel_id"] == "C1"
+        assert call_kwargs["thread_ts"] == "ts1"
+        prompts = call_kwargs["prompts"]
+        assert len(prompts) == 2
+        assert prompts[0]["title"] == "Search"
+        assert prompts[0]["message"] == "Search Slack for..."
+
+    @pytest.mark.asyncio
+    async def test_handle_assistant_thread_started_default_prompts(self, service, mock_slack_bot, mock_db_session):
+        """Falls back to default prompts when agent has no suggestion_prompts."""
+        mock_client = AsyncMock()
+
+        mock_agent = MagicMock(spec=Agent)
+        mock_agent.suggestion_prompts = None
+        mock_db_session.get.return_value = mock_agent
+
+        await service._handle_assistant_thread_started(
+            slack_bot=mock_slack_bot,
+            event={"assistant_thread": {"channel_id": "C1", "thread_ts": "ts1"}},
+            client=mock_client,
+        )
+
+        mock_client.assistant_threads_setSuggestedPrompts.assert_awaited_once()
+        prompts = mock_client.assistant_threads_setSuggestedPrompts.call_args[1]["prompts"]
+        assert len(prompts) >= 2  # at least the default fallbacks
+
+    @pytest.mark.asyncio
+    async def test_handle_assistant_thread_started_missing_fields(self, service, mock_slack_bot):
+        """Silently skips if channel_id or thread_ts is missing."""
+        mock_client = AsyncMock()
+        await service._handle_assistant_thread_started(
+            slack_bot=mock_slack_bot,
+            event={"assistant_thread": {}},
+            client=mock_client,
+        )
+        mock_client.assistant_threads_setSuggestedPrompts.assert_not_awaited()
 
     @pytest.mark.asyncio
     async def test_get_bot_status(self, service, mock_db_session, mock_slack_bot):

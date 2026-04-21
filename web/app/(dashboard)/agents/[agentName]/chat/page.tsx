@@ -574,6 +574,54 @@ export default function AdvancedChatPage() {
             }
             return newMessages
           })
+        } else if (event.type === 'infographic' && (event as any).infographic) {
+          setMessages((prev) => {
+            const newMessages = [...prev]
+            const lastIndex = newMessages.length - 1
+            if (lastIndex >= 0 && newMessages[lastIndex].role === 'assistant') {
+              const currentMetadata = newMessages[lastIndex].metadata || {}
+              newMessages[lastIndex] = {
+                ...newMessages[lastIndex],
+                metadata: {
+                  ...currentMetadata,
+                  infographics: [...(currentMetadata.infographics || []), (event as any).infographic],
+                },
+              }
+            }
+            return newMessages
+          })
+        } else if (event.type === 'vehicle_map' && (event as any).map) {
+          setMessages((prev) => {
+            const newMessages = [...prev]
+            const lastIndex = newMessages.length - 1
+            if (lastIndex >= 0 && newMessages[lastIndex].role === 'assistant') {
+              const currentMetadata = newMessages[lastIndex].metadata || {}
+              newMessages[lastIndex] = {
+                ...newMessages[lastIndex],
+                metadata: {
+                  ...currentMetadata,
+                  vehicle_maps: [...(currentMetadata.vehicle_maps || []), (event as any).map],
+                },
+              }
+            }
+            return newMessages
+          })
+        } else if (event.type === 'fleet_card' && (event as any).card) {
+          setMessages((prev) => {
+            const newMessages = [...prev]
+            const lastIndex = newMessages.length - 1
+            if (lastIndex >= 0 && newMessages[lastIndex].role === 'assistant') {
+              const currentMetadata = newMessages[lastIndex].metadata || {}
+              newMessages[lastIndex] = {
+                ...newMessages[lastIndex],
+                metadata: {
+                  ...currentMetadata,
+                  fleet_cards: [...(currentMetadata.fleet_cards || []), (event as any).card],
+                },
+              }
+            }
+            return newMessages
+          })
         } else if (event.type === 'done') {
           setThinkingStatus('')
           responseSources = event.sources || []
@@ -1149,6 +1197,7 @@ export default function AdvancedChatPage() {
                   streamStartTime={streamStartTime}
                   suggestionPrompts={agent?.suggestion_prompts || []}
                   onSuggestionClick={(prompt) => handleSend(prompt)}
+                  onActionClick={(text) => handleSend(text)}
                   chatConfig={chatConfig}
                   agentAvatar={agent?.avatar}
                   userAvatar={user?.avatar}

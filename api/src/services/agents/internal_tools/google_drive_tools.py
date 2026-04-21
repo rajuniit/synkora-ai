@@ -131,7 +131,7 @@ async def internal_google_drive_list_files(
     tool_name = config.get("_tool_name", "internal_google_drive_list_files")
 
     if not runtime_context:
-        raise ValueError("Runtime context not available for Google Drive authentication")
+        return {"success": False, "error": "Runtime context not available for Google Drive authentication"}
 
     access_token = await _get_google_drive_access_token(runtime_context, tool_name)
 
@@ -187,7 +187,7 @@ async def internal_google_drive_get_file(file_id: str, **kwargs) -> dict[str, An
     tool_name = config.get("_tool_name", "internal_google_drive_get_file")
 
     if not runtime_context:
-        raise ValueError("Runtime context not available for Google Drive authentication")
+        return {"success": False, "error": "Runtime context not available for Google Drive authentication"}
 
     access_token = await _get_google_drive_access_token(runtime_context, tool_name)
 
@@ -239,7 +239,7 @@ async def internal_google_drive_download_file(file_id: str, **kwargs) -> dict[st
     tool_name = config.get("_tool_name", "internal_google_drive_download_file")
 
     if not runtime_context:
-        raise ValueError("Runtime context not available for Google Drive authentication")
+        return {"success": False, "error": "Runtime context not available for Google Drive authentication"}
 
     access_token = await _get_google_drive_access_token(runtime_context, tool_name)
 
@@ -306,7 +306,7 @@ async def internal_google_drive_upload_file(
     tool_name = config.get("_tool_name", "internal_google_drive_upload_file")
 
     if not runtime_context:
-        raise ValueError("Runtime context not available for Google Drive authentication")
+        return {"success": False, "error": "Runtime context not available for Google Drive authentication"}
 
     access_token = await _get_google_drive_access_token(runtime_context, tool_name)
 
@@ -386,7 +386,7 @@ async def internal_google_drive_update_file(
     tool_name = config.get("_tool_name", "internal_google_drive_update_file")
 
     if not runtime_context:
-        raise ValueError("Runtime context not available for Google Drive authentication")
+        return {"success": False, "error": "Runtime context not available for Google Drive authentication"}
 
     access_token = await _get_google_drive_access_token(runtime_context, tool_name)
 
@@ -461,7 +461,7 @@ async def internal_google_drive_delete_file(file_id: str, **kwargs) -> dict[str,
     tool_name = config.get("_tool_name", "internal_google_drive_delete_file")
 
     if not runtime_context:
-        raise ValueError("Runtime context not available for Google Drive authentication")
+        return {"success": False, "error": "Runtime context not available for Google Drive authentication"}
 
     access_token = await _get_google_drive_access_token(runtime_context, tool_name)
 
@@ -524,7 +524,7 @@ async def internal_google_drive_create_folder(
     tool_name = config.get("_tool_name", "internal_google_drive_create_folder")
 
     if not runtime_context:
-        raise ValueError("Runtime context not available for Google Drive authentication")
+        return {"success": False, "error": "Runtime context not available for Google Drive authentication"}
 
     access_token = await _get_google_drive_access_token(runtime_context, tool_name)
 
@@ -573,7 +573,7 @@ async def internal_google_drive_move_file(file_id: str, new_parent_folder_id: st
     tool_name = config.get("_tool_name", "internal_google_drive_move_file")
 
     if not runtime_context:
-        raise ValueError("Runtime context not available for Google Drive authentication")
+        return {"success": False, "error": "Runtime context not available for Google Drive authentication"}
 
     access_token = await _get_google_drive_access_token(runtime_context, tool_name)
 
@@ -640,7 +640,7 @@ async def internal_google_drive_share_file(
     tool_name = config.get("_tool_name", "internal_google_drive_share_file")
 
     if not runtime_context:
-        raise ValueError("Runtime context not available for Google Drive authentication")
+        return {"success": False, "error": "Runtime context not available for Google Drive authentication"}
 
     access_token = await _get_google_drive_access_token(runtime_context, tool_name)
 
@@ -687,7 +687,7 @@ async def internal_google_drive_get_permissions(file_id: str, **kwargs) -> dict[
     tool_name = config.get("_tool_name", "internal_google_drive_get_permissions")
 
     if not runtime_context:
-        raise ValueError("Runtime context not available for Google Drive authentication")
+        return {"success": False, "error": "Runtime context not available for Google Drive authentication"}
 
     access_token = await _get_google_drive_access_token(runtime_context, tool_name)
 
@@ -733,7 +733,7 @@ async def internal_google_drive_remove_permission(file_id: str, permission_id: s
     tool_name = config.get("_tool_name", "internal_google_drive_remove_permission")
 
     if not runtime_context:
-        raise ValueError("Runtime context not available for Google Drive authentication")
+        return {"success": False, "error": "Runtime context not available for Google Drive authentication"}
 
     access_token = await _get_google_drive_access_token(runtime_context, tool_name)
 
@@ -781,7 +781,7 @@ async def internal_google_docs_create_document(
     tool_name = config.get("_tool_name", "internal_google_docs_create_document")
 
     if not runtime_context:
-        raise ValueError("Runtime context not available for Google Drive authentication")
+        return {"success": False, "error": "Runtime context not available for Google Drive authentication"}
 
     access_token = await _get_google_drive_access_token(runtime_context, tool_name)
 
@@ -836,7 +836,7 @@ async def internal_google_docs_get_content(document_id: str, **kwargs) -> dict[s
     tool_name = config.get("_tool_name", "internal_google_docs_get_content")
 
     if not runtime_context:
-        raise ValueError("Runtime context not available for Google Drive authentication")
+        return {"success": False, "error": "Runtime context not available for Google Drive authentication"}
 
     access_token = await _get_google_drive_access_token(runtime_context, tool_name)
 
@@ -891,7 +891,7 @@ async def internal_google_docs_append_content(document_id: str, content: str, **
     tool_name = config.get("_tool_name", "internal_google_docs_append_content")
 
     if not runtime_context:
-        raise ValueError("Runtime context not available for Google Drive authentication")
+        return {"success": False, "error": "Runtime context not available for Google Drive authentication"}
 
     access_token = await _get_google_drive_access_token(runtime_context, tool_name)
 
@@ -947,7 +947,7 @@ async def internal_google_sheets_create_spreadsheet(
     tool_name = config.get("_tool_name", "internal_google_sheets_create_spreadsheet")
 
     if not runtime_context:
-        raise ValueError("Runtime context not available for Google Drive authentication")
+        return {"success": False, "error": "Runtime context not available for Google Drive authentication"}
 
     access_token = await _get_google_drive_access_token(runtime_context, tool_name)
 
@@ -1005,7 +1005,7 @@ async def internal_google_sheets_read_range(
     tool_name = config.get("_tool_name", "internal_google_sheets_read_range")
 
     if not runtime_context:
-        raise ValueError("Runtime context not available for Google Drive authentication")
+        return {"success": False, "error": "Runtime context not available for Google Drive authentication"}
 
     access_token = await _get_google_drive_access_token(runtime_context, tool_name)
 
@@ -1057,7 +1057,7 @@ async def internal_google_sheets_write_range(
     tool_name = config.get("_tool_name", "internal_google_sheets_write_range")
 
     if not runtime_context:
-        raise ValueError("Runtime context not available for Google Drive authentication")
+        return {"success": False, "error": "Runtime context not available for Google Drive authentication"}
 
     access_token = await _get_google_drive_access_token(runtime_context, tool_name)
 

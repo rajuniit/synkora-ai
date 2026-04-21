@@ -42,8 +42,10 @@ export default function AgentApiKeysPage() {
         setAgent(agentData);
         const keys = await getApiKeys({ agent_id: agentData.id });
         setApiKeys(keys);
-      } catch (err) {
+      } catch (err: any) {
         console.error('Failed to load agent:', err);
+        const detail = err?.response?.data?.detail;
+        toast.error(typeof detail === 'string' ? detail : 'Failed to load agent');
       } finally {
         setLoadingAgent(false);
       }
@@ -61,6 +63,7 @@ export default function AgentApiKeysPage() {
     if (!agent) return;
     const response = await createApiKey(data);
     if (response) {
+      toast.success('API key created — copy it now, it won\'t be shown again');
       setNewKeyResponse({ key: response.api_key, name: data.key_name });
       setShowCreateForm(false);
       await loadApiKeys(agent.id);

@@ -79,19 +79,9 @@ export async function regenerateApiKey(
  */
 export async function getApiKeyUsage(
   keyId: string,
-  periodStart?: string,
-  periodEnd?: string
+  days: number = 30
 ): Promise<UsageStatsResponse> {
-  const params: any = {};
-  
-  if (periodStart) {
-    params.period_start = periodStart;
-  }
-  if (periodEnd) {
-    params.period_end = periodEnd;
-  }
-
-  return await apiClient.request('GET', `${BASE_PATH}/${keyId}/usage`, null, { params });
+  return await apiClient.request('GET', `${BASE_PATH}/${keyId}/usage`, null, { params: { days } });
 }
 
 /**

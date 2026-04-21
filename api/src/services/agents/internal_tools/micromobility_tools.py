@@ -104,6 +104,15 @@ async def _get_micromobility_credentials(runtime_context: Any, tool_name: str) -
     credentials = await resolver.get_micromobility_credentials(tool_name)
     if not credentials:
         raise ValueError("micromobility not configured. Please connect your account in OAuth Apps settings.")
+
+    # If a previous call in this request refreshed the JWT, reuse it so we don't
+    # hit another 401 on every paginated page (stale DB token would cause that).
+    refreshed = runtime_context.get_state("_mm_refreshed_token")
+    if refreshed:
+        credentials["api_token"] = refreshed
+
+    # Store runtime_context so _make_micromobility_request can cache refreshed tokens.
+    credentials["_runtime_context"] = runtime_context
     return credentials
 
 
@@ -208,6 +217,11 @@ async def _make_micromobility_request(
             key_format = mm_config.get("api_key_format", "Bearer {token}")
             key_header = mm_config.get("api_key_header", "Authorization")
             headers[key_header] = key_format.format(token=new_token)
+            # Cache on runtime_context.shared_state so subsequent paginated calls reuse
+            # this token without hitting another 401 (avoids repeated re-login per page)
+            _ctx = mm_config.get("_runtime_context")
+            if _ctx is not None:
+                _ctx.set_state("_mm_refreshed_token", new_token)
             async with httpx.AsyncClient(follow_redirects=False) as retry_client:
                 response = await retry_client.request(
                     method=method, url=url, headers=headers, params=params, json=json_data, timeout=timeout
