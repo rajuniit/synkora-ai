@@ -19,10 +19,10 @@ from .google_drive_tools_registry import register_google_drive_tools
 from .hackernews_tools_registry import register_hackernews_tools
 from .linkedin_tools_registry import register_linkedin_tools
 from .onepassword_tools_registry import register_1password_tools
+from .openmeteo_tools_registry import register_openmeteo_tools
 from .recall_tools_registry import register_recall_tools
 from .role_tools_registry import register_role_tools
 from .scheduler_tools_registry import register_scheduler_tools
-from .openmeteo_tools_registry import register_openmeteo_tools
 from .slack_tools_registry import register_slack_tools
 from .tool_discovery_registry import register_tool_discovery_tools
 from .twitter_tools_registry import register_twitter_tools

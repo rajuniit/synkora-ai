@@ -269,7 +269,10 @@ async def internal_micromobility_get_network_health(
     if not runtime_context:
         return {"success": False, "error": "No runtime context available."}
     try:
-        from src.services.agents.internal_tools.micromobility_intelligence_tools import _fetch_all_vehicles, _hours_since
+        from src.services.agents.internal_tools.micromobility_intelligence_tools import (
+            _fetch_all_vehicles,
+            _hours_since,
+        )
 
         vehicles = await _fetch_all_vehicles(runtime_context, config)
         if not vehicles:
@@ -380,6 +383,7 @@ async def internal_micromobility_get_parking_compliance(
         return {"success": False, "error": "No runtime context available."}
     try:
         from datetime import UTC, datetime, timedelta
+
         from src.services.agents.internal_tools.micromobility_intelligence_tools import _fetch_all_trips
 
         now = datetime.now(tz=UTC)
@@ -570,8 +574,8 @@ async def internal_micromobility_get_ranger_performance(
     if not runtime_context:
         return {"success": False, "error": "No runtime context available."}
     try:
-        from src.services.agents.internal_tools.micromobility_tools import internal_micromobility_list_tasks
         from src.services.agents.internal_tools.micromobility_intelligence_tools import _hours_since
+        from src.services.agents.internal_tools.micromobility_tools import internal_micromobility_list_tasks
 
         now = datetime.now(tz=UTC)
         start = (now - timedelta(days=days)).strftime("%Y-%m-%d")

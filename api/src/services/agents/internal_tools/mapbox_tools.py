@@ -14,11 +14,12 @@ logger = logging.getLogger(__name__)
 
 async def _get_mapbox_config(runtime_context: Any, tool_name: str) -> dict[str, Any]:
     """Resolve Mapbox credentials from the linked OAuthApp."""
+    from sqlalchemy import select
+
     from src.core.database import get_async_session_factory
     from src.models.agent_tool import AgentTool
     from src.models.oauth_app import OAuthApp
     from src.services.agents.security import decrypt_value
-    from sqlalchemy import select
 
     async with get_async_session_factory()() as db:
         result = await db.execute(

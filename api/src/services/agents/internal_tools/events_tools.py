@@ -20,11 +20,12 @@ logger = logging.getLogger(__name__)
 
 async def _get_provider_config(runtime_context: Any, tool_name: str, provider: str) -> dict[str, Any] | None:
     """Return decrypted config for a provider linked to the given tool, or None if not configured."""
+    from sqlalchemy import select
+
     from src.core.database import get_async_session_factory
     from src.models.agent_tool import AgentTool
     from src.models.oauth_app import OAuthApp
     from src.services.agents.security import decrypt_value
-    from sqlalchemy import select
 
     try:
         async with get_async_session_factory()() as db:
