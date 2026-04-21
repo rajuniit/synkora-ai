@@ -136,16 +136,11 @@ async def internal_micromobility_analyze_event_impact(
         baseline_weeks = max(1, min(int(baseline_weeks), 8))
 
         # ── Event window trips ────────────────────────────────────────────────
-        event_trips = await _fetch_trips_window(
-            runtime_context, config, event_date, event_start_hour, event_end_hour
-        )
+        event_trips = await _fetch_trips_window(runtime_context, config, event_date, event_start_hour, event_end_hour)
 
         # Optional zone filter
         if zone:
-            event_trips = [
-                t for t in event_trips
-                if zone.lower() in (t.get("service_area") or "").lower()
-            ]
+            event_trips = [t for t in event_trips if zone.lower() in (t.get("service_area") or "").lower()]
 
         event_count = len(event_trips)
         event_zone_counts = _zone_breakdown(event_trips)
@@ -162,10 +157,7 @@ async def internal_micromobility_analyze_event_impact(
                 runtime_context, config, baseline_date, event_start_hour, event_end_hour
             )
             if zone:
-                base_trips = [
-                    t for t in base_trips
-                    if zone.lower() in (t.get("service_area") or "").lower()
-                ]
+                base_trips = [t for t in base_trips if zone.lower() in (t.get("service_area") or "").lower()]
             baseline_counts.append(len(base_trips))
             bz = _zone_breakdown(base_trips)
             for z, c in bz.items():
@@ -189,19 +181,21 @@ async def internal_micromobility_analyze_event_impact(
             base_list = baseline_zone_counts.get(z, [0])
             base_mean = sum(base_list) / len(base_list)
             delta = round((ev - base_mean) / base_mean * 100, 1) if base_mean > 0 else (100.0 if ev > 0 else 0.0)
-            hotspot_zones.append({
-                "service_area": z,
-                "event_trips": ev,
-                "baseline_avg": round(base_mean, 1),
-                "delta_pct": delta,
-            })
+            hotspot_zones.append(
+                {
+                    "service_area": z,
+                    "event_trips": ev,
+                    "baseline_avg": round(base_mean, 1),
+                    "delta_pct": delta,
+                }
+            )
         hotspot_zones.sort(key=lambda x: x["delta_pct"], reverse=True)
 
         # ── One-way ratio (if trip_type or distance available) ────────────────
         one_way_count = sum(
-            1 for t in event_trips
-            if (t.get("trip_type") or "").lower() in ("one_way", "one-way")
-            or (t.get("is_round_trip") is False)
+            1
+            for t in event_trips
+            if (t.get("trip_type") or "").lower() in ("one_way", "one-way") or (t.get("is_round_trip") is False)
         )
         one_way_ratio = round(one_way_count / event_count, 2) if event_count > 0 else None
 
@@ -292,19 +286,19 @@ async def internal_micromobility_get_network_health(
             last_seen = v.get("last_heartbeat_at") or v.get("last_location_at") or v.get("updated_at")
             hours_silent = _hours_since(last_seen)
 
-            is_offline = status == "offline" or (
-                hours_silent is not None and hours_silent >= offline_threshold_hours
-            )
+            is_offline = status == "offline" or (hours_silent is not None and hours_silent >= offline_threshold_hours)
 
             if is_offline:
                 zone_offline[zone] = zone_offline.get(zone, 0) + 1
-                offline_vehicles.append({
-                    "vehicle_id": vid,
-                    "service_area": zone,
-                    "status": status,
-                    "hours_silent": round(hours_silent, 1) if hours_silent else None,
-                    "last_seen": last_seen,
-                })
+                offline_vehicles.append(
+                    {
+                        "vehicle_id": vid,
+                        "service_area": zone,
+                        "status": status,
+                        "hours_silent": round(hours_silent, 1) if hours_silent else None,
+                        "last_seen": last_seen,
+                    }
+                )
 
         # Dead spots: offline rate > 30% with at least 3 vehicles
         dead_zones = []
@@ -312,12 +306,14 @@ async def internal_micromobility_get_network_health(
             offline_z = zone_offline.get(zone, 0)
             rate = offline_z / total_z if total_z > 0 else 0
             if rate > 0.30 and total_z >= 3:
-                dead_zones.append({
-                    "service_area": zone,
-                    "offline_vehicles": offline_z,
-                    "total_vehicles": total_z,
-                    "offline_rate_pct": round(rate * 100, 1),
-                })
+                dead_zones.append(
+                    {
+                        "service_area": zone,
+                        "offline_vehicles": offline_z,
+                        "total_vehicles": total_z,
+                        "offline_rate_pct": round(rate * 100, 1),
+                    }
+                )
         dead_zones.sort(key=lambda z: z["offline_rate_pct"], reverse=True)
 
         total_offline = len(offline_vehicles)
@@ -327,13 +323,12 @@ async def internal_micromobility_get_network_health(
             summary = f"All {total} vehicles are online. Fleet connectivity is at 100%."
         else:
             summary = (
-                f"{total_offline} of {total} vehicles are offline or silent "
-                f"(connectivity rate: {connectivity_rate}%). "
+                f"{total_offline} of {total} vehicles are offline or silent (connectivity rate: {connectivity_rate}%). "
             )
             if dead_zones:
                 summary += f"Connectivity dead spot: {dead_zones[0]['service_area']} has {dead_zones[0]['offline_rate_pct']}% offline rate."
 
-        offline_vehicles.sort(key=lambda x: (x.get("hours_silent") or 0), reverse=True)
+        offline_vehicles.sort(key=lambda x: x.get("hours_silent") or 0, reverse=True)
 
         return {
             "success": True,
@@ -345,7 +340,9 @@ async def internal_micromobility_get_network_health(
             "offline_service_areas": dead_zones,
             "recommended_actions": [
                 f"Dispatch ranger to {dead_zones[0]['service_area']} — {dead_zones[0]['offline_rate_pct']}% of vehicles offline"
-            ] if dead_zones else ["Fleet connectivity is healthy — no action required"],
+            ]
+            if dead_zones
+            else ["Fleet connectivity is healthy — no action required"],
             "summary": summary,
         }
 
@@ -393,12 +390,16 @@ async def internal_micromobility_get_parking_compliance(
         trips = await _fetch_all_trips(runtime_context, config, start_date=start, end_date=end, status="completed")
         total = len(trips)
         if total == 0:
-            return {"success": True, "compliance_rate_pct": 100.0, "non_compliant_trips": 0, "summary": "No completed trips in the period."}
+            return {
+                "success": True,
+                "compliance_rate_pct": 100.0,
+                "non_compliant_trips": 0,
+                "summary": "No completed trips in the period.",
+            }
 
         # Check parking_area field on trip — OtoRide sets this when trip ends in a valid area
         non_compliant = [
-            t for t in trips
-            if not (t.get("parking_area") or t.get("end_parking_area") or t.get("parked_in_area"))
+            t for t in trips if not (t.get("parking_area") or t.get("end_parking_area") or t.get("parked_in_area"))
         ]
         non_compliant_count = len(non_compliant)
         compliance_rate = round((total - non_compliant_count) / total * 100, 1)
@@ -515,13 +516,15 @@ async def internal_micromobility_get_battery_degradation(
                 continue
             avg_drain = sum(drains) / len(drains)
             if avg_drain > degradation_threshold_pct_per_trip:
-                flagged.append({
-                    "vehicle_id": vid,
-                    "avg_drain_pct_per_trip": round(avg_drain, 2),
-                    "trips_analysed": len(drains),
-                    "vs_fleet_avg": round(avg_drain - fleet_avg, 2),
-                    "urgency": "high" if avg_drain > degradation_threshold_pct_per_trip * 2 else "medium",
-                })
+                flagged.append(
+                    {
+                        "vehicle_id": vid,
+                        "avg_drain_pct_per_trip": round(avg_drain, 2),
+                        "trips_analysed": len(drains),
+                        "vs_fleet_avg": round(avg_drain - fleet_avg, 2),
+                        "urgency": "high" if avg_drain > degradation_threshold_pct_per_trip * 2 else "medium",
+                    }
+                )
 
         flagged.sort(key=lambda x: x["avg_drain_pct_per_trip"], reverse=True)
 
@@ -529,8 +532,8 @@ async def internal_micromobility_get_battery_degradation(
             f"Fleet average battery drain: {fleet_avg}% per trip. "
             f"{len(flagged)} vehicle(s) exceed the {degradation_threshold_pct_per_trip}% threshold — "
             "likely candidates for battery inspection or replacement."
-            if flagged else
-            f"Fleet battery health is normal. Average drain: {fleet_avg}% per trip."
+            if flagged
+            else f"Fleet battery health is normal. Average drain: {fleet_avg}% per trip."
         )
 
         return {
@@ -585,8 +588,7 @@ async def internal_micromobility_get_ranger_performance(
         offset = 0
         while True:
             resp = await internal_micromobility_list_tasks(
-                config=config, runtime_context=runtime_context,
-                start_date=start, end_date=end, limit=100, offset=offset
+                config=config, runtime_context=runtime_context, start_date=start, end_date=end, limit=100, offset=offset
             )
             if not isinstance(resp, dict) or not resp.get("success"):
                 break
@@ -642,21 +644,31 @@ async def internal_micromobility_get_ranger_performance(
             total_r = s["completed"] + s["pending"] + s["cancelled"]
             completion_rate = round(s["completed"] / total_r * 100, 1) if total_r > 0 else 0.0
             avg_duration = round(sum(s["durations"]) / len(s["durations"]), 1) if s["durations"] else None
-            rangers.append({
-                "ranger_id": rid,
-                "completed_tasks": s["completed"],
-                "pending_tasks": s["pending"],
-                "completion_rate_pct": completion_rate,
-                "avg_task_duration_min": avg_duration,
-            })
+            rangers.append(
+                {
+                    "ranger_id": rid,
+                    "completed_tasks": s["completed"],
+                    "pending_tasks": s["pending"],
+                    "completion_rate_pct": completion_rate,
+                    "avg_task_duration_min": avg_duration,
+                }
+            )
 
         rangers.sort(key=lambda r: r["completion_rate_pct"])
 
         fleet_rates = [r["completion_rate_pct"] for r in rangers]
         fleet_avg = round(sum(fleet_rates) / len(fleet_rates), 1) if fleet_rates else 0.0
 
-        slowest_type = max(task_type_durations, key=lambda k: sum(task_type_durations[k]) / len(task_type_durations[k])) if task_type_durations else None
-        slowest_avg = round(sum(task_type_durations[slowest_type]) / len(task_type_durations[slowest_type]), 1) if slowest_type else None
+        slowest_type = (
+            max(task_type_durations, key=lambda k: sum(task_type_durations[k]) / len(task_type_durations[k]))
+            if task_type_durations
+            else None
+        )
+        slowest_avg = (
+            round(sum(task_type_durations[slowest_type]) / len(task_type_durations[slowest_type]), 1)
+            if slowest_type
+            else None
+        )
 
         low_performers = [r for r in rangers if r["completion_rate_pct"] < 70 and r["ranger_id"] != "Unassigned"]
         summary = (

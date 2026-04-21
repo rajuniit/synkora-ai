@@ -18,7 +18,8 @@ def register_micromobility_event_tools(registry) -> None:
     async def _event_impact_wrapper(config: dict[str, Any] | None = None, **kwargs):
         rc = config.get("_runtime_context") if config else None
         return await internal_micromobility_analyze_event_impact(
-            config=config, runtime_context=rc,
+            config=config,
+            runtime_context=rc,
             event_date=kwargs.get("event_date", ""),
             event_start_hour=int(kwargs.get("event_start_hour", 0)),
             event_end_hour=int(kwargs.get("event_end_hour", 23)),
@@ -30,21 +31,24 @@ def register_micromobility_event_tools(registry) -> None:
     async def _network_health_wrapper(config: dict[str, Any] | None = None, **kwargs):
         rc = config.get("_runtime_context") if config else None
         return await internal_micromobility_get_network_health(
-            config=config, runtime_context=rc,
+            config=config,
+            runtime_context=rc,
             offline_threshold_hours=int(kwargs.get("offline_threshold_hours", 2)),
         )
 
     async def _parking_compliance_wrapper(config: dict[str, Any] | None = None, **kwargs):
         rc = config.get("_runtime_context") if config else None
         return await internal_micromobility_get_parking_compliance(
-            config=config, runtime_context=rc,
+            config=config,
+            runtime_context=rc,
             lookback_days=int(kwargs.get("lookback_days", 7)),
         )
 
     async def _battery_degradation_wrapper(config: dict[str, Any] | None = None, **kwargs):
         rc = config.get("_runtime_context") if config else None
         return await internal_micromobility_get_battery_degradation(
-            config=config, runtime_context=rc,
+            config=config,
+            runtime_context=rc,
             min_trips=int(kwargs.get("min_trips", 10)),
             degradation_threshold_pct_per_trip=float(kwargs.get("degradation_threshold_pct_per_trip", 2.0)),
         )
@@ -52,7 +56,8 @@ def register_micromobility_event_tools(registry) -> None:
     async def _ranger_perf_wrapper(config: dict[str, Any] | None = None, **kwargs):
         rc = config.get("_runtime_context") if config else None
         return await internal_micromobility_get_ranger_performance(
-            config=config, runtime_context=rc,
+            config=config,
+            runtime_context=rc,
             days=int(kwargs.get("days", 14)),
         )
 
@@ -70,9 +75,18 @@ def register_micromobility_event_tools(registry) -> None:
                 "event_date": {"type": "string", "description": "Date of the event in YYYY-MM-DD format"},
                 "event_start_hour": {"type": "integer", "description": "Start of event window (0-23, e.g. 8 for 8 AM)"},
                 "event_end_hour": {"type": "integer", "description": "End of event window (0-23, e.g. 11 for 11 AM)"},
-                "description": {"type": "string", "description": "Human label for the event (e.g. 'Metro Line 8 strike', 'Taylor Swift concert')"},
-                "baseline_weeks": {"type": "integer", "description": "Prior same-weekday windows to use as baseline (default 4)"},
-                "service_area": {"type": "string", "description": "Optional — restrict to a specific service area name"},
+                "description": {
+                    "type": "string",
+                    "description": "Human label for the event (e.g. 'Metro Line 8 strike', 'Taylor Swift concert')",
+                },
+                "baseline_weeks": {
+                    "type": "integer",
+                    "description": "Prior same-weekday windows to use as baseline (default 4)",
+                },
+                "service_area": {
+                    "type": "string",
+                    "description": "Optional — restrict to a specific service area name",
+                },
             },
             "required": ["event_date"],
         },
@@ -128,7 +142,10 @@ def register_micromobility_event_tools(registry) -> None:
         parameters={
             "type": "object",
             "properties": {
-                "min_trips": {"type": "integer", "description": "Minimum trips needed to compute drain rate (default 10)"},
+                "min_trips": {
+                    "type": "integer",
+                    "description": "Minimum trips needed to compute drain rate (default 10)",
+                },
                 "degradation_threshold_pct_per_trip": {
                     "type": "number",
                     "description": "Flag vehicles draining more than this % per trip (default 2.0)",

@@ -230,8 +230,7 @@ class SlackEventService:
             ]
             if agent and agent.suggestion_prompts:
                 prompt_lines = "\n".join(
-                    f"• *{p.get('title', '')}*"
-                    + (f" — _{p.get('description', '')}_" if p.get("description") else "")
+                    f"• *{p.get('title', '')}*" + (f" — _{p.get('description', '')}_" if p.get("description") else "")
                     for p in agent.suggestion_prompts[:5]
                     if p.get("title")
                 )
@@ -261,7 +260,10 @@ class SlackEventService:
             default_prompts = [
                 {"title": "What can you do?", "message": "What are your capabilities?"},
                 {"title": "Summarize recent messages", "message": "Summarize the last 20 messages in this channel"},
-                {"title": "Help me draft a message", "message": "Help me write a professional message to my team about..."},
+                {
+                    "title": "Help me draft a message",
+                    "message": "Help me write a professional message to my team about...",
+                },
             ]
             prompts = default_prompts
             if agent and agent.suggestion_prompts:

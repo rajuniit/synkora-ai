@@ -233,15 +233,17 @@ async def internal_get_directions(
         for leg in route.get("legs", []):
             for step in leg.get("steps", []):
                 maneuver = step.get("maneuver", {})
-                steps.append({
-                    "instruction": maneuver.get("instruction", ""),
-                    "distance_m": round(step.get("distance", 0)),
-                    "duration_s": round(step.get("duration", 0)),
-                })
+                steps.append(
+                    {
+                        "instruction": maneuver.get("instruction", ""),
+                        "distance_m": round(step.get("distance", 0)),
+                        "duration_s": round(step.get("duration", 0)),
+                    }
+                )
 
         # Build static map of the route
         route_coords = route.get("geometry", {}).get("coordinates", [])
-        path_points = [{"lng": c[0], "lat": c[1]} for c in route_coords[::max(1, len(route_coords) // 50)]]
+        path_points = [{"lng": c[0], "lat": c[1]} for c in route_coords[:: max(1, len(route_coords) // 50)]]
 
         mid_lat = (origin_lat + dest_lat) / 2
         mid_lng = (origin_lng + dest_lng) / 2

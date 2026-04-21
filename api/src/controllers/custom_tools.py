@@ -136,9 +136,7 @@ async def create_custom_tool(
         # Validate OpenAPI schema by parsing it
         try:
             schema = request.openapi_schema
-            if not isinstance(schema, dict) or not (
-                "openapi" in schema or "swagger" in schema or "paths" in schema
-            ):
+            if not isinstance(schema, dict) or not ("openapi" in schema or "swagger" in schema or "paths" in schema):
                 raise ValueError("Schema must contain 'openapi', 'swagger', or 'paths' key")
             parser = OpenAPIParser(schema, request.server_url)
             schema_info = parser.get_schema_info()

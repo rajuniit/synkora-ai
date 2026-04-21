@@ -138,7 +138,10 @@ async def internal_get_predicthq_events(
     try:
         cfg = await _get_provider_config(runtime_context, "internal_get_predicthq_events", "predicthq")
         if not cfg:
-            return {"success": False, "error": "PredictHQ not configured. Connect a PredictHQ OAuth app in Agent Tools."}
+            return {
+                "success": False,
+                "error": "PredictHQ not configured. Connect a PredictHQ OAuth app in Agent Tools.",
+            }
 
         hours_ahead = max(1, min(int(hours_ahead), 168))
         now = datetime.now(tz=UTC)
@@ -167,18 +170,20 @@ async def internal_get_predicthq_events(
         for ev in resp.json().get("results", []):
             impact = float(ev.get("phq_attendance", 0) or 0)
             impact_score = min(impact / 1000, 100)
-            events.append({
-                "source": "predicthq",
-                "id": ev.get("id", ""),
-                "name": ev.get("title", ""),
-                "category": ev.get("category", ""),
-                "start_iso": ev.get("start", ""),
-                "end_iso": ev.get("end", ""),
-                "venue": (ev.get("entities") or [{}])[0].get("name", ""),
-                "attendance": int(impact),
-                "impact_score": round(impact_score, 1),
-                "demand_multiplier": round(_impact_to_multiplier(impact_score, cfg["impact_weight"]), 2),
-            })
+            events.append(
+                {
+                    "source": "predicthq",
+                    "id": ev.get("id", ""),
+                    "name": ev.get("title", ""),
+                    "category": ev.get("category", ""),
+                    "start_iso": ev.get("start", ""),
+                    "end_iso": ev.get("end", ""),
+                    "venue": (ev.get("entities") or [{}])[0].get("name", ""),
+                    "attendance": int(impact),
+                    "impact_score": round(impact_score, 1),
+                    "demand_multiplier": round(_impact_to_multiplier(impact_score, cfg["impact_weight"]), 2),
+                }
+            )
 
         events.sort(key=lambda e: e["impact_score"], reverse=True)
         return _build_event_result(events, "PredictHQ")
@@ -220,7 +225,10 @@ async def internal_get_ticketmaster_events(
     try:
         cfg = await _get_provider_config(runtime_context, "internal_get_ticketmaster_events", "ticketmaster")
         if not cfg:
-            return {"success": False, "error": "Ticketmaster not configured. Connect a Ticketmaster OAuth app in Agent Tools."}
+            return {
+                "success": False,
+                "error": "Ticketmaster not configured. Connect a Ticketmaster OAuth app in Agent Tools.",
+            }
 
         hours_ahead = max(1, min(int(hours_ahead), 168))
         now = datetime.now(tz=UTC)
@@ -260,18 +268,20 @@ async def internal_get_ticketmaster_events(
             if ev.get("classifications"):
                 segment_name = (ev["classifications"][0].get("segment") or {}).get("name", "")
 
-            events.append({
-                "source": "ticketmaster",
-                "id": ev.get("id", ""),
-                "name": ev.get("name", ""),
-                "category": segment_name or ev.get("type", ""),
-                "start_iso": (ev.get("dates") or {}).get("start", {}).get("dateTime", ""),
-                "end_iso": "",
-                "venue": venue_data.get("name", ""),
-                "attendance": attendance,
-                "impact_score": round(impact_score, 1),
-                "demand_multiplier": round(_impact_to_multiplier(impact_score, cfg["impact_weight"]), 2),
-            })
+            events.append(
+                {
+                    "source": "ticketmaster",
+                    "id": ev.get("id", ""),
+                    "name": ev.get("name", ""),
+                    "category": segment_name or ev.get("type", ""),
+                    "start_iso": (ev.get("dates") or {}).get("start", {}).get("dateTime", ""),
+                    "end_iso": "",
+                    "venue": venue_data.get("name", ""),
+                    "attendance": attendance,
+                    "impact_score": round(impact_score, 1),
+                    "demand_multiplier": round(_impact_to_multiplier(impact_score, cfg["impact_weight"]), 2),
+                }
+            )
 
         events.sort(key=lambda e: e["impact_score"], reverse=True)
         return _build_event_result(events, "Ticketmaster")

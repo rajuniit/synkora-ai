@@ -144,18 +144,30 @@ async def internal_get_weather_forecast(
         hourly: list[dict[str, Any]] = []
         async with httpx.AsyncClient(timeout=timeout) as client:
             url = f"{base_url}/data/{api_version}/onecall"
-            resp = await client.get(url, params={
-                "lat": lat, "lon": lng, "appid": api_key,
-                "units": units, "exclude": "minutely,daily,alerts",
-            })
+            resp = await client.get(
+                url,
+                params={
+                    "lat": lat,
+                    "lon": lng,
+                    "appid": api_key,
+                    "units": units,
+                    "exclude": "minutely,daily,alerts",
+                },
+            )
             if resp.is_success:
                 hourly = resp.json().get("hourly", [])[:hours_ahead]
             else:
                 # Fallback to 2.5
-                resp2 = await client.get(f"{base_url}/data/2.5/forecast", params={
-                    "lat": lat, "lon": lng, "appid": api_key,
-                    "units": units, "cnt": min(hours_ahead, 40),
-                })
+                resp2 = await client.get(
+                    f"{base_url}/data/2.5/forecast",
+                    params={
+                        "lat": lat,
+                        "lon": lng,
+                        "appid": api_key,
+                        "units": units,
+                        "cnt": min(hours_ahead, 40),
+                    },
+                )
                 if resp2.is_success:
                     hourly = resp2.json().get("list", [])[:hours_ahead]
                 else:
@@ -166,15 +178,17 @@ async def internal_get_weather_forecast(
         for h in hourly:
             m = _compute_demand_modifier(h, rules)
             modifiers.append(m)
-            result_hours.append({
-                "dt_iso": datetime.fromtimestamp(h["dt"], tz=UTC).isoformat(),
-                "temp": h.get("temp"),
-                "feels_like": h.get("feels_like"),
-                "precip_pct": round(float(h.get("pop", 0)) * 100),
-                "wind_speed": h.get("wind_speed"),
-                "description": (h.get("weather") or [{}])[0].get("description", ""),
-                "demand_modifier": round(m, 2),
-            })
+            result_hours.append(
+                {
+                    "dt_iso": datetime.fromtimestamp(h["dt"], tz=UTC).isoformat(),
+                    "temp": h.get("temp"),
+                    "feels_like": h.get("feels_like"),
+                    "precip_pct": round(float(h.get("pop", 0)) * 100),
+                    "wind_speed": h.get("wind_speed"),
+                    "description": (h.get("weather") or [{}])[0].get("description", ""),
+                    "demand_modifier": round(m, 2),
+                }
+            )
 
         overall = round(sum(modifiers) / len(modifiers), 2) if modifiers else 1.0
         if overall >= 1.15:
@@ -222,9 +236,15 @@ async def internal_get_current_weather(
         timeout = cfg["timeout"]
 
         async with httpx.AsyncClient(timeout=timeout) as client:
-            resp = await client.get(f"{base_url}/data/2.5/weather", params={
-                "lat": lat, "lon": lng, "appid": api_key, "units": units,
-            })
+            resp = await client.get(
+                f"{base_url}/data/2.5/weather",
+                params={
+                    "lat": lat,
+                    "lon": lng,
+                    "appid": api_key,
+                    "units": units,
+                },
+            )
 
         if not resp.is_success:
             return {"success": False, "error": f"OpenWeather error {resp.status_code}"}

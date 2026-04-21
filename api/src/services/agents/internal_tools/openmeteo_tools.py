@@ -22,26 +22,39 @@ BASE_URL = "https://api.open-meteo.com/v1/forecast"
 
 _WMO_DESCRIPTIONS: dict[int, str] = {
     0: "clear sky",
-    1: "mainly clear", 2: "partly cloudy", 3: "overcast",
-    45: "fog", 48: "icy fog",
-    51: "light drizzle", 53: "moderate drizzle", 55: "heavy drizzle",
-    61: "light rain", 63: "moderate rain", 65: "heavy rain",
-    71: "light snow", 73: "moderate snow", 75: "heavy snow",
+    1: "mainly clear",
+    2: "partly cloudy",
+    3: "overcast",
+    45: "fog",
+    48: "icy fog",
+    51: "light drizzle",
+    53: "moderate drizzle",
+    55: "heavy drizzle",
+    61: "light rain",
+    63: "moderate rain",
+    65: "heavy rain",
+    71: "light snow",
+    73: "moderate snow",
+    75: "heavy snow",
     77: "snow grains",
-    80: "light rain showers", 81: "moderate rain showers", 82: "heavy rain showers",
-    85: "light snow showers", 86: "heavy snow showers",
+    80: "light rain showers",
+    81: "moderate rain showers",
+    82: "heavy rain showers",
+    85: "light snow showers",
+    86: "heavy snow showers",
     95: "thunderstorm",
-    96: "thunderstorm with hail", 99: "heavy thunderstorm with hail",
+    96: "thunderstorm with hail",
+    99: "heavy thunderstorm with hail",
 }
 
 _DEFAULT_DEMAND_RULES: list[dict[str, Any]] = [
     {"precip_pct_gte": 80, "modifier": 0.30},
     {"precip_pct_gte": 60, "modifier": 0.50},
-    {"temp_c_lte": 0,      "modifier": 0.45},
-    {"temp_c_lte": 5,      "modifier": 0.60},
-    {"temp_c_gte": 38,     "modifier": 0.65},
-    {"temp_c_gte": 33,     "modifier": 0.80},
-    {"wind_mps_gte": 12,   "modifier": 0.75},
+    {"temp_c_lte": 0, "modifier": 0.45},
+    {"temp_c_lte": 5, "modifier": 0.60},
+    {"temp_c_gte": 38, "modifier": 0.65},
+    {"temp_c_gte": 33, "modifier": 0.80},
+    {"wind_mps_gte": 12, "modifier": 0.75},
     {"temp_c_between": [15, 27], "precip_pct_lt": 20, "modifier": 1.25},
     {"temp_c_between": [10, 32], "modifier": 1.0},
 ]
@@ -104,25 +117,28 @@ async def internal_get_openmeteo_forecast(
         hours_ahead = max(1, min(int(hours_ahead), 48))
 
         async with httpx.AsyncClient(timeout=15) as client:
-            resp = await client.get(BASE_URL, params={
-                "latitude": lat,
-                "longitude": lng,
-                "hourly": "temperature_2m,precipitation_probability,windspeed_10m,relativehumidity_2m,weathercode",
-                "current_weather": "true",
-                "forecast_days": 2,
-                "timezone": "UTC",
-            })
+            resp = await client.get(
+                BASE_URL,
+                params={
+                    "latitude": lat,
+                    "longitude": lng,
+                    "hourly": "temperature_2m,precipitation_probability,windspeed_10m,relativehumidity_2m,weathercode",
+                    "current_weather": "true",
+                    "forecast_days": 2,
+                    "timezone": "UTC",
+                },
+            )
 
         if not resp.is_success:
             return {"success": False, "error": f"Open-Meteo error {resp.status_code}"}
 
         data = resp.json()
         hourly = data.get("hourly", {})
-        times        = hourly.get("time", [])
-        temps        = hourly.get("temperature_2m", [])
+        times = hourly.get("time", [])
+        temps = hourly.get("temperature_2m", [])
         precip_probs = hourly.get("precipitation_probability", [])
-        windspeeds   = hourly.get("windspeed_10m", [])
-        humidities   = hourly.get("relativehumidity_2m", [])
+        windspeeds = hourly.get("windspeed_10m", [])
+        humidities = hourly.get("relativehumidity_2m", [])
         weathercodes = hourly.get("weathercode", [])
 
         # Find the index for current hour and slice forward
@@ -134,26 +150,28 @@ async def internal_get_openmeteo_forecast(
         modifiers = []
 
         for i in range(start_idx, min(end_idx, len(times))):
-            temp        = float(temps[i]) if i < len(temps) else 15.0
-            precip_pct  = float(precip_probs[i]) if i < len(precip_probs) else 0.0
-            wind_kmh    = float(windspeeds[i]) if i < len(windspeeds) else 0.0
-            wind_mps    = wind_kmh / 3.6
-            humidity    = int(humidities[i]) if i < len(humidities) else 0
-            code        = int(weathercodes[i]) if i < len(weathercodes) else 0
+            temp = float(temps[i]) if i < len(temps) else 15.0
+            precip_pct = float(precip_probs[i]) if i < len(precip_probs) else 0.0
+            wind_kmh = float(windspeeds[i]) if i < len(windspeeds) else 0.0
+            wind_mps = wind_kmh / 3.6
+            humidity = int(humidities[i]) if i < len(humidities) else 0
+            code = int(weathercodes[i]) if i < len(weathercodes) else 0
 
             modifier = _compute_demand_modifier(temp, precip_pct, wind_mps, _DEFAULT_DEMAND_RULES)
             modifiers.append(modifier)
 
-            result_hours.append({
-                "dt_iso": times[i] + ":00+00:00",
-                "temp": round(temp, 1),
-                "feels_like": None,
-                "precip_pct": int(precip_pct),
-                "wind_speed": round(wind_mps, 1),
-                "humidity": humidity,
-                "description": _wmo_description(code),
-                "demand_modifier": round(modifier, 2),
-            })
+            result_hours.append(
+                {
+                    "dt_iso": times[i] + ":00+00:00",
+                    "temp": round(temp, 1),
+                    "feels_like": None,
+                    "precip_pct": int(precip_pct),
+                    "wind_speed": round(wind_mps, 1),
+                    "humidity": humidity,
+                    "description": _wmo_description(code),
+                    "demand_modifier": round(modifier, 2),
+                }
+            )
 
         overall = round(sum(modifiers) / len(modifiers), 2) if modifiers else 1.0
 
@@ -202,14 +220,17 @@ async def internal_get_openmeteo_current(
     """
     try:
         async with httpx.AsyncClient(timeout=15) as client:
-            resp = await client.get(BASE_URL, params={
-                "latitude": lat,
-                "longitude": lng,
-                "current_weather": "true",
-                "hourly": "precipitation_probability,relativehumidity_2m",
-                "forecast_days": 1,
-                "timezone": "UTC",
-            })
+            resp = await client.get(
+                BASE_URL,
+                params={
+                    "latitude": lat,
+                    "longitude": lng,
+                    "current_weather": "true",
+                    "hourly": "precipitation_probability,relativehumidity_2m",
+                    "forecast_days": 1,
+                    "timezone": "UTC",
+                },
+            )
 
         if not resp.is_success:
             return {"success": False, "error": f"Open-Meteo error {resp.status_code}"}
@@ -217,20 +238,20 @@ async def internal_get_openmeteo_current(
         data = resp.json()
         cw = data.get("current_weather", {})
 
-        temp     = float(cw.get("temperature", 0))
+        temp = float(cw.get("temperature", 0))
         wind_kmh = float(cw.get("windspeed", 0))
         wind_mps = round(wind_kmh / 3.6, 1)
-        code     = int(cw.get("weathercode", 0))
+        code = int(cw.get("weathercode", 0))
 
         # Get current hour's precip probability and humidity
-        hourly   = data.get("hourly", {})
-        times    = hourly.get("time", [])
-        now_str  = datetime.now(tz=UTC).strftime("%Y-%m-%dT%H:00")
-        idx      = next((i for i, t in enumerate(times) if t >= now_str), 0)
+        hourly = data.get("hourly", {})
+        times = hourly.get("time", [])
+        now_str = datetime.now(tz=UTC).strftime("%Y-%m-%dT%H:00")
+        idx = next((i for i, t in enumerate(times) if t >= now_str), 0)
         precip_probs = hourly.get("precipitation_probability", [])
-        humidities   = hourly.get("relativehumidity_2m", [])
-        precip_pct   = float(precip_probs[idx]) if idx < len(precip_probs) else 0.0
-        humidity     = int(humidities[idx]) if idx < len(humidities) else 0
+        humidities = hourly.get("relativehumidity_2m", [])
+        precip_pct = float(precip_probs[idx]) if idx < len(precip_probs) else 0.0
+        humidity = int(humidities[idx]) if idx < len(humidities) else 0
 
         modifier = _compute_demand_modifier(temp, precip_pct, wind_mps, _DEFAULT_DEMAND_RULES)
 

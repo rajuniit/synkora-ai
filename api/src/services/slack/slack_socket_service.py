@@ -215,9 +215,7 @@ class SlackSocketService:
             say=say,
         )
 
-    async def _handle_app_home_opened(
-        self, slack_bot: SlackBot, event: dict, client: AsyncWebClient
-    ) -> None:
+    async def _handle_app_home_opened(self, slack_bot: SlackBot, event: dict, client: AsyncWebClient) -> None:
         """Publish the App Home tab view when a user opens it."""
         user_id = event.get("user")
         if not user_id:
@@ -236,9 +234,7 @@ class SlackSocketService:
                 },
             ]
             if agent_desc:
-                blocks.append(
-                    {"type": "section", "text": {"type": "mrkdwn", "text": agent_desc}}
-                )
+                blocks.append({"type": "section", "text": {"type": "mrkdwn", "text": agent_desc}})
             blocks += [
                 {"type": "divider"},
                 {
@@ -258,8 +254,7 @@ class SlackSocketService:
             # Show suggestion prompts if the agent has them configured
             if agent and agent.suggestion_prompts:
                 prompt_lines = "\n".join(
-                    f"• *{p.get('title', '')}*"
-                    + (f" — _{p.get('description', '')}_" if p.get("description") else "")
+                    f"• *{p.get('title', '')}*" + (f" — _{p.get('description', '')}_" if p.get("description") else "")
                     for p in agent.suggestion_prompts[:5]
                     if p.get("title")
                 )
@@ -280,9 +275,7 @@ class SlackSocketService:
         except Exception as e:
             logger.warning(f"Failed to publish App Home for user {user_id}: {e}")
 
-    async def _handle_assistant_thread_started(
-        self, slack_bot: SlackBot, event: dict, client: AsyncWebClient
-    ) -> None:
+    async def _handle_assistant_thread_started(self, slack_bot: SlackBot, event: dict, client: AsyncWebClient) -> None:
         """Set suggested prompts in the Slack AI assistant panel."""
         thread = event.get("assistant_thread", {})
         channel_id = thread.get("channel_id")
