@@ -63,6 +63,7 @@ export interface MessageMetadata {
   workflow?: WorkflowMetadata
   vehicle_maps?: VehicleMapData[]
   fleet_cards?: FleetCardData[]
+  confidence?: number
 }
 
 export interface VehicleMapData {
