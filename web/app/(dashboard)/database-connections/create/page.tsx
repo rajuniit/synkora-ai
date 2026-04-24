@@ -98,6 +98,8 @@ export default function CreateDatabaseConnectionPage() {
   const isCloudOnly = isBigQuery || isSnowflake || isSupabase
 
   const buildPayload = (data: ConnectionFormData) => {
+    const portOrNull = data.port > 0 ? data.port : null
+
     if (data.type === 'BIGQUERY') {
       let serviceAccountJson: Record<string, any> | null = null
       try {
@@ -107,6 +109,7 @@ export default function CreateDatabaseConnectionPage() {
       }
       return {
         ...data,
+        port: portOrNull,
         password: undefined,
         connection_params: {
           ...data.connection_params,
@@ -115,7 +118,7 @@ export default function CreateDatabaseConnectionPage() {
         },
       }
     }
-    return data
+    return { ...data, port: portOrNull }
   }
 
   const testConnection = async () => {

@@ -234,6 +234,10 @@ export default function EditDatabaseConnectionPage() {
       let updateData: Record<string, any> = isBigQuery
         ? buildBigQueryPayload(baseData as typeof formData)
         : baseData
+      // Convert port=0 (no-port types) to null so backend validation passes
+      if ('port' in updateData && (updateData.port === 0 || updateData.port === null)) {
+        updateData = { ...updateData, port: null }
+      }
       // Don't send connection_params if it's empty — nothing to update
       if (
         updateData.connection_params != null &&
