@@ -1,6 +1,7 @@
 "use client";
 
 import { useState, useEffect } from "react";
+import { extractErrorMessage } from '@/lib/api/error'
 import { useParams, useRouter } from "next/navigation";
 import {
   ArrowLeft,
@@ -49,7 +50,7 @@ export default function DomainInstructionsPage() {
       setDomain(domainData);
     } catch (err: any) {
       console.error("Failed to fetch domain:", err);
-      setError(err.response?.data?.detail || "Failed to load domain");
+      setError(extractErrorMessage(err, "Failed to load domain"))
     } finally {
       setLoading(false);
     }
@@ -89,7 +90,7 @@ export default function DomainInstructionsPage() {
         );
       }
     } catch (err: any) {
-      toast.error(err.response?.data?.detail || "Failed to verify domain");
+      toast.error(extractErrorMessage(err, "Failed to verify domain"))
     } finally {
       setVerifying(false);
     }

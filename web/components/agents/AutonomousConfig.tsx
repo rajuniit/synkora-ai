@@ -1,6 +1,7 @@
 'use client'
 
 import { useState } from 'react'
+import { extractErrorMessage } from '@/lib/api/error'
 import { Save, Play, ShieldCheck } from 'lucide-react'
 
 interface AutonomousStatus {
@@ -110,7 +111,7 @@ export function AutonomousConfig({ agentName, status, onSaved, onTriggered }: Pr
       }
       onSaved()
     } catch (err: any) {
-      setError(err?.response?.data?.detail ?? err?.message ?? 'Save failed')
+      setError(extractErrorMessage(err, 'Save failed'))
     } finally {
       setSaving(false)
     }
@@ -127,7 +128,7 @@ export function AutonomousConfig({ agentName, status, onSaved, onTriggered }: Pr
       )
       onTriggered()
     } catch (err: any) {
-      setError(err?.response?.data?.detail ?? err?.message ?? 'Trigger failed')
+      setError(extractErrorMessage(err, 'Trigger failed'))
     } finally {
       setTriggering(false)
     }

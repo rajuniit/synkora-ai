@@ -21,23 +21,26 @@ logger = logging.getLogger(__name__)
 
 def _run_query_sync(db_connection: DatabaseConnection, query: str, task_id: Any) -> dict[str, Any]:
     """Run a database query synchronously (called via run_in_executor from async context)."""
-    if db_connection.type == DatabaseConnectionType.POSTGRESQL:
+    if db_connection.database_type == DatabaseConnectionType.POSTGRESQL:
         connector = PostgreSQLConnector(db_connection)
-    elif db_connection.type == DatabaseConnectionType.ELASTICSEARCH:
+    elif db_connection.database_type == DatabaseConnectionType.ELASTICSEARCH:
         connector = ElasticsearchConnector(db_connection)
     else:
-        raise ValueError(f"Unsupported database type: {db_connection.type}")
+        raise ValueError(f"Unsupported database type: {db_connection.database_type}")
 
-    connector.connect()
-    try:
-        results = connector.execute_query(query)
-        logger.info(f"Query executed successfully for task {task_id}")
-        return {"success": True, "data": results, "row_count": len(results) if isinstance(results, list) else 0}
-    except Exception as e:
-        logger.error(f"Error executing query for task {task_id}: {str(e)}", exc_info=True)
-        return {"success": False, "error": str(e), "data": None, "row_count": 0}
-    finally:
-        connector.disconnect()
+    async def _run():
+        await connector.connect()
+        try:
+            results = await connector.execute_query(query)
+            logger.info(f"Query executed successfully for task {task_id}")
+            return {"success": True, "data": results, "row_count": len(results) if isinstance(results, list) else 0}
+        except Exception as e:
+            logger.error(f"Error executing query for task {task_id}: {str(e)}", exc_info=True)
+            return {"success": False, "error": str(e), "data": None, "row_count": 0}
+        finally:
+            await connector.disconnect()
+
+    return asyncio.run(_run())
 
 
 class TaskExecutor:

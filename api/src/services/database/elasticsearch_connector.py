@@ -143,7 +143,8 @@ class ElasticsearchConnector:
             raise RuntimeError("Client not initialized. Call connect() first.")
 
         try:
-            response = await self.client.search(index=index, body=query, size=size, from_=from_)
+            # body= is deprecated in ES 8.x; unpack the DSL dict as keyword args
+            response = await self.client.search(index=index, size=size, from_=from_, **query)
 
             # Extract hits
             hits = response.get("hits", {})
@@ -189,8 +190,10 @@ class ElasticsearchConnector:
             raise RuntimeError("Client not initialized. Call connect() first.")
 
         try:
-            body = {"query": query} if query else None
-            response = await self.client.count(index=index, body=body)
+            kwargs: dict[str, Any] = {}
+            if query:
+                kwargs["query"] = query
+            response = await self.client.count(index=index, **kwargs)
 
             return {"success": True, "count": response.get("count", 0)}
 
@@ -331,12 +334,11 @@ class ElasticsearchConnector:
             raise RuntimeError("Client not initialized. Call connect() first.")
 
         try:
-            body = {"size": 0, "aggs": aggregations}
-
+            agg_body: dict[str, Any] = {"size": 0, "aggs": aggregations}
             if query:
-                body["query"] = query
+                agg_body["query"] = query
 
-            response = await self.client.search(index=index, body=body)
+            response = await self.client.search(index=index, **agg_body)
 
             return {"success": True, "aggregations": response.get("aggregations", {}), "took": response.get("took")}
 

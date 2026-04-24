@@ -1,6 +1,7 @@
 'use client'
 
 import { useCallback, useEffect, useState } from 'react'
+import { extractErrorMessage } from '@/lib/api/error'
 import { CheckCircle, XCircle, Clock, MessageSquare, RefreshCw } from 'lucide-react'
 
 interface ApprovalRequest {
@@ -68,7 +69,7 @@ function ApprovalCard({
       onResponded()
     } catch (err: unknown) {
       const e = err as { response?: { data?: { detail?: string } }; message?: string }
-      setError(e?.response?.data?.detail ?? e?.message ?? 'Request failed')
+      setError(extractErrorMessage(e, 'Request failed'))
     } finally {
       setResponding(false)
     }

@@ -76,26 +76,23 @@ def _parse_data_to_dataframe(data_str: str) -> pd.DataFrame | None:
     return None
 
 
-async def query_datadog_metrics(
-    data_source_id: int, query: str, from_time: str, to_time: str, config: dict[str, Any] | None = None
-) -> dict[str, Any]:
+async def list_data_sources(config: dict[str, Any] | None = None) -> dict[str, Any]:
     """
-    Query metrics from Datadog monitoring platform.
+    List all Datadog, Databricks, and Docker connections available to this agent.
+
+    Returns entries from the database_connections table (UUID-based, configured
+    via the Database Connections UI). Each entry includes a 'connection_id' (UUID
+    string) and a 'query_tool' field telling you which tool to call next.
 
     Args:
-        data_source_id: The ID of the Datadog data source
-        query: Datadog metric query (e.g., 'avg:system.cpu.user{*}')
-        from_time: Start time in ISO format
-        to_time: End time in ISO format
         config: Configuration with runtime context
 
     Returns:
-        Query results with metrics data
+        List of available connections with connection_id, name, type, and query_tool.
     """
     try:
-        from src.services.data_analysis_service import DataAnalysisService
+        from sqlalchemy import select
 
-        # Extract runtime context
         config = config or {}
         runtime_context = config.get("_runtime_context")
 
@@ -105,32 +102,184 @@ async def query_datadog_metrics(
         db_session = (
             runtime_context.db_session if hasattr(runtime_context, "db_session") else runtime_context.get("db_session")
         )
+        tenant_id = (
+            runtime_context.tenant_id if hasattr(runtime_context, "tenant_id") else runtime_context.get("tenant_id")
+        )
 
+        if not db_session or not tenant_id:
+            return {"success": False, "error": "Runtime context incomplete"}
+
+        sources: list[dict[str, Any]] = []
+
+        # --- System 1: database_connections table (UUID IDs) ---
+        try:
+            from src.models.database_connection import DatabaseConnection, DatabaseConnectionType
+
+            _db_type_to_query_tool = {
+                DatabaseConnectionType.DATADOG: "query_datadog_metrics",
+                DatabaseConnectionType.DATABRICKS: "query_databricks",
+                DatabaseConnectionType.DOCKER: "query_docker_logs",
+            }
+            analysis_db_types = set(_db_type_to_query_tool.keys())
+            db_stmt = (
+                select(DatabaseConnection)
+                .where(
+                    DatabaseConnection.tenant_id == tenant_id,
+                    DatabaseConnection.status == "active",
+                    DatabaseConnection.database_type.in_([t.value for t in analysis_db_types]),
+                )
+                .order_by(DatabaseConnection.database_type, DatabaseConnection.name)
+            )
+            db_result = await db_session.execute(db_stmt)
+            db_connections = db_result.scalars().all()
+            for conn in db_connections:
+                query_tool = _db_type_to_query_tool.get(conn.database_type, "query_datadog_metrics")
+                entry: dict[str, Any] = {
+                    "connection_id": str(conn.id),  # UUID — pass as connection_id to the query tool
+                    "name": conn.name,
+                    "type": str(conn.database_type),
+                    "status": conn.status,
+                    "query_tool": query_tool,
+                    "id_param": "connection_id",
+                }
+                # Datadog supports both metrics AND logs — expose both tools
+                if conn.database_type == DatabaseConnectionType.DATADOG:
+                    entry["logs_tool"] = "query_datadog_logs"
+                    entry["note"] = (
+                        "Use query_datadog_metrics for time-series metrics "
+                        "(e.g. avg:system.cpu.user{*}). "
+                        "Use query_datadog_logs for log events "
+                        "(e.g. service:account_migration status:error)."
+                    )
+                sources.append(entry)
+        except Exception as e:
+            logger.warning(f"list_data_sources: database_connections query failed: {e}")
+
+        return {
+            "success": True,
+            "data_sources": sources,
+            "count": len(sources),
+            "note": "Pass the 'connection_id' value (UUID string) to the tool named in 'query_tool'.",
+        }
+
+    except Exception as e:
+        logger.error(f"list_data_sources error: {e}", exc_info=True)
+        return {"success": False, "error": str(e)}
+
+
+async def query_datadog_metrics(
+    connection_id: str, query: str, from_time: str, to_time: str, config: dict[str, Any] | None = None
+) -> dict[str, Any]:
+    """
+    Query metrics from Datadog monitoring platform.
+
+    Args:
+        connection_id: UUID of the Datadog DatabaseConnection (from list_data_sources)
+        query: Datadog metric query (e.g., 'avg:system.cpu.user{*}')
+        from_time: Start time in ISO-8601 format (e.g. '2024-01-01T00:00:00Z')
+        to_time: End time in ISO-8601 format
+        config: Configuration with runtime context
+
+    Returns:
+        Query results with metrics data
+    """
+    try:
+        from uuid import UUID
+
+        from src.services.data_analysis_service import DataAnalysisService
+
+        config = config or {}
+        runtime_context = config.get("_runtime_context")
+        if not runtime_context:
+            return {"success": False, "error": "Runtime context not available"}
+
+        db_session = (
+            runtime_context.db_session if hasattr(runtime_context, "db_session") else runtime_context.get("db_session")
+        )
+        tenant_id = (
+            runtime_context.tenant_id if hasattr(runtime_context, "tenant_id") else runtime_context.get("tenant_id")
+        )
         if not db_session:
             return {"success": False, "error": "Database session not available"}
 
-        # Create service and query
-        service = DataAnalysisService(db_session)
-        result = await service.query_data_source(
-            data_source_id=data_source_id,
-            query_params={"query_type": "metrics", "query": query, "from_time": from_time, "to_time": to_time},
+        service = DataAnalysisService(db_session, tenant_id)
+        return await service.query_datadog_connection(
+            connection_id=UUID(connection_id),
+            query=query,
+            from_time=from_time,
+            to_time=to_time,
         )
-
-        return result
 
     except Exception as e:
         logger.error(f"Datadog query error: {e}", exc_info=True)
         return {"success": False, "error": str(e)}
 
 
+async def query_datadog_logs(
+    connection_id: str,
+    query: str,
+    from_time: str,
+    to_time: str,
+    limit: int = 100,
+    config: dict[str, Any] | None = None,
+) -> dict[str, Any]:
+    """
+    Search logs from Datadog via the Logs API v2.
+
+    Args:
+        connection_id: UUID of the Datadog DatabaseConnection (from list_data_sources)
+        query: Datadog log search query (e.g., 'service:account_migration status:error')
+        from_time: Start time in ISO-8601 format (e.g. '2024-01-01T00:00:00Z') or relative ('now-1h')
+        to_time: End time in ISO-8601 format or relative ('now')
+        limit: Maximum number of log events to return (default: 100, max: 1000)
+        config: Configuration with runtime context
+
+    Returns:
+        Log events with timestamp, message, service, status, host, tags
+    """
+    try:
+        from uuid import UUID
+
+        from src.services.data_analysis_service import DataAnalysisService
+
+        config = config or {}
+        runtime_context = config.get("_runtime_context")
+        if not runtime_context:
+            return {"success": False, "error": "Runtime context not available"}
+
+        db_session = (
+            runtime_context.db_session if hasattr(runtime_context, "db_session") else runtime_context.get("db_session")
+        )
+        tenant_id = (
+            runtime_context.tenant_id if hasattr(runtime_context, "tenant_id") else runtime_context.get("tenant_id")
+        )
+        if not db_session:
+            return {"success": False, "error": "Database session not available"}
+
+        # Prefix query so the connector routes to the Logs API v2 (not the Metrics API)
+        logs_query = f"logs: {query}" if not query.strip().lower().startswith("logs:") else query
+
+        service = DataAnalysisService(db_session, tenant_id)
+        return await service.query_datadog_connection(
+            connection_id=UUID(connection_id),
+            query=logs_query,
+            from_time=from_time,
+            to_time=to_time,
+        )
+
+    except Exception as e:
+        logger.error(f"Datadog logs query error: {e}", exc_info=True)
+        return {"success": False, "error": str(e)}
+
+
 async def query_databricks(
-    data_source_id: int, query: str, limit: int = 1000, config: dict[str, Any] | None = None
+    connection_id: str, query: str, limit: int = 1000, config: dict[str, Any] | None = None
 ) -> dict[str, Any]:
     """
     Execute SQL queries on Databricks data lakehouse.
 
     Args:
-        data_source_id: The ID of the Databricks data source
+        connection_id: UUID of the Databricks DatabaseConnection (from list_data_sources)
         query: SQL query to execute
         limit: Maximum number of rows to return
         config: Configuration with runtime context
@@ -139,29 +288,30 @@ async def query_databricks(
         Query results with rows and columns
     """
     try:
+        from uuid import UUID
+
         from src.services.data_analysis_service import DataAnalysisService
 
-        # Extract runtime context
         config = config or {}
         runtime_context = config.get("_runtime_context")
-
         if not runtime_context:
             return {"success": False, "error": "Runtime context not available"}
 
         db_session = (
             runtime_context.db_session if hasattr(runtime_context, "db_session") else runtime_context.get("db_session")
         )
-
+        tenant_id = (
+            runtime_context.tenant_id if hasattr(runtime_context, "tenant_id") else runtime_context.get("tenant_id")
+        )
         if not db_session:
             return {"success": False, "error": "Database session not available"}
 
-        # Create service and query
-        service = DataAnalysisService(db_session)
-        result = await service.query_data_source(
-            data_source_id=data_source_id, query_params={"query": query, "limit": limit}
+        service = DataAnalysisService(db_session, tenant_id)
+        return await service.query_databricks_connection(
+            connection_id=UUID(connection_id),
+            query=query,
+            limit=limit,
         )
-
-        return result
 
     except Exception as e:
         logger.error(f"Databricks query error: {e}", exc_info=True)
@@ -169,7 +319,7 @@ async def query_databricks(
 
 
 async def query_docker_logs(
-    data_source_id: int,
+    connection_id: str,
     container_id: str | None = None,
     container_name: str | None = None,
     since: str | None = None,
@@ -180,9 +330,9 @@ async def query_docker_logs(
     Fetch logs from Docker containers.
 
     Args:
-        data_source_id: The ID of the Docker data source
+        connection_id: UUID of the Docker DatabaseConnection (from list_data_sources)
         container_id: Docker container ID (optional if container_name provided)
-        container_name: Docker container name (optional if container_id provided)
+        container_name: Docker container name (alternative to container_id)
         since: Only return logs since this time (ISO format, optional)
         tail: Number of lines from end of logs to show
         config: Configuration with runtime context
@@ -191,36 +341,36 @@ async def query_docker_logs(
         Log lines with timestamps
     """
     try:
+        from uuid import UUID
+
         from src.services.data_analysis_service import DataAnalysisService
 
-        # Extract runtime context
         config = config or {}
         runtime_context = config.get("_runtime_context")
-
         if not runtime_context:
             return {"success": False, "error": "Runtime context not available"}
 
         db_session = (
             runtime_context.db_session if hasattr(runtime_context, "db_session") else runtime_context.get("db_session")
         )
-
+        tenant_id = (
+            runtime_context.tenant_id if hasattr(runtime_context, "tenant_id") else runtime_context.get("tenant_id")
+        )
         if not db_session:
             return {"success": False, "error": "Database session not available"}
 
-        # Build query parameters
-        query_params: dict[str, Any] = {"tail": tail}
-        if container_id:
-            query_params["container_id"] = container_id
-        if container_name:
-            query_params["container_name"] = container_name
-        if since:
-            query_params["since"] = since
+        # Build the Docker pseudo-query string understood by DockerConnector.execute_query()
+        target = container_id or container_name
+        if target:
+            docker_query = f"logs {target}"
+        else:
+            docker_query = "containers"
 
-        # Create service and query
-        service = DataAnalysisService(db_session)
-        result = await service.query_data_source(data_source_id=data_source_id, query_params=query_params)
-
-        return result
+        service = DataAnalysisService(db_session, tenant_id)
+        return await service.query_docker_connection(
+            connection_id=UUID(connection_id),
+            query=docker_query,
+        )
 
     except Exception as e:
         logger.error(f"Docker logs query error: {e}", exc_info=True)

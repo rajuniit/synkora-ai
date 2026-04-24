@@ -319,6 +319,11 @@ class ADKToolRegistry:
 
         register_spawn_agent_tools(self)
 
+        # Remote agent tools (A2A / MCP callers) - use modular registry
+        from src.services.agents.tool_registrations.remote_agent_tools_registry import register_remote_agent_tools
+
+        register_remote_agent_tools(self)
+
         # Knowledge base ingest tools - use modular registry
         from src.services.agents.tool_registrations.kb_ingest_tools_registry import register_kb_ingest_tools
 
@@ -1025,13 +1030,13 @@ Supports: Git, GitHub CLI, npm, pip, Docker, file operations (ls, cat, mkdir, et
 
         self.register_tool(
             name="internal_generate_chart",
-            description="Generate Chart.js visualization from database query results. Automatically detects appropriate chart type or accepts custom configuration. IMPORTANT: After calling this tool the chart is automatically rendered in the UI — do NOT embed any image URL or markdown image syntax in your response. Simply describe the chart you created. IMPORTANT: You MUST call the data-fetching tool (e.g. internal_micromobility_list_trips, internal_query_database) first and pass its EXACT raw result as query_result. Do NOT construct query_result from memory or from previously displayed text — always fetch fresh data immediately before calling this tool.",
+            description="Generate a chart visualization from pre-aggregated data. IMPORTANT: After calling this tool the chart is automatically rendered in the UI — do NOT embed any image URL or markdown image syntax in your response. Simply describe the chart you created. IMPORTANT: query_result must contain PRE-AGGREGATED data, NOT raw API records. Raw records (e.g. individual trips with id/pick_up_time fields) will be rejected. You must aggregate the data first: fetch records, group/count them by the desired dimension (e.g. by date, by status), then pass the aggregated list. The aggregated data must be a list of rows with exactly 2 columns: column 1 = label (x-axis, e.g. date string), column 2 = numeric value (y-axis, e.g. count). Example: query_result=[{\"date\": \"2026-04-20\", \"trips\": 15}, {\"date\": \"2026-04-21\", \"trips\": 12}]. For flat summary stats (e.g. {\"total\": 276, \"pending\": 216}), pass the dict directly — it will be auto-converted.",
             parameters={
                 "type": "object",
                 "properties": {
                     "query_result": {
                         "type": "object",
-                        "description": "The exact raw result returned by a data-fetching tool (e.g. internal_micromobility_list_trips, internal_query_database). Must be called immediately before this tool — do not pass reconstructed or summarised data.",
+                        "description": "Pre-aggregated chart data. Either: (a) a list of 2-column rows [{label_col: x, value_col: numeric_y}, ...], or (b) a flat dict of {label: numeric_value} pairs for summary stats. Do NOT pass raw API list responses with many columns — aggregate first.",
                     },
                     "chart_type": {
                         "type": "string",

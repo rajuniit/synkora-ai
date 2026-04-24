@@ -7,6 +7,7 @@ import LoadingSpinner from '@/components/common/LoadingSpinner'
 import ErrorAlert from '@/components/common/ErrorAlert'
 import EmptyState from '@/components/common/EmptyState'
 import { socialAuthConfigApi, type ProviderConfig } from '@/lib/api/social-auth-config'
+import { extractErrorMessage } from '@/lib/api/error'
 import type { SocialProvider } from '@/types/social-auth'
 import { usePermissions } from '@/hooks/usePermissions'
 import { ProviderIcon } from '@/components/social-auth/ProviderIcon'
@@ -65,7 +66,7 @@ export default function SocialAuthConfigPage() {
       const data = await socialAuthConfigApi.listProviderConfigs()
       setProviders(Array.isArray(data) ? data : [])
     } catch (err: any) {
-      const errorMessage = err.response?.data?.message || err.response?.data?.detail || err.message || 'Failed to load providers'
+      const errorMessage = extractErrorMessage(err, 'Failed to load providers')
       setError(errorMessage)
     } finally {
       setLoading(false)
@@ -80,11 +81,7 @@ export default function SocialAuthConfigPage() {
       setDeleteConfirm(null)
       toast.success(`${provider.charAt(0).toUpperCase() + provider.slice(1)} provider deleted successfully`)
     } catch (err: any) {
-      const errorMessage = err.response?.data?.detail 
-        ? (typeof err.response.data.detail === 'string' 
-            ? err.response.data.detail
-            : err.response.data.detail?.message || 'Failed to delete provider')
-        : err.message || 'Failed to delete provider'
+      const errorMessage = extractErrorMessage(err, 'Failed to delete provider')
       setError(errorMessage)
       toast.error(errorMessage)
     }
@@ -102,11 +99,7 @@ export default function SocialAuthConfigPage() {
       await fetchProviders()
       toast.success(`${provider.provider_name.charAt(0).toUpperCase() + provider.provider_name.slice(1)} provider ${!provider.enabled ? 'enabled' : 'disabled'} successfully`)
     } catch (err: any) {
-      const errorMessage = err.response?.data?.detail 
-        ? (typeof err.response.data.detail === 'string' 
-            ? err.response.data.detail
-            : err.response.data.detail?.message || 'Failed to toggle provider')
-        : err.message || 'Failed to toggle provider'
+      const errorMessage = extractErrorMessage(err, 'Failed to toggle provider')
       setError(errorMessage)
       toast.error(errorMessage)
       console.error('Error toggling provider:', err)
@@ -148,11 +141,7 @@ export default function SocialAuthConfigPage() {
       handleCancelEdit()
       toast.success(`${editingProvider.charAt(0).toUpperCase() + editingProvider.slice(1)} provider updated successfully`)
     } catch (err: any) {
-      const errorMessage = err.response?.data?.detail 
-        ? (typeof err.response.data.detail === 'string' 
-            ? err.response.data.detail
-            : err.response.data.detail?.message || 'Failed to update provider')
-        : err.message || 'Failed to update provider'
+      const errorMessage = extractErrorMessage(err, 'Failed to update provider')
       setError(errorMessage)
       toast.error(errorMessage)
     } finally {
@@ -195,11 +184,7 @@ export default function SocialAuthConfigPage() {
       handleCancelCreate()
       toast.success(`${creatingProvider.charAt(0).toUpperCase() + creatingProvider.slice(1)} provider created successfully`)
     } catch (err: any) {
-      const errorMessage = err.response?.data?.detail 
-        ? (typeof err.response.data.detail === 'string' 
-            ? err.response.data.detail
-            : err.response.data.detail?.message || 'Failed to create provider')
-        : err.message || 'Failed to create provider'
+      const errorMessage = extractErrorMessage(err, 'Failed to create provider')
       setError(errorMessage)
       toast.error(errorMessage)
     } finally {

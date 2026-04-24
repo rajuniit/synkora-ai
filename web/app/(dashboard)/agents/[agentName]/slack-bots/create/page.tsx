@@ -1,6 +1,7 @@
 "use client";
 
 import { useState } from "react";
+import { extractErrorMessage } from '@/lib/api/error'
 import { useParams, useRouter } from "next/navigation";
 import { ArrowLeft, AlertCircle, ExternalLink } from "lucide-react";
 import { apiClient } from "@/lib/api/client";
@@ -56,7 +57,7 @@ export default function CreateSlackBotPage() {
       router.push(`/agents/${agentName}/slack-bots`);
     } catch (err: any) {
       console.error("Error creating Slack bot:", err);
-      setError(err.response?.data?.detail || "Failed to create Slack bot");
+      setError(extractErrorMessage(err, "Failed to create Slack bot"))
       setLoading(false);
     }
   };

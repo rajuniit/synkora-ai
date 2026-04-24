@@ -1,6 +1,7 @@
 "use client";
 
 import { useState, useEffect } from "react";
+import { extractErrorMessage } from '@/lib/api/error'
 import { useParams, useRouter } from "next/navigation";
 import {
   Plus,
@@ -67,7 +68,7 @@ export default function AgentWidgetsPage() {
       setWidgets(widgets);
     } catch (err: any) {
       console.error("Failed to fetch widgets:", err);
-      setError(err.response?.data?.detail || "Failed to load widgets");
+      setError(extractErrorMessage(err, "Failed to load widgets"))
     } finally {
       setLoading(false);
     }
@@ -83,7 +84,7 @@ export default function AgentWidgetsPage() {
       await fetchWidgets();
       toast.success("Widget deleted");
     } catch (err: any) {
-      toast.error(err.response?.data?.detail || "Failed to delete widget");
+      toast.error(extractErrorMessage(err, "Failed to delete widget"))
     }
   };
 
@@ -97,7 +98,7 @@ export default function AgentWidgetsPage() {
       await fetchWidgets();
       toast.success("API key regenerated successfully");
     } catch (err: any) {
-      toast.error(err.response?.data?.detail || "Failed to regenerate API key");
+      toast.error(extractErrorMessage(err, "Failed to regenerate API key"))
     }
   };
 
@@ -107,7 +108,7 @@ export default function AgentWidgetsPage() {
       setEmbedCode(response.data?.embed_code || response.embed_code);
       setShowEmbedCode(true);
     } catch (err: any) {
-      toast.error(err.response?.data?.detail || "Failed to get embed code");
+      toast.error(extractErrorMessage(err, "Failed to get embed code"))
     }
   };
 
@@ -404,7 +405,7 @@ function CreateWidgetModal({
       onSuccess();
     } catch (err: any) {
       console.error("Failed to create widget:", err);
-      setError(err.response?.data?.detail || err.message || "Failed to create widget");
+      setError(extractErrorMessage(err, err.message || "Failed to create widget"))
     } finally {
       setLoading(false);
     }

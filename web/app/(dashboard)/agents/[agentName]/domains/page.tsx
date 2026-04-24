@@ -1,6 +1,7 @@
 "use client";
 
 import { useState, useEffect } from "react";
+import { extractErrorMessage } from '@/lib/api/error'
 import { useParams, useRouter } from "next/navigation";
 import {
   Plus,
@@ -60,7 +61,7 @@ export default function AgentDomainsPage() {
       }
     } catch (err: any) {
       console.error("Failed to fetch domains:", err);
-      setError(err.response?.data?.detail || "Failed to load domains");
+      setError(extractErrorMessage(err, "Failed to load domains"))
     } finally {
       setLoading(false);
     }
@@ -76,7 +77,7 @@ export default function AgentDomainsPage() {
       toast.success("Domain deleted successfully");
       await fetchDomains();
     } catch (err: any) {
-      toast.error(err.response?.data?.detail || "Failed to delete domain");
+      toast.error(extractErrorMessage(err, "Failed to delete domain"))
     }
   };
 
@@ -99,7 +100,7 @@ export default function AgentDomainsPage() {
         toast.error(result.message || "Domain verification failed. Please check your DNS configuration.");
       }
     } catch (err: any) {
-      toast.error(err.response?.data?.detail || "Failed to verify domain");
+      toast.error(extractErrorMessage(err, "Failed to verify domain"))
     }
   };
 

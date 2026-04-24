@@ -1,6 +1,7 @@
 "use client";
 
 import { useState, useEffect } from "react";
+import { extractErrorMessage } from '@/lib/api/error'
 import { useParams, useRouter } from "next/navigation";
 import { ArrowLeft, MessageCircle, ExternalLink, CheckCircle, AlertCircle } from "lucide-react";
 import { apiClient } from "@/lib/api/client";
@@ -73,7 +74,7 @@ export default function CreateTelegramBotPage() {
       }
     } catch (err: any) {
       console.error("Error validating token:", err);
-      setError(err.response?.data?.detail || "Failed to validate token");
+      setError(extractErrorMessage(err, "Failed to validate token"))
     } finally {
       setValidating(false);
     }
@@ -107,7 +108,7 @@ export default function CreateTelegramBotPage() {
       router.push(`/agents/${agentName}/telegram-bots`);
     } catch (err: any) {
       console.error("Error creating bot:", err);
-      setError(err.response?.data?.detail || "Failed to create Telegram bot");
+      setError(extractErrorMessage(err, "Failed to create Telegram bot"))
     } finally {
       setLoading(false);
     }

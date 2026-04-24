@@ -12,7 +12,10 @@ import time
 import uuid
 from collections.abc import AsyncGenerator
 from dataclasses import dataclass
-from typing import Any, Optional
+from typing import TYPE_CHECKING, Any, Optional
+
+if TYPE_CHECKING:
+    from src.services.security.pii_redactor import PIIRedactor
 
 from src.helpers.streaming_helpers import convert_to_json_serializable
 from src.services.agents.config import AgenticConfig
@@ -56,6 +59,7 @@ class FunctionCallingHandler:
         observability_config: dict[str, Any] | None = None,
         agentic_config: AgenticConfig | None = None,
         langfuse_service: "LangfuseService | None" = None,
+        pii_redactor: Optional["PIIRedactor"] = None,
     ):
         """
         Initialize function calling handler.
@@ -69,6 +73,7 @@ class FunctionCallingHandler:
             observability_config: Optional observability configuration
             agentic_config: Configuration for agentic loop behavior (parallel tools, retries, etc.)
             langfuse_service: Optional pre-configured LangfuseService (avoids creating duplicate clients)
+            pii_redactor: Optional PIIRedactor for redacting PII in tool results (None = disabled)
         """
         self.llm_client = llm_client
         # Normalize provider to lowercase for consistent comparison
@@ -80,6 +85,7 @@ class FunctionCallingHandler:
         self.observability_config = observability_config or {}
         self.langfuse_service = langfuse_service or LangfuseService.for_agent(self.observability_config)
         self.agentic_config = agentic_config or AgenticConfig()
+        self.pii_redactor = pii_redactor
 
     def _get_available_tools(self, tool_names: list[str] | None) -> list[dict[str, Any]]:
         """Get tool definitions in the format needed."""
@@ -202,11 +208,15 @@ class FunctionCallingHandler:
             # Add function results as tool messages — use index to match call_id exactly
             for i, exec_result in enumerate(execution_results):
                 result = exec_result.result if isinstance(exec_result, ToolExecutionResult) else exec_result
+                content = json.dumps(convert_to_json_serializable(result))
+                # PII redaction — no-op when pii_redactor is None (all existing agents unaffected)
+                if self.pii_redactor:
+                    content = self.pii_redactor.redact(content)
                 conversation_history.append(
                     {
                         "role": "tool",
                         "tool_call_id": f"call_{i}",
-                        "content": json.dumps(convert_to_json_serializable(result)),
+                        "content": content,
                     }
                 )
 
@@ -732,6 +742,9 @@ class FunctionCallingHandler:
                         }
 
                 content = json.dumps(convert_to_json_serializable(result)) if not isinstance(result, str) else result
+                # PII redaction — no-op when pii_redactor is None (all existing agents unaffected)
+                if self.pii_redactor:
+                    content = self.pii_redactor.redact(content)
                 conversation_history.append({"role": "tool", "tool_call_id": call_ids[i], "content": content})
 
         # Max iterations reached - generate a final summary response without tools
@@ -1023,6 +1036,24 @@ class FunctionCallingHandler:
             }
             if system_prompt:
                 create_params["system"] = system_prompt
+
+            # Add cache_control to the last tool entry — caches the entire tool list prefix.
+            # Any change to the tool list will change the last entry, auto-busting the cache.
+            _CACHEABLE = ("claude-3", "claude-sonnet", "claude-haiku", "claude-opus")
+            model = getattr(self.llm_client.config, "model_name", "")
+            if tools and any(p in model.lower() for p in _CACHEABLE):
+                try:
+                    create_params["tools"] = list(tools)
+                    create_params["tools"][-1] = {
+                        **create_params["tools"][-1],
+                        "cache_control": {"type": "ephemeral"},
+                    }
+                    create_params.setdefault("extra_headers", {})[
+                        "anthropic-beta"
+                    ] = "prompt-caching-2024-07-31"
+                except Exception:
+                    pass  # caching is optional; fall back to uncached call
+
             response = await self.llm_client._client.messages.create(**create_params)
 
         return response

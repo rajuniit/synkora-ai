@@ -1,6 +1,6 @@
 """Chart model for storing chart configurations and data."""
 
-from datetime import datetime
+from datetime import UTC, datetime
 from uuid import uuid4
 
 from sqlalchemy import JSON, Column, DateTime, ForeignKey, String, Text
@@ -32,9 +32,9 @@ class Chart(Base):
     data = Column(JSON, nullable=False)  # Chart data
     query = Column(Text, nullable=True)  # Original query that generated the data
 
-    # Timestamps
-    created_at = Column(DateTime, default=datetime.utcnow, nullable=False)
-    updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow, nullable=False)
+    # Timestamps — column is TIMESTAMP WITHOUT TIME ZONE; strip tzinfo so asyncpg accepts it
+    created_at = Column(DateTime, default=lambda: datetime.now(UTC).replace(tzinfo=None), nullable=False)
+    updated_at = Column(DateTime, default=lambda: datetime.now(UTC).replace(tzinfo=None), onupdate=lambda: datetime.now(UTC).replace(tzinfo=None), nullable=False)
 
     # Relationships
     tenant = relationship("Tenant", back_populates="charts")

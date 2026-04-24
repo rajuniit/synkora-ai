@@ -1,6 +1,7 @@
 'use client'
 
 import { useState, useEffect, Suspense } from 'react'
+import { extractErrorMessage } from '@/lib/api/error'
 import Link from 'next/link'
 import { useRouter, useSearchParams } from 'next/navigation'
 import toast from 'react-hot-toast'
@@ -29,7 +30,7 @@ function VerifyEmailContent() {
           router.push('/signin')
         }, 3000)
       } catch (err: any) {
-        const errorMsg = err.response?.data?.detail || 'Failed to verify email'
+        const errorMsg = extractErrorMessage(err, 'Failed to verify email')
         setErrorMessage(errorMsg)
         toast.error(errorMsg)
       } finally {

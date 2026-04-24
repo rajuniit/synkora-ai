@@ -53,7 +53,7 @@ class ExportReportRequest(BaseModel):
     """Request model for exporting report."""
 
     data: list[dict[str, Any]] | dict[str, Any]
-    format: str = Field(..., pattern="^(csv|excel|xlsx|json|html|pdf)$")
+    format: str = Field(..., pattern="^(csv|excel|xlsx|json|html)$")
     filename: str | None = None
     title: str | None = None
 

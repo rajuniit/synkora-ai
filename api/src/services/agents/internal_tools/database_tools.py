@@ -5,7 +5,10 @@ Provides internal database query capabilities for PostgreSQL and Elasticsearch,
 as well as chart generation from query results.
 """
 
+import asyncio
+import json
 import logging
+import time
 from typing import Any
 from uuid import UUID
 
@@ -15,9 +18,158 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from src.models.chart import Chart
 from src.models.database_connection import DatabaseConnection
 from src.services.charts import ChartService
-from src.services.database import ElasticsearchConnector, PostgreSQLConnector, SQLiteConnector
+from src.services.database import (
+    BigQueryConnector,
+    ClickHouseConnector,
+    DatabricksConnector,
+    DatadogConnector,
+    DockerConnector,
+    DuckDBConnector,
+    ElasticsearchConnector,
+    MongoDBConnector,
+    MySQLConnector,
+    PostgreSQLConnector,
+    SnowflakeConnector,
+    SQLiteConnector,
+    SQLServerConnector,
+    SupabaseConnector,
+)
 
 logger = logging.getLogger(__name__)
+
+# ---------------------------------------------------------------------------
+# Connector cache — reuse live connectors across agent tool calls.
+# Key: connection_id (str), Value: (connector, last_used_timestamp)
+# ---------------------------------------------------------------------------
+_CONNECTOR_TTL = 300  # 5 minutes
+_connector_cache: dict[str, tuple[Any, float]] = {}
+_connector_locks: dict[str, asyncio.Lock] = {}
+
+# Maximum characters for query result data returned to the LLM.
+# ~50 K chars ≈ 12 K tokens — large enough for meaningful analysis,
+# small enough to never blow the context window.
+_MAX_RESULT_CHARS = 50_000
+
+# Chart-type → rendering library mapping (mirrors generate_chart_from_csv.py)
+_CHARTJS_TYPES = {"bar", "line", "pie", "doughnut", "scatter"}
+_RECHARTS_TYPES = {"area", "stacked_bar", "radar", "treemap", "funnel"}
+_PLOTLY_TYPES = {"heatmap", "box", "box_plot", "violin", "candlestick", "waterfall"}
+
+
+def _truncate_rows_for_llm(rows: list, total_rows: int) -> tuple[list, str | None]:
+    """
+    Trim *rows* so the JSON representation stays within _MAX_RESULT_CHARS.
+
+    Returns (trimmed_rows, truncation_note) where truncation_note is None when
+    no trimming was needed, or a human-readable warning string when it was.
+    """
+    if not rows:
+        return rows, None
+
+    serialized = json.dumps(rows)
+    if len(serialized) <= _MAX_RESULT_CHARS:
+        return rows, None
+
+    # Binary-search for the largest prefix that fits
+    lo, hi = 1, len(rows)
+    while lo < hi:
+        mid = (lo + hi + 1) // 2
+        if len(json.dumps(rows[:mid])) <= _MAX_RESULT_CHARS:
+            lo = mid
+        else:
+            hi = mid - 1
+
+    kept = lo
+    note = (
+        f"Result truncated: returned {kept} of {total_rows} rows "
+        f"(output exceeded {_MAX_RESULT_CHARS:,} character limit). "
+        "Use a more specific query or add a LIMIT clause to reduce the result size."
+    )
+    logger.warning(note)
+    return rows[:kept], note
+
+
+def _library_for_chart_type(chart_type: str) -> str:
+    """Return the rendering library that supports the given chart type."""
+    ct = chart_type.lower().strip()
+    if ct in _RECHARTS_TYPES:
+        return "recharts"
+    if ct in _PLOTLY_TYPES:
+        return "plotly"
+    return "chartjs"
+
+
+async def _get_or_create_connector(connection: DatabaseConnection) -> Any:
+    """
+    Return a cached connector for *connection*, creating one if needed.
+
+    Uses a per-connection asyncio.Lock to prevent duplicate pool creation
+    on concurrent first calls for the same connection.
+    """
+    conn_key = str(connection.id)
+
+    # Lazily create the per-key lock
+    if conn_key not in _connector_locks:
+        _connector_locks[conn_key] = asyncio.Lock()
+
+    async with _connector_locks[conn_key]:
+        # Evict if stale
+        if conn_key in _connector_cache:
+            connector, last_used = _connector_cache[conn_key]
+            if time.monotonic() - last_used < _CONNECTOR_TTL:
+                _connector_cache[conn_key] = (connector, time.monotonic())
+                return connector
+            # Stale — disconnect and remove
+            try:
+                await connector.disconnect()
+            except Exception:
+                pass
+            del _connector_cache[conn_key]
+
+        # Create a fresh connector
+        db_type = str(connection.database_type).upper()
+        if db_type == "POSTGRESQL":
+            connector = PostgreSQLConnector(connection)
+        elif db_type == "ELASTICSEARCH":
+            connector = ElasticsearchConnector(connection)
+        elif db_type == "SQLITE":
+            connector = SQLiteConnector(database_path=connection.database_path)
+        elif db_type == "MYSQL":
+            connector = MySQLConnector(connection)
+        elif db_type == "MONGODB":
+            connector = MongoDBConnector(connection)
+        elif db_type == "SUPABASE":
+            connector = SupabaseConnector(connection)
+        elif db_type == "BIGQUERY":
+            connector = BigQueryConnector(connection)
+        elif db_type == "SNOWFLAKE":
+            connector = SnowflakeConnector(connection)
+        elif db_type == "SQLSERVER":
+            connector = SQLServerConnector(connection)
+        elif db_type == "CLICKHOUSE":
+            connector = ClickHouseConnector(connection)
+        elif db_type == "DUCKDB":
+            connector = DuckDBConnector(connection)
+        elif db_type == "DATADOG":
+            connector = DatadogConnector(connection)
+            # Datadog connector has no persistent connection; return directly
+            _connector_cache[conn_key] = (connector, time.monotonic())
+            return connector
+        elif db_type == "DATABRICKS":
+            connector = DatabricksConnector(connection)
+            _connector_cache[conn_key] = (connector, time.monotonic())
+            return connector
+        elif db_type == "DOCKER":
+            connector = DockerConnector(connection)
+            _connector_cache[conn_key] = (connector, time.monotonic())
+            return connector
+        else:
+            return None
+
+        await connector.connect()
+        _connector_cache[conn_key] = (connector, time.monotonic())
+        logger.debug(f"Created and cached connector for connection {conn_key}")
+        return connector
 
 
 async def internal_query_database(
@@ -63,13 +215,17 @@ async def internal_query_database(
         if connection.status != "active":
             return {"success": False, "error": f"Database connection is not active. Status: {connection.status}"}
 
-        # Execute query based on database type
-        if connection.database_type == "POSTGRESQL":
+        # Execute query based on database type (use cached connector)
+        db_type = str(connection.database_type).upper()
+        if db_type == "POSTGRESQL":
             return await _execute_postgresql_query(connection, query)
-        elif connection.database_type == "ELASTICSEARCH":
+        elif db_type == "ELASTICSEARCH":
             return await _execute_elasticsearch_query(connection, query)
-        elif connection.database_type == "SQLITE":
+        elif db_type == "SQLITE":
             return await _execute_sqlite_query(connection, query)
+        elif db_type in ("MYSQL", "MONGODB", "SUPABASE", "BIGQUERY", "SNOWFLAKE", "SQLSERVER", "CLICKHOUSE", "DUCKDB",
+                         "DATADOG", "DATABRICKS", "DOCKER"):
+            return await _execute_generic_query(connection, query)
         else:
             return {"success": False, "error": f"Unsupported database type: {connection.database_type}"}
 
@@ -79,37 +235,35 @@ async def internal_query_database(
 
 
 async def _execute_postgresql_query(connection: DatabaseConnection, query: str) -> dict[str, Any]:
-    """Execute a PostgreSQL query."""
+    """Execute a PostgreSQL query using a cached connector."""
     try:
-        connector = PostgreSQLConnector(connection)
-        connected = await connector.connect()
-
-        if not connected:
+        connector = await _get_or_create_connector(connection)
+        if connector is None:
             return {
                 "success": False,
-                "error": "Failed to connect to PostgreSQL database. Check connection credentials and network access.",
+                "error": "Failed to create PostgreSQL connector.",
                 "connection_name": connection.name,
                 "database_type": "postgresql",
             }
 
-        try:
-            # Execute the query
-            result = await connector.execute_query(query)
+        result = await connector.execute_query(query)
+        rows, note = _truncate_rows_for_llm(result.get("rows", []), result.get("row_count", 0))
 
-            return {
-                "success": True,
-                "data": result.get("rows", []),
-                "row_count": result.get("row_count", 0),
-                "columns": result.get("columns", []),
-                "query_executed": result.get("query", query),
-                "connection_name": connection.name,
-                "database_type": "postgresql",
-            }
-        finally:
-            await connector.disconnect()
+        return {
+            "success": True,
+            "data": rows,
+            "row_count": result.get("row_count", 0),
+            "columns": result.get("columns", []),
+            "query_executed": result.get("query", query),
+            "connection_name": connection.name,
+            "database_type": "postgresql",
+            **({"truncation_note": note} if note else {}),
+        }
 
     except Exception as e:
         logger.warning(f"PostgreSQL query error: {e}", exc_info=True)
+        # Evict stale connector on error
+        _connector_cache.pop(str(connection.id), None)
         return {
             "success": False,
             "error": f"PostgreSQL query failed: {str(e)}",
@@ -119,59 +273,87 @@ async def _execute_postgresql_query(connection: DatabaseConnection, query: str) 
 
 
 async def _execute_elasticsearch_query(connection: DatabaseConnection, query: str) -> dict[str, Any]:
-    """Execute an Elasticsearch query."""
+    """Execute an Elasticsearch query using a cached connector."""
     try:
-        connector = ElasticsearchConnector(connection)
-        connected = await connector.connect()
+        import json
 
-        if not connected:
+        connector = await _get_or_create_connector(connection)
+        if connector is None:
             return {
                 "success": False,
-                "error": "Failed to connect to Elasticsearch. Check connection credentials and network access.",
+                "error": "Failed to create Elasticsearch connector.",
                 "connection_name": connection.name,
                 "database_type": "elasticsearch",
             }
 
         try:
-            # Parse query as JSON if it looks like DSL
-            import json
-
-            try:
-                query_dsl = json.loads(query)
-                # Assume it's a search query
-                result = await connector.search(
-                    index=query_dsl.get("index", "_all"),
-                    query=query_dsl.get("query", {}),
-                    size=query_dsl.get("size", 10),
-                )
-            except json.JSONDecodeError:
-                # Treat as natural language query - would need query builder
-                return {
-                    "success": False,
-                    "error": "Natural language queries for Elasticsearch not yet implemented. Please provide DSL query as JSON.",
-                    "connection_name": connection.name,
-                    "database_type": "elasticsearch",
-                }
-
+            query_dsl = json.loads(query)
+        except json.JSONDecodeError:
             return {
-                "success": True,
-                "data": result.get("hits", []),
-                "row_count": len(result.get("hits", [])),
-                "total_hits": result.get("total", 0),
-                "query_executed": query,
+                "success": False,
+                "error": "Natural language queries for Elasticsearch not yet implemented. Please provide DSL query as JSON.",
                 "connection_name": connection.name,
                 "database_type": "elasticsearch",
             }
-        finally:
-            await connector.disconnect()
+
+        index = query_dsl.pop("index", "_all")
+        size = query_dsl.pop("size", 10)
+        from_ = query_dsl.pop("from", 0)
+        result = await connector.execute_search(index=index, query=query_dsl, size=size, from_=from_)
+
+        return {
+            "success": result.get("success", False),
+            "data": result.get("results", []),
+            "row_count": len(result.get("results", [])),
+            "total_hits": result.get("total", 0),
+            "query_executed": query,
+            "connection_name": connection.name,
+            "database_type": "elasticsearch",
+        }
 
     except Exception as e:
         logger.warning(f"Elasticsearch query error: {e}", exc_info=True)
+        _connector_cache.pop(str(connection.id), None)
         return {
             "success": False,
             "error": f"Elasticsearch query failed: {str(e)}",
             "connection_name": connection.name,
             "database_type": "elasticsearch",
+        }
+
+
+async def _execute_generic_query(connection: DatabaseConnection, query: str) -> dict[str, Any]:
+    """Execute a query on a MySQL or MongoDB connection using a cached connector."""
+    db_type = str(connection.database_type).upper()
+    display_type = db_type.lower()
+    try:
+        connector = await _get_or_create_connector(connection)
+        if connector is None:
+            return {"success": False, "error": f"Failed to create {display_type} connector.", "connection_name": connection.name, "database_type": display_type}
+
+        result = await connector.execute_query(query)
+        rows, note = _truncate_rows_for_llm(result.get("rows", []), result.get("row_count", 0))
+
+        return {
+            "success": result.get("success", False),
+            "data": rows,
+            "row_count": result.get("row_count", 0),
+            "columns": result.get("columns", []),
+            "query_executed": query,
+            "connection_name": connection.name,
+            "database_type": display_type,
+            "error": result.get("error"),
+            **({"truncation_note": note} if note else {}),
+        }
+
+    except Exception as e:
+        logger.warning(f"{db_type} query error: {e}", exc_info=True)
+        _connector_cache.pop(str(connection.id), None)
+        return {
+            "success": False,
+            "error": f"{db_type} query failed: {str(e)}",
+            "connection_name": connection.name,
+            "database_type": display_type,
         }
 
 
@@ -268,13 +450,16 @@ async def internal_get_database_schema(
         if not connection:
             return {"success": False, "error": f"Database connection not found: {connection_id}"}
 
-        # Get schema based on database type
-        if connection.database_type == "POSTGRESQL":
+        db_type = str(connection.database_type).upper()
+        if db_type == "POSTGRESQL":
             return await _get_postgresql_schema(connection)
-        elif connection.database_type == "ELASTICSEARCH":
+        elif db_type == "ELASTICSEARCH":
             return await _get_elasticsearch_schema(connection)
-        elif connection.database_type == "SQLITE":
+        elif db_type == "SQLITE":
             return await _get_sqlite_schema(connection)
+        elif db_type in ("MYSQL", "MONGODB", "SUPABASE", "BIGQUERY", "SNOWFLAKE", "SQLSERVER", "CLICKHOUSE", "DUCKDB",
+                         "DATADOG", "DATABRICKS", "DOCKER"):
+            return await _get_generic_schema(connection)
         else:
             return {"success": False, "error": f"Unsupported database type: {connection.database_type}"}
 
@@ -284,31 +469,28 @@ async def internal_get_database_schema(
 
 
 async def _get_postgresql_schema(connection: DatabaseConnection) -> dict[str, Any]:
-    """Get PostgreSQL schema information."""
+    """Get PostgreSQL schema information using cached connector."""
     try:
-        connector = PostgreSQLConnector(connection)
-        await connector.connect()
+        connector = await _get_or_create_connector(connection)
+        if connector is None:
+            return {"success": False, "error": "Failed to create PostgreSQL connector.", "connection_name": connection.name, "database_type": "postgresql"}
 
-        try:
-            tables = await connector.get_tables()
+        tables = await connector.get_tables()
+        schema_info = []
+        for table in tables[:20]:
+            table_info = await connector.get_table_info(table)
+            schema_info.append(table_info)
 
-            # Get detailed info for each table
-            schema_info = []
-            for table in tables[:20]:  # Limit to first 20 tables
-                table_info = await connector.get_table_info(table)
-                schema_info.append(table_info)
-
-            return {
-                "success": True,
-                "schema": {"tables": schema_info, "total_tables": len(tables)},
-                "connection_name": connection.name,
-                "database_type": "postgresql",
-            }
-        finally:
-            await connector.disconnect()
+        return {
+            "success": True,
+            "schema": {"tables": schema_info, "total_tables": len(tables)},
+            "connection_name": connection.name,
+            "database_type": "postgresql",
+        }
 
     except Exception as e:
         logger.warning(f"PostgreSQL schema error: {e}", exc_info=True)
+        _connector_cache.pop(str(connection.id), None)
         return {
             "success": False,
             "error": f"Failed to get PostgreSQL schema: {str(e)}",
@@ -318,31 +500,29 @@ async def _get_postgresql_schema(connection: DatabaseConnection) -> dict[str, An
 
 
 async def _get_elasticsearch_schema(connection: DatabaseConnection) -> dict[str, Any]:
-    """Get Elasticsearch schema information."""
+    """Get Elasticsearch schema information using cached connector."""
     try:
-        connector = ElasticsearchConnector(connection)
-        await connector.connect()
+        connector = await _get_or_create_connector(connection)
+        if connector is None:
+            return {"success": False, "error": "Failed to create Elasticsearch connector.", "connection_name": connection.name, "database_type": "elasticsearch"}
 
-        try:
-            indices = await connector.list_indices()
+        indices_result = await connector.get_indices()
+        indices = [idx["name"] for idx in (indices_result.get("indices") or [])]
+        schema_info = []
+        for index_name in indices[:20]:
+            mapping = await connector.get_index_mapping(index_name)
+            schema_info.append({"index": index_name, "mapping": mapping})
 
-            # Get mappings for each index
-            schema_info = []
-            for index in indices[:20]:  # Limit to first 20 indices
-                mapping = await connector.get_mapping(index)
-                schema_info.append({"index": index, "mapping": mapping})
-
-            return {
-                "success": True,
-                "schema": {"indices": schema_info, "total_indices": len(indices)},
-                "connection_name": connection.name,
-                "database_type": "elasticsearch",
-            }
-        finally:
-            await connector.disconnect()
+        return {
+            "success": True,
+            "schema": {"indices": schema_info, "total_indices": len(indices)},
+            "connection_name": connection.name,
+            "database_type": "elasticsearch",
+        }
 
     except Exception as e:
         logger.warning(f"Elasticsearch schema error: {e}", exc_info=True)
+        _connector_cache.pop(str(connection.id), None)
         return {
             "success": False,
             "error": f"Failed to get Elasticsearch schema: {str(e)}",
@@ -352,29 +532,34 @@ async def _get_elasticsearch_schema(connection: DatabaseConnection) -> dict[str,
 
 
 async def _execute_sqlite_query(connection: DatabaseConnection, query: str) -> dict[str, Any]:
-    """Execute a SQLite query."""
+    """Execute a SQLite query using a cached connector."""
     try:
-        connector = SQLiteConnector(database_path=connection.database_path)
-        await connector.connect()
-
-        try:
-            # Execute the query
-            result = await connector.execute_query(query)
-
+        connector = await _get_or_create_connector(connection)
+        if connector is None:
             return {
-                "success": True,
-                "data": result.get("rows", []),
-                "row_count": result.get("row_count", 0),
-                "columns": result.get("columns", []),
-                "query_executed": result.get("query", query),
+                "success": False,
+                "error": "Failed to create SQLite connector.",
                 "connection_name": connection.name,
                 "database_type": "sqlite",
             }
-        finally:
-            await connector.disconnect()
+
+        result = await connector.execute_query(query)
+        rows, note = _truncate_rows_for_llm(result.get("rows", []), result.get("row_count", 0))
+
+        return {
+            "success": True,
+            "data": rows,
+            "row_count": result.get("row_count", 0),
+            "columns": result.get("columns", []),
+            "query_executed": result.get("query", query),
+            "connection_name": connection.name,
+            "database_type": "sqlite",
+            **({"truncation_note": note} if note else {}),
+        }
 
     except Exception as e:
         logger.warning(f"SQLite query error: {e}", exc_info=True)
+        _connector_cache.pop(str(connection.id), None)
         return {
             "success": False,
             "error": f"SQLite query failed: {str(e)}",
@@ -383,39 +568,58 @@ async def _execute_sqlite_query(connection: DatabaseConnection, query: str) -> d
         }
 
 
-async def _get_sqlite_schema(connection: DatabaseConnection) -> dict[str, Any]:
-    """Get SQLite schema information."""
+async def _get_generic_schema(connection: DatabaseConnection) -> dict[str, Any]:
+    """Get schema for MySQL or MongoDB using a cached connector."""
+    db_type = str(connection.database_type).upper()
+    display_type = db_type.lower()
     try:
-        connector = SQLiteConnector(database_path=connection.database_path)
-        await connector.connect()
+        connector = await _get_or_create_connector(connection)
+        if connector is None:
+            return {"success": False, "error": f"Failed to create {display_type} connector.", "connection_name": connection.name, "database_type": display_type}
 
-        try:
-            schema_result = await connector.get_schema()
+        result = await connector.get_schema()
+        tables = result.get("tables", [])
+        return {
+            "success": result.get("success", False),
+            "schema": {"tables": tables[:20], "total_tables": len(tables)},
+            "connection_name": connection.name,
+            "database_type": display_type,
+        }
 
-            if not schema_result.get("success"):
-                return {
-                    "success": False,
-                    "error": schema_result.get("error", "Failed to get schema"),
-                    "connection_name": connection.name,
-                    "database_type": "sqlite",
-                }
+    except Exception as e:
+        logger.warning(f"{db_type} schema error: {e}", exc_info=True)
+        _connector_cache.pop(str(connection.id), None)
+        return {"success": False, "error": f"Failed to get {display_type} schema: {str(e)}", "connection_name": connection.name, "database_type": display_type}
 
-            tables = schema_result.get("tables", [])
 
+async def _get_sqlite_schema(connection: DatabaseConnection) -> dict[str, Any]:
+    """Get SQLite schema information using cached connector."""
+    try:
+        connector = await _get_or_create_connector(connection)
+        if connector is None:
+            return {"success": False, "error": "Failed to create SQLite connector.", "connection_name": connection.name, "database_type": "sqlite"}
+
+        schema_result = await connector.get_schema()
+
+        if not schema_result.get("success"):
             return {
-                "success": True,
-                "schema": {
-                    "tables": tables[:20],  # Limit to first 20 tables
-                    "total_tables": len(tables),
-                },
+                "success": False,
+                "error": schema_result.get("error", "Failed to get schema"),
                 "connection_name": connection.name,
                 "database_type": "sqlite",
             }
-        finally:
-            await connector.disconnect()
+
+        tables = schema_result.get("tables", [])
+        return {
+            "success": True,
+            "schema": {"tables": tables[:20], "total_tables": len(tables)},
+            "connection_name": connection.name,
+            "database_type": "sqlite",
+        }
 
     except Exception as e:
         logger.warning(f"SQLite schema error: {e}", exc_info=True)
+        _connector_cache.pop(str(connection.id), None)
         return {
             "success": False,
             "error": f"Failed to get SQLite schema: {str(e)}",
@@ -435,17 +639,18 @@ async def internal_generate_chart(
     message_id: str | None = None,
     description: str | None = None,
     config: dict[str, Any] | None = None,
+    library: str | None = None,
 ) -> dict[str, Any]:
     """
     Generate a chart from database query results.
 
-    This tool allows agents to create visualizations from data they've queried.
-    The chart configuration is generated automatically based on the data structure,
-    or can be customized using the config parameter.
+    Supports Chart.js (bar, line, pie, doughnut, scatter),
+    Recharts (area, stacked_bar, radar, treemap, funnel),
+    and Plotly (heatmap, box, violin, candlestick, waterfall).
 
     Args:
         query_result: Result from internal_query_database containing data
-        chart_type: Type of chart (line, bar, pie, scatter, etc.) or None for auto-detection
+        chart_type: Type of chart or None for auto-detection
         title: Chart title
         agent_id: Agent ID creating the chart
         tenant_id: Tenant ID for authorization
@@ -454,6 +659,7 @@ async def internal_generate_chart(
         message_id: Optional message ID to link chart to
         description: Optional chart description
         config: Optional custom chart configuration
+        library: Rendering library override (chartjs | recharts | plotly). Auto-detected from chart_type if None.
 
     Returns:
         Dictionary containing:
@@ -465,9 +671,16 @@ async def internal_generate_chart(
     """
     try:
         # Normalize query_result — the LLM may pass data in several shapes:
+        #   0. A JSON string — parse it first
         #   1. A plain list of rows (e.g. from micromobility tool results aggregated by LLM)
         #   2. A flat dict of key→value pairs (e.g. {"total_reports": 276, "pending": 216})
         #   3. The standard {"success": True, "data": [...]} format from internal_query_database
+        if isinstance(query_result, str):
+            try:
+                query_result = json.loads(query_result)
+            except (json.JSONDecodeError, ValueError):
+                return {"success": False, "error": "query_result is a string but could not be parsed as JSON. Pass a list or dict, not a string."}
+
         if isinstance(query_result, list):
             query_result = {"success": True, "data": query_result, "row_count": len(query_result)}
         elif isinstance(query_result, dict) and "data" not in query_result:
@@ -491,10 +704,13 @@ async def internal_generate_chart(
         # The LLM may pass query results with or without a "success" key
         data = clean_query_result.get("data", [])
 
-        # If data is a paginated API response (e.g. micromobility list_trips returns
-        # {"count": N, "next": ..., "results": [...]}), extract the actual rows.
+        # If data is a paginated API response, unwrap to the inner list.
+        # DRF format: {"count": N, "results": [...]}
         if isinstance(data, dict) and "results" in data:
             data = data["results"]
+        # Micromobility format: {"meta": {...}, "data": [...]}
+        elif isinstance(data, dict) and "data" in data and isinstance(data["data"], list):
+            data = data["data"]
 
         # Validate that we have data to work with
         if not data:
@@ -503,6 +719,42 @@ async def internal_generate_chart(
             return {"success": False, "error": error_msg}
 
         logger.info(f"Generating chart with {len(data)} data points")
+
+        # Validate data shape: the chart service expects rows with at least 2 columns where
+        # column 0 = label (x-axis) and column 1 = numeric value (y-axis).
+        # If data rows look like raw API records (more than 3 columns, or no numeric second column),
+        # return a helpful error so the agent can pre-aggregate before calling this tool.
+        if isinstance(data, list) and data and isinstance(data[0], dict):
+            columns = list(data[0].keys())
+            if len(columns) > 3:
+                col_names = ", ".join(columns[:6]) + ("..." if len(columns) > 6 else "")
+                return {
+                    "success": False,
+                    "error": (
+                        f"Data cannot be charted directly — it contains {len(columns)} columns "
+                        f"({col_names}) and appears to be raw API records, not aggregated chart data. "
+                        "Please pre-aggregate the data into rows with exactly 2 columns: "
+                        "a label column (e.g. 'date') and a numeric value column (e.g. 'count'). "
+                        "Example: [{\"date\": \"2026-04-20\", \"count\": 15}, ...]. "
+                        "Then call internal_generate_chart again with the aggregated data."
+                    ),
+                }
+            # Ensure the second column is (or can be cast to) a number
+            if len(columns) >= 2:
+                second_col = columns[1]
+                sample_val = data[0].get(second_col)
+                if sample_val is not None and not isinstance(sample_val, (int, float)):
+                    try:
+                        float(str(sample_val))
+                    except (ValueError, TypeError):
+                        return {
+                            "success": False,
+                            "error": (
+                                f"Column '{second_col}' (value '{sample_val}') is not numeric. "
+                                "The second column must contain numeric values for the y-axis. "
+                                "Please provide pre-aggregated data with a label column and a numeric count/value column."
+                            ),
+                        }
 
         # Determine chart type if not specified
         if not chart_type:
@@ -514,8 +766,11 @@ async def internal_generate_chart(
         # Generate chart data structure (doesn't need db)
         chart_data = chart_service.generate_chart_from_query_result(query_result=data, chart_type=chart_type)
 
+        # Determine rendering library: explicit override → auto-detect from type → default chartjs
+        if not library:
+            library = _library_for_chart_type(chart_type)
+
         # Generate chart configuration (doesn't need db)
-        library = "chartjs"  # Default library
         chart_config = chart_service._generate_chart_config(chart_type=chart_type, data=chart_data, library=library)
 
         # Merge with custom config if provided, but exclude runtime context

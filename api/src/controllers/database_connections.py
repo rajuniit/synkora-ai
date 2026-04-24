@@ -18,11 +18,62 @@ from src.core.errors import safe_error_message
 from src.middleware.auth_middleware import get_current_account, get_current_tenant_id
 from src.models import Account
 from src.models.database_connection import DatabaseConnection, DatabaseConnectionType
-from src.services.database import ElasticsearchConnector, PostgreSQLConnector, SQLiteConnector
+from src.services.database import (
+    BigQueryConnector,
+    ClickHouseConnector,
+    DatabricksConnector,
+    DatadogConnector,
+    DockerConnector,
+    DuckDBConnector,
+    ElasticsearchConnector,
+    MongoDBConnector,
+    MySQLConnector,
+    PostgreSQLConnector,
+    SnowflakeConnector,
+    SQLiteConnector,
+    SQLServerConnector,
+    SupabaseConnector,
+)
 
 logger = logging.getLogger(__name__)
 
 router = APIRouter(prefix="/api/v1/database-connections", tags=["database-connections"])
+
+
+
+def _make_connector(db_type: DatabaseConnectionType, connection: "DatabaseConnection"):
+    """Return the right connector instance for *db_type*, or None if unsupported."""
+    match db_type:
+        case DatabaseConnectionType.POSTGRESQL:
+            return PostgreSQLConnector(database_connection=connection)
+        case DatabaseConnectionType.SUPABASE:
+            return SupabaseConnector(database_connection=connection)
+        case DatabaseConnectionType.MYSQL:
+            return MySQLConnector(database_connection=connection)
+        case DatabaseConnectionType.MONGODB:
+            return MongoDBConnector(database_connection=connection)
+        case DatabaseConnectionType.SQLITE:
+            return SQLiteConnector(database_path=connection.database_path)
+        case DatabaseConnectionType.ELASTICSEARCH:
+            return ElasticsearchConnector(database_connection=connection)
+        case DatabaseConnectionType.BIGQUERY:
+            return BigQueryConnector(database_connection=connection)
+        case DatabaseConnectionType.SNOWFLAKE:
+            return SnowflakeConnector(database_connection=connection)
+        case DatabaseConnectionType.SQLSERVER:
+            return SQLServerConnector(database_connection=connection)
+        case DatabaseConnectionType.CLICKHOUSE:
+            return ClickHouseConnector(database_connection=connection)
+        case DatabaseConnectionType.DUCKDB:
+            return DuckDBConnector(database_connection=connection)
+        case DatabaseConnectionType.DATADOG:
+            return DatadogConnector(database_connection=connection)
+        case DatabaseConnectionType.DATABRICKS:
+            return DatabricksConnector(database_connection=connection)
+        case DatabaseConnectionType.DOCKER:
+            return DockerConnector(database_connection=connection)
+        case _:
+            return None
 
 
 # Request/Response Models
@@ -32,7 +83,7 @@ class DatabaseConnectionCreate(BaseModel):
     name: str = Field(..., min_length=1, max_length=255)
     type: DatabaseConnectionType
     host: str | None = None
-    port: int | None = Field(None, gt=0, lt=65536)
+    port: int | None = Field(None, ge=1, lt=65536)
     database: str | None = None
     username: str | None = None
     password: str | None = None
@@ -59,7 +110,7 @@ class DatabaseConnectionUpdate(BaseModel):
 
     name: str | None = Field(None, min_length=1, max_length=255)
     host: str | None = None
-    port: int | None = Field(None, gt=0, lt=65536)
+    port: int | None = Field(None, ge=1, lt=65536)
     database: str | None = None
     username: str | None = None
     password: str | None = None
@@ -122,6 +173,49 @@ async def create_database_connection(
                 raise HTTPException(
                     status_code=status.HTTP_400_BAD_REQUEST, detail="database_path is required for SQLite connections"
                 )
+        elif connection_data.type == DatabaseConnectionType.DATADOG:
+            if not connection_data.password:
+                raise HTTPException(
+                    status_code=status.HTTP_400_BAD_REQUEST, detail="API key (password) is required for Datadog"
+                )
+            if not connection_data.username:
+                raise HTTPException(
+                    status_code=status.HTTP_400_BAD_REQUEST, detail="Application key (username) is required for Datadog"
+                )
+            if not connection_data.host:
+                raise HTTPException(
+                    status_code=status.HTTP_400_BAD_REQUEST, detail="Site (host) is required for Datadog"
+                )
+        elif connection_data.type == DatabaseConnectionType.DATABRICKS:
+            if not connection_data.host:
+                raise HTTPException(
+                    status_code=status.HTTP_400_BAD_REQUEST, detail="Server hostname (host) is required for Databricks"
+                )
+            if not connection_data.database_path:
+                raise HTTPException(
+                    status_code=status.HTTP_400_BAD_REQUEST, detail="HTTP path (database_path) is required for Databricks"
+                )
+            if not connection_data.password:
+                raise HTTPException(
+                    status_code=status.HTTP_400_BAD_REQUEST, detail="Access token (password) is required for Databricks"
+                )
+        elif connection_data.type == DatabaseConnectionType.BIGQUERY:
+            if not connection_data.connection_params or not connection_data.connection_params.get("service_account_json"):
+                raise HTTPException(
+                    status_code=status.HTTP_400_BAD_REQUEST,
+                    detail="connection_params.service_account_json is required for BigQuery",
+                )
+        elif connection_data.type == DatabaseConnectionType.DOCKER:
+            if not connection_data.host:
+                raise HTTPException(
+                    status_code=status.HTTP_400_BAD_REQUEST, detail="Docker host is required"
+                )
+        elif connection_data.type == DatabaseConnectionType.SUPABASE:
+            if not connection_data.host or not connection_data.username or not connection_data.password:
+                raise HTTPException(
+                    status_code=status.HTTP_400_BAD_REQUEST,
+                    detail="Project URL (host), Anon Key (username) and Service Role Key (password) are required for Supabase",
+                )
         else:
             if not connection_data.host or not connection_data.port:
                 raise HTTPException(
@@ -152,8 +246,8 @@ async def create_database_connection(
             database_name=connection_data.database or "",
             username=connection_data.username or "",
             database_path=connection_data.database_path,
-            connection_params=connection_data.connection_params or {},
         )
+        connection.connection_params = connection_data.connection_params or {}
 
         # Set encrypted password if provided
         if connection_data.password:
@@ -170,14 +264,8 @@ async def create_database_connection(
 
         # Automatically test the connection and update status
         try:
-            if connection.database_type == DatabaseConnectionType.POSTGRESQL:
-                connector = PostgreSQLConnector(database_connection=connection)
-                test_result = await connector.test_connection()
-            elif connection.database_type == DatabaseConnectionType.SQLITE:
-                connector = SQLiteConnector(database_path=connection.database_path)
-                test_result = await connector.test_connection()
-            elif connection.database_type == DatabaseConnectionType.ELASTICSEARCH:
-                connector = ElasticsearchConnector(database_connection=connection)
+            connector = _make_connector(connection.database_type, connection)
+            if connector is not None:
                 test_result = await connector.test_connection()
             else:
                 test_result = {"success": False}
@@ -207,7 +295,7 @@ async def create_database_connection(
             database=connection.database_name if connection.database_name else None,
             username=connection.username if connection.username else None,
             database_path=connection.database_path,
-            connection_params=connection.connection_params,
+            connection_params=connection.get_safe_connection_params(),
             status=connection.status,
             created_at=connection.created_at.isoformat(),
             updated_at=connection.updated_at.isoformat(),
@@ -265,7 +353,7 @@ async def list_database_connections(
                 database=conn.database_name if conn.database_name else None,
                 username=conn.username if conn.username else None,
                 database_path=conn.database_path,
-                connection_params=conn.connection_params,
+                connection_params=conn.get_safe_connection_params(),
                 status=conn.status,
                 created_at=conn.created_at.isoformat(),
                 updated_at=conn.updated_at.isoformat(),
@@ -323,7 +411,7 @@ async def get_database_connection(
             database=connection.database_name if connection.database_name else None,
             username=connection.username if connection.username else None,
             database_path=connection.database_path,
-            connection_params=connection.connection_params,
+            connection_params=connection.get_safe_connection_params(),
             status=connection.status,
             created_at=connection.created_at.isoformat(),
             updated_at=connection.updated_at.isoformat(),
@@ -387,7 +475,9 @@ async def update_database_connection(
         if connection_data.database_path is not None:
             connection.database_path = connection_data.database_path
         if connection_data.connection_params is not None:
-            connection.connection_params = connection_data.connection_params
+            # Merge: keep existing sensitive values unless caller explicitly replaces them
+            existing = connection.connection_params  # decrypted via property getter
+            connection.connection_params = {**existing, **connection_data.connection_params}
 
         # Update status if provided, otherwise reset to pending if connection details changed
         if connection_data.status is not None:
@@ -421,7 +511,7 @@ async def update_database_connection(
             database=connection.database_name if connection.database_name else None,
             username=connection.username if connection.username else None,
             database_path=connection.database_path,
-            connection_params=connection.connection_params,
+            connection_params=connection.get_safe_connection_params(),
             status=connection.status,
             created_at=connection.created_at.isoformat(),
             updated_at=connection.updated_at.isoformat(),
@@ -458,83 +548,85 @@ async def test_database_connection(
         Connection test result
     """
     try:
-        # Validate required fields based on database type
+        # Validate required fields per connector type
         if connection_data.type == DatabaseConnectionType.SQLITE:
             if not connection_data.database_path:
                 raise HTTPException(
-                    status_code=status.HTTP_400_BAD_REQUEST, detail="database_path is required for SQLite connections"
+                    status_code=status.HTTP_400_BAD_REQUEST,
+                    detail="database_path is required for SQLite connections",
                 )
-        else:
+        elif connection_data.type == DatabaseConnectionType.BIGQUERY:
+            # BigQuery uses service_account_json in connection_params, not host/port
+            if not connection_data.connection_params or not connection_data.connection_params.get("service_account_json"):
+                raise HTTPException(
+                    status_code=status.HTTP_400_BAD_REQUEST,
+                    detail="connection_params.service_account_json is required for BigQuery",
+                )
+        elif connection_data.type == DatabaseConnectionType.DATADOG:
+            if not connection_data.password:
+                raise HTTPException(
+                    status_code=status.HTTP_400_BAD_REQUEST, detail="API key (password) is required for Datadog"
+                )
+            if not connection_data.host:
+                raise HTTPException(
+                    status_code=status.HTTP_400_BAD_REQUEST, detail="Site (host) is required for Datadog"
+                )
+        elif connection_data.type == DatabaseConnectionType.DATABRICKS:
+            if not connection_data.host:
+                raise HTTPException(
+                    status_code=status.HTTP_400_BAD_REQUEST, detail="Server hostname (host) is required for Databricks"
+                )
+            if not connection_data.database_path:
+                raise HTTPException(
+                    status_code=status.HTTP_400_BAD_REQUEST, detail="HTTP path (database_path) is required for Databricks"
+                )
+            if not connection_data.password:
+                raise HTTPException(
+                    status_code=status.HTTP_400_BAD_REQUEST, detail="Access token (password) is required for Databricks"
+                )
+        elif connection_data.type == DatabaseConnectionType.DOCKER:
+            if not connection_data.host:
+                raise HTTPException(
+                    status_code=status.HTTP_400_BAD_REQUEST, detail="Docker host is required"
+                )
+        elif connection_data.type == DatabaseConnectionType.SUPABASE:
+            if not connection_data.host or not connection_data.username or not connection_data.password:
+                raise HTTPException(
+                    status_code=status.HTTP_400_BAD_REQUEST,
+                    detail="Project URL (host), Anon Key (username) and Service Role Key (password) are required for Supabase",
+                )
+        elif connection_data.type != DatabaseConnectionType.ELASTICSEARCH:
             if not connection_data.host or not connection_data.port:
                 raise HTTPException(
                     status_code=status.HTTP_400_BAD_REQUEST,
-                    detail="host and port are required for non-SQLite connections",
+                    detail="host and port are required for this connection type",
                 )
-            # For Elasticsearch, credentials are optional (only needed if security is enabled)
-            # For PostgreSQL/MySQL/MongoDB, credentials are required
-            if connection_data.type != DatabaseConnectionType.ELASTICSEARCH:
-                if not connection_data.database:
-                    raise HTTPException(
-                        status_code=status.HTTP_400_BAD_REQUEST,
-                        detail="database is required for non-SQLite connections",
-                    )
-                if not connection_data.username or not connection_data.password:
-                    raise HTTPException(
-                        status_code=status.HTTP_400_BAD_REQUEST,
-                        detail="username and password are required for non-SQLite connections",
-                    )
 
-        # Test the connection based on type
-        if connection_data.type == DatabaseConnectionType.POSTGRESQL:
-            temp_connection = DatabaseConnection(
-                tenant_id=tenant_id,
-                name="temp_test",
-                database_type=connection_data.type,
-                host=connection_data.host or "",
-                port=connection_data.port or 5432,
-                database_name=connection_data.database or "",
-                username=connection_data.username or "",
-                database_path=None,
-                connection_params=connection_data.connection_params or {},
-            )
-            if connection_data.password:
-                temp_connection.set_password(connection_data.password)
+        # Build a transient DatabaseConnection for testing (never persisted)
+        temp_connection = DatabaseConnection(
+            tenant_id=tenant_id,
+            name="temp_test",
+            database_type=connection_data.type,
+            host=connection_data.host or "",
+            port=connection_data.port or 0,
+            database_name=connection_data.database or "",
+            username=connection_data.username or "",
+            database_path=connection_data.database_path,
+        )
+        temp_connection.connection_params = connection_data.connection_params or {}
+        if connection_data.password:
+            temp_connection.set_password(connection_data.password)
 
-            connector = PostgreSQLConnector(database_connection=temp_connection)
-            test_result = await connector.test_connection()
-
-            if not test_result["success"]:
-                raise Exception(test_result["message"])
-        elif connection_data.type == DatabaseConnectionType.SQLITE:
-            connector = SQLiteConnector(database_path=connection_data.database_path)
-            # Test connection
-            await connector.connect()
-            await connector.disconnect()
-        elif connection_data.type == DatabaseConnectionType.ELASTICSEARCH:
-            # Create a temporary DatabaseConnection object for testing
-            temp_connection = DatabaseConnection(
-                tenant_id=tenant_id,
-                name="temp_test",
-                database_type=connection_data.type,
-                host=connection_data.host or "",
-                port=connection_data.port or 9200,
-                database_name=connection_data.database or "",
-                username=connection_data.username or "",
-                database_path=None,
-                connection_params=connection_data.connection_params or {},
-            )
-            if connection_data.password:
-                temp_connection.set_password(connection_data.password)
-
-            connector = ElasticsearchConnector(database_connection=temp_connection)
-            test_result = await connector.test_connection()
-
-            if not test_result["success"]:
-                raise Exception(test_result["message"])
-        else:
+        connector = _make_connector(connection_data.type, temp_connection)
+        if connector is None:
             raise HTTPException(
-                status_code=status.HTTP_400_BAD_REQUEST, detail=f"Unsupported database type: {connection_data.type}"
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail=f"Unsupported database type: {connection_data.type}",
             )
+
+        test_result = await connector.test_connection()
+        if not test_result.get("success"):
+            raise Exception(test_result.get("message", "Connection test failed"))
 
         return ConnectionTestResponse(
             success=True, message="Connection successful", details={"type": connection_data.type.value}
@@ -578,19 +670,13 @@ async def test_existing_database_connection(
             raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Database connection not found")
 
         # Test the connection based on type
-        if connection.database_type == DatabaseConnectionType.POSTGRESQL:
-            connector = PostgreSQLConnector(database_connection=connection)
-            test_result = await connector.test_connection()
-        elif connection.database_type == DatabaseConnectionType.SQLITE:
-            connector = SQLiteConnector(database_path=connection.database_path)
-            test_result = await connector.test_connection()
-        elif connection.database_type == DatabaseConnectionType.ELASTICSEARCH:
-            connector = ElasticsearchConnector(database_connection=connection)
-            test_result = await connector.test_connection()
-        else:
+        connector = _make_connector(connection.database_type, connection)
+        if connector is None:
             raise HTTPException(
-                status_code=status.HTTP_400_BAD_REQUEST, detail=f"Unsupported database type: {connection.database_type}"
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail=f"Unsupported database type: {connection.database_type}",
             )
+        test_result = await connector.test_connection()
 
         # Update connection status based on test result
         if test_result["success"]:

@@ -614,11 +614,12 @@ export function ChatMessage({
                 isRangerPerf ? 'Ranger Performance' : 'Fleet Analytics'
 
               const fleetStatus = isFleetHealth ? (
-                (summary?.operational_rate_pct ?? 100) >= 90 &&
+                (summary?.operational_rate_pct ?? 0) >= 90 &&
                 (summary?.low_battery_count ?? 0) === 0 &&
-                (summary?.maintenance_count ?? 0) === 0
+                (summary?.maintenance_count ?? 0) === 0 &&
+                (summary?.idle_count ?? data?.idle?.length ?? 0) === 0
                   ? 'healthy'
-                  : (summary?.operational_rate_pct ?? 100) >= 70 ? 'warning' : 'critical'
+                  : (summary?.operational_rate_pct ?? 0) >= 70 ? 'warning' : 'critical'
               ) : null
 
               const primaryAction = isFleetHealth && data?.low_battery?.length > 0
@@ -731,7 +732,7 @@ export function ChatMessage({
                         <Section title={data.low_battery?.length > 0 ? 'Low Battery Vehicles' : 'Idle Vehicles'} action={primaryAction}>
                           {data.low_battery?.length > 0
                             ? data.low_battery.slice(0, 5).map((v: any, i: number) => (
-                                <R key={i} left={v.vehicle_id} sub={v.service_area}
+                                <R key={i} left={v.qr_code || v.vehicle_id} sub={v.service_area}
                                   right={<span className="flex items-center gap-2">
                                     <span className="w-16 h-1 bg-gray-200 rounded-full overflow-hidden inline-block align-middle">
                                       <span className="h-full bg-red-400 rounded-full block" style={{ width: `${v.battery_pct}%` }} />
@@ -742,7 +743,7 @@ export function ChatMessage({
                                 />
                               ))
                             : data.idle.slice(0, 5).map((v: any, i: number) => (
-                                <R key={i} left={v.vehicle_id} sub={v.service_area} right={`${v.idle_hours}h idle`} rightColor="text-amber-500" />
+                                <R key={i} left={v.qr_code || v.vehicle_id} sub={v.service_area} right={`${v.idle_hours}h idle`} rightColor="text-amber-500" />
                               ))
                           }
                         </Section>

@@ -379,7 +379,7 @@ async def get_conversation_messages(
 
     Args:
         conversation_id: UUID of the conversation
-        limit: Maximum number of messages to return
+        limit: Maximum number of messages to return (capped at 500)
         current_account: Current authenticated user
         db: Database session
 
@@ -410,9 +410,12 @@ async def get_conversation_messages(
                 status_code=status.HTTP_404_NOT_FOUND, detail=f"Conversation with ID '{conversation_id}' not found"
             )
 
+        # SECURITY: Clamp limit to prevent unbounded queries
+        effective_limit = min(limit or 100, 500)
+
         # Get messages
         messages = await ConversationService.get_conversation_messages(
-            db=db, conversation_id=conversation_uuid, limit=limit
+            db=db, conversation_id=conversation_uuid, limit=effective_limit
         )
 
         messages_list = [msg.to_dict() for msg in messages]

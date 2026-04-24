@@ -82,6 +82,15 @@ dependencies = [
     "PyPDF2>=3.0.0,<4.0.0",
     "pillow>=10.0.0,<12.0.0",
     "python-magic>=0.4.27,<1.0.0",
+    # Database Connectors — all native async
+    "aiomysql>=0.2.0,<1.0.0",           # MySQL  — native async pool
+    "motor>=3.3.0,<4.0.0",              # MongoDB — native async
+    "gcloud-aio-bigquery>=7.0.0,<8.0.0", # BigQuery — native asyncio via aiohttp
+    "snowflake-connector-python>=3.0.0,<4.0.0",  # Snowflake — async job API + poll
+    "aioodbc>=0.5.0,<1.0.0",            # SQL Server — native async ODBC pool
+    "pyodbc>=5.0.0,<6.0.0",             # SQL Server — ODBC driver (required by aioodbc)
+    "clickhouse-connect>=0.7.0,<1.0.0", # ClickHouse — native async HTTP
+    "duckdb>=0.10.0,<2.0.0",            # DuckDB — in-process (run_in_executor, no async API)
     # Data Analysis
     "pandas>=2.0.0,<3.0.0",
     "numpy>=1.24.0,<2.0.0",  # Pin to 1.x for pyarrow compatibility

@@ -1,6 +1,7 @@
 'use client'
 
 import { useState } from 'react'
+import { extractErrorMessage } from '@/lib/api/error'
 import Link from 'next/link'
 import toast from 'react-hot-toast'
 import axios from 'axios'
@@ -23,7 +24,7 @@ export default function ForgotPasswordPage() {
       setIsSubmitted(true)
       toast.success('Password reset link sent! Check your email.')
     } catch (err: any) {
-      const errorMessage = err.response?.data?.detail || 'Failed to send reset link'
+      const errorMessage = extractErrorMessage(err, 'Failed to send reset link')
       toast.error(errorMessage)
     } finally {
       setIsLoading(false)

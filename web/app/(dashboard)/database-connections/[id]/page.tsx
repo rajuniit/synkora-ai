@@ -18,6 +18,7 @@ import {
   Copy
 } from 'lucide-react'
 import { apiClient } from '@/lib/api/client'
+import { extractErrorMessage } from '@/lib/api/error'
 
 interface DatabaseConnection {
   id: number
@@ -73,7 +74,7 @@ export default function DatabaseConnectionDetailsPage() {
         toast.error(data.message || 'Connection test failed')
       }
     } catch (error: any) {
-      toast.error(error.response?.data?.detail || 'Failed to test connection')
+      toast.error(extractErrorMessage(error, 'Failed to test connection'))
     } finally {
       setTesting(false)
     }
@@ -86,7 +87,7 @@ export default function DatabaseConnectionDetailsPage() {
       toast.success('Connection deleted successfully')
       router.push('/database-connections')
     } catch (error: any) {
-      toast.error(error.response?.data?.detail || 'Failed to delete connection')
+      toast.error(extractErrorMessage(error, 'Failed to delete connection'))
     } finally {
       setDeleting(false)
       setDeleteModal(false)

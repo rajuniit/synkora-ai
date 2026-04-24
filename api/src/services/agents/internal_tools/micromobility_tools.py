@@ -2,8 +2,7 @@
 Micromobility Dashboard Tools.
 
 Provides tools for managing a micromobility fleet via the Dashboard API.
-Covers vehicles, trips, riders, ranger tasks, analytics, reports, areas, pricing,
-promotions, and invoices.
+Covers vehicles, trips, riders, ranger tasks, fleets, areas, and reports.
 
 Auth: JWT Bearer token stored as api_token in OAuthApp (auth_method='api_token').
 All endpoint paths are configurable via OAuthApp.config.endpoints.
@@ -23,21 +22,14 @@ ENDPOINT_DEFAULTS: dict[str, str] = {
     # Vehicles
     "list_vehicles": "/vehicles/",
     "get_vehicle": "/vehicles/{vehicle_id}/",
-    "lock_vehicle": "/vehicles/{vehicle_id}/lock/",
-    "unlock_vehicle": "/vehicles/{vehicle_id}/unlock/",
-    "sync_vehicle_status": "/vehicles/{vehicle_id}/force-status-sync/",
-    "update_vehicle": "/vehicles/{vehicle_id}/",
-    "vehicle_lock_status": "/vehicles/{vehicle_id}/status/",
     # Trips
     "list_trips": "/trips/",
     "get_trip": "/trips/{trip_id}/",
-    "cancel_trip": "/trips/{trip_id}/cancel/",
-    "complete_trip": "/trips/{trip_id}/complete/",
     # Riders
     "list_riders": "/riders/",
     "get_rider": "/riders/{rider_id}/",
-    "adjust_rider_balance": "/riders/{rider_id}/",
-    "get_rider_payment_info": "/riders/{rider_id}/payment-info/",
+    # Operators
+    "list_operators": "/operators/",
     # Ranger Tasks
     "list_tasks": "/tasks/",
     "get_task": "/tasks/{task_id}/",
@@ -45,27 +37,9 @@ ENDPOINT_DEFAULTS: dict[str, str] = {
     "update_task": "/tasks/{task_id}/",
     # Fleets
     "list_fleets": "/fleets/",
-    "get_fleet": "/fleets/{fleet_id}/",
     # Areas
     "list_service_areas": "/service-areas/",
-    "get_service_area": "/service-areas/{service_area_id}/",
     "list_parking_areas": "/parking-areas/",
-    "get_parking_area": "/parking-areas/{parking_area_id}/",
-    # Pricing & Promotions
-    "list_pricing_plans": "/pricing-plans/",
-    "get_pricing_plan": "/pricing-plans/{pricing_plan_id}/",
-    "list_promotions": "/promotions/",
-    "get_promotion": "/promotions/{promotion_id}/",
-    "notify_riders_promotion": "/promotions/{promotion_id}/notify-riders/",
-    # Invoices
-    "list_invoices": "/invoices/",
-    "refund_invoice": "/invoices/{invoice_id}/refund/",
-    # Analytics
-    "analytics_line_chart": "/analytics/line-chart",
-    "analytics_bar_chart": "/analytics/bar-chart",
-    "analytics_gauge_chart": "/analytics/gauge-chart",
-    "analytics_activity_chart": "/analytics/activity-chart/",
-    "analytics_map_chart": "/analytics/map-chart",
     # Reports
     "list_reports": "/reports/",
     "get_report": "/reports/{report_id}/",
@@ -135,6 +109,7 @@ async def _make_micromobility_request(
     mm_config: dict[str, Any],
     params: dict[str, Any] | None = None,
     json_data: dict[str, Any] | None = None,
+    form_data: dict[str, Any] | None = None,
 ) -> dict[str, Any]:
     from src.services.agents.internal_tools.web_tools import _is_url_safe
 
@@ -149,7 +124,10 @@ async def _make_micromobility_request(
     if not url.startswith("https://"):
         raise ValueError("API base_url must use HTTPS")
 
-    headers: dict[str, str] = {"Accept": "application/json", "Content-Type": "application/json"}
+    # For form data requests let httpx set Content-Type (multipart boundary)
+    headers: dict[str, str] = {"Accept": "application/json"}
+    if not form_data:
+        headers["Content-Type"] = "application/json"
 
     if auth_type == "oauth":
         access_token = mm_config.get("access_token")
@@ -179,7 +157,8 @@ async def _make_micromobility_request(
 
     async with httpx.AsyncClient(follow_redirects=False) as client:
         response = await client.request(
-            method=method, url=url, headers=headers, params=params, json=json_data, timeout=timeout
+            method=method, url=url, headers=headers, params=params,
+            json=json_data, data=form_data, timeout=timeout
         )
 
     if response.status_code == 429:
@@ -224,7 +203,8 @@ async def _make_micromobility_request(
                 _ctx.set_state("_mm_refreshed_token", new_token)
             async with httpx.AsyncClient(follow_redirects=False) as retry_client:
                 response = await retry_client.request(
-                    method=method, url=url, headers=headers, params=params, json=json_data, timeout=timeout
+                    method=method, url=url, headers=headers, params=params,
+                    json=json_data, data=form_data, timeout=timeout
                 )
             if not response.is_success:
                 return {
@@ -254,34 +234,130 @@ async def _make_micromobility_request(
 async def internal_micromobility_list_vehicles(
     config: dict[str, Any] | None = None,
     runtime_context: Any | None = None,
+    # Search & identity
     search: str | None = None,
-    status: str | None = None,
     fleet_id: str | None = None,
-    service_area_id: str | None = None,
-    fetch_test_vehicles: bool | None = None,
+    bike_category: str | None = None,
+    user: str | None = None,
+    country: str | None = None,
+    geofence: str | None = None,
+    # Battery / heartbeat range filters
+    min_power_level: int | None = None,
+    max_power_level: int | None = None,
+    min_last_heartbeat_time: int | None = None,
+    max_last_heartbeat_time: int | None = None,
+    # Date range
+    start_date: str | None = None,
+    end_date: str | None = None,
+    # Boolean state flags — only sent when True
+    locked: bool | None = None,
+    active: bool | None = None,
+    damaged: bool | None = None,
+    on_ride: bool | None = None,
+    on_reservation: bool | None = None,
+    parking: bool | None = None,
+    missing: bool | None = None,
+    iot_fault: bool | None = None,
+    geofence_alert: bool | None = None,
+    low_battery: bool | None = None,
+    rebalance: bool | None = None,
+    charging_pick: bool | None = None,
+    in_task: bool | None = None,
+    is_charging: bool | None = None,
+    is_rebalancing: bool | None = None,
+    in_maintainance: bool | None = None,
+    has_lock: bool | None = None,
+    # Pagination
     limit: int | None = None,
     offset: int | None = None,
 ) -> dict[str, Any]:
-    """List fleet vehicles with optional search and filters."""
+    """List fleet vehicles. Test vehicles excluded by default (fetch_test_vehicles not sent)."""
     try:
         mm_config = await _get_micromobility_credentials(runtime_context, "internal_micromobility_list_vehicles")
         endpoint = _resolve_endpoint(mm_config, "list_vehicles")
         params: dict[str, Any] = {}
+
+        # Search & identity
         if search:
             params["search"] = search
-        if status:
-            params["status"] = status
         if fleet_id:
             params["fleet"] = _validate_id(fleet_id, "fleet_id")
-        if service_area_id:
-            params["service_area"] = _validate_id(service_area_id, "service_area_id")
-        if fetch_test_vehicles is not None:
-            params["fetch_test_vehicles"] = fetch_test_vehicles
+        if bike_category:
+            params["bike_category"] = bike_category
+        if user:
+            params["user"] = _validate_id(user, "user")
+        if country:
+            params["country"] = country
+        if geofence:
+            params["geofence"] = geofence
+
+        # Battery / heartbeat range
+        if min_power_level is not None:
+            params["min_power_level"] = min_power_level
+        if max_power_level is not None:
+            params["max_power_level"] = max_power_level
+        if min_last_heartbeat_time is not None:
+            params["min_last_heartbeat_time"] = min_last_heartbeat_time
+        if max_last_heartbeat_time is not None:
+            params["max_last_heartbeat_time"] = max_last_heartbeat_time
+
+        # Date range
+        if start_date:
+            params["start_date"] = start_date
+        if end_date:
+            params["end_date"] = end_date
+
+        # Boolean flags — only add when explicitly True
+        for flag, key in [
+            (locked, "locked"),
+            (active, "active"),
+            (damaged, "damaged"),
+            (on_ride, "on_ride"),
+            (on_reservation, "on_reservation"),
+            (parking, "parking"),
+            (missing, "missing"),
+            (iot_fault, "iot_fault"),
+            (geofence_alert, "geofence_alert"),
+            (low_battery, "low_battery"),
+            (rebalance, "rebalance"),
+            (charging_pick, "charging_pick"),
+            (in_task, "in_task"),
+            (is_charging, "is_charging"),
+            (is_rebalancing, "is_rebalancing"),
+            (in_maintainance, "in_maintainance"),
+            (has_lock, "has_lock"),
+        ]:
+            if flag is True:
+                params[key] = "true"
+
+        # Do NOT send fetch_test_vehicles — omitting it returns only real vehicles by default
+
+        # Pagination
         if limit is not None:
             params["limit"] = limit
         if offset is not None:
             params["offset"] = offset
-        return await _make_micromobility_request("GET", endpoint, mm_config, params=params or None)
+
+        result = await _make_micromobility_request("GET", endpoint, mm_config, params=params)
+        # Normalize Micromobility paginated response:
+        # {"meta": {"count": {"total": N, "page": P}, "summary": {...}}, "data": [...]}
+        if result.get("success"):
+            raw = result.get("data")
+            if isinstance(raw, dict):
+                meta = raw.get("meta") or {}
+                count_obj = meta.get("count") or {}
+                items = raw.get("data") or raw.get("results") or raw.get("vehicles") or []
+                total = (count_obj.get("total") if isinstance(count_obj, dict) else None) or raw.get("count", len(items))
+                result["count"] = total
+                result["vehicles"] = items
+                result["meta"] = meta
+                result["summary"] = meta.get("summary") or {}
+                result["has_more"] = (offset or 0) + len(items) < total
+            elif isinstance(raw, list):
+                result["vehicles"] = raw
+                result["count"] = len(raw)
+                result["has_more"] = False
+        return result
     except Exception as e:
         logger.error(f"list_vehicles failed: {e}")
         return {"success": False, "error": str(e)}
@@ -302,51 +378,6 @@ async def internal_micromobility_get_vehicle(
         return {"success": False, "error": str(e)}
 
 
-async def internal_micromobility_lock_vehicle(
-    config: dict[str, Any] | None = None,
-    runtime_context: Any | None = None,
-    vehicle_id: str = "",
-) -> dict[str, Any]:
-    """Lock a vehicle remotely. Requires HITL approval."""
-    try:
-        mm_config = await _get_micromobility_credentials(runtime_context, "internal_micromobility_lock_vehicle")
-        endpoint = _resolve_endpoint(mm_config, "lock_vehicle", vehicle_id=vehicle_id)
-        return await _make_micromobility_request("POST", endpoint, mm_config)
-    except Exception as e:
-        logger.error(f"lock_vehicle failed: {e}")
-        return {"success": False, "error": str(e)}
-
-
-async def internal_micromobility_unlock_vehicle(
-    config: dict[str, Any] | None = None,
-    runtime_context: Any | None = None,
-    vehicle_id: str = "",
-) -> dict[str, Any]:
-    """Unlock a vehicle remotely. Requires HITL approval."""
-    try:
-        mm_config = await _get_micromobility_credentials(runtime_context, "internal_micromobility_unlock_vehicle")
-        endpoint = _resolve_endpoint(mm_config, "unlock_vehicle", vehicle_id=vehicle_id)
-        return await _make_micromobility_request("POST", endpoint, mm_config)
-    except Exception as e:
-        logger.error(f"unlock_vehicle failed: {e}")
-        return {"success": False, "error": str(e)}
-
-
-async def internal_micromobility_sync_vehicle_status(
-    config: dict[str, Any] | None = None,
-    runtime_context: Any | None = None,
-    vehicle_id: str = "",
-) -> dict[str, Any]:
-    """Force sync a vehicle's status from the IoT device. Requires HITL approval."""
-    try:
-        mm_config = await _get_micromobility_credentials(runtime_context, "internal_micromobility_sync_vehicle_status")
-        endpoint = _resolve_endpoint(mm_config, "sync_vehicle_status", vehicle_id=vehicle_id)
-        return await _make_micromobility_request("POST", endpoint, mm_config)
-    except Exception as e:
-        logger.error(f"sync_vehicle_status failed: {e}")
-        return {"success": False, "error": str(e)}
-
-
 # ── Trip Tools ────────────────────────────────────────────────────────────────
 
 
@@ -361,8 +392,18 @@ async def internal_micromobility_list_trips(
     end_date: str | None = None,
     limit: int | None = None,
     offset: int | None = None,
+    search: str | None = None,
+    sort: str | None = None,
+    order: str | None = None,
+    preferred_currency: str | None = None,
+    franchise_user: str | None = None,
 ) -> dict[str, Any]:
-    """List trips with optional filtering by status, vehicle, rider, or date range."""
+    """List trips with optional filtering.
+
+    Status codes: 'C'=completed, 'A'=active/on-trip. Cancelled code unknown.
+    Zone identified by bike.fleet.address. Duration in riding_time (seconds).
+    Revenue in invoiced_charges.amount (string). Start time in pick_up_time.
+    """
     try:
         mm_config = await _get_micromobility_credentials(runtime_context, "internal_micromobility_list_trips")
         endpoint = _resolve_endpoint(mm_config, "list_trips")
@@ -372,7 +413,7 @@ async def internal_micromobility_list_trips(
         if vehicle_id:
             params["vehicle"] = _validate_id(vehicle_id, "vehicle_id")
         if rider_id:
-            params["rider"] = _validate_id(rider_id, "rider_id")
+            params["user"] = _validate_id(rider_id, "rider_id")
         if fleet_id:
             params["fleet"] = _validate_id(fleet_id, "fleet_id")
         if start_date:
@@ -383,7 +424,34 @@ async def internal_micromobility_list_trips(
             params["limit"] = limit
         if offset is not None:
             params["offset"] = offset
-        return await _make_micromobility_request("GET", endpoint, mm_config, params=params or None)
+        if search:
+            params["search"] = search
+        if sort:
+            params["sort"] = sort
+        if order:
+            params["order"] = order
+        if preferred_currency:
+            params["preferred_currency"] = preferred_currency
+        if franchise_user:
+            params["franchise_user"] = franchise_user
+        result = await _make_micromobility_request("GET", endpoint, mm_config, params=params or None)
+        if result.get("success"):
+            raw = result.get("data")
+            if isinstance(raw, dict):
+                meta = raw.get("meta") or {}
+                count_obj = meta.get("count") or {}
+                items = raw.get("data") or raw.get("results") or raw.get("trips") or []
+                total = (count_obj.get("total") if isinstance(count_obj, dict) else None) or raw.get("count", len(items))
+                result["count"] = total
+                result["trips"] = items
+                result["meta"] = meta
+                result["summary"] = meta.get("summary") or {}
+                result["has_more"] = (offset or 0) + len(items) < total
+            elif isinstance(raw, list):
+                result["trips"] = raw
+                result["count"] = len(raw)
+                result["has_more"] = False
+        return result
     except Exception as e:
         logger.error(f"list_trips failed: {e}")
         return {"success": False, "error": str(e)}
@@ -404,36 +472,6 @@ async def internal_micromobility_get_trip(
         return {"success": False, "error": str(e)}
 
 
-async def internal_micromobility_cancel_trip(
-    config: dict[str, Any] | None = None,
-    runtime_context: Any | None = None,
-    trip_id: str = "",
-) -> dict[str, Any]:
-    """Cancel an active trip. Requires HITL approval."""
-    try:
-        mm_config = await _get_micromobility_credentials(runtime_context, "internal_micromobility_cancel_trip")
-        endpoint = _resolve_endpoint(mm_config, "cancel_trip", trip_id=trip_id)
-        return await _make_micromobility_request("POST", endpoint, mm_config)
-    except Exception as e:
-        logger.error(f"cancel_trip failed: {e}")
-        return {"success": False, "error": str(e)}
-
-
-async def internal_micromobility_complete_trip(
-    config: dict[str, Any] | None = None,
-    runtime_context: Any | None = None,
-    trip_id: str = "",
-) -> dict[str, Any]:
-    """Force complete an active trip. Requires HITL approval."""
-    try:
-        mm_config = await _get_micromobility_credentials(runtime_context, "internal_micromobility_complete_trip")
-        endpoint = _resolve_endpoint(mm_config, "complete_trip", trip_id=trip_id)
-        return await _make_micromobility_request("POST", endpoint, mm_config)
-    except Exception as e:
-        logger.error(f"complete_trip failed: {e}")
-        return {"success": False, "error": str(e)}
-
-
 # ── Rider Tools ───────────────────────────────────────────────────────────────
 
 
@@ -444,8 +482,29 @@ async def internal_micromobility_list_riders(
     status: str | None = None,
     limit: int | None = None,
     offset: int | None = None,
+    order: str | None = None,
+    start_date: str | None = None,
+    end_date: str | None = None,
+    trip_status: str | None = None,
+    min_balance: float | None = None,
+    max_balance: float | None = None,
+    fraud_status: str | None = None,
 ) -> dict[str, Any]:
-    """List riders with optional search by name, email, or phone."""
+    """List riders with optional filters.
+
+    Args:
+        search: Search by name, email, or phone.
+        status: Rider status filter (e.g. "A" for active).
+        limit: Page size.
+        offset: Page offset.
+        order: Sort order field.
+        start_date: Filter by join/activity date from (YYYY-MM-DD).
+        end_date: Filter by join/activity date to (YYYY-MM-DD).
+        trip_status: Filter by last trip status (e.g. "N" for no trip).
+        min_balance: Minimum wallet balance filter.
+        max_balance: Maximum wallet balance filter.
+        fraud_status: Fraud flag filter (e.g. "N" for non-fraud).
+    """
     try:
         mm_config = await _get_micromobility_credentials(runtime_context, "internal_micromobility_list_riders")
         endpoint = _resolve_endpoint(mm_config, "list_riders")
@@ -458,7 +517,38 @@ async def internal_micromobility_list_riders(
             params["limit"] = limit
         if offset is not None:
             params["offset"] = offset
-        return await _make_micromobility_request("GET", endpoint, mm_config, params=params or None)
+        if order is not None:
+            params["order"] = order
+        if start_date:
+            params["start_date"] = start_date
+        if end_date:
+            params["end_date"] = end_date
+        if trip_status is not None:
+            params["trip_status"] = trip_status
+        if min_balance is not None:
+            params["min_balance"] = min_balance
+        if max_balance is not None:
+            params["max_balance"] = max_balance
+        if fraud_status is not None:
+            params["fraud_status"] = fraud_status
+        result = await _make_micromobility_request("GET", endpoint, mm_config, params=params or None)
+        if result.get("success"):
+            raw = result.get("data")
+            if isinstance(raw, dict):
+                meta = raw.get("meta") or {}
+                count_obj = meta.get("count") or {}
+                items = raw.get("data") or raw.get("results") or raw.get("riders") or []
+                total = (count_obj.get("total") if isinstance(count_obj, dict) else None) or raw.get("count", len(items))
+                result["count"] = total
+                result["riders"] = items
+                result["meta"] = meta
+                result["summary"] = meta.get("summary") or {}
+                result["has_more"] = (offset or 0) + len(items) < total
+            elif isinstance(raw, list):
+                result["riders"] = raw
+                result["count"] = len(raw)
+                result["has_more"] = False
+        return result
     except Exception as e:
         logger.error(f"list_riders failed: {e}")
         return {"success": False, "error": str(e)}
@@ -479,23 +569,61 @@ async def internal_micromobility_get_rider(
         return {"success": False, "error": str(e)}
 
 
-async def internal_micromobility_adjust_rider_balance(
+async def internal_micromobility_list_operators(
     config: dict[str, Any] | None = None,
     runtime_context: Any | None = None,
-    rider_id: str = "",
-    amount: float = 0.0,
-    note: str | None = None,
+    limit: int = 10,
+    offset: int = 0,
+    search: str | None = None,
+    sort: str | None = None,
+    order: str | None = None,
+    is_active: bool | None = None,
+    user_status: str | None = None,
+    ranger_job_type: str | None = None,
+    start_date: str | None = None,
+    end_date: str | None = None,
 ) -> dict[str, Any]:
-    """Adjust a rider's wallet balance (positive to add, negative to deduct). Requires HITL approval."""
+    """List operators/rangers registered on the platform."""
     try:
-        mm_config = await _get_micromobility_credentials(runtime_context, "internal_micromobility_adjust_rider_balance")
-        endpoint = _resolve_endpoint(mm_config, "adjust_rider_balance", rider_id=rider_id)
-        body: dict[str, Any] = {"balance": amount}
-        if note:
-            body["note"] = note
-        return await _make_micromobility_request("POST", endpoint, mm_config, json_data=body)
+        mm_config = await _get_micromobility_credentials(runtime_context, "internal_micromobility_list_operators")
+        endpoint = _resolve_endpoint(mm_config, "list_operators")
+        params: dict[str, Any] = {"limit": limit, "offset": offset}
+        if search:
+            params["search"] = search
+        if sort:
+            params["sort"] = sort
+        if order:
+            params["order"] = order
+        if is_active is not None:
+            params["is_active"] = str(is_active).lower()
+        if user_status:
+            params["user_status"] = user_status
+        if ranger_job_type:
+            params["ranger_job_type"] = ranger_job_type
+        if start_date:
+            params["start_date"] = start_date
+        if end_date:
+            params["end_date"] = end_date
+        result = await _make_micromobility_request("GET", endpoint, mm_config, params=params)
+        if result.get("success"):
+            raw = result.get("data")
+            if isinstance(raw, dict):
+                meta = raw.get("meta") or {}
+                count_obj = meta.get("count") or {}
+                items = raw.get("data") or raw.get("results") or raw.get("operators") or []
+                total = (count_obj.get("total") if isinstance(count_obj, dict) else None) or raw.get("count", len(items))
+                result["operators"] = items
+                result["count"] = total
+                result["meta"] = meta
+                result["summary"] = meta.get("summary") or {}
+                result["has_more"] = offset + len(items) < total
+            elif isinstance(raw, list):
+                result["operators"] = raw
+                result["count"] = len(raw)
+                result["has_more"] = False
+        return result
     except Exception as e:
-        logger.error(f"adjust_rider_balance failed: {e}")
+        logger.error(f"list_operators failed: {e}")
         return {"success": False, "error": str(e)}
 
 
@@ -505,28 +633,72 @@ async def internal_micromobility_adjust_rider_balance(
 async def internal_micromobility_list_tasks(
     config: dict[str, Any] | None = None,
     runtime_context: Any | None = None,
-    status: str | None = None,
+    task_status: str | None = None,
     task_type: str | None = None,
+    assigned_to: str | None = None,
     operator_id: str | None = None,
+    vehicle_tag: str | None = None,
+    vehicle_mode: str | None = None,
+    search: str | None = None,
+    sort: str | None = None,
+    order: str | None = None,
+    export: bool | None = None,
     limit: int | None = None,
     offset: int | None = None,
 ) -> dict[str, Any]:
-    """List ranger tasks (charging, rebalancing, maintenance) with optional filters."""
+    """List ranger tasks (charging, rebalancing, maintenance) with optional filters.
+
+    task_status values: 'TODO', 'PICKED' (in progress), 'DROPPED' (completed), 'CANCELLED'.
+    task_type values: 'CHARGING', 'REBALANCING', 'MAINTENANCE', 'UNAVAILABLE'.
+    Ranger assigned in: user.id / user.full_name. Filter by assigned_to (ranger user ID).
+    Duration: picked_at → dropped_at.
+    """
     try:
         mm_config = await _get_micromobility_credentials(runtime_context, "internal_micromobility_list_tasks")
         endpoint = _resolve_endpoint(mm_config, "list_tasks")
         params: dict[str, Any] = {}
-        if status:
-            params["status"] = status
+        if task_status:
+            params["task_status"] = task_status
         if task_type:
             params["task_type"] = task_type
+        if assigned_to:
+            params["assigned_to"] = _validate_id(assigned_to, "assigned_to")
         if operator_id:
             params["operator"] = _validate_id(operator_id, "operator_id")
+        if vehicle_tag:
+            params["vehicle_tag"] = _validate_id(vehicle_tag, "vehicle_tag")
+        if vehicle_mode:
+            params["vehicle_mode"] = vehicle_mode
+        if search:
+            params["search"] = search
+        if sort:
+            params["sort"] = sort
+        if order:
+            params["order"] = order
+        if export is not None:
+            params["export"] = "true" if export else "false"
         if limit is not None:
             params["limit"] = limit
         if offset is not None:
             params["offset"] = offset
-        return await _make_micromobility_request("GET", endpoint, mm_config, params=params or None)
+        result = await _make_micromobility_request("GET", endpoint, mm_config, params=params or None)
+        if result.get("success"):
+            raw = result.get("data")
+            if isinstance(raw, dict):
+                meta = raw.get("meta") or {}
+                count_obj = meta.get("count") or {}
+                items = raw.get("data") or raw.get("results") or raw.get("tasks") or []
+                total = (count_obj.get("total") if isinstance(count_obj, dict) else None) or raw.get("count", len(items))
+                result["count"] = total
+                result["tasks"] = items
+                result["meta"] = meta
+                result["summary"] = meta.get("summary") or {}
+                result["has_more"] = (offset or 0) + len(items) < total
+            elif isinstance(raw, list):
+                result["tasks"] = raw
+                result["count"] = len(raw)
+                result["has_more"] = False
+        return result
     except Exception as e:
         logger.error(f"list_tasks failed: {e}")
         return {"success": False, "error": str(e)}
@@ -551,25 +723,32 @@ async def internal_micromobility_create_task(
     config: dict[str, Any] | None = None,
     runtime_context: Any | None = None,
     task_type: str = "",
+    task_status: str = "TODO",
+    title: str | None = None,
+    description: str | None = None,
     vehicle_id: str | None = None,
-    operator_id: str | None = None,
-    notes: str | None = None,
+    user: str | None = None,
     priority: str | None = None,
+    due_by: str | None = None,
 ) -> dict[str, Any]:
-    """Create a new ranger task (e.g., charging, rebalancing, maintenance). Requires HITL approval."""
+    """Create a new ranger task. Submitted as multipart form data. Requires HITL approval."""
     try:
         mm_config = await _get_micromobility_credentials(runtime_context, "internal_micromobility_create_task")
         endpoint = _resolve_endpoint(mm_config, "create_task")
-        body: dict[str, Any] = {"task_type": task_type}
+        form: dict[str, Any] = {"task_type": task_type, "task_status": task_status}
+        if title:
+            form["title"] = title
+        if description:
+            form["description"] = description
         if vehicle_id:
-            body["vehicle"] = _validate_id(vehicle_id, "vehicle_id")
-        if operator_id:
-            body["operator"] = _validate_id(operator_id, "operator_id")
-        if notes:
-            body["notes"] = notes
+            form["vehicle"] = _validate_id(vehicle_id, "vehicle_id")
+        if user:
+            form["user"] = _validate_id(user, "user")
         if priority:
-            body["priority"] = priority
-        return await _make_micromobility_request("POST", endpoint, mm_config, json_data=body)
+            form["priority"] = priority
+        if due_by:
+            form["due_by"] = due_by
+        return await _make_micromobility_request("POST", endpoint, mm_config, form_data=form)
     except Exception as e:
         logger.error(f"create_task failed: {e}")
         return {"success": False, "error": str(e)}
@@ -604,11 +783,31 @@ async def internal_micromobility_list_fleets(
     config: dict[str, Any] | None = None,
     runtime_context: Any | None = None,
 ) -> dict[str, Any]:
-    """List all fleets in the organization."""
+    """List all fleets in the organization.
+
+    Key fields: name, address, status_active, total_vehicles,
+    currency.code_alpha, geofence.name (service area), pricing_plans (list),
+    visibility, is_default_fleet_for_organization.
+    No meta.summary on this endpoint.
+    """
     try:
         mm_config = await _get_micromobility_credentials(runtime_context, "internal_micromobility_list_fleets")
         endpoint = _resolve_endpoint(mm_config, "list_fleets")
-        return await _make_micromobility_request("GET", endpoint, mm_config)
+        result = await _make_micromobility_request("GET", endpoint, mm_config)
+        if result.get("success"):
+            raw = result.get("data")
+            if isinstance(raw, dict):
+                meta = raw.get("meta") or {}
+                count_obj = meta.get("count") or {}
+                items = raw.get("data") or raw.get("results") or raw.get("fleets") or []
+                total = (count_obj.get("total") if isinstance(count_obj, dict) else None) or raw.get("count", len(items))
+                result["count"] = total
+                result["fleets"] = items
+                result["meta"] = meta
+            elif isinstance(raw, list):
+                result["fleets"] = raw
+                result["count"] = len(raw)
+        return result
     except Exception as e:
         logger.error(f"list_fleets failed: {e}")
         return {"success": False, "error": str(e)}
@@ -617,19 +816,32 @@ async def internal_micromobility_list_fleets(
 async def internal_micromobility_list_service_areas(
     config: dict[str, Any] | None = None,
     runtime_context: Any | None = None,
-    limit: int | None = None,
-    offset: int | None = None,
+    limit: int = 10,
+    offset: int = 0,
 ) -> dict[str, Any]:
     """List service areas (operational zones) with boundaries."""
     try:
         mm_config = await _get_micromobility_credentials(runtime_context, "internal_micromobility_list_service_areas")
         endpoint = _resolve_endpoint(mm_config, "list_service_areas")
-        params: dict[str, Any] = {}
-        if limit is not None:
-            params["limit"] = limit
-        if offset is not None:
-            params["offset"] = offset
-        return await _make_micromobility_request("GET", endpoint, mm_config, params=params or None)
+        params: dict[str, Any] = {"limit": limit, "offset": offset}
+        result = await _make_micromobility_request("GET", endpoint, mm_config, params=params)
+        if result.get("success"):
+            raw = result.get("data")
+            if isinstance(raw, dict):
+                meta = raw.get("meta") or {}
+                count_obj = meta.get("count") or {}
+                items = raw.get("data") or raw.get("results") or raw.get("service_areas") or []
+                total = (count_obj.get("total") if isinstance(count_obj, dict) else None) or raw.get("count", len(items))
+                result["service_areas"] = items
+                result["count"] = total
+                result["meta"] = meta
+                result["summary"] = meta.get("summary") or {}
+                result["has_more"] = offset + len(items) < total
+            elif isinstance(raw, list):
+                result["service_areas"] = raw
+                result["count"] = len(raw)
+                result["has_more"] = False
+        return result
     except Exception as e:
         logger.error(f"list_service_areas failed: {e}")
         return {"success": False, "error": str(e)}
@@ -638,172 +850,34 @@ async def internal_micromobility_list_service_areas(
 async def internal_micromobility_list_parking_areas(
     config: dict[str, Any] | None = None,
     runtime_context: Any | None = None,
+    limit: int = 10,
+    offset: int = 0,
 ) -> dict[str, Any]:
-    """List all parking areas/hubs."""
+    """List all designated parking areas with boundaries and compliance stats."""
     try:
         mm_config = await _get_micromobility_credentials(runtime_context, "internal_micromobility_list_parking_areas")
         endpoint = _resolve_endpoint(mm_config, "list_parking_areas")
-        return await _make_micromobility_request("GET", endpoint, mm_config)
+        params: dict[str, Any] = {"limit": limit, "offset": offset}
+        result = await _make_micromobility_request("GET", endpoint, mm_config, params=params)
+        if result.get("success"):
+            raw = result.get("data")
+            if isinstance(raw, dict):
+                meta = raw.get("meta") or {}
+                count_obj = meta.get("count") or {}
+                items = raw.get("data") or raw.get("results") or raw.get("parking_areas") or []
+                total = (count_obj.get("total") if isinstance(count_obj, dict) else None) or raw.get("count", len(items))
+                result["parking_areas"] = items
+                result["count"] = total
+                result["meta"] = meta
+                result["summary"] = meta.get("summary") or {}
+                result["has_more"] = offset + len(items) < total
+            elif isinstance(raw, list):
+                result["parking_areas"] = raw
+                result["count"] = len(raw)
+                result["has_more"] = False
+        return result
     except Exception as e:
         logger.error(f"list_parking_areas failed: {e}")
-        return {"success": False, "error": str(e)}
-
-
-# ── Pricing & Promotion Tools ─────────────────────────────────────────────────
-
-
-async def internal_micromobility_list_pricing_plans(
-    config: dict[str, Any] | None = None,
-    runtime_context: Any | None = None,
-    limit: int | None = None,
-    offset: int | None = None,
-) -> dict[str, Any]:
-    """List all pricing plans."""
-    try:
-        mm_config = await _get_micromobility_credentials(runtime_context, "internal_micromobility_list_pricing_plans")
-        endpoint = _resolve_endpoint(mm_config, "list_pricing_plans")
-        params: dict[str, Any] = {}
-        if limit is not None:
-            params["limit"] = limit
-        if offset is not None:
-            params["offset"] = offset
-        return await _make_micromobility_request("GET", endpoint, mm_config, params=params or None)
-    except Exception as e:
-        logger.error(f"list_pricing_plans failed: {e}")
-        return {"success": False, "error": str(e)}
-
-
-async def internal_micromobility_list_promotions(
-    config: dict[str, Any] | None = None,
-    runtime_context: Any | None = None,
-) -> dict[str, Any]:
-    """List all promotions (discounts, free rides, etc.)."""
-    try:
-        mm_config = await _get_micromobility_credentials(runtime_context, "internal_micromobility_list_promotions")
-        endpoint = _resolve_endpoint(mm_config, "list_promotions")
-        return await _make_micromobility_request("GET", endpoint, mm_config)
-    except Exception as e:
-        logger.error(f"list_promotions failed: {e}")
-        return {"success": False, "error": str(e)}
-
-
-async def internal_micromobility_get_promotion(
-    config: dict[str, Any] | None = None,
-    runtime_context: Any | None = None,
-    promotion_id: str = "",
-) -> dict[str, Any]:
-    """Get details for a specific promotion."""
-    try:
-        mm_config = await _get_micromobility_credentials(runtime_context, "internal_micromobility_get_promotion")
-        endpoint = _resolve_endpoint(mm_config, "get_promotion", promotion_id=promotion_id)
-        return await _make_micromobility_request("GET", endpoint, mm_config)
-    except Exception as e:
-        logger.error(f"get_promotion failed: {e}")
-        return {"success": False, "error": str(e)}
-
-
-# ── Invoice Tools ─────────────────────────────────────────────────────────────
-
-
-async def internal_micromobility_list_invoices(
-    config: dict[str, Any] | None = None,
-    runtime_context: Any | None = None,
-    rider_id: str | None = None,
-    trip_id: str | None = None,
-    limit: int | None = None,
-    offset: int | None = None,
-) -> dict[str, Any]:
-    """List transaction invoices with optional filtering."""
-    try:
-        mm_config = await _get_micromobility_credentials(runtime_context, "internal_micromobility_list_invoices")
-        endpoint = _resolve_endpoint(mm_config, "list_invoices")
-        params: dict[str, Any] = {}
-        if rider_id:
-            params["rider"] = _validate_id(rider_id, "rider_id")
-        if trip_id:
-            params["trip"] = _validate_id(trip_id, "trip_id")
-        if limit is not None:
-            params["limit"] = limit
-        if offset is not None:
-            params["offset"] = offset
-        return await _make_micromobility_request("GET", endpoint, mm_config, params=params or None)
-    except Exception as e:
-        logger.error(f"list_invoices failed: {e}")
-        return {"success": False, "error": str(e)}
-
-
-async def internal_micromobility_refund_invoice(
-    config: dict[str, Any] | None = None,
-    runtime_context: Any | None = None,
-    invoice_id: str = "",
-    reason: str | None = None,
-) -> dict[str, Any]:
-    """Refund a transaction invoice. Requires HITL approval."""
-    try:
-        mm_config = await _get_micromobility_credentials(runtime_context, "internal_micromobility_refund_invoice")
-        endpoint = _resolve_endpoint(mm_config, "refund_invoice", invoice_id=invoice_id)
-        body: dict[str, Any] = {}
-        if reason:
-            body["reason"] = reason
-        return await _make_micromobility_request("POST", endpoint, mm_config, json_data=body)
-    except Exception as e:
-        logger.error(f"refund_invoice failed: {e}")
-        return {"success": False, "error": str(e)}
-
-
-# ── Analytics Tools ───────────────────────────────────────────────────────────
-
-
-async def internal_micromobility_analytics_overview(
-    config: dict[str, Any] | None = None,
-    runtime_context: Any | None = None,
-    start_date: str | None = None,
-    end_date: str | None = None,
-    fleet_id: str | None = None,
-    chart_type: str | None = None,
-) -> dict[str, Any]:
-    """
-    Get analytics chart data (trips, revenue, users) for a date range.
-    chart_type: 'line', 'bar', or 'gauge'. Required — must be specified by the caller.
-    """
-    try:
-        mm_config = await _get_micromobility_credentials(runtime_context, "internal_micromobility_analytics_overview")
-        key_map = {"line": "analytics_line_chart", "bar": "analytics_bar_chart", "gauge": "analytics_gauge_chart"}
-        if not chart_type or chart_type not in key_map:
-            return {"success": False, "error": f"chart_type must be one of: {list(key_map.keys())}"}
-        endpoint_key = key_map[chart_type]
-        endpoint = _resolve_endpoint(mm_config, endpoint_key)
-        params: dict[str, Any] = {}
-        if start_date:
-            params["start_date"] = start_date
-        if end_date:
-            params["end_date"] = end_date
-        if fleet_id:
-            params["fleet"] = _validate_id(fleet_id, "fleet_id")
-        return await _make_micromobility_request("GET", endpoint, mm_config, params=params)
-    except Exception as e:
-        logger.error(f"analytics_overview failed: {e}")
-        return {"success": False, "error": str(e)}
-
-
-async def internal_micromobility_analytics_activity(
-    config: dict[str, Any] | None = None,
-    runtime_context: Any | None = None,
-    start_hour: int | None = None,
-    step_hour: int | None = None,
-) -> dict[str, Any]:
-    """Get hourly activity chart data showing peak usage hours."""
-    try:
-        mm_config = await _get_micromobility_credentials(runtime_context, "internal_micromobility_analytics_activity")
-        endpoint = _resolve_endpoint(mm_config, "analytics_activity_chart")
-        params: dict[str, Any] = {}
-        if start_hour is not None:
-            params["start_hour"] = start_hour
-        if step_hour is not None:
-            params["step_hour"] = step_hour
-        return await _make_micromobility_request("GET", endpoint, mm_config, params=params or None)
-    except Exception as e:
-        logger.error(f"analytics_activity failed: {e}")
         return {"success": False, "error": str(e)}
 
 
@@ -813,12 +887,59 @@ async def internal_micromobility_analytics_activity(
 async def internal_micromobility_list_reports(
     config: dict[str, Any] | None = None,
     runtime_context: Any | None = None,
+    limit: int = 10,
+    offset: int = 0,
+    search: str | None = None,
+    sort: str | None = None,
+    order: str | None = None,
+    report_category: str | None = None,
+    report_type: str | None = None,
+    status: str | None = None,
+    fleet: str | None = None,
+    start_date: str | None = None,
+    end_date: str | None = None,
 ) -> dict[str, Any]:
-    """List all generated reports."""
+    """List vehicle/trip reports submitted by riders or rangers."""
     try:
         mm_config = await _get_micromobility_credentials(runtime_context, "internal_micromobility_list_reports")
         endpoint = _resolve_endpoint(mm_config, "list_reports")
-        return await _make_micromobility_request("GET", endpoint, mm_config)
+        params: dict[str, Any] = {"limit": limit, "offset": offset}
+        if search:
+            params["search"] = search
+        if sort:
+            params["sort"] = sort
+        if order:
+            params["order"] = order
+        if report_category:
+            params["report_category"] = report_category
+        if report_type:
+            params["report_type"] = report_type
+        if status:
+            params["status"] = status
+        if fleet:
+            params["fleet"] = fleet
+        if start_date:
+            params["start_date"] = start_date
+        if end_date:
+            params["end_date"] = end_date
+        result = await _make_micromobility_request("GET", endpoint, mm_config, params=params)
+        if result.get("success"):
+            raw = result.get("data")
+            if isinstance(raw, dict):
+                meta = raw.get("meta") or {}
+                count_obj = meta.get("count") or {}
+                items = raw.get("data") or raw.get("results") or raw.get("reports") or []
+                total = (count_obj.get("total") if isinstance(count_obj, dict) else None) or raw.get("count", len(items))
+                result["reports"] = items
+                result["count"] = total
+                result["meta"] = meta
+                result["summary"] = meta.get("summary") or {}
+                result["has_more"] = offset + len(items) < total
+            elif isinstance(raw, list):
+                result["reports"] = raw
+                result["count"] = len(raw)
+                result["has_more"] = False
+        return result
     except Exception as e:
         logger.error(f"list_reports failed: {e}")
         return {"success": False, "error": str(e)}

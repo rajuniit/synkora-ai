@@ -2,6 +2,7 @@
 Database-related Celery tasks for scheduled task execution.
 """
 
+import asyncio
 import logging
 from typing import Any
 from uuid import UUID
@@ -41,21 +42,24 @@ def execute_database_query(connection_id: str, query: str, task_id: str = None) 
             raise ValueError(f"Database connection {connection_id} not found")
 
         # Create appropriate connector
-        if connection.type == DatabaseConnectionType.POSTGRESQL:
+        if connection.database_type == DatabaseConnectionType.POSTGRESQL:
             connector = PostgreSQLConnector(connection)
-        elif connection.type == DatabaseConnectionType.ELASTICSEARCH:
+        elif connection.database_type == DatabaseConnectionType.ELASTICSEARCH:
             connector = ElasticsearchConnector(connection)
         else:
-            raise ValueError(f"Unsupported database type: {connection.type}")
+            raise ValueError(f"Unsupported database type: {connection.database_type}")
 
-        # Execute query synchronously (connectors handle their own async)
-        connector.connect()
-        try:
-            results = connector.execute_query(query)
-            logger.info(f"Query executed successfully for task {task_id}")
-            return {"success": True, "data": results, "row_count": len(results) if isinstance(results, list) else 0}
-        finally:
-            connector.disconnect()
+        # All connectors are async — run in a fresh event loop (Celery workers are sync)
+        async def _run():
+            await connector.connect()
+            try:
+                results = await connector.execute_query(query)
+                logger.info(f"Query executed successfully for task {task_id}")
+                return {"success": True, "data": results, "row_count": len(results) if isinstance(results, list) else 0}
+            finally:
+                await connector.disconnect()
+
+        return asyncio.run(_run())
 
     except Exception as e:
         logger.error(f"Error executing query for task {task_id}: {str(e)}", exc_info=True)

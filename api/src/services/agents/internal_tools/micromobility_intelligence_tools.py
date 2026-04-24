@@ -1,9 +1,9 @@
 """
 Micromobility Intelligence Tools.
 
-Pre-computes analytical insights from OtoRide fleet data so the LLM receives
+Pre-computes analytical insights from Micromobility fleet data so the LLM receives
 structured results rather than raw JSON dumps. Each tool fetches data from the
-OtoRide API, applies Python-level computation, and returns clean, actionable output.
+Micromobility API, applies Python-level computation, and returns clean, actionable output.
 
 The LLM calls these tools instead of (or after) the raw micromobility tools when
 the question requires cross-vehicle analysis, demand prediction, or rebalancing plans.
@@ -21,8 +21,10 @@ _DEFAULT_IDLE_HOURS = 4
 _REBALANCE_MIN_SURPLUS = 2  # min extra vehicles before suggesting a move
 
 
-async def _fetch_all_vehicles(runtime_context: Any, config: Any) -> list[dict[str, Any]]:
-    """Fetch all vehicles from OtoRide with pagination."""
+async def _fetch_all_vehicles(
+    runtime_context: Any, config: Any, _meta_out: dict[str, Any] | None = None
+) -> list[dict[str, Any]]:
+    """Fetch all vehicles from Micromobility with pagination. Always filters bike_category=P."""
     from src.services.agents.internal_tools.micromobility_tools import internal_micromobility_list_vehicles
 
     all_vehicles: list[dict[str, Any]] = []
@@ -30,25 +32,33 @@ async def _fetch_all_vehicles(runtime_context: Any, config: Any) -> list[dict[st
     page_size = 100
     while True:
         resp = await internal_micromobility_list_vehicles(
-            config=config, runtime_context=runtime_context, limit=page_size, offset=offset
+            config=config, runtime_context=runtime_context,
+            bike_category="P",  # always fetch real (non-test) bike category
+            limit=page_size, offset=offset,
         )
         if not isinstance(resp, dict) or not resp.get("success"):
             break
-        raw = resp.get("data")
-        if isinstance(raw, list):
-            items = raw
-        elif isinstance(raw, dict):
-            items = raw.get("vehicles") or raw.get("results") or raw.get("data") or []
-        else:
-            items = resp.get("vehicles") or resp.get("results") or []
+        items = resp.get("vehicles") or []
+        # Capture meta from first page (has total count + fleet-wide summary)
+        if _meta_out is not None and offset == 0:
+            _meta_out.update(resp.get("meta") or {})
+            _meta_out["api_summary"] = resp.get("summary") or {}
+            _meta_out["total_count"] = resp.get("count")
         if not items:
+            logger.info(f"[fetch_all_vehicles] page offset={offset} returned 0 items — stopping")
             break
+        logger.info(
+            f"[fetch_all_vehicles] page offset={offset} got {len(items)} vehicles (total so far: {len(all_vehicles) + len(items)})"
+        )
         all_vehicles.extend(items)
         if len(items) < page_size:
+            logger.info(f"[fetch_all_vehicles] last page (got {len(items)} < {page_size}) — done, total={len(all_vehicles)}")
             break
         offset += page_size
         if offset > 2000:
+            logger.warning(f"[fetch_all_vehicles] hit 2000 offset cap — stopping, total={len(all_vehicles)}")
             break
+    logger.info(f"[fetch_all_vehicles] final total vehicles fetched: {len(all_vehicles)}")
     return all_vehicles
 
 
@@ -65,21 +75,23 @@ async def _fetch_all_trips(runtime_context: Any, config: Any, **filters) -> list
         )
         if not isinstance(resp, dict) or not resp.get("success"):
             break
-        raw = resp.get("data")
-        if isinstance(raw, list):
-            items = raw
-        elif isinstance(raw, dict):
-            items = raw.get("trips") or raw.get("results") or raw.get("data") or []
-        else:
-            items = resp.get("trips") or resp.get("results") or []
+        # list_trips normalizes response: items available at resp["trips"]
+        items = resp.get("trips") or []
         if not items:
+            logger.info(f"[fetch_all_trips] page offset={offset} returned 0 items — stopping")
             break
+        logger.info(
+            f"[fetch_all_trips] page offset={offset} got {len(items)} trips (total so far: {len(all_trips) + len(items)})"
+        )
         all_trips.extend(items)
         if len(items) < page_size:
+            logger.info(f"[fetch_all_trips] last page (got {len(items)} < {page_size}) — done, total={len(all_trips)}")
             break
         offset += page_size
         if offset > 1000:
+            logger.warning(f"[fetch_all_trips] hit 1000 offset cap — stopping, total={len(all_trips)}")
             break
+    logger.info(f"[fetch_all_trips] final total trips fetched: {len(all_trips)} | filters={filters}")
     return all_trips
 
 
@@ -123,84 +135,114 @@ async def internal_micromobility_get_fleet_health(
     if not runtime_context:
         return {"success": False, "error": "No runtime context available."}
     try:
-        vehicles = await _fetch_all_vehicles(runtime_context, config)
+        meta_out: dict[str, Any] = {}
+        vehicles = await _fetch_all_vehicles(runtime_context, config, _meta_out=meta_out)
         if not vehicles:
-            return {"success": False, "error": "No vehicle data returned from OtoRide API."}
+            return {"success": False, "error": "No vehicle data returned from Micromobility API."}
 
-        total = len(vehicles)
-        low_battery = []
-        idle_vehicles = []
-        maintenance_vehicles = []
-        batteries = []
+        # Use API-provided summary (covers all pages, pre-computed server-side)
+        api_summary = meta_out.get("api_summary") or {}
+        total = meta_out.get("total_count") or len(vehicles)
+
+        low_battery: list[dict[str, Any]] = []
+        idle_vehicles: list[dict[str, Any]] = []
+        maintenance_vehicles: list[dict[str, Any]] = []
+        batteries: list[float] = []
 
         for v in vehicles:
-            vid = v.get("id") or v.get("vehicle_id", "")
-            status = (v.get("status") or "").lower()
-            battery = v.get("battery_level")
-            zone = v.get("service_area") or v.get("zone") or v.get("fleet_id") or "Unknown"
-            _loc = v.get("last_location")
-            loc = _loc if isinstance(_loc, dict) else {}
-            lat = loc.get("lat") or v.get("lat")
-            lng = loc.get("lng") or v.get("lng")
+            vid = v.get("qr_code") or v.get("name") or v.get("id") or ""
+
+            # Micromobility nested flag dicts
+            _sf = v.get("status_flags") or {}
+            _of = v.get("operational_flags") or {}
+            _gf = v.get("general_flags") or {}
+
+            is_on_ride = bool(_sf.get("is_on_ride"))
+            is_idle = bool(_sf.get("is_idle"))
+            is_in_maintenance = bool(_of.get("maintenance"))
+            flag_low_battery = bool(_gf.get("low_battery"))
+
+            # Zone from nested fleet object
+            _fleet = v.get("fleet") or {}
+            zone = _fleet.get("name") or _fleet.get("id") or "Unknown"
+
+            # Location: "lat,lng" string
+            loc_raw = v.get("location")
+            lat: str | None = None
+            lng: str | None = None
+            if isinstance(loc_raw, str) and "," in loc_raw:
+                parts = loc_raw.split(",", 1)
+                lat, lng = parts[0].strip(), parts[1].strip()
+
+            # Battery from lock.power_level (e.g. "96.00")
+            _lock = v.get("lock") or {}
+            battery_raw = _lock.get("power_level")
+            battery: float | None = None
+            try:
+                battery = float(battery_raw) if battery_raw is not None else None
+            except (ValueError, TypeError):
+                pass
 
             if battery is not None:
-                try:
-                    batteries.append(float(battery))
-                except (ValueError, TypeError):
-                    pass
+                batteries.append(battery)
 
-            if battery is not None:
-                try:
-                    if float(battery) < low_battery_threshold and status != "in_use":
-                        low_battery.append(
-                            {
-                                "vehicle_id": vid,
-                                "battery_pct": battery,
-                                "service_area": zone,
-                                "lat": lat,
-                                "lng": lng,
-                            }
-                        )
-                except (ValueError, TypeError):
-                    pass
+            # Low battery: use API flag OR threshold check on lock power level
+            if (flag_low_battery or (battery is not None and battery < low_battery_threshold)) and not is_on_ride:
+                low_battery.append({
+                    "qr_code": vid,
+                    "battery_pct": battery,
+                    "service_area": zone,
+                    "lat": lat,
+                    "lng": lng,
+                })
 
-            if status == "maintenance":
-                maintenance_vehicles.append({"vehicle_id": vid, "service_area": zone})
-            elif status in ("available", "offline"):
-                idle_h = _hours_since(v.get("last_trip_completed_at"))
-                if idle_h is not None and idle_h >= idle_hours_threshold:
-                    idle_vehicles.append(
-                        {
-                            "vehicle_id": vid,
-                            "idle_hours": round(idle_h, 1),
-                            "service_area": zone,
-                            "lat": lat,
-                            "lng": lng,
-                        }
-                    )
+            if is_in_maintenance:
+                maintenance_vehicles.append({"qr_code": vid, "service_area": zone})
+            elif not is_on_ride:
+                last_seen_ts = v.get("last_connected_at") or v.get("last_loc_updated_at")
+                idle_h = _hours_since(last_seen_ts)
+                if is_idle or (idle_h is not None and idle_h >= idle_hours_threshold):
+                    idle_vehicles.append({
+                        "qr_code": vid,
+                        "battery_pct": battery,
+                        "idle_hours": round(idle_h, 1) if idle_h is not None else None,
+                        "no_heartbeat": not bool(v.get("heart_beat")),
+                        "service_area": zone,
+                        "lat": lat,
+                        "lng": lng,
+                    })
 
         avg_battery = round(sum(batteries) / len(batteries), 1) if batteries else None
-        operational = total - len(maintenance_vehicles)
-        operational_rate = round(operational / total * 100, 1) if total else 0
-
-        # Sort for priority
         low_battery.sort(key=lambda x: x.get("battery_pct") or 100)
-        idle_vehicles.sort(key=lambda x: x["idle_hours"], reverse=True)
+        idle_vehicles.sort(key=lambda x: x.get("idle_hours") or 0, reverse=True)
+
+        # Fleet-wide counts from API summary (accurate across all pages)
+        api_idle = api_summary.get("idle", len(idle_vehicles))
+        api_low_bat = api_summary.get("low_battery", len(low_battery))
+        api_maintenance = api_summary.get("maintenance", len(maintenance_vehicles))
+        api_on_ride = api_summary.get("on_ride", 0)
+        operational = total - api_maintenance - api_idle
+        operational_rate = round(max(operational, 0) / total * 100, 1) if total else 0
 
         actions = []
-        if low_battery:
+        if api_low_bat:
+            top = low_battery[0] if low_battery else {}
             actions.append(
-                f"Dispatch rangers to charge {len(low_battery)} low-battery vehicle(s) — priority: {low_battery[0]['vehicle_id']} at {low_battery[0]['battery_pct']}%"
+                f"Dispatch rangers to charge {api_low_bat} low-battery vehicle(s)"
+                + (f" — priority: {top.get('qr_code')} at {top.get('battery_pct')}%" if top else "")
             )
-        if idle_vehicles:
-            top_idle = idle_vehicles[0]
-            actions.append(
-                f"Inspect {len(idle_vehicles)} idle vehicle(s) — longest idle: {top_idle['vehicle_id']} ({top_idle['idle_hours']}h in {top_idle['service_area']})"
-            )
-        if maintenance_vehicles:
-            actions.append(
-                f"{len(maintenance_vehicles)} vehicle(s) currently in maintenance — review completion status"
-            )
+        if api_summary.get("iot_fault"):
+            actions.append(f"{api_summary['iot_fault']} vehicle(s) with IoT fault — investigate connectivity")
+        if api_summary.get("geofence_alert"):
+            actions.append(f"{api_summary['geofence_alert']} vehicle(s) outside geofence — review positions")
+        if api_summary.get("illegally_parking"):
+            actions.append(f"{api_summary['illegally_parking']} vehicle(s) illegally parked — dispatch ranger to relocate")
+        if api_summary.get("rebalance"):
+            actions.append(f"{api_summary['rebalance']} vehicle(s) flagged for rebalancing")
+        if api_summary.get("charging_pick"):
+            actions.append(f"{api_summary['charging_pick']} vehicle(s) need charging pickup")
+        if api_maintenance:
+            actions.append(f"{api_maintenance} vehicle(s) in maintenance — review completion status")
         if not actions:
             actions.append("Fleet is in good health — no immediate actions required")
 
@@ -208,16 +250,22 @@ async def internal_micromobility_get_fleet_health(
             "success": True,
             "summary": {
                 "total_vehicles": total,
+                "on_ride": api_on_ride,
+                "idle": api_idle,
                 "operational": operational,
                 "operational_rate_pct": operational_rate,
                 "avg_battery_pct": avg_battery,
-                "low_battery_count": len(low_battery),
-                "idle_count": len(idle_vehicles),
-                "maintenance_count": len(maintenance_vehicles),
-                "thresholds": {
-                    "low_battery_pct": low_battery_threshold,
-                    "idle_hours": idle_hours_threshold,
-                },
+                "low_battery_count": api_low_bat,
+                "on_charging": api_summary.get("on_charging", 0),
+                "parking": api_summary.get("parking", 0),
+                "illegally_parking": api_summary.get("illegally_parking", 0),
+                "iot_fault": api_summary.get("iot_fault", 0),
+                "geofence_alert": api_summary.get("geofence_alert", 0),
+                "rebalance": api_summary.get("rebalance", 0),
+                "charging_pick": api_summary.get("charging_pick", 0),
+                "maintenance_count": api_maintenance,
+                "percentages": api_summary.get("percentages") or {},
+                "thresholds": {"low_battery_pct": low_battery_threshold, "idle_hours": idle_hours_threshold},
             },
             "low_battery": low_battery[:20],
             "idle": idle_vehicles[:20],
@@ -259,22 +307,28 @@ async def internal_micromobility_get_zone_demand_supply(
         vehicles, trips = (
             await _fetch_all_vehicles(runtime_context, config),
             await _fetch_all_trips(
-                runtime_context, config, start_date=start_date, end_date=end_date, status="completed"
+                runtime_context, config, start_date=start_date, end_date=end_date, status="C"
             ),
         )
 
+        logger.info(f"[zone_demand_supply] vehicles={len(vehicles)} trips={len(trips)}")
+
         # Count available vehicles per zone
+        # Micromobility uses is_available boolean + nested fleet object for zone
         zone_supply: dict[str, int] = {}
         for v in vehicles:
-            status = (v.get("status") or "").lower()
-            if status == "available":
-                zone = v.get("service_area") or v.get("zone") or v.get("fleet_id") or "Unknown"
+            if v.get("is_available"):
+                _fleet = v.get("fleet") or {}
+                zone = _fleet.get("name") or _fleet.get("id") or v.get("service_area") or "Unknown"
                 zone_supply[zone] = zone_supply.get(zone, 0) + 1
 
         # Count trips started per zone per day
+        # Micromobility trips: zone identified by bike.fleet.address (no name on trips)
         zone_trips: dict[str, list[int]] = {}
         for t in trips:
-            zone = t.get("service_area") or t.get("start_zone") or t.get("fleet_id") or "Unknown"
+            _bike = t.get("bike") or {}
+            _fleet = _bike.get("fleet") or {}
+            zone = _fleet.get("address") or _fleet.get("name") or "Unknown"
             zone_trips.setdefault(zone, [])
             zone_trips[zone].append(1)
 
@@ -372,9 +426,15 @@ async def internal_micromobility_predict_demand(
             activity_resp = await internal_micromobility_analytics_activity(
                 config=config, runtime_context=runtime_context
             )
+            logger.info(
+                f"[predict_demand] analytics_activity response keys: {list(activity_resp.keys()) if isinstance(activity_resp, dict) else type(activity_resp)}"
+            )
             if isinstance(activity_resp, dict) and activity_resp.get("success"):
                 # Estimate modifier from hourly activity peaks
                 data = activity_resp.get("data") or activity_resp.get("activity") or []
+                logger.info(
+                    f"[predict_demand] activity data type={type(data)} len={len(data) if isinstance(data, list) else 'n/a'} sample={data[0] if isinstance(data, list) and data else data}"
+                )
                 if data:
                     values = [float(d.get("value") or d.get("count") or 0) for d in data]
                     if values:
@@ -694,25 +754,33 @@ async def internal_micromobility_get_trip_performance(
         start = (now - timedelta(days=days)).strftime("%Y-%m-%d")
         end = now.strftime("%Y-%m-%d")
 
-        completed = await _fetch_all_trips(runtime_context, config, start_date=start, end_date=end, status="completed")
+        # Micromobility status codes: "C" = completed. Cancelled code unknown — fetch all and filter by status field.
+        completed = await _fetch_all_trips(runtime_context, config, start_date=start, end_date=end, status="C")
         cancelled = await _fetch_all_trips(runtime_context, config, start_date=start, end_date=end, status="cancelled")
+
+        logger.info(
+            f"[trip_performance] fetched completed={len(completed)} cancelled={len(cancelled)} for period {start} → {end}"
+        )
 
         total_completed = len(completed)
         total_cancelled = len(cancelled)
         total = total_completed + total_cancelled
 
-        durations = [float(t.get("duration_minutes") or t.get("duration") or 0) for t in completed]
-        distances = [float(t.get("distance_km") or t.get("distance") or 0) for t in completed]
-        revenues = [float(t.get("cost") or t.get("amount") or 0) for t in completed]
+        # riding_time is in seconds; convert to minutes
+        durations = [float(t.get("riding_time") or 0) / 60 for t in completed]
+        # distance is a string (e.g. "0" or "1.23")
+        distances = [float(t.get("distance") or 0) for t in completed]
+        # revenue is in invoiced_charges.amount (string)
+        revenues = [float((t.get("invoiced_charges") or {}).get("amount") or 0) for t in completed]
 
         avg_duration = round(sum(durations) / len(durations), 1) if durations else 0
         avg_distance = round(sum(distances) / len(distances), 2) if distances else 0
         total_revenue = round(sum(revenues), 2)
 
-        # Hourly distribution
+        # Hourly distribution — Micromobility uses pick_up_time
         hour_counts: dict[int, int] = {}
         for t in completed:
-            start_ts = t.get("started_at") or t.get("created_at") or ""
+            start_ts = t.get("pick_up_time") or ""
             h = _hours_since(start_ts)
             if h is not None:
                 hour_of_day = (now - timedelta(hours=h)).hour
@@ -720,10 +788,12 @@ async def internal_micromobility_get_trip_performance(
 
         peak_hour = max(hour_counts, key=hour_counts.get) if hour_counts else None
 
-        # Zone breakdown
+        # Zone breakdown — Micromobility trips: zone is bike.fleet.address (no fleet name on trips)
         zone_counts: dict[str, int] = {}
         for t in completed:
-            zone = t.get("service_area") or t.get("start_zone") or t.get("fleet_id") or "Unknown"
+            _bike = t.get("bike") or {}
+            _fleet = _bike.get("fleet") or {}
+            zone = _fleet.get("address") or _fleet.get("name") or "Unknown"
             zone_counts[zone] = zone_counts.get(zone, 0) + 1
 
         top_zones = sorted(

@@ -1,6 +1,7 @@
 'use client'
 
 import { useState, useEffect } from 'react'
+import { extractErrorMessage } from '@/lib/api/error'
 import { cn } from '@/lib/utils/cn'
 import type { AutopilotStatus } from '@/lib/api/knowledge-autopilot'
 import { getAutopilotStatus, triggerCompilation } from '@/lib/api/knowledge-autopilot'
@@ -40,7 +41,7 @@ export function CompilationStatus({ kbId }: CompilationStatusProps) {
       }
       await loadStatus()
     } catch (err: any) {
-      setError(err?.response?.data?.detail || err?.message || 'Compilation failed')
+      setError(extractErrorMessage(err, err?.message || 'Compilation failed'))
     } finally {
       setCompiling(false)
     }

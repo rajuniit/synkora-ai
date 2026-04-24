@@ -72,6 +72,59 @@ export async function getMessages(conversationId: string): Promise<Message[]> {
   return data
 }
 
+// Conversation Shares
+export interface ShareLink {
+  id: string
+  conversation_id: string
+  share_url: string
+  expires_at: string
+  revoked_at: string | null
+  is_active: boolean
+  created_at: string
+  token?: string
+}
+
+export interface SharedConversationData {
+  conversation: any
+  messages: any[]
+  agent: { name: string; avatar?: string; description?: string }
+  expires_at: string
+  share_id: string
+}
+
+export async function createConversationShare(
+  conversationId: string,
+  expiresInSeconds: number
+): Promise<ShareLink> {
+  const { data } = await apiClient.axios.post(
+    `/api/v1/agents/conversations/${conversationId}/shares`,
+    { expires_in_seconds: expiresInSeconds }
+  )
+  return data.data
+}
+
+export async function listConversationShares(conversationId: string): Promise<ShareLink[]> {
+  const { data } = await apiClient.axios.get(
+    `/api/v1/agents/conversations/${conversationId}/shares`
+  )
+  return data.data?.shares || []
+}
+
+export async function revokeConversationShare(shareId: string, conversationId: string): Promise<void> {
+  await apiClient.axios.delete(`/api/v1/agents/conversations/${conversationId}/shares/${shareId}`)
+}
+
+export async function getSharedConversation(token: string): Promise<SharedConversationData> {
+  // Public endpoint — no auth header needed; use plain fetch to avoid auth interceptors
+  const apiUrl = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:5001'
+  const res = await fetch(`${apiUrl}/api/v1/public/share/${encodeURIComponent(token)}`)
+  if (!res.ok) {
+    throw new Error(res.status === 404 ? 'not_found' : 'fetch_error')
+  }
+  const json = await res.json()
+  return json.data
+}
+
 // Chat Attachments
 export async function uploadChatAttachment(
   conversationId: string,

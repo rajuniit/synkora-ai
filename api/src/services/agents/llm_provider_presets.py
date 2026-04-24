@@ -56,6 +56,39 @@ OPENAI_PRESET = ProviderPreset(
     models=[
         # GPT-5 Series
         ModelPreset(
+            name="GPT-5.5 Pro",
+            model_name="gpt-5.5-pro",
+            description="Most powerful GPT-5.5 model with maximum capabilities",
+            default_max_tokens=32768,
+        ),
+        ModelPreset(name="GPT-5.5", model_name="gpt-5.5", description="Latest GPT-5.5 model", default_max_tokens=32768),
+        ModelPreset(
+            name="GPT-5.4 Pro",
+            model_name="gpt-5.4-pro",
+            description="GPT-5.4 Pro with enhanced reasoning",
+            default_max_tokens=32768,
+        ),
+        ModelPreset(name="GPT-5.4", model_name="gpt-5.4", description="GPT-5.4 model", default_max_tokens=32768),
+        ModelPreset(
+            name="GPT-5.3 Instant",
+            model_name="gpt-5.3-instant",
+            description="Fast GPT-5.3 variant for quick responses",
+            default_max_tokens=16384,
+        ),
+        ModelPreset(
+            name="GPT-5.3 Instant Mini",
+            model_name="gpt-5.3-instant-mini",
+            description="Compact fast GPT-5.3 for lightweight tasks",
+            default_max_tokens=8192,
+        ),
+        ModelPreset(
+            name="GPT-5.3 Codex",
+            model_name="gpt-5.3-codex",
+            description="GPT-5.3 specialized for code generation",
+            default_max_tokens=32768,
+        ),
+        ModelPreset(name="GPT-5.3", model_name="gpt-5.3", description="GPT-5.3 base model", default_max_tokens=32768),
+        ModelPreset(
             name="GPT-5.2 Pro",
             model_name="gpt-5.2-pro",
             description="Most advanced GPT-5 model with enhanced capabilities",
@@ -284,6 +317,22 @@ ANTHROPIC_PRESET = ProviderPreset(
             max_input_tokens=200000,
             max_output_tokens=32000,
         ),
+        ModelPreset(
+            name="Claude Sonnet 4.7",
+            model_name="claude-sonnet-4-7",
+            description="Balanced Claude 4.7 model for enterprise workloads",
+            default_max_tokens=16384,
+            max_input_tokens=200000,
+            max_output_tokens=128000,
+        ),
+        ModelPreset(
+            name="Claude Haiku 4.7",
+            model_name="claude-haiku-4-7",
+            description="Fast and efficient Claude 4.7 model",
+            default_max_tokens=8192,
+            max_input_tokens=200000,
+            max_output_tokens=8192,
+        ),
         # Claude 4.6 Series
         ModelPreset(
             name="Claude Opus 4.6",
@@ -300,6 +349,14 @@ ANTHROPIC_PRESET = ProviderPreset(
             default_max_tokens=16384,
             max_input_tokens=200000,
             max_output_tokens=128000,
+        ),
+        ModelPreset(
+            name="Claude Haiku 4.6",
+            model_name="claude-haiku-4-6",
+            description="Fast and efficient Claude 4.6 model",
+            default_max_tokens=8192,
+            max_input_tokens=200000,
+            max_output_tokens=8192,
         ),
         # Claude 4.5 Series
         ModelPreset(
@@ -335,6 +392,22 @@ ANTHROPIC_PRESET = ProviderPreset(
             max_input_tokens=200000,
             max_output_tokens=32000,
         ),
+        ModelPreset(
+            name="Claude Sonnet 4.1",
+            model_name="claude-sonnet-4-1",
+            description="Balanced Claude 4.1 model for enterprise workloads",
+            default_max_tokens=16384,
+            max_input_tokens=200000,
+            max_output_tokens=128000,
+        ),
+        ModelPreset(
+            name="Claude Haiku 4.1",
+            model_name="claude-haiku-4-1",
+            description="Fast and efficient Claude 4.1 model",
+            default_max_tokens=8192,
+            max_input_tokens=200000,
+            max_output_tokens=8192,
+        ),
         # Claude 4 Series
         ModelPreset(
             name="Claude Opus 4",
@@ -351,6 +424,14 @@ ANTHROPIC_PRESET = ProviderPreset(
             default_max_tokens=16384,
             max_input_tokens=200000,
             max_output_tokens=128000,
+        ),
+        ModelPreset(
+            name="Claude Haiku 4",
+            model_name="claude-haiku-4",
+            description="Fast and efficient Claude 4 model",
+            default_max_tokens=8192,
+            max_input_tokens=200000,
+            max_output_tokens=8192,
         ),
         # Claude 3.7 Series
         ModelPreset(
@@ -676,6 +757,36 @@ AWS_BEDROCK_PRESET = ProviderPreset(
     models=[
         # Anthropic Claude on Bedrock
         ModelPreset(
+            name="Claude Opus 4.7 (Bedrock)",
+            model_name="anthropic.claude-opus-4-7-v1:0",
+            description="Latest Claude Opus 4.7 via Bedrock",
+            default_max_tokens=16384,
+        ),
+        ModelPreset(
+            name="Claude Sonnet 4.7 (Bedrock)",
+            model_name="anthropic.claude-sonnet-4-7-v1:0",
+            description="Claude Sonnet 4.7 via Bedrock",
+            default_max_tokens=16384,
+        ),
+        ModelPreset(
+            name="Claude Haiku 4.7 (Bedrock)",
+            model_name="anthropic.claude-haiku-4-7-v1:0",
+            description="Claude Haiku 4.7 via Bedrock",
+            default_max_tokens=8192,
+        ),
+        ModelPreset(
+            name="Claude Opus 4.6 (Bedrock)",
+            model_name="anthropic.claude-opus-4-6-v1:0",
+            description="Claude Opus 4.6 via Bedrock",
+            default_max_tokens=16384,
+        ),
+        ModelPreset(
+            name="Claude Sonnet 4.6 (Bedrock)",
+            model_name="anthropic.claude-sonnet-4-6-v1:0",
+            description="Claude Sonnet 4.6 via Bedrock",
+            default_max_tokens=16384,
+        ),
+        ModelPreset(
             name="Claude Sonnet 4.5 (Bedrock)",
             model_name="anthropic.claude-sonnet-4-5-20250514-v1:0",
             description="Latest Claude Sonnet 4.5 via Bedrock",
@@ -857,6 +968,31 @@ VERTEX_AI_PRESET = ProviderPreset(
     requires_api_key=False,
     documentation_url="https://cloud.google.com/vertex-ai/docs",
     models=[
+        # Gemini 3.x Series
+        ModelPreset(
+            name="Gemini 3.1 Pro Preview (Vertex)",
+            model_name="gemini-3.1-pro-preview",
+            description="Google Gemini 3.1 Pro preview via Vertex AI",
+            default_max_tokens=32768,
+            max_input_tokens=1000000,
+            max_output_tokens=32768,
+        ),
+        ModelPreset(
+            name="Gemini 3 Pro (Vertex)",
+            model_name="gemini-3-pro",
+            description="Google Gemini 3 Pro via Vertex AI",
+            default_max_tokens=32768,
+            max_input_tokens=1000000,
+            max_output_tokens=32768,
+        ),
+        ModelPreset(
+            name="Gemini 3 Flash (Vertex)",
+            model_name="gemini-3-flash",
+            description="Google Gemini 3 Flash via Vertex AI",
+            default_max_tokens=16384,
+            max_input_tokens=1000000,
+            max_output_tokens=16384,
+        ),
         # Gemini 2.5 Series
         ModelPreset(
             name="Gemini 2.5 Pro (Vertex)",
@@ -1440,11 +1576,36 @@ OPENROUTER_PRESET = ProviderPreset(
             description="Faster, cheaper O1 variant",
             default_max_tokens=65536,
         ),
-        # Anthropic Models — Claude 4.x (latest)
+        # Anthropic Models — Claude 4.7 (latest)
+        ModelPreset(
+            name="Claude Opus 4.7",
+            model_name="anthropic/claude-opus-4-7",
+            description="Anthropic's most powerful model — highest intelligence",
+            default_max_tokens=32768,
+            max_input_tokens=200000,
+            max_output_tokens=32768,
+        ),
+        ModelPreset(
+            name="Claude Sonnet 4.7",
+            model_name="anthropic/claude-sonnet-4-7",
+            description="Best balance of intelligence and speed — Claude 4.7",
+            default_max_tokens=16384,
+            max_input_tokens=200000,
+            max_output_tokens=128000,
+        ),
+        ModelPreset(
+            name="Claude Haiku 4.7",
+            model_name="anthropic/claude-haiku-4-7",
+            description="Claude Haiku 4.7 — fastest Claude model",
+            default_max_tokens=8192,
+            max_input_tokens=200000,
+            max_output_tokens=8192,
+        ),
+        # Anthropic Models — Claude 4.6
         ModelPreset(
             name="Claude Opus 4.6",
             model_name="anthropic/claude-opus-4-6",
-            description="Anthropic's most powerful model — highest intelligence",
+            description="Anthropic Claude Opus 4.6 — powerful and capable",
             default_max_tokens=32768,
             max_input_tokens=200000,
             max_output_tokens=32768,
@@ -1452,11 +1613,20 @@ OPENROUTER_PRESET = ProviderPreset(
         ModelPreset(
             name="Claude Sonnet 4.6",
             model_name="anthropic/claude-sonnet-4-6",
-            description="Best balance of intelligence and speed — Claude 4.6",
+            description="Claude Sonnet 4.6 — fast and intelligent",
             default_max_tokens=16384,
             max_input_tokens=200000,
             max_output_tokens=128000,
         ),
+        ModelPreset(
+            name="Claude Haiku 4.6",
+            model_name="anthropic/claude-haiku-4-6",
+            description="Claude Haiku 4.6 — fast and efficient",
+            default_max_tokens=8192,
+            max_input_tokens=200000,
+            max_output_tokens=8192,
+        ),
+        # Anthropic Models — Claude 4.5
         ModelPreset(
             name="Claude Opus 4.5",
             model_name="anthropic/claude-opus-4-5",
@@ -1477,6 +1647,56 @@ OPENROUTER_PRESET = ProviderPreset(
             name="Claude Haiku 4.5",
             model_name="anthropic/claude-haiku-4-5",
             description="Claude Haiku 4.5 — fastest Claude model",
+            default_max_tokens=8192,
+            max_input_tokens=200000,
+            max_output_tokens=8192,
+        ),
+        # Anthropic Models — Claude 4.1
+        ModelPreset(
+            name="Claude Opus 4.1",
+            model_name="anthropic/claude-opus-4-1",
+            description="Claude Opus 4.1 — advanced reasoning",
+            default_max_tokens=32768,
+            max_input_tokens=200000,
+            max_output_tokens=32768,
+        ),
+        ModelPreset(
+            name="Claude Sonnet 4.1",
+            model_name="anthropic/claude-sonnet-4-1",
+            description="Claude Sonnet 4.1 — balanced intelligence",
+            default_max_tokens=16384,
+            max_input_tokens=200000,
+            max_output_tokens=128000,
+        ),
+        ModelPreset(
+            name="Claude Haiku 4.1",
+            model_name="anthropic/claude-haiku-4-1",
+            description="Claude Haiku 4.1 — fast and efficient",
+            default_max_tokens=8192,
+            max_input_tokens=200000,
+            max_output_tokens=8192,
+        ),
+        # Anthropic Models — Claude 4
+        ModelPreset(
+            name="Claude Opus 4",
+            model_name="anthropic/claude-opus-4",
+            description="Claude Opus 4 — next-generation flagship",
+            default_max_tokens=32768,
+            max_input_tokens=200000,
+            max_output_tokens=32768,
+        ),
+        ModelPreset(
+            name="Claude Sonnet 4",
+            model_name="anthropic/claude-sonnet-4",
+            description="Claude Sonnet 4 — balanced model",
+            default_max_tokens=16384,
+            max_input_tokens=200000,
+            max_output_tokens=128000,
+        ),
+        ModelPreset(
+            name="Claude Haiku 4",
+            model_name="anthropic/claude-haiku-4",
+            description="Claude Haiku 4 — fast and efficient",
             default_max_tokens=8192,
             max_input_tokens=200000,
             max_output_tokens=8192,
@@ -1522,7 +1742,56 @@ OPENROUTER_PRESET = ProviderPreset(
             max_input_tokens=200000,
             max_output_tokens=4096,
         ),
-        # OpenAI Models — latest
+        # OpenAI Models — GPT-5.x (latest)
+        ModelPreset(
+            name="GPT-5.5 Pro",
+            model_name="openai/gpt-5.5-pro",
+            description="OpenAI's most powerful GPT-5.5 model",
+            default_max_tokens=32768,
+        ),
+        ModelPreset(
+            name="GPT-5.5",
+            model_name="openai/gpt-5.5",
+            description="OpenAI GPT-5.5",
+            default_max_tokens=32768,
+        ),
+        ModelPreset(
+            name="GPT-5.4 Pro",
+            model_name="openai/gpt-5.4-pro",
+            description="OpenAI GPT-5.4 Pro",
+            default_max_tokens=32768,
+        ),
+        ModelPreset(
+            name="GPT-5.4",
+            model_name="openai/gpt-5.4",
+            description="OpenAI GPT-5.4",
+            default_max_tokens=32768,
+        ),
+        ModelPreset(
+            name="GPT-5.3 Instant",
+            model_name="openai/gpt-5.3-instant",
+            description="OpenAI GPT-5.3 Instant — fast responses",
+            default_max_tokens=16384,
+        ),
+        ModelPreset(
+            name="GPT-5.2 Pro",
+            model_name="openai/gpt-5.2-pro",
+            description="OpenAI GPT-5.2 Pro",
+            default_max_tokens=32768,
+        ),
+        ModelPreset(
+            name="GPT-5.2",
+            model_name="openai/gpt-5.2",
+            description="OpenAI GPT-5.2",
+            default_max_tokens=32768,
+        ),
+        ModelPreset(
+            name="GPT-5",
+            model_name="openai/gpt-5",
+            description="OpenAI GPT-5 base model",
+            default_max_tokens=32768,
+        ),
+        # OpenAI Models — GPT-4.x
         ModelPreset(
             name="GPT-4.1",
             model_name="openai/gpt-4.1",
@@ -1587,7 +1856,32 @@ OPENROUTER_PRESET = ProviderPreset(
             max_input_tokens=128000,
             max_output_tokens=16384,
         ),
-        # Google Models — latest
+        # Google Models — Gemini 3.x (latest)
+        ModelPreset(
+            name="Gemini 3.1 Pro Preview",
+            model_name="google/gemini-3.1-pro-preview",
+            description="Google's latest Gemini 3.1 Pro preview",
+            default_max_tokens=32768,
+            max_input_tokens=1000000,
+            max_output_tokens=32768,
+        ),
+        ModelPreset(
+            name="Gemini 3 Pro",
+            model_name="google/gemini-3-pro",
+            description="Google Gemini 3 Pro — next-generation flagship",
+            default_max_tokens=32768,
+            max_input_tokens=1000000,
+            max_output_tokens=32768,
+        ),
+        ModelPreset(
+            name="Gemini 3 Flash",
+            model_name="google/gemini-3-flash",
+            description="Google Gemini 3 Flash — fast multimodal model",
+            default_max_tokens=16384,
+            max_input_tokens=1000000,
+            max_output_tokens=16384,
+        ),
+        # Google Models — Gemini 2.x
         ModelPreset(
             name="Gemini 2.5 Pro",
             model_name="google/gemini-2.5-pro-preview",
@@ -1883,6 +2177,45 @@ LITELLM_PRESET = ProviderPreset(
     models=[
         # OpenAI Models via LiteLLM - GPT-5 Series
         ModelPreset(
+            name="GPT-5.5 Pro",
+            model_name="gpt-5.5-pro",
+            description="OpenAI GPT-5.5 Pro via LiteLLM",
+            default_max_tokens=32768,
+        ),
+        ModelPreset(
+            name="GPT-5.5", model_name="gpt-5.5", description="OpenAI GPT-5.5 via LiteLLM", default_max_tokens=32768
+        ),
+        ModelPreset(
+            name="GPT-5.4 Pro",
+            model_name="gpt-5.4-pro",
+            description="OpenAI GPT-5.4 Pro via LiteLLM",
+            default_max_tokens=32768,
+        ),
+        ModelPreset(
+            name="GPT-5.4", model_name="gpt-5.4", description="OpenAI GPT-5.4 via LiteLLM", default_max_tokens=32768
+        ),
+        ModelPreset(
+            name="GPT-5.3 Instant",
+            model_name="gpt-5.3-instant",
+            description="OpenAI GPT-5.3 Instant via LiteLLM",
+            default_max_tokens=16384,
+        ),
+        ModelPreset(
+            name="GPT-5.3 Instant Mini",
+            model_name="gpt-5.3-instant-mini",
+            description="OpenAI GPT-5.3 Instant Mini via LiteLLM",
+            default_max_tokens=8192,
+        ),
+        ModelPreset(
+            name="GPT-5.3 Codex",
+            model_name="gpt-5.3-codex",
+            description="OpenAI GPT-5.3 Codex via LiteLLM",
+            default_max_tokens=32768,
+        ),
+        ModelPreset(
+            name="GPT-5.3", model_name="gpt-5.3", description="OpenAI GPT-5.3 via LiteLLM", default_max_tokens=32768
+        ),
+        ModelPreset(
             name="GPT-5.2 Pro",
             model_name="gpt-5.2-pro",
             description="OpenAI GPT-5.2 Pro via LiteLLM",
@@ -2015,7 +2348,26 @@ LITELLM_PRESET = ProviderPreset(
             name="O1 Mini", model_name="o1-mini", description="OpenAI O1 Mini via LiteLLM", default_max_tokens=65536
         ),
         ModelPreset(name="O1", model_name="o1", description="OpenAI O1 via LiteLLM", default_max_tokens=32768),
-        # Anthropic Claude Models via LiteLLM - Claude 4.6 Series
+        # Anthropic Claude Models via LiteLLM - Claude 4.7 Series
+        ModelPreset(
+            name="Claude Opus 4.7",
+            model_name="claude-opus-4-7",
+            description="Anthropic Claude Opus 4.7 via LiteLLM",
+            default_max_tokens=16384,
+        ),
+        ModelPreset(
+            name="Claude Sonnet 4.7",
+            model_name="claude-sonnet-4-7",
+            description="Anthropic Claude Sonnet 4.7 via LiteLLM",
+            default_max_tokens=16384,
+        ),
+        ModelPreset(
+            name="Claude Haiku 4.7",
+            model_name="claude-haiku-4-7",
+            description="Anthropic Claude Haiku 4.7 via LiteLLM",
+            default_max_tokens=8192,
+        ),
+        # Anthropic - Claude 4.6 Series
         ModelPreset(
             name="Claude Opus 4.6",
             model_name="claude-opus-4-6",
@@ -2028,25 +2380,68 @@ LITELLM_PRESET = ProviderPreset(
             description="Anthropic Claude Sonnet 4.6 via LiteLLM",
             default_max_tokens=16384,
         ),
+        ModelPreset(
+            name="Claude Haiku 4.6",
+            model_name="claude-haiku-4-6",
+            description="Anthropic Claude Haiku 4.6 via LiteLLM",
+            default_max_tokens=8192,
+        ),
         # Anthropic - Claude 4.5 Series
         ModelPreset(
-            name="Claude 4.5 Sonnet",
+            name="Claude Opus 4.5",
+            model_name="claude-opus-4-5",
+            description="Anthropic Claude Opus 4.5 via LiteLLM",
+            default_max_tokens=16384,
+        ),
+        ModelPreset(
+            name="Claude Sonnet 4.5",
             model_name="claude-sonnet-4-5",
-            description="Anthropic Claude 4.5 Sonnet via LiteLLM",
+            description="Anthropic Claude Sonnet 4.5 via LiteLLM",
             default_max_tokens=16384,
         ),
         ModelPreset(
             name="Claude Haiku 4.5",
             model_name="claude-haiku-4-5",
             description="Anthropic Claude Haiku 4.5 via LiteLLM",
+            default_max_tokens=8192,
+        ),
+        # Anthropic - Claude 4.1 Series
+        ModelPreset(
+            name="Claude Opus 4.1",
+            model_name="claude-opus-4-1",
+            description="Anthropic Claude Opus 4.1 via LiteLLM",
             default_max_tokens=16384,
+        ),
+        ModelPreset(
+            name="Claude Sonnet 4.1",
+            model_name="claude-sonnet-4-1",
+            description="Anthropic Claude Sonnet 4.1 via LiteLLM",
+            default_max_tokens=16384,
+        ),
+        ModelPreset(
+            name="Claude Haiku 4.1",
+            model_name="claude-haiku-4-1",
+            description="Anthropic Claude Haiku 4.1 via LiteLLM",
+            default_max_tokens=8192,
         ),
         # Anthropic - Claude 4 Series
         ModelPreset(
-            name="Claude 4 Sonnet",
-            model_name="claude-sonnet-4",
-            description="Anthropic Claude 4 Sonnet via LiteLLM",
+            name="Claude Opus 4",
+            model_name="claude-opus-4",
+            description="Anthropic Claude Opus 4 via LiteLLM",
             default_max_tokens=16384,
+        ),
+        ModelPreset(
+            name="Claude Sonnet 4",
+            model_name="claude-sonnet-4",
+            description="Anthropic Claude Sonnet 4 via LiteLLM",
+            default_max_tokens=16384,
+        ),
+        ModelPreset(
+            name="Claude Haiku 4",
+            model_name="claude-haiku-4",
+            description="Anthropic Claude Haiku 4 via LiteLLM",
+            default_max_tokens=8192,
         ),
         # Anthropic - Claude 3.7 Series
         ModelPreset(
@@ -2266,12 +2661,47 @@ MODEL_COMPARISON_DATA: dict[str, dict[str, Any]] = {
         "speed_tier": "slow",
         "tags": ["general", "coding", "reasoning", "popular"],
     },
+    "claude-sonnet-4-7": {
+        "cost_input_per_1m": 3.00,
+        "cost_output_per_1m": 15.00,
+        "quality_score": 9.7,
+        "speed_tier": "medium",
+        "tags": ["general", "coding", "popular"],
+    },
+    "claude-haiku-4-7": {
+        "cost_input_per_1m": 1.00,
+        "cost_output_per_1m": 5.00,
+        "quality_score": 9.2,
+        "speed_tier": "fast",
+        "tags": ["general", "cheap"],
+    },
+    "claude-haiku-4-6": {
+        "cost_input_per_1m": 1.00,
+        "cost_output_per_1m": 5.00,
+        "quality_score": 9.0,
+        "speed_tier": "fast",
+        "tags": ["general", "cheap"],
+    },
     "claude-opus-4-1": {
         "cost_input_per_1m": 5.00,
         "cost_output_per_1m": 25.00,
         "quality_score": 9.6,
         "speed_tier": "slow",
         "tags": ["general", "coding", "reasoning"],
+    },
+    "claude-sonnet-4-1": {
+        "cost_input_per_1m": 3.00,
+        "cost_output_per_1m": 15.00,
+        "quality_score": 9.2,
+        "speed_tier": "medium",
+        "tags": ["general", "coding"],
+    },
+    "claude-haiku-4-1": {
+        "cost_input_per_1m": 1.00,
+        "cost_output_per_1m": 5.00,
+        "quality_score": 8.8,
+        "speed_tier": "fast",
+        "tags": ["general", "cheap"],
     },
     "claude-opus-4": {
         "cost_input_per_1m": 15.00,
@@ -2287,8 +2717,36 @@ MODEL_COMPARISON_DATA: dict[str, dict[str, Any]] = {
         "speed_tier": "medium",
         "tags": ["general", "coding"],
     },
+    "claude-haiku-4": {
+        "cost_input_per_1m": 1.00,
+        "cost_output_per_1m": 5.00,
+        "quality_score": 8.6,
+        "speed_tier": "fast",
+        "tags": ["general", "cheap"],
+    },
     # ── OpenAI ──────────────────────────────────────────────────────────────
     # GPT-5.x Series — pricing not officially announced; set to None
+    "gpt-5.5-pro": {
+        "cost_input_per_1m": None,
+        "cost_output_per_1m": None,
+        "quality_score": 10.0,
+        "speed_tier": "slow",
+        "tags": ["reasoning", "coding", "general"],
+    },
+    "gpt-5.5": {
+        "cost_input_per_1m": None,
+        "cost_output_per_1m": None,
+        "quality_score": 9.9,
+        "speed_tier": "medium",
+        "tags": ["general", "coding", "vision", "popular"],
+    },
+    "gpt-5.3": {
+        "cost_input_per_1m": None,
+        "cost_output_per_1m": None,
+        "quality_score": 9.4,
+        "speed_tier": "medium",
+        "tags": ["general", "coding"],
+    },
     "gpt-5.4-pro": {
         "cost_input_per_1m": None,
         "cost_output_per_1m": None,
@@ -2609,6 +3067,13 @@ MODEL_COMPARISON_DATA: dict[str, dict[str, Any]] = {
         "quality_score": 9.1,
         "speed_tier": "fast",
         "tags": ["general", "cheap", "reasoning", "popular"],
+    },
+    "gemini-3-pro": {
+        "cost_input_per_1m": None,
+        "cost_output_per_1m": None,
+        "quality_score": 9.6,
+        "speed_tier": "medium",
+        "tags": ["general", "reasoning", "coding"],
     },
     "gemma-4-31b-it": {
         "cost_input_per_1m": 0.0,

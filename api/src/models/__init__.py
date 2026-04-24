@@ -2,6 +2,7 @@
 
 from .activity_log import ActivityLog, ActivityType
 from .agent import Agent
+from .agent_a2a_task import A2ATaskStatus, AgentA2ATask
 from .agent_api_key import AgentApiKey
 from .agent_api_usage import AgentApiUsage
 from .agent_approval import AgentApprovalRequest, ApprovalStatus
@@ -34,6 +35,7 @@ from .app_store_source import AppStoreSource, SourceStatus, StoreType, SyncFrequ
 from .base import BaseModel, SoftDeleteMixin, StatusMixin, TenantMixin, TimestampMixin
 from .chart import Chart
 from .conversation import Conversation, ConversationStatus
+from .conversation_share import ConversationShare
 from .credit_balance import CreditBalance
 from .credit_topup import CreditTopup, TopupStatus
 from .credit_transaction import CreditTransaction, TransactionType
@@ -106,6 +108,7 @@ from .test_result import MetricType, PercentileType, TestResult
 from .test_run import TestRun, TestRunStatus
 from .test_scenario import TestScenario
 from .upload_file import FileSource, FileType, UploadFile
+from .llm_token_usage import LLMTokenUsage
 from .usage_analytics import UsageAnalytics
 from .user_oauth_token import UserOAuthToken
 from .voice_api_key import VoiceApiKey
@@ -182,6 +185,7 @@ __all__ = [
     "AppMode",
     "AppStatus",
     "ConversationStatus",
+    "ConversationShare",
     "MessageRole",
     "MessageStatus",
     # Document models
@@ -220,6 +224,9 @@ __all__ = [
     "ScheduledTask",
     "TaskExecution",
     "TaskNotification",
+    # A2A Protocol models
+    "AgentA2ATask",
+    "A2ATaskStatus",
     # HITL Approval models
     "AgentApprovalRequest",
     "ApprovalStatus",
@@ -256,6 +263,7 @@ __all__ = [
     "RevenueStatus",
     "CreditTopup",
     "TopupStatus",
+    "LLMTokenUsage",
     "UsageAnalytics",
     "PlatformSettings",
     "IntegrationConfig",

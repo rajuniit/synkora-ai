@@ -58,6 +58,11 @@ class RateLimitMiddleware:
         "/console/api/files/upload": {"requests": 20, "window": 60},
         "/api/v1/files/upload": {"requests": 20, "window": 60},
         "/api/v1/data-analysis/upload": {"requests": 10, "window": 60},
+        # Charts and data analysis - moderate (expensive JSONB + DB operations)
+        "/api/v1/charts": {"requests": 60, "window": 60},
+        "/api/v1/data-analysis/query-database": {"requests": 15, "window": 60},
+        "/api/v1/data-analysis/query-data-source": {"requests": 15, "window": 60},
+        "/api/v1/database-connections": {"requests": 20, "window": 60},
         # Public webhook endpoints - moderate
         "/webhook/": {"requests": 100, "window": 60},
         # Health check - very permissive

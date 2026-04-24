@@ -192,8 +192,8 @@ class TestElasticsearchServiceSearch:
 
         await svc.search("idx", "q", size=500)
 
-        call_body = svc.client.search.call_args.kwargs["body"]
-        assert call_body["size"] == 100
+        call_kwargs = svc.client.search.call_args.kwargs
+        assert call_kwargs["size"] == 100
 
     async def test_size_under_100_not_capped(self):
         svc = _make_service()
@@ -201,8 +201,8 @@ class TestElasticsearchServiceSearch:
 
         await svc.search("idx", "q", size=20)
 
-        call_body = svc.client.search.call_args.kwargs["body"]
-        assert call_body["size"] == 20
+        call_kwargs = svc.client.search.call_args.kwargs
+        assert call_kwargs["size"] == 20
 
     async def test_from_offset_sent(self):
         svc = _make_service()
@@ -210,8 +210,8 @@ class TestElasticsearchServiceSearch:
 
         await svc.search("idx", "q", from_=50)
 
-        call_body = svc.client.search.call_args.kwargs["body"]
-        assert call_body["from"] == 50
+        call_kwargs = svc.client.search.call_args.kwargs
+        assert call_kwargs["from"] == 50
 
     async def test_index_pattern_sent(self):
         svc = _make_service()
@@ -248,8 +248,8 @@ class TestElasticsearchServiceSearchFilters:
             "date_range": {"field": "created_at", "gte": "2024-01-01"}
         })
 
-        body = svc.client.search.call_args.kwargs["body"]
-        filter_clauses = body["query"]["bool"]["filter"]
+        query = svc.client.search.call_args.kwargs["query"]
+        filter_clauses = query["bool"]["filter"]
         range_filter = next(f for f in filter_clauses if "range" in f)
         assert range_filter["range"]["created_at"]["gte"] == "2024-01-01"
 
@@ -261,8 +261,8 @@ class TestElasticsearchServiceSearchFilters:
             "date_range": {"field": "ts", "lte": "2024-12-31"}
         })
 
-        body = svc.client.search.call_args.kwargs["body"]
-        filter_clauses = body["query"]["bool"]["filter"]
+        query = svc.client.search.call_args.kwargs["query"]
+        filter_clauses = query["bool"]["filter"]
         range_filter = next(f for f in filter_clauses if "range" in f)
         assert range_filter["range"]["ts"]["lte"] == "2024-12-31"
 
@@ -274,8 +274,8 @@ class TestElasticsearchServiceSearchFilters:
             "term_filters": {"status": "active", "tenant_id": "t1"}
         })
 
-        body = svc.client.search.call_args.kwargs["body"]
-        filter_clauses = body["query"]["bool"]["filter"]
+        query = svc.client.search.call_args.kwargs["query"]
+        filter_clauses = query["bool"]["filter"]
         term_fields = {list(f["term"].keys())[0] for f in filter_clauses if "term" in f}
         assert "status" in term_fields
         assert "tenant_id" in term_fields
@@ -286,8 +286,8 @@ class TestElasticsearchServiceSearchFilters:
 
         await svc.search("idx", "q")
 
-        body = svc.client.search.call_args.kwargs["body"]
-        assert "filter" not in body["query"]["bool"]
+        query = svc.client.search.call_args.kwargs["query"]
+        assert "filter" not in query["bool"]
 
 
 # ---------------------------------------------------------------------------
@@ -346,12 +346,12 @@ class TestElasticsearchServiceSearchErrors:
 class TestElasticsearchServiceGetIndices:
     async def test_returns_sorted_index_names(self):
         svc = _make_service()
-        svc.client.indices = MagicMock()
-        svc.client.indices.get_alias = AsyncMock(return_value={
-            "logs-2024": {},
-            "logs-2023": {},
-            "metrics": {},
-        })
+        svc.client.cat = MagicMock()
+        svc.client.cat.indices = AsyncMock(return_value=[
+            {"index": "logs-2024"},
+            {"index": "logs-2023"},
+            {"index": "metrics"},
+        ])
 
         result = await svc.get_indices()
 
@@ -359,8 +359,8 @@ class TestElasticsearchServiceGetIndices:
 
     async def test_exception_returns_empty_list(self):
         svc = _make_service()
-        svc.client.indices = MagicMock()
-        svc.client.indices.get_alias = AsyncMock(side_effect=ConnectionError("down"))
+        svc.client.cat = MagicMock()
+        svc.client.cat.indices = AsyncMock(side_effect=ConnectionError("down"))
 
         result = await svc.get_indices()
 

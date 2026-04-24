@@ -61,6 +61,7 @@ def _create_mock_connection(conn_id, tenant_id, **kwargs):
     mock_conn.username = kwargs.get("username", "testuser")
     mock_conn.database_path = kwargs.get("database_path")
     mock_conn.connection_params = kwargs.get("connection_params", {})
+    mock_conn.get_safe_connection_params.return_value = kwargs.get("connection_params", {})
     mock_conn.status = kwargs.get("status", "active")
     mock_conn.created_at = datetime.now(UTC)
     mock_conn.updated_at = datetime.now(UTC)

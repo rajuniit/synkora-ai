@@ -7,6 +7,7 @@ import {
   ChatMessages,
   ChatInput,
   ChatSidebar,
+  ShareModal,
 } from '@/components/chat/components'
 import { Message, Agent, Source, Person, NewsItem, Attachment } from '@/components/chat/types'
 import { apiClient } from '@/lib/api/client'
@@ -96,6 +97,7 @@ export default function AdvancedChatPage() {
   const [agentLoadError, setAgentLoadError] = useState<string | null>(null)
   const [chatConfig, setChatConfig] = useState<ChatConfig | null>(null)
   const [isSidebarExpanded, setIsSidebarExpanded] = useState(false) // Default to collapsed
+  const [shareConvId, setShareConvId] = useState<string | null>(null)
   const [isMobileSidebarOpen, setIsMobileSidebarOpen] = useState(false)
   const [totalMessages, setTotalMessages] = useState<number>(0)
   const [inputResetKey, setInputResetKey] = useState(0) // Key to force ChatInput remount
@@ -941,6 +943,7 @@ export default function AdvancedChatPage() {
   const rightWidgets = activeConfig?.sidebar_widgets?.filter((w: any) => w.position === 'right').sort((a: any, b: any) => (a.order || 0) - (b.order || 0)) || []
 
   return (
+    <>
     <div style={getChatStyles()} className="min-h-screen bg-gradient-to-br from-red-50/60 via-white to-rose-50/40 custom-scrollbar-container">
       <style jsx global>{`
         /* Custom scrollbar styling */
@@ -1095,6 +1098,7 @@ export default function AdvancedChatPage() {
                   }
                 }}
                 onNewChat={handleNewChat}
+                onShareSession={(sessionId) => setShareConvId(sessionId)}
                 chatConfig={chatConfig}
                 agentName={agent?.agent_name}
                 agentAvatar={agent?.avatar}
@@ -1180,6 +1184,18 @@ export default function AdvancedChatPage() {
                       </svg>
                       <span className="text-xs font-medium">New chat</span>
                     </button>
+                    {currentConversation && (
+                      <button
+                        onClick={() => setShareConvId(currentConversation.id)}
+                        className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg hover:bg-gray-100 transition-colors text-gray-600 hover:text-gray-900"
+                        title="Share conversation"
+                      >
+                        <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8.684 13.342C8.886 12.938 9 12.482 9 12c0-.482-.114-.938-.316-1.342m0 2.684a3 3 0 110-2.684m0 2.684l6.632 3.316m-6.632-6l6.632-3.316m0 0a3 3 0 105.367-2.684 3 3 0 00-5.367 2.684zm0 9.316a3 3 0 105.368 2.684 3 3 0 00-5.368-2.684z" />
+                        </svg>
+                        <span className="text-xs font-medium">Share</span>
+                      </button>
+                    )}
                   </div>
                 </div>
               </div>
@@ -1233,5 +1249,13 @@ export default function AdvancedChatPage() {
         </div>
       </div>
     </div>
+
+    {shareConvId && (
+      <ShareModal
+        conversationId={shareConvId}
+        onClose={() => setShareConvId(null)}
+      />
+    )}
+    </>
   )
 }

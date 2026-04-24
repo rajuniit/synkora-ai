@@ -4,7 +4,7 @@ Handles subscription management, credit operations, and billing analytics
 """
 
 import json
-from datetime import date, datetime
+from datetime import UTC, date, datetime, timedelta
 from typing import Optional
 from uuid import UUID
 
@@ -1001,3 +1001,56 @@ async def export_usage_report(
     )
 
     return report
+
+
+# ---------------------------------------------------------------------------
+# LLM Cost Analytics Endpoints
+# ---------------------------------------------------------------------------
+
+
+def _parse_period(period: str) -> tuple[datetime, datetime]:
+    """Parse a period string like '7d', '30d', '90d' into (start, end) UTC datetimes."""
+    now = datetime.now(UTC)
+    mapping = {"1d": 1, "7d": 7, "30d": 30, "90d": 90}
+    days = mapping.get(period, 7)
+    return now - timedelta(days=days), now
+
+
+@router.get("/llm-cost/summary")
+async def get_llm_cost_summary(
+    period: str = Query("7d", pattern="^(1d|7d|30d|90d)$"),
+    agent_id: UUID | None = None,
+    tenant_id: UUID = Depends(get_current_tenant_id),
+    db: AsyncSession = Depends(get_async_db),
+):
+    """Total token counts and estimated cost for a time period."""
+    from src.services.billing.llm_cost_service import get_cost_summary
+
+    start, end = _parse_period(period)
+    return await get_cost_summary(db, tenant_id, start, end, agent_id=agent_id)
+
+
+@router.get("/llm-cost/by-model")
+async def get_llm_cost_by_model(
+    period: str = Query("7d", pattern="^(1d|7d|30d|90d)$"),
+    tenant_id: UUID = Depends(get_current_tenant_id),
+    db: AsyncSession = Depends(get_async_db),
+):
+    """Cost breakdown grouped by provider and model."""
+    from src.services.billing.llm_cost_service import get_cost_by_model
+
+    start, end = _parse_period(period)
+    return await get_cost_by_model(db, tenant_id, start, end)
+
+
+@router.get("/llm-cost/savings")
+async def get_llm_cost_savings(
+    period: str = Query("7d", pattern="^(1d|7d|30d|90d)$"),
+    tenant_id: UUID = Depends(get_current_tenant_id),
+    db: AsyncSession = Depends(get_async_db),
+):
+    """Savings estimate: cached token counts, response cache hits, batch calls."""
+    from src.services.billing.llm_cost_service import get_savings_estimate
+
+    start, end = _parse_period(period)
+    return await get_savings_estimate(db, tenant_id, start, end)
