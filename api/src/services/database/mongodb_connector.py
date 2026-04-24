@@ -27,7 +27,11 @@ class MongoDBConnector:
         try:
             import motor.motor_asyncio as motor  # noqa: PLC0415
 
-            password = decrypt_value(self.database_connection.password_encrypted) if self.database_connection.password_encrypted else None
+            password = (
+                decrypt_value(self.database_connection.password_encrypted)
+                if self.database_connection.password_encrypted
+                else None
+            )
 
             host = self.database_connection.host or "localhost"
             port = int(self.database_connection.port or 27017)
@@ -92,7 +96,13 @@ class MongoDBConnector:
 
             collection_name = q.get("collection")
             if not collection_name:
-                return {"success": False, "rows": [], "row_count": 0, "columns": [], "error": "Missing 'collection' key in query"}
+                return {
+                    "success": False,
+                    "rows": [],
+                    "row_count": 0,
+                    "columns": [],
+                    "error": "Missing 'collection' key in query",
+                }
 
             collection = self._db[collection_name]
             filt = q.get("filter", {})

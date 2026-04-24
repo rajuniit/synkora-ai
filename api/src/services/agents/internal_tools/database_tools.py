@@ -223,8 +223,19 @@ async def internal_query_database(
             return await _execute_elasticsearch_query(connection, query)
         elif db_type == "SQLITE":
             return await _execute_sqlite_query(connection, query)
-        elif db_type in ("MYSQL", "MONGODB", "SUPABASE", "BIGQUERY", "SNOWFLAKE", "SQLSERVER", "CLICKHOUSE", "DUCKDB",
-                         "DATADOG", "DATABRICKS", "DOCKER"):
+        elif db_type in (
+            "MYSQL",
+            "MONGODB",
+            "SUPABASE",
+            "BIGQUERY",
+            "SNOWFLAKE",
+            "SQLSERVER",
+            "CLICKHOUSE",
+            "DUCKDB",
+            "DATADOG",
+            "DATABRICKS",
+            "DOCKER",
+        ):
             return await _execute_generic_query(connection, query)
         else:
             return {"success": False, "error": f"Unsupported database type: {connection.database_type}"}
@@ -329,7 +340,12 @@ async def _execute_generic_query(connection: DatabaseConnection, query: str) -> 
     try:
         connector = await _get_or_create_connector(connection)
         if connector is None:
-            return {"success": False, "error": f"Failed to create {display_type} connector.", "connection_name": connection.name, "database_type": display_type}
+            return {
+                "success": False,
+                "error": f"Failed to create {display_type} connector.",
+                "connection_name": connection.name,
+                "database_type": display_type,
+            }
 
         result = await connector.execute_query(query)
         rows, note = _truncate_rows_for_llm(result.get("rows", []), result.get("row_count", 0))
@@ -457,8 +473,19 @@ async def internal_get_database_schema(
             return await _get_elasticsearch_schema(connection)
         elif db_type == "SQLITE":
             return await _get_sqlite_schema(connection)
-        elif db_type in ("MYSQL", "MONGODB", "SUPABASE", "BIGQUERY", "SNOWFLAKE", "SQLSERVER", "CLICKHOUSE", "DUCKDB",
-                         "DATADOG", "DATABRICKS", "DOCKER"):
+        elif db_type in (
+            "MYSQL",
+            "MONGODB",
+            "SUPABASE",
+            "BIGQUERY",
+            "SNOWFLAKE",
+            "SQLSERVER",
+            "CLICKHOUSE",
+            "DUCKDB",
+            "DATADOG",
+            "DATABRICKS",
+            "DOCKER",
+        ):
             return await _get_generic_schema(connection)
         else:
             return {"success": False, "error": f"Unsupported database type: {connection.database_type}"}
@@ -473,7 +500,12 @@ async def _get_postgresql_schema(connection: DatabaseConnection) -> dict[str, An
     try:
         connector = await _get_or_create_connector(connection)
         if connector is None:
-            return {"success": False, "error": "Failed to create PostgreSQL connector.", "connection_name": connection.name, "database_type": "postgresql"}
+            return {
+                "success": False,
+                "error": "Failed to create PostgreSQL connector.",
+                "connection_name": connection.name,
+                "database_type": "postgresql",
+            }
 
         tables = await connector.get_tables()
         schema_info = []
@@ -504,7 +536,12 @@ async def _get_elasticsearch_schema(connection: DatabaseConnection) -> dict[str,
     try:
         connector = await _get_or_create_connector(connection)
         if connector is None:
-            return {"success": False, "error": "Failed to create Elasticsearch connector.", "connection_name": connection.name, "database_type": "elasticsearch"}
+            return {
+                "success": False,
+                "error": "Failed to create Elasticsearch connector.",
+                "connection_name": connection.name,
+                "database_type": "elasticsearch",
+            }
 
         indices_result = await connector.get_indices()
         indices = [idx["name"] for idx in (indices_result.get("indices") or [])]
@@ -575,7 +612,12 @@ async def _get_generic_schema(connection: DatabaseConnection) -> dict[str, Any]:
     try:
         connector = await _get_or_create_connector(connection)
         if connector is None:
-            return {"success": False, "error": f"Failed to create {display_type} connector.", "connection_name": connection.name, "database_type": display_type}
+            return {
+                "success": False,
+                "error": f"Failed to create {display_type} connector.",
+                "connection_name": connection.name,
+                "database_type": display_type,
+            }
 
         result = await connector.get_schema()
         tables = result.get("tables", [])
@@ -589,7 +631,12 @@ async def _get_generic_schema(connection: DatabaseConnection) -> dict[str, Any]:
     except Exception as e:
         logger.warning(f"{db_type} schema error: {e}", exc_info=True)
         _connector_cache.pop(str(connection.id), None)
-        return {"success": False, "error": f"Failed to get {display_type} schema: {str(e)}", "connection_name": connection.name, "database_type": display_type}
+        return {
+            "success": False,
+            "error": f"Failed to get {display_type} schema: {str(e)}",
+            "connection_name": connection.name,
+            "database_type": display_type,
+        }
 
 
 async def _get_sqlite_schema(connection: DatabaseConnection) -> dict[str, Any]:
@@ -597,7 +644,12 @@ async def _get_sqlite_schema(connection: DatabaseConnection) -> dict[str, Any]:
     try:
         connector = await _get_or_create_connector(connection)
         if connector is None:
-            return {"success": False, "error": "Failed to create SQLite connector.", "connection_name": connection.name, "database_type": "sqlite"}
+            return {
+                "success": False,
+                "error": "Failed to create SQLite connector.",
+                "connection_name": connection.name,
+                "database_type": "sqlite",
+            }
 
         schema_result = await connector.get_schema()
 
@@ -679,7 +731,10 @@ async def internal_generate_chart(
             try:
                 query_result = json.loads(query_result)
             except (json.JSONDecodeError, ValueError):
-                return {"success": False, "error": "query_result is a string but could not be parsed as JSON. Pass a list or dict, not a string."}
+                return {
+                    "success": False,
+                    "error": "query_result is a string but could not be parsed as JSON. Pass a list or dict, not a string.",
+                }
 
         if isinstance(query_result, list):
             query_result = {"success": True, "data": query_result, "row_count": len(query_result)}
@@ -735,7 +790,7 @@ async def internal_generate_chart(
                         f"({col_names}) and appears to be raw API records, not aggregated chart data. "
                         "Please pre-aggregate the data into rows with exactly 2 columns: "
                         "a label column (e.g. 'date') and a numeric value column (e.g. 'count'). "
-                        "Example: [{\"date\": \"2026-04-20\", \"count\": 15}, ...]. "
+                        'Example: [{"date": "2026-04-20", "count": 15}, ...]. '
                         "Then call internal_generate_chart again with the aggregated data."
                     ),
                 }

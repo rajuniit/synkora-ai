@@ -401,7 +401,13 @@ class SupabaseConnector:
 
         response = await client.get(f"/rest/v1/{table}", params=params)
         if response.status_code not in (200, 206):
-            return {"success": False, "error": f"HTTP {response.status_code}: {response.text[:400]}", "rows": [], "row_count": 0, "columns": []}
+            return {
+                "success": False,
+                "error": f"HTTP {response.status_code}: {response.text[:400]}",
+                "rows": [],
+                "row_count": 0,
+                "columns": [],
+            }
 
         rows = response.json()
         if not isinstance(rows, list):
@@ -414,7 +420,13 @@ class SupabaseConnector:
         params = q.get("params", {})
         response = await client.post(f"/rest/v1/rpc/{fn}", json=params)
         if response.status_code not in (200, 201):
-            return {"success": False, "error": f"HTTP {response.status_code}: {response.text[:400]}", "rows": [], "row_count": 0, "columns": []}
+            return {
+                "success": False,
+                "error": f"HTTP {response.status_code}: {response.text[:400]}",
+                "rows": [],
+                "row_count": 0,
+                "columns": [],
+            }
 
         data = response.json()
         rows = data if isinstance(data, list) else [{"result": data}]
@@ -448,12 +460,14 @@ class SupabaseConnector:
                 col_type = col_def.get("type") or col_def.get("format", "unknown")
                 if isinstance(col_type, list):
                     col_type = next((t for t in col_type if t != "null"), "unknown")
-                columns.append({
-                    "name": col_name,
-                    "type": col_type,
-                    "nullable": col_name not in required,
-                    "description": col_def.get("description", ""),
-                })
+                columns.append(
+                    {
+                        "name": col_name,
+                        "type": col_type,
+                        "nullable": col_name not in required,
+                        "description": col_def.get("description", ""),
+                    }
+                )
             tables.append({"name": table_name, "columns": columns, "column_count": len(columns)})
         return sorted(tables, key=lambda t: t["name"])
 

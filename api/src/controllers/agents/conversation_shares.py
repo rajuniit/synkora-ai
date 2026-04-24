@@ -113,9 +113,7 @@ async def list_shares(
         )
         return {
             "success": True,
-            "data": {
-                "shares": [s.to_dict() for s in shares]
-            },
+            "data": {"shares": [s.to_dict() for s in shares]},
         }
     except HTTPException:
         raise

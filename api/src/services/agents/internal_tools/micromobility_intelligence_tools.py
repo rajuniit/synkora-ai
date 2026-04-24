@@ -32,9 +32,11 @@ async def _fetch_all_vehicles(
     page_size = 100
     while True:
         resp = await internal_micromobility_list_vehicles(
-            config=config, runtime_context=runtime_context,
+            config=config,
+            runtime_context=runtime_context,
             bike_category="P",  # always fetch real (non-test) bike category
-            limit=page_size, offset=offset,
+            limit=page_size,
+            offset=offset,
         )
         if not isinstance(resp, dict) or not resp.get("success"):
             break
@@ -52,7 +54,9 @@ async def _fetch_all_vehicles(
         )
         all_vehicles.extend(items)
         if len(items) < page_size:
-            logger.info(f"[fetch_all_vehicles] last page (got {len(items)} < {page_size}) — done, total={len(all_vehicles)}")
+            logger.info(
+                f"[fetch_all_vehicles] last page (got {len(items)} < {page_size}) — done, total={len(all_vehicles)}"
+            )
             break
         offset += page_size
         if offset > 2000:
@@ -188,13 +192,15 @@ async def internal_micromobility_get_fleet_health(
 
             # Low battery: use API flag OR threshold check on lock power level
             if (flag_low_battery or (battery is not None and battery < low_battery_threshold)) and not is_on_ride:
-                low_battery.append({
-                    "qr_code": vid,
-                    "battery_pct": battery,
-                    "service_area": zone,
-                    "lat": lat,
-                    "lng": lng,
-                })
+                low_battery.append(
+                    {
+                        "qr_code": vid,
+                        "battery_pct": battery,
+                        "service_area": zone,
+                        "lat": lat,
+                        "lng": lng,
+                    }
+                )
 
             if is_in_maintenance:
                 maintenance_vehicles.append({"qr_code": vid, "service_area": zone})
@@ -202,15 +208,17 @@ async def internal_micromobility_get_fleet_health(
                 last_seen_ts = v.get("last_connected_at") or v.get("last_loc_updated_at")
                 idle_h = _hours_since(last_seen_ts)
                 if is_idle or (idle_h is not None and idle_h >= idle_hours_threshold):
-                    idle_vehicles.append({
-                        "qr_code": vid,
-                        "battery_pct": battery,
-                        "idle_hours": round(idle_h, 1) if idle_h is not None else None,
-                        "no_heartbeat": not bool(v.get("heart_beat")),
-                        "service_area": zone,
-                        "lat": lat,
-                        "lng": lng,
-                    })
+                    idle_vehicles.append(
+                        {
+                            "qr_code": vid,
+                            "battery_pct": battery,
+                            "idle_hours": round(idle_h, 1) if idle_h is not None else None,
+                            "no_heartbeat": not bool(v.get("heart_beat")),
+                            "service_area": zone,
+                            "lat": lat,
+                            "lng": lng,
+                        }
+                    )
 
         avg_battery = round(sum(batteries) / len(batteries), 1) if batteries else None
         low_battery.sort(key=lambda x: x.get("battery_pct") or 100)
@@ -236,7 +244,9 @@ async def internal_micromobility_get_fleet_health(
         if api_summary.get("geofence_alert"):
             actions.append(f"{api_summary['geofence_alert']} vehicle(s) outside geofence — review positions")
         if api_summary.get("illegally_parking"):
-            actions.append(f"{api_summary['illegally_parking']} vehicle(s) illegally parked — dispatch ranger to relocate")
+            actions.append(
+                f"{api_summary['illegally_parking']} vehicle(s) illegally parked — dispatch ranger to relocate"
+            )
         if api_summary.get("rebalance"):
             actions.append(f"{api_summary['rebalance']} vehicle(s) flagged for rebalancing")
         if api_summary.get("charging_pick"):
@@ -306,9 +316,7 @@ async def internal_micromobility_get_zone_demand_supply(
 
         vehicles, trips = (
             await _fetch_all_vehicles(runtime_context, config),
-            await _fetch_all_trips(
-                runtime_context, config, start_date=start_date, end_date=end_date, status="C"
-            ),
+            await _fetch_all_trips(runtime_context, config, start_date=start_date, end_date=end_date, status="C"),
         )
 
         logger.info(f"[zone_demand_supply] vehicles={len(vehicles)} trips={len(trips)}")

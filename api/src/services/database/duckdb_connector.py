@@ -169,6 +169,7 @@ class DuckDBConnector:
                     s3_secret = None
 
             if s3_access_key and s3_secret:
+
                 def _set_s3(c=conn, region=s3_region, key=s3_access_key, secret=s3_secret):
                     c.execute(f"SET s3_region='{region}'")
                     c.execute(f"SET s3_access_key_id='{key}'")
@@ -227,6 +228,7 @@ class DuckDBConnector:
             }
 
         try:
+
             def _execute(c=self._conn, q=query, p=params):
                 if p:
                     rel = c.execute(q, p)

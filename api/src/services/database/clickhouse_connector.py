@@ -188,7 +188,7 @@ class ClickHouseConnector:
         try:
             result = await self._client.query(query, parameters=params)
             column_names: list[str] = list(result.column_names)
-            rows = [dict(zip(column_names, row)) for row in result.result_rows]
+            rows = [dict(zip(column_names, row, strict=False)) for row in result.result_rows]
 
             return {
                 "success": True,
@@ -297,8 +297,7 @@ class ClickHouseConnector:
                 describe_result = await self.execute_query(f"DESCRIBE TABLE `{table}`")
                 if describe_result["success"]:
                     columns = [
-                        {"name": row.get("name", ""), "type": row.get("type", "")}
-                        for row in describe_result["rows"]
+                        {"name": row.get("name", ""), "type": row.get("type", "")} for row in describe_result["rows"]
                     ]
                 else:
                     columns = []
@@ -339,10 +338,7 @@ class ClickHouseConnector:
                 "error": result.get("error", "Unknown error"),
             }
 
-        columns = [
-            {"name": row.get("name", ""), "type": row.get("type", "")}
-            for row in result["rows"]
-        ]
+        columns = [{"name": row.get("name", ""), "type": row.get("type", "")} for row in result["rows"]]
 
         return {
             "success": True,

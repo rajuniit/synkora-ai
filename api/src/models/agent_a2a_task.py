@@ -10,7 +10,7 @@ from sqlalchemy.dialects.postgresql import JSONB, UUID
 from src.core.database import Base
 
 
-class A2ATaskStatus(str, enum.Enum):
+class A2ATaskStatus(enum.StrEnum):
     SUBMITTED = "submitted"
     WORKING = "working"
     INPUT_REQUIRED = "input-required"

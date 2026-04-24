@@ -104,7 +104,9 @@ class DockerConnector:
                     container = client.containers.get(container_id)
                     return container.attrs
                 else:
-                    return {"error": f"Unknown query: '{query}'. Supported: containers, images, logs <id>, inspect <id>"}
+                    return {
+                        "error": f"Unknown query: '{query}'. Supported: containers, images, logs <id>, inspect <id>"
+                    }
             finally:
                 client.close()
 

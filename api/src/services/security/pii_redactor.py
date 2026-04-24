@@ -156,9 +156,7 @@ class PIIRedactor:
         """Single-pass restoration.  O(text_length) regardless of token count."""
         if not self._token_to_value:
             return text
-        return _TOKEN_PATTERN.sub(
-            lambda m: self._token_to_value.get(m.group(0), m.group(0)), text
-        )
+        return _TOKEN_PATTERN.sub(lambda m: self._token_to_value.get(m.group(0), m.group(0)), text)
 
     def restore_streaming(self, chunk: str, *, flush: bool = False) -> str:
         """Buffer partial tokens split across SSE chunk boundaries, then restore.

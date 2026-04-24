@@ -90,9 +90,7 @@ def _is_cacheable(messages: list[dict], temperature: float) -> bool:
             return False
 
     # Gate 4: time-sensitive content
-    last_user = next(
-        (m.get("content", "") for m in reversed(messages) if m.get("role") == "user"), ""
-    )
+    last_user = next((m.get("content", "") for m in reversed(messages) if m.get("role") == "user"), "")
     if isinstance(last_user, str):
         lower = last_user.lower()
         if any(kw in lower for kw in _TIME_SENSITIVE):

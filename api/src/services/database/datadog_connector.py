@@ -5,7 +5,7 @@ import functools
 import json
 import logging
 import time
-from datetime import datetime, timezone
+from datetime import UTC, datetime, timezone
 from typing import Any
 
 from src.models.database_connection import DatabaseConnection
@@ -87,7 +87,7 @@ class DatadogConnector:
 
     @staticmethod
     def _unix_to_iso(t: int | float) -> str:
-        return datetime.fromtimestamp(int(t), tz=timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ")
+        return datetime.fromtimestamp(int(t), tz=UTC).strftime("%Y-%m-%dT%H:%M:%SZ")
 
     # ------------------------------------------------------------------
     # Connection lifecycle
@@ -245,15 +245,17 @@ class DatadogConnector:
             rows = []
             for log in result.data or []:
                 attrs = log.attributes
-                rows.append({
-                    "id": log.id,
-                    "timestamp": str(attrs.timestamp) if attrs.timestamp else None,
-                    "message": attrs.message,
-                    "service": attrs.service,
-                    "status": attrs.status,
-                    "host": attrs.host,
-                    "tags": attrs.tags or [],
-                })
+                rows.append(
+                    {
+                        "id": log.id,
+                        "timestamp": str(attrs.timestamp) if attrs.timestamp else None,
+                        "message": attrs.message,
+                        "service": attrs.service,
+                        "status": attrs.status,
+                        "host": attrs.host,
+                        "tags": attrs.tags or [],
+                    }
+                )
 
             return {
                 "success": True,

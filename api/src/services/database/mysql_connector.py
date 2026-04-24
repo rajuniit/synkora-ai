@@ -73,7 +73,12 @@ class MySQLConnector:
                     await cur.execute(query, params or ())
                     rows = await cur.fetchall()
                     columns = [d[0] for d in cur.description] if cur.description else []
-                    return {"success": True, "rows": [dict(r) for r in rows], "row_count": len(rows), "columns": columns}
+                    return {
+                        "success": True,
+                        "rows": [dict(r) for r in rows],
+                        "row_count": len(rows),
+                        "columns": columns,
+                    }
         except Exception as e:
             logger.error(f"MySQL query failed: {e}")
             return {"success": False, "rows": [], "row_count": 0, "columns": [], "error": str(e)}

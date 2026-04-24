@@ -1048,9 +1048,7 @@ class FunctionCallingHandler:
                         **create_params["tools"][-1],
                         "cache_control": {"type": "ephemeral"},
                     }
-                    create_params.setdefault("extra_headers", {})[
-                        "anthropic-beta"
-                    ] = "prompt-caching-2024-07-31"
+                    create_params.setdefault("extra_headers", {})["anthropic-beta"] = "prompt-caching-2024-07-31"
                 except Exception:
                     pass  # caching is optional; fall back to uncached call
 

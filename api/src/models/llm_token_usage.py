@@ -43,10 +43,7 @@ class LLMTokenUsage(BaseModel):
     optimization_flags = Column(
         JSONB,
         nullable=True,
-        comment=(
-            "Optimization metadata: "
-            "{prompt_cache_hit, response_cache_hit, routing_mode, batch_id, batch_status}"
-        ),
+        comment=("Optimization metadata: {prompt_cache_hit, response_cache_hit, routing_mode, batch_id, batch_status}"),
     )
 
     __table_args__ = (

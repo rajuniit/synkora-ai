@@ -687,11 +687,13 @@ class MultiProviderLLMClient:
             details = getattr(response.usage, "prompt_tokens_details", None)
             if details and hasattr(details, "cached_tokens"):
                 cached = details.cached_tokens or 0
-            _llm_usage_ctx.set({
-                "input_tokens": response.usage.prompt_tokens,
-                "output_tokens": response.usage.completion_tokens,
-                "cached_input_tokens": cached,
-            })
+            _llm_usage_ctx.set(
+                {
+                    "input_tokens": response.usage.prompt_tokens,
+                    "output_tokens": response.usage.completion_tokens,
+                    "cached_input_tokens": cached,
+                }
+            )
         return response.choices[0].message.content
 
     async def _generate_anthropic(self, prompt: str, temperature: float, max_tokens: int | None, **kwargs) -> str:
@@ -718,12 +720,14 @@ class MultiProviderLLMClient:
 
         response = await self._client.messages.create(**create_kwargs, **kwargs)
 
-        _llm_usage_ctx.set({
-            "input_tokens": response.usage.input_tokens,
-            "output_tokens": response.usage.output_tokens,
-            "cache_read_tokens": getattr(response.usage, "cache_read_input_tokens", 0) or 0,
-            "cache_creation_tokens": getattr(response.usage, "cache_creation_input_tokens", 0) or 0,
-        })
+        _llm_usage_ctx.set(
+            {
+                "input_tokens": response.usage.input_tokens,
+                "output_tokens": response.usage.output_tokens,
+                "cache_read_tokens": getattr(response.usage, "cache_read_input_tokens", 0) or 0,
+                "cache_creation_tokens": getattr(response.usage, "cache_creation_input_tokens", 0) or 0,
+            }
+        )
 
         return response.content[0].text
 
@@ -1044,11 +1048,13 @@ class MultiProviderLLMClient:
                 details = getattr(chunk.usage, "prompt_tokens_details", None)
                 if details and hasattr(details, "cached_tokens"):
                     cached = details.cached_tokens or 0
-                _llm_usage_ctx.set({
-                    "input_tokens": chunk.usage.prompt_tokens,
-                    "output_tokens": chunk.usage.completion_tokens,
-                    "cached_input_tokens": cached,
-                })
+                _llm_usage_ctx.set(
+                    {
+                        "input_tokens": chunk.usage.prompt_tokens,
+                        "output_tokens": chunk.usage.completion_tokens,
+                        "cached_input_tokens": cached,
+                    }
+                )
 
     async def _generate_anthropic_stream_with_messages(
         self, messages: list[dict[str, Any]], temperature: float, max_tokens: int | None, **kwargs
@@ -1103,12 +1109,15 @@ class MultiProviderLLMClient:
                 try:
                     final_msg = await stream.get_final_message()
                     if final_msg and final_msg.usage:
-                        _llm_usage_ctx.set({
-                            "input_tokens": final_msg.usage.input_tokens,
-                            "output_tokens": final_msg.usage.output_tokens,
-                            "cache_read_tokens": getattr(final_msg.usage, "cache_read_input_tokens", 0) or 0,
-                            "cache_creation_tokens": getattr(final_msg.usage, "cache_creation_input_tokens", 0) or 0,
-                        })
+                        _llm_usage_ctx.set(
+                            {
+                                "input_tokens": final_msg.usage.input_tokens,
+                                "output_tokens": final_msg.usage.output_tokens,
+                                "cache_read_tokens": getattr(final_msg.usage, "cache_read_input_tokens", 0) or 0,
+                                "cache_creation_tokens": getattr(final_msg.usage, "cache_creation_input_tokens", 0)
+                                or 0,
+                            }
+                        )
                 except Exception:
                     pass  # usage capture never blocks streaming
         except Exception as e:

@@ -352,12 +352,8 @@ class ChatStreamService:
                         conversation_id=conversation_uuid,
                         routing_rules=_routing_rules,
                         optimization_flags={},
-                        enable_response_cache=bool(
-                            perf_config.get("enable_response_cache", False)
-                        ),
-                        system_prompt_hash=_hashlib.sha256(
-                            (system_prompt or "").encode()
-                        ).hexdigest()[:16],
+                        enable_response_cache=bool(perf_config.get("enable_response_cache", False)),
+                        system_prompt_hash=_hashlib.sha256((system_prompt or "").encode()).hexdigest()[:16],
                         agent_updated_at=str(
                             db_agent.updated_at.timestamp() if db_agent and db_agent.updated_at else ""
                         ),
@@ -1885,11 +1881,7 @@ class ChatStreamService:
                     yield await generate_sse_event("fleet_card", card_payload)
 
             # Flush any partial PII token held back in the streaming buffer
-            if (
-                pii_redactor
-                and pii_redactor.config.redact_for_llm
-                and not pii_redactor.config.redact_for_response
-            ):
+            if pii_redactor and pii_redactor.config.redact_for_llm and not pii_redactor.config.redact_for_response:
                 trailing = pii_redactor.flush_stream_buffer()
                 if trailing:
                     state.assistant_chunks.append(trailing)

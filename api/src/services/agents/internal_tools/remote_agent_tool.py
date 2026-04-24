@@ -27,11 +27,11 @@ def _is_url_safe(url: str) -> bool:
     localhost, cloud metadata endpoints, etc.
     """
     try:
-        from src.services.agents.internal_tools.web_tools import _is_ip_blocked
-
         import ipaddress
         import socket
         from urllib.parse import urlparse
+
+        from src.services.agents.internal_tools.web_tools import _is_ip_blocked
 
         parsed = urlparse(url)
         if parsed.scheme not in ("http", "https"):

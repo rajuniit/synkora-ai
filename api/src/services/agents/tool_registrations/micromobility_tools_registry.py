@@ -283,8 +283,14 @@ def register_micromobility_tools(registry):
                 # Search & identity
                 "search": {"type": "string", "description": "Search by vehicle ID, serial number, or QR code"},
                 "fleet_id": {"type": "string", "description": "Filter by fleet ID"},
-                "bike_category": {"type": "string", "description": "Filter by vehicle category (e.g. 'P' for pedal, 'E' for electric)"},
-                "user": {"type": "string", "description": "Filter by rider/user UUID — vehicles last unlocked by this user"},
+                "bike_category": {
+                    "type": "string",
+                    "description": "Filter by vehicle category (e.g. 'P' for pedal, 'E' for electric)",
+                },
+                "user": {
+                    "type": "string",
+                    "description": "Filter by rider/user UUID — vehicles last unlocked by this user",
+                },
                 "country": {"type": "string", "description": "Filter by country code"},
                 "geofence": {"type": "string", "description": "Filter by geofence/service area ID"},
                 # Battery & heartbeat range
@@ -315,7 +321,10 @@ def register_micromobility_tools(registry):
                 "has_lock": {"type": "boolean", "description": "Only vehicles that have a physical lock attached"},
                 # Pagination
                 "limit": {"type": "integer", "description": "Page size — number of vehicles per page"},
-                "offset": {"type": "integer", "description": "Pagination offset (skip N results). offset = page_number * limit"},
+                "offset": {
+                    "type": "integer",
+                    "description": "Pagination offset (skip N results). offset = page_number * limit",
+                },
             },
             "required": [],
         },
@@ -580,7 +589,10 @@ def register_micromobility_tools(registry):
                     "type": "string",
                     "description": "Priority: 'H' (high), 'M' (medium), 'L' (low), 'U' (urgent)",
                 },
-                "due_by": {"type": "string", "description": "Due date/time in ISO 8601 format (e.g. 2026-04-30T10:00:00Z)"},
+                "due_by": {
+                    "type": "string",
+                    "description": "Due date/time in ISO 8601 format (e.g. 2026-04-30T10:00:00Z)",
+                },
             },
             "required": ["task_type", "user"],
         },

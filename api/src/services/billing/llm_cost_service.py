@@ -48,8 +48,8 @@ def _resolve_pricing(
     normalized = re.sub(r"-\d{8}$", "", model_name.lower())
 
     try:
-        from src.services.agents.routing.model_router import _BUILTIN_COSTS
         from src.services.agents.llm_provider_presets import MODEL_COMPARISON_DATA
+        from src.services.agents.routing.model_router import _BUILTIN_COSTS
     except ImportError:
         return None, None
 
@@ -203,6 +203,7 @@ async def get_cost_summary(
 ) -> dict:
     """Aggregate token counts and cost for a time period."""
     from sqlalchemy import func, select
+
     from src.models.llm_token_usage import LLMTokenUsage
 
     q = select(
@@ -243,6 +244,7 @@ async def get_cost_by_model(
 ) -> list[dict]:
     """Cost breakdown grouped by (provider, model_name)."""
     from sqlalchemy import func, select
+
     from src.models.llm_token_usage import LLMTokenUsage
 
     q = (
@@ -291,6 +293,7 @@ async def get_savings_estimate(
     savings:       baseline_cost - actual_cost
     """
     from sqlalchemy import func, select
+
     from src.models.llm_token_usage import LLMTokenUsage
 
     q = select(
@@ -301,16 +304,16 @@ async def get_savings_estimate(
             + func.coalesce(LLMTokenUsage.cache_creation_tokens, 0)
             + func.coalesce(LLMTokenUsage.cached_input_tokens, 0)
         ).label("total_cached_tokens"),
-        func.count(
-            LLMTokenUsage.id
-        ).filter(
+        func.count(LLMTokenUsage.id)
+        .filter(
             LLMTokenUsage.optimization_flags["response_cache_hit"].as_boolean() == True  # noqa: E712
-        ).label("response_cache_hits"),
-        func.count(
-            LLMTokenUsage.id
-        ).filter(
+        )
+        .label("response_cache_hits"),
+        func.count(LLMTokenUsage.id)
+        .filter(
             LLMTokenUsage.optimization_flags["batch_id"].astext != None  # noqa: E711
-        ).label("batch_calls"),
+        )
+        .label("batch_calls"),
     ).where(
         LLMTokenUsage.tenant_id == tenant_id,
         LLMTokenUsage.created_at >= start_date,

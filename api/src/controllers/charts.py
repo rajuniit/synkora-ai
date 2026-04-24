@@ -135,9 +135,7 @@ async def create_chart(
 ):
     """Create a new chart."""
     # SECURITY: Verify the agent belongs to the current tenant (cross-tenant AuthZ check)
-    agent_result = await db.execute(
-        select(Agent).where(Agent.id == chart_data.agent_id, Agent.tenant_id == tenant_id)
-    )
+    agent_result = await db.execute(select(Agent).where(Agent.id == chart_data.agent_id, Agent.tenant_id == tenant_id))
     if agent_result.scalar_one_or_none() is None:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Agent not found")
 

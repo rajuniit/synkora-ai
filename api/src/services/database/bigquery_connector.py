@@ -13,7 +13,7 @@ from src.models.database_connection import DatabaseConnection
 logger = logging.getLogger(__name__)
 
 _SCHEMA_TABLE_LIMIT = 20
-_POLL_INTERVAL = 2    # seconds between job-completion checks
+_POLL_INTERVAL = 2  # seconds between job-completion checks
 _MAX_POLL_TIME = 300  # 5-minute query timeout
 
 
@@ -27,7 +27,7 @@ def _parse_bq_response(response: dict) -> dict[str, Any]:
     rows = []
     for raw_row in raw_rows:
         values = [cell.get("v") for cell in raw_row.get("f", [])]
-        rows.append(dict(zip(columns, values)))
+        rows.append(dict(zip(columns, values, strict=False)))
 
     return {
         "success": True,
@@ -56,9 +56,7 @@ class BigQueryConnector:
     def __init__(self, database_connection: DatabaseConnection) -> None:
         self.database_connection = database_connection
         self._conn_params: dict[str, Any] = database_connection.connection_params or {}
-        self._project_id: str = (
-            self._conn_params.get("project_id") or database_connection.database_name or ""
-        )
+        self._project_id: str = self._conn_params.get("project_id") or database_connection.database_name or ""
         self._dataset: str | None = self._conn_params.get("dataset")
         self._location: str | None = self._conn_params.get("location")
         self._session: aiohttp.ClientSession | None = None
@@ -73,10 +71,7 @@ class BigQueryConnector:
         try:
             from gcloud.aio.bigquery import Job  # noqa: PLC0415
         except ImportError:
-            logger.error(
-                "gcloud-aio-bigquery is not installed. "
-                "Add 'gcloud-aio-bigquery' to dependencies."
-            )
+            logger.error("gcloud-aio-bigquery is not installed. Add 'gcloud-aio-bigquery' to dependencies.")
             return False
 
         try:
@@ -137,7 +132,9 @@ class BigQueryConnector:
     # ------------------------------------------------------------------
 
     async def execute_query(
-        self, query: str, params: list[Any] | None = None  # noqa: ARG002
+        self,
+        query: str,
+        params: list[Any] | None = None,  # noqa: ARG002
     ) -> dict[str, Any]:
         """
         Execute a BigQuery SQL query asynchronously.

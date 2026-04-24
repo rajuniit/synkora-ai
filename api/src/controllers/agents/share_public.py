@@ -38,9 +38,7 @@ async def get_shared_conversation(
         from src.models.message import Message
 
         # Load conversation
-        conv_result = await db.execute(
-            select(Conversation).filter(Conversation.id == share.conversation_id)
-        )
+        conv_result = await db.execute(select(Conversation).filter(Conversation.id == share.conversation_id))
         conversation = conv_result.scalar_one_or_none()
         if not conversation:
             raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Conversation not found")

@@ -38,6 +38,7 @@ from .openweather_tools_registry import register_openweather_tools
 from .platform_tools_registry import register_platform_tools
 from .pr_review_tools_registry import register_pr_review_tools
 from .recall_tools_registry import register_recall_tools
+from .remote_agent_tools_registry import register_remote_agent_tools
 from .role_tools_registry import register_role_tools
 from .scheduler_tools_registry import register_scheduler_tools
 from .slack_tools_registry import register_slack_tools
@@ -47,7 +48,6 @@ from .tool_discovery_registry import register_tool_discovery_tools
 from .tutorial_tools_registry import register_tutorial_tools
 from .twitter_tools_registry import register_twitter_tools
 from .youtube_tools_registry import register_youtube_tools
-from .remote_agent_tools_registry import register_remote_agent_tools
 from .zoom_tools_registry import register_zoom_tools
 
 __all__ = [

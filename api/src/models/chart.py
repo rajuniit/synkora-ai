@@ -34,7 +34,12 @@ class Chart(Base):
 
     # Timestamps — column is TIMESTAMP WITHOUT TIME ZONE; strip tzinfo so asyncpg accepts it
     created_at = Column(DateTime, default=lambda: datetime.now(UTC).replace(tzinfo=None), nullable=False)
-    updated_at = Column(DateTime, default=lambda: datetime.now(UTC).replace(tzinfo=None), onupdate=lambda: datetime.now(UTC).replace(tzinfo=None), nullable=False)
+    updated_at = Column(
+        DateTime,
+        default=lambda: datetime.now(UTC).replace(tzinfo=None),
+        onupdate=lambda: datetime.now(UTC).replace(tzinfo=None),
+        nullable=False,
+    )
 
     # Relationships
     tenant = relationship("Tenant", back_populates="charts")

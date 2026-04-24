@@ -157,9 +157,7 @@ class ElasticsearchService:
             # and returns actual indices rather than alias mappings.
             # Filter out system indices (starting with ".") by default.
             result = await self.client.cat.indices(format="json", h="index,health,status,docs.count,store.size")
-            return sorted(
-                [entry["index"] for entry in result if not entry["index"].startswith(".")]
-            )
+            return sorted([entry["index"] for entry in result if not entry["index"].startswith(".")])
         except Exception as e:
             logger.error(f"Error getting indices: {e}")
             return []

@@ -157,8 +157,7 @@ async def _make_micromobility_request(
 
     async with httpx.AsyncClient(follow_redirects=False) as client:
         response = await client.request(
-            method=method, url=url, headers=headers, params=params,
-            json=json_data, data=form_data, timeout=timeout
+            method=method, url=url, headers=headers, params=params, json=json_data, data=form_data, timeout=timeout
         )
 
     if response.status_code == 429:
@@ -203,8 +202,13 @@ async def _make_micromobility_request(
                 _ctx.set_state("_mm_refreshed_token", new_token)
             async with httpx.AsyncClient(follow_redirects=False) as retry_client:
                 response = await retry_client.request(
-                    method=method, url=url, headers=headers, params=params,
-                    json=json_data, data=form_data, timeout=timeout
+                    method=method,
+                    url=url,
+                    headers=headers,
+                    params=params,
+                    json=json_data,
+                    data=form_data,
+                    timeout=timeout,
                 )
             if not response.is_success:
                 return {
@@ -347,7 +351,9 @@ async def internal_micromobility_list_vehicles(
                 meta = raw.get("meta") or {}
                 count_obj = meta.get("count") or {}
                 items = raw.get("data") or raw.get("results") or raw.get("vehicles") or []
-                total = (count_obj.get("total") if isinstance(count_obj, dict) else None) or raw.get("count", len(items))
+                total = (count_obj.get("total") if isinstance(count_obj, dict) else None) or raw.get(
+                    "count", len(items)
+                )
                 result["count"] = total
                 result["vehicles"] = items
                 result["meta"] = meta
@@ -441,7 +447,9 @@ async def internal_micromobility_list_trips(
                 meta = raw.get("meta") or {}
                 count_obj = meta.get("count") or {}
                 items = raw.get("data") or raw.get("results") or raw.get("trips") or []
-                total = (count_obj.get("total") if isinstance(count_obj, dict) else None) or raw.get("count", len(items))
+                total = (count_obj.get("total") if isinstance(count_obj, dict) else None) or raw.get(
+                    "count", len(items)
+                )
                 result["count"] = total
                 result["trips"] = items
                 result["meta"] = meta
@@ -538,7 +546,9 @@ async def internal_micromobility_list_riders(
                 meta = raw.get("meta") or {}
                 count_obj = meta.get("count") or {}
                 items = raw.get("data") or raw.get("results") or raw.get("riders") or []
-                total = (count_obj.get("total") if isinstance(count_obj, dict) else None) or raw.get("count", len(items))
+                total = (count_obj.get("total") if isinstance(count_obj, dict) else None) or raw.get(
+                    "count", len(items)
+                )
                 result["count"] = total
                 result["riders"] = items
                 result["meta"] = meta
@@ -611,7 +621,9 @@ async def internal_micromobility_list_operators(
                 meta = raw.get("meta") or {}
                 count_obj = meta.get("count") or {}
                 items = raw.get("data") or raw.get("results") or raw.get("operators") or []
-                total = (count_obj.get("total") if isinstance(count_obj, dict) else None) or raw.get("count", len(items))
+                total = (count_obj.get("total") if isinstance(count_obj, dict) else None) or raw.get(
+                    "count", len(items)
+                )
                 result["operators"] = items
                 result["count"] = total
                 result["meta"] = meta
@@ -688,7 +700,9 @@ async def internal_micromobility_list_tasks(
                 meta = raw.get("meta") or {}
                 count_obj = meta.get("count") or {}
                 items = raw.get("data") or raw.get("results") or raw.get("tasks") or []
-                total = (count_obj.get("total") if isinstance(count_obj, dict) else None) or raw.get("count", len(items))
+                total = (count_obj.get("total") if isinstance(count_obj, dict) else None) or raw.get(
+                    "count", len(items)
+                )
                 result["count"] = total
                 result["tasks"] = items
                 result["meta"] = meta
@@ -800,7 +814,9 @@ async def internal_micromobility_list_fleets(
                 meta = raw.get("meta") or {}
                 count_obj = meta.get("count") or {}
                 items = raw.get("data") or raw.get("results") or raw.get("fleets") or []
-                total = (count_obj.get("total") if isinstance(count_obj, dict) else None) or raw.get("count", len(items))
+                total = (count_obj.get("total") if isinstance(count_obj, dict) else None) or raw.get(
+                    "count", len(items)
+                )
                 result["count"] = total
                 result["fleets"] = items
                 result["meta"] = meta
@@ -831,7 +847,9 @@ async def internal_micromobility_list_service_areas(
                 meta = raw.get("meta") or {}
                 count_obj = meta.get("count") or {}
                 items = raw.get("data") or raw.get("results") or raw.get("service_areas") or []
-                total = (count_obj.get("total") if isinstance(count_obj, dict) else None) or raw.get("count", len(items))
+                total = (count_obj.get("total") if isinstance(count_obj, dict) else None) or raw.get(
+                    "count", len(items)
+                )
                 result["service_areas"] = items
                 result["count"] = total
                 result["meta"] = meta
@@ -865,7 +883,9 @@ async def internal_micromobility_list_parking_areas(
                 meta = raw.get("meta") or {}
                 count_obj = meta.get("count") or {}
                 items = raw.get("data") or raw.get("results") or raw.get("parking_areas") or []
-                total = (count_obj.get("total") if isinstance(count_obj, dict) else None) or raw.get("count", len(items))
+                total = (count_obj.get("total") if isinstance(count_obj, dict) else None) or raw.get(
+                    "count", len(items)
+                )
                 result["parking_areas"] = items
                 result["count"] = total
                 result["meta"] = meta
@@ -929,7 +949,9 @@ async def internal_micromobility_list_reports(
                 meta = raw.get("meta") or {}
                 count_obj = meta.get("count") or {}
                 items = raw.get("data") or raw.get("results") or raw.get("reports") or []
-                total = (count_obj.get("total") if isinstance(count_obj, dict) else None) or raw.get("count", len(items))
+                total = (count_obj.get("total") if isinstance(count_obj, dict) else None) or raw.get(
+                    "count", len(items)
+                )
                 result["reports"] = items
                 result["count"] = total
                 result["meta"] = meta

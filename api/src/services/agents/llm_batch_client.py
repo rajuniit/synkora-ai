@@ -223,9 +223,7 @@ class AnthropicBatchClient:
         return "completed", results
 
 
-def get_batch_client(
-    provider: str, api_key: str, model: str
-) -> OpenAIBatchClient | AnthropicBatchClient | None:
+def get_batch_client(provider: str, api_key: str, model: str) -> OpenAIBatchClient | AnthropicBatchClient | None:
     """
     Return the appropriate batch client for a provider, or None if unsupported.
 

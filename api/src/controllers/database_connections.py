@@ -40,7 +40,6 @@ logger = logging.getLogger(__name__)
 router = APIRouter(prefix="/api/v1/database-connections", tags=["database-connections"])
 
 
-
 def _make_connector(db_type: DatabaseConnectionType, connection: "DatabaseConnection"):
     """Return the right connector instance for *db_type*, or None if unsupported."""
     match db_type:
@@ -193,23 +192,24 @@ async def create_database_connection(
                 )
             if not connection_data.database_path:
                 raise HTTPException(
-                    status_code=status.HTTP_400_BAD_REQUEST, detail="HTTP path (database_path) is required for Databricks"
+                    status_code=status.HTTP_400_BAD_REQUEST,
+                    detail="HTTP path (database_path) is required for Databricks",
                 )
             if not connection_data.password:
                 raise HTTPException(
                     status_code=status.HTTP_400_BAD_REQUEST, detail="Access token (password) is required for Databricks"
                 )
         elif connection_data.type == DatabaseConnectionType.BIGQUERY:
-            if not connection_data.connection_params or not connection_data.connection_params.get("service_account_json"):
+            if not connection_data.connection_params or not connection_data.connection_params.get(
+                "service_account_json"
+            ):
                 raise HTTPException(
                     status_code=status.HTTP_400_BAD_REQUEST,
                     detail="connection_params.service_account_json is required for BigQuery",
                 )
         elif connection_data.type == DatabaseConnectionType.DOCKER:
             if not connection_data.host:
-                raise HTTPException(
-                    status_code=status.HTTP_400_BAD_REQUEST, detail="Docker host is required"
-                )
+                raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Docker host is required")
         elif connection_data.type == DatabaseConnectionType.SUPABASE:
             if not connection_data.host or not connection_data.username or not connection_data.password:
                 raise HTTPException(
@@ -557,7 +557,9 @@ async def test_database_connection(
                 )
         elif connection_data.type == DatabaseConnectionType.BIGQUERY:
             # BigQuery uses service_account_json in connection_params, not host/port
-            if not connection_data.connection_params or not connection_data.connection_params.get("service_account_json"):
+            if not connection_data.connection_params or not connection_data.connection_params.get(
+                "service_account_json"
+            ):
                 raise HTTPException(
                     status_code=status.HTTP_400_BAD_REQUEST,
                     detail="connection_params.service_account_json is required for BigQuery",
@@ -578,7 +580,8 @@ async def test_database_connection(
                 )
             if not connection_data.database_path:
                 raise HTTPException(
-                    status_code=status.HTTP_400_BAD_REQUEST, detail="HTTP path (database_path) is required for Databricks"
+                    status_code=status.HTTP_400_BAD_REQUEST,
+                    detail="HTTP path (database_path) is required for Databricks",
                 )
             if not connection_data.password:
                 raise HTTPException(
@@ -586,9 +589,7 @@ async def test_database_connection(
                 )
         elif connection_data.type == DatabaseConnectionType.DOCKER:
             if not connection_data.host:
-                raise HTTPException(
-                    status_code=status.HTTP_400_BAD_REQUEST, detail="Docker host is required"
-                )
+                raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Docker host is required")
         elif connection_data.type == DatabaseConnectionType.SUPABASE:
             if not connection_data.host or not connection_data.username or not connection_data.password:
                 raise HTTPException(

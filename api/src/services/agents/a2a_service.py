@@ -340,9 +340,7 @@ class A2AService:
         async_session_factory = create_celery_async_session()
 
         async with async_session_factory() as db:
-            result = await db.execute(
-                select(AgentA2ATask).where(AgentA2ATask.id == uuid.UUID(task_id_str))
-            )
+            result = await db.execute(select(AgentA2ATask).where(AgentA2ATask.id == uuid.UUID(task_id_str)))
             task = result.scalar_one_or_none()
 
             if not task:
@@ -356,9 +354,7 @@ class A2AService:
             # Load agent
             from src.models.agent import Agent
 
-            agent_result = await db.execute(
-                select(Agent).where(Agent.id == task.agent_id)
-            )
+            agent_result = await db.execute(select(Agent).where(Agent.id == task.agent_id))
             agent = agent_result.scalar_one_or_none()
 
             if not agent:

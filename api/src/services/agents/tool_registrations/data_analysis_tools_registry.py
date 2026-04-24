@@ -68,7 +68,10 @@ def register_data_analysis_tools(registry: Any):
                     "type": "string",
                     "description": "Start time in ISO-8601 format (e.g., '2024-01-01T00:00:00Z')",
                 },
-                "to_time": {"type": "string", "description": "End time in ISO-8601 format (e.g., '2024-01-31T23:59:59Z')"},
+                "to_time": {
+                    "type": "string",
+                    "description": "End time in ISO-8601 format (e.g., '2024-01-31T23:59:59Z')",
+                },
             },
             "required": ["connection_id", "query", "from_time", "to_time"],
         },

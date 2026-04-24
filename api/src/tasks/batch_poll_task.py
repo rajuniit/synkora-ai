@@ -40,9 +40,9 @@ async def _poll_batches_async() -> None:
     factory = create_celery_async_session()
     async with factory() as db:
         # Find rows with pending batch jobs
-        stmt = select(LLMTokenUsage).where(
-            LLMTokenUsage.optimization_flags["batch_status"].astext == "pending"
-        ).limit(100)
+        stmt = (
+            select(LLMTokenUsage).where(LLMTokenUsage.optimization_flags["batch_status"].astext == "pending").limit(100)
+        )
 
         result = await db.execute(stmt)
         pending_rows = result.scalars().all()
@@ -84,10 +84,7 @@ async def _poll_batches_async() -> None:
                     row.input_tokens = total_input
                     row.output_tokens = total_output
                     row.optimization_flags = new_flags
-                    logger.info(
-                        f"poll_llm_batches: batch {batch_id} completed "
-                        f"({total_input} in, {total_output} out)"
-                    )
+                    logger.info(f"poll_llm_batches: batch {batch_id} completed ({total_input} in, {total_output} out)")
                 elif status in ("failed", "expired", "cancelling", "cancelled"):
                     new_flags = {**flags, "batch_status": status}
                     row.optimization_flags = new_flags

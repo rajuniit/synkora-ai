@@ -588,10 +588,6 @@ async def internal_micromobility_get_ranger_performance(
         from src.services.agents.internal_tools.micromobility_intelligence_tools import _hours_since
         from src.services.agents.internal_tools.micromobility_tools import internal_micromobility_list_tasks
 
-        now = datetime.now(tz=UTC)
-        start = (now - timedelta(days=days)).strftime("%Y-%m-%d")
-        end = now.strftime("%Y-%m-%d")
-
         all_tasks: list[dict[str, Any]] = []
         offset = 0
         while True:

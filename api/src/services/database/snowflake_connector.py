@@ -82,8 +82,7 @@ class SnowflakeConnector:
             import snowflake.connector  # noqa: PLC0415  (deferred, optional dep)
         except ImportError:
             logger.error(
-                "snowflake-connector-python is not installed. "
-                "Add 'snowflake-connector-python' to dependencies."
+                "snowflake-connector-python is not installed. Add 'snowflake-connector-python' to dependencies."
             )
             return False
 
@@ -111,10 +110,7 @@ class SnowflakeConnector:
 
             self._conn = await self._run_sync(_do_connect)
 
-            logger.info(
-                f"Connected to Snowflake account={account} "
-                f"database={self.database_connection.database_name}"
-            )
+            logger.info(f"Connected to Snowflake account={account} database={self.database_connection.database_name}")
             return True
 
         except Exception as e:
@@ -186,6 +182,7 @@ class SnowflakeConnector:
         elapsed = 0
         try:
             while elapsed < _MAX_WAIT:
+
                 def _check(qid=query_id):
                     status = self._conn.get_query_status_throw_if_error(qid)
                     return self._conn.is_still_running(status)
@@ -212,7 +209,7 @@ class SnowflakeConnector:
             cur.get_results_from_sfqid(qid)
             rows_raw = cur.fetchall()
             columns = [desc[0] for desc in cur.description] if cur.description else []
-            rows = [dict(zip(columns, row)) for row in rows_raw]
+            rows = [dict(zip(columns, row, strict=False)) for row in rows_raw]
             cur.close()
             return {"success": True, "rows": rows, "row_count": len(rows), "columns": columns}
 
@@ -251,9 +248,19 @@ class SnowflakeConnector:
             db_result = await self.execute_query("SELECT CURRENT_DATABASE() AS database_name")
             wh_result = await self.execute_query("SELECT CURRENT_WAREHOUSE() AS warehouse")
 
-            version = version_result["rows"][0].get("VERSION", "unknown") if version_result.get("success") and version_result["rows"] else "unknown"
-            database = db_result["rows"][0].get("DATABASE_NAME", self.database_connection.database_name) if db_result.get("success") and db_result["rows"] else self.database_connection.database_name
-            warehouse = wh_result["rows"][0].get("WAREHOUSE") if wh_result.get("success") and wh_result["rows"] else None
+            version = (
+                version_result["rows"][0].get("VERSION", "unknown")
+                if version_result.get("success") and version_result["rows"]
+                else "unknown"
+            )
+            database = (
+                db_result["rows"][0].get("DATABASE_NAME", self.database_connection.database_name)
+                if db_result.get("success") and db_result["rows"]
+                else self.database_connection.database_name
+            )
+            warehouse = (
+                wh_result["rows"][0].get("WAREHOUSE") if wh_result.get("success") and wh_result["rows"] else None
+            )
 
             return {
                 "success": True,

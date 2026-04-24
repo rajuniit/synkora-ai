@@ -23,9 +23,6 @@ from src.services.data_sources.docker_logs_connector import DockerLogsConnector
 from src.services.database import (
     BigQueryConnector,
     ClickHouseConnector,
-    DatabricksConnector as DBDatabricksConnector,
-    DatadogConnector as DBDatadogConnector,
-    DockerConnector as DBDockerConnector,
     DuckDBConnector,
     ElasticsearchConnector,
     MongoDBConnector,
@@ -35,6 +32,15 @@ from src.services.database import (
     SQLiteConnector,
     SQLServerConnector,
     SupabaseConnector,
+)
+from src.services.database import (
+    DatabricksConnector as DBDatabricksConnector,
+)
+from src.services.database import (
+    DatadogConnector as DBDatadogConnector,
+)
+from src.services.database import (
+    DockerConnector as DBDockerConnector,
 )
 
 logger = logging.getLogger(__name__)
@@ -432,7 +438,9 @@ class DataAnalysisService:
             logger.error(f"Failed to query Datadog connection: {e}")
             return {"success": False, "message": f"Query failed: {str(e)}", "error": str(e)}
 
-    async def query_databricks_connection(self, connection_id: UUID, query: str, limit: int | None = None) -> dict[str, Any]:
+    async def query_databricks_connection(
+        self, connection_id: UUID, query: str, limit: int | None = None
+    ) -> dict[str, Any]:
         """Execute a SQL query on a Databricks DatabaseConnection (UUID ID).
 
         Args:

@@ -143,7 +143,7 @@ class SQLServerConnector:
 
                     rows_raw = await cursor.fetchall()
                     columns = [desc[0] for desc in cursor.description] if cursor.description else []
-                    rows = [dict(zip(columns, row)) for row in rows_raw]
+                    rows = [dict(zip(columns, row, strict=False)) for row in rows_raw]
 
                     return {
                         "success": True,
@@ -207,9 +207,7 @@ class SQLServerConnector:
 
     async def get_tables(self) -> list[str]:
         result = await self.execute_query(
-            "SELECT TABLE_NAME FROM INFORMATION_SCHEMA.TABLES "
-            "WHERE TABLE_TYPE = 'BASE TABLE' "
-            "ORDER BY TABLE_NAME"
+            "SELECT TABLE_NAME FROM INFORMATION_SCHEMA.TABLES WHERE TABLE_TYPE = 'BASE TABLE' ORDER BY TABLE_NAME"
         )
         if not result.get("success"):
             logger.error("Failed to list SQL Server tables: %s", result.get("error"))
@@ -228,10 +226,12 @@ class SQLServerConnector:
                     "ORDER BY ORDINAL_POSITION",
                     (table,),
                 )
-                table_info.append({
-                    "name": table,
-                    "columns": cols.get("rows", []) if cols.get("success") else [],
-                })
+                table_info.append(
+                    {
+                        "name": table,
+                        "columns": cols.get("rows", []) if cols.get("success") else [],
+                    }
+                )
             return {"success": True, "tables": table_info}
         except Exception as e:
             logger.error("Failed to get SQL Server schema: %s", e)

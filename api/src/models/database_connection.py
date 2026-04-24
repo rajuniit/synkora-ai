@@ -77,9 +77,7 @@ class DatabaseConnection(BaseModel, TimestampMixin):
     # Additional connection parameters (SSL, timeouts, etc.).
     # Sensitive values are stored as "enc:<fernet_token>" strings inside the JSONB.
     # Always access via the `connection_params` property — never read this directly.
-    _connection_params_enc: Mapped[dict | None] = mapped_column(
-        "connection_params", JSONB, nullable=True
-    )
+    _connection_params_enc: Mapped[dict | None] = mapped_column("connection_params", JSONB, nullable=True)
 
     @property
     def connection_params(self) -> dict:

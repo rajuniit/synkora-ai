@@ -72,6 +72,7 @@ from .knowledge_base import (
     KnowledgeBaseStatus,
     VectorDBProvider,
 )
+from .llm_token_usage import LLMTokenUsage
 from .load_test import LoadTest, LoadTestStatus, TargetType
 from .mcp_server import MCPServer
 from .message import Message, MessageRole, MessageStatus
@@ -108,7 +109,6 @@ from .test_result import MetricType, PercentileType, TestResult
 from .test_run import TestRun, TestRunStatus
 from .test_scenario import TestScenario
 from .upload_file import FileSource, FileType, UploadFile
-from .llm_token_usage import LLMTokenUsage
 from .usage_analytics import UsageAnalytics
 from .user_oauth_token import UserOAuthToken
 from .voice_api_key import VoiceApiKey
