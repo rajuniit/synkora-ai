@@ -5,6 +5,7 @@
 
 import { useState, useCallback } from 'react';
 import { apiClient } from '@/lib/api/client';
+import { extractErrorMessage } from '@/lib/api/error';
 import type {
   TeamMember,
   TeamInvitation,
@@ -12,22 +13,7 @@ import type {
   UpdateMemberRoleRequest,
 } from '@/types/team';
 
-// Helper to extract error message from API response
-const getErrorMessage = (err: any, fallback: string): string => {
-  // FastAPI returns error in response.data.detail
-  if (err.response?.data?.detail) {
-    return err.response.data.detail;
-  }
-  // Some APIs return message
-  if (err.response?.data?.message) {
-    return err.response.data.message;
-  }
-  // Axios error message
-  if (err.message) {
-    return err.message;
-  }
-  return fallback;
-};
+const getErrorMessage = (err: any, fallback: string): string => extractErrorMessage(err, fallback);
 
 export function useTeam() {
   const [loading, setLoading] = useState(false);

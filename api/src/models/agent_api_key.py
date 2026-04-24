@@ -76,7 +76,7 @@ class AgentApiKey(BaseModel, TenantMixin):
         ARRAY(String),
         nullable=False,
         default=["chat"],
-        comment="List of allowed operations (e.g., ['chat', 'execute', 'stream'])",
+        comment="List of allowed operations (e.g., ['chat', 'execute', 'stream', 'mcp_server', 'a2a'])",
     )
 
     rate_limit_per_minute = Column(

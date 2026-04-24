@@ -48,42 +48,93 @@ class ContextGuardResult:
 
 # Model context limits (conservative estimates leaving room for output)
 MODEL_CONTEXT_LIMITS = {
-    # Anthropic Claude models (200K context window, leave room for output)
+    # Anthropic Claude 4.7 Series
+    "claude-opus-4-7": 180000,
+    "claude-sonnet-4-7": 180000,
+    "claude-haiku-4-7": 180000,
+    # Anthropic Claude 4.6 Series
     "claude-opus-4-6": 180000,
     "claude-sonnet-4-6": 180000,
+    "claude-haiku-4-6": 180000,
+    # Anthropic Claude 4.5 Series
+    "claude-opus-4-5": 180000,
+    "claude-sonnet-4-5": 180000,
+    "claude-haiku-4-5": 180000,
+    # Anthropic Claude 4.1 Series
+    "claude-opus-4-1": 180000,
+    "claude-sonnet-4-1": 180000,
+    "claude-haiku-4-1": 180000,
+    # Anthropic Claude 4 Series
+    "claude-opus-4": 180000,
+    "claude-sonnet-4": 180000,
+    "claude-haiku-4": 180000,
+    # Legacy alternative name aliases
+    "claude-4-5-sonnet": 180000,
+    "claude-4-sonnet": 180000,
+    "claude-4-opus": 180000,
+    "claude-4-5-opus": 180000,
+    # Anthropic Claude 3.x Series
     "claude-3-opus": 180000,
     "claude-3-sonnet": 180000,
     "claude-3-haiku": 180000,
     "claude-3.5-sonnet": 180000,
     "claude-3.5-haiku": 180000,
-    "claude-sonnet-4": 180000,
-    "claude-opus-4": 180000,
-    "claude-4-5-sonnet": 180000,
-    "claude-4-sonnet": 180000,
-    "claude-4-opus": 180000,
-    "claude-4-5-opus": 180000,
-    "claude-haiku-4": 180000,
-    "claude-haiku-4-5": 180000,
-    # OpenAI models
-    "gpt-4": 8000,
-    "gpt-4-turbo": 120000,
-    "gpt-4o": 120000,
-    "gpt-4o-mini": 120000,
+    "claude-3-7-sonnet": 180000,
+    # OpenAI GPT-5.x Series
+    "gpt-5.5-pro": 180000,
+    "gpt-5.5": 180000,
+    "gpt-5.4-pro": 180000,
+    "gpt-5.4": 180000,
+    "gpt-5.3": 180000,
+    "gpt-5.3-instant": 180000,
+    "gpt-5.3-instant-mini": 180000,
+    "gpt-5.3-codex": 180000,
+    "gpt-5.2-pro": 180000,
+    "gpt-5.2": 180000,
+    "gpt-5.1-thinking": 180000,
+    "gpt-5.1-instant": 180000,
+    "gpt-5.1-codex": 180000,
+    "gpt-5.1": 180000,
+    "gpt-5-codex": 180000,
+    "gpt-5-mini": 180000,
+    "gpt-5-nano": 180000,
+    "gpt-5": 180000,
+    # OpenAI GPT-4.x Series
+    "gpt-4.5": 120000,
     "gpt-4.1": 1000000,
     "gpt-4.1-mini": 1000000,
     "gpt-4.1-nano": 1000000,
+    "gpt-4-turbo": 120000,
+    "gpt-4o": 120000,
+    "gpt-4o-mini": 120000,
+    "gpt-4": 8000,
     "gpt-3.5-turbo": 12000,
     "gpt-3.5-turbo-16k": 14000,
+    # OpenAI Reasoning Series
+    "o4-mini": 180000,
+    "o3-pro": 180000,
     "o3": 180000,
     "o3-mini": 180000,
-    "o4-mini": 180000,
-    # Google models
-    "gemini-pro": 28000,
-    "gemini-1.5-pro": 950000,
-    "gemini-1.5-flash": 950000,
-    "gemini-2.0-flash": 950000,
+    "o1-pro": 180000,
+    "o1-preview": 120000,
+    "o1-mini": 120000,
+    "o1": 180000,
+    # Google Gemini 3.x Series
+    "gemini-3.1-pro-preview": 950000,
+    "gemini-3.1-flash-lite-preview": 950000,
+    "gemini-3-pro": 950000,
+    "gemini-3-flash": 950000,
+    # Google Gemini 2.x Series
     "gemini-2.5-pro": 1000000,
     "gemini-2.5-flash": 1000000,
+    "gemini-2.5-flash-lite": 1000000,
+    "gemini-2.0-flash": 950000,
+    "gemini-2.0-flash-lite": 950000,
+    "gemini-2.0-flash-thinking": 950000,
+    # Google Gemini 1.x Series
+    "gemini-1.5-pro": 950000,
+    "gemini-1.5-flash": 950000,
+    "gemini-pro": 28000,
     # Default - use a reasonable fallback instead of 8K
     "default": 180000,
 }

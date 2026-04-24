@@ -1,6 +1,7 @@
 'use client'
 
 import { useState } from 'react'
+import { extractErrorMessage } from '@/lib/api/error'
 import { Trash2, AlertTriangle } from 'lucide-react'
 
 interface MemoryMessage {
@@ -59,7 +60,7 @@ export function AutonomousMemoryViewer({ agentName, messages, onCleared }: Props
       setConfirming(false)
       onCleared()
     } catch (err: any) {
-      setError(err?.response?.data?.detail ?? err?.message ?? 'Clear failed')
+      setError(extractErrorMessage(err, 'Clear failed'))
     } finally {
       setClearing(false)
     }

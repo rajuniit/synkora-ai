@@ -5,6 +5,7 @@ import Link from 'next/link'
 import { useRouter, useSearchParams } from 'next/navigation'
 import toast from 'react-hot-toast'
 import { apiClient } from '@/lib/api/client'
+import { extractErrorMessage } from '@/lib/api/error'
 
 function AcceptInviteContent() {
   const [isProcessing, setIsProcessing] = useState(true)
@@ -29,7 +30,7 @@ function AcceptInviteContent() {
           router.push('/agents')
         }, 3000)
       } catch (err: any) {
-        const errorMsg = err.response?.data?.detail || 'Failed to accept invitation'
+        const errorMsg = extractErrorMessage(err, 'Failed to accept invitation')
 
         // Check if user needs to sign in
         if (err.response?.status === 401) {

@@ -65,7 +65,13 @@ class TestDatabaseTools:
         with patch("src.services.agents.internal_tools.database_tools.ElasticsearchConnector") as MockConnector:
             connector_instance = MockConnector.return_value
             connector_instance.connect = AsyncMock()
-            connector_instance.search = AsyncMock(return_value={"hits": [{"_source": {"id": 1}}], "total": 1})
+            connector_instance.execute_search = AsyncMock(
+                return_value={
+                    "success": True,
+                    "total": 1,
+                    "results": [{"_index": "test", "_id": "1", "_score": 1.0, "_source": {"id": 1}}],
+                }
+            )
             connector_instance.disconnect = AsyncMock()
 
             # Valid DSL query
@@ -173,8 +179,10 @@ class TestDatabaseTools:
         with patch("src.services.agents.internal_tools.database_tools.ElasticsearchConnector") as MockConnector:
             connector_instance = MockConnector.return_value
             connector_instance.connect = AsyncMock()
-            connector_instance.list_indices = AsyncMock(return_value=["users"])
-            connector_instance.get_mapping = AsyncMock(return_value={"properties": {}})
+            connector_instance.get_indices = AsyncMock(
+                return_value={"success": True, "indices": [{"name": "users", "health": "green", "status": "open", "docs_count": 0}]}
+            )
+            connector_instance.get_index_mapping = AsyncMock(return_value={"success": True, "fields": []})
             connector_instance.disconnect = AsyncMock()
 
             result = await internal_get_database_schema(

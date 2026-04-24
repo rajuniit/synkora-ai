@@ -7,7 +7,8 @@ import {
   Settings,
   LogOut,
   User,
-  ChevronDown
+  ChevronDown,
+  Share2,
 } from 'lucide-react'
 import { cn } from '@/lib/utils'
 
@@ -32,6 +33,7 @@ interface ChatSidebarProps {
   onSessionSelect?: (sessionId: string) => void
   onNewChat?: () => void
   onDeleteSession?: (sessionId: string) => void
+  onShareSession?: (sessionId: string) => void
   onSettingsClick?: () => void
   className?: string
   chatConfig?: ChatConfig | null
@@ -50,6 +52,7 @@ export function ChatSidebar({
   onSessionSelect,
   onNewChat,
   onDeleteSession,
+  onShareSession,
   className,
   chatConfig,
   agentName,
@@ -120,6 +123,7 @@ export function ChatSidebar({
                 activeSessionId={activeSessionId}
                 onSessionSelect={onSessionSelect}
                 onDeleteSession={onDeleteSession}
+                onShareSession={onShareSession}
                 primaryColor={primaryColor}
               />
             )}
@@ -130,6 +134,7 @@ export function ChatSidebar({
                 activeSessionId={activeSessionId}
                 onSessionSelect={onSessionSelect}
                 onDeleteSession={onDeleteSession}
+                onShareSession={onShareSession}
                 primaryColor={primaryColor}
               />
             )}
@@ -140,6 +145,7 @@ export function ChatSidebar({
                 activeSessionId={activeSessionId}
                 onSessionSelect={onSessionSelect}
                 onDeleteSession={onDeleteSession}
+                onShareSession={onShareSession}
                 primaryColor={primaryColor}
               />
             )}
@@ -150,6 +156,7 @@ export function ChatSidebar({
                 activeSessionId={activeSessionId}
                 onSessionSelect={onSessionSelect}
                 onDeleteSession={onDeleteSession}
+                onShareSession={onShareSession}
                 primaryColor={primaryColor}
               />
             )}
@@ -219,6 +226,7 @@ interface SessionGroupProps {
   activeSessionId?: string
   onSessionSelect?: (sessionId: string) => void
   onDeleteSession?: (sessionId: string) => void
+  onShareSession?: (sessionId: string) => void
   primaryColor: string
 }
 
@@ -228,6 +236,7 @@ function SessionGroup({
   activeSessionId,
   onSessionSelect,
   onDeleteSession,
+  onShareSession,
   primaryColor,
 }: SessionGroupProps) {
   return (
@@ -243,6 +252,7 @@ function SessionGroup({
             isActive={session.id === activeSessionId}
             onClick={() => onSessionSelect?.(session.id)}
             onDelete={() => onDeleteSession?.(session.id)}
+            onShare={() => onShareSession?.(session.id)}
             primaryColor={primaryColor}
           />
         ))}
@@ -256,10 +266,11 @@ interface SessionItemProps {
   isActive?: boolean
   onClick?: () => void
   onDelete?: () => void
+  onShare?: () => void
   primaryColor: string
 }
 
-function SessionItem({ session, isActive, onClick, onDelete, primaryColor }: SessionItemProps) {
+function SessionItem({ session, isActive, onClick, onDelete, onShare }: SessionItemProps) {
   const [showActions, setShowActions] = useState(false)
 
   return (
@@ -283,17 +294,33 @@ function SessionItem({ session, isActive, onClick, onDelete, primaryColor }: Ses
         </p>
       </button>
 
-      {showActions && onDelete && (
-        <button
-          onClick={(e) => {
-            e.stopPropagation()
-            onDelete()
-          }}
-          className="p-1.5 mr-2 hover:bg-gray-200 rounded-lg transition-colors"
-          title="Delete"
-        >
-          <Trash2 size={14} className="text-gray-400 hover:text-red-500" />
-        </button>
+      {showActions && (
+        <div className="flex items-center mr-1.5 gap-0.5">
+          {onShare && (
+            <button
+              onClick={(e) => {
+                e.stopPropagation()
+                onShare()
+              }}
+              className="p-1.5 hover:bg-gray-200 rounded-lg transition-colors"
+              title="Share"
+            >
+              <Share2 size={13} className="text-gray-400 hover:text-blue-500" />
+            </button>
+          )}
+          {onDelete && (
+            <button
+              onClick={(e) => {
+                e.stopPropagation()
+                onDelete()
+              }}
+              className="p-1.5 hover:bg-gray-200 rounded-lg transition-colors"
+              title="Delete"
+            >
+              <Trash2 size={13} className="text-gray-400 hover:text-red-500" />
+            </button>
+          )}
+        </div>
       )}
     </div>
   )

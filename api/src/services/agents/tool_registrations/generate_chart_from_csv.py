@@ -6,6 +6,17 @@ from typing import Any
 
 logger = logging.getLogger(__name__)
 
+# Formula injection prefixes that are dangerous in spreadsheet apps
+_FORMULA_PREFIXES = ("=", "+", "-", "@")
+
+
+def _safe_label(value: Any) -> Any:
+    """Prefix spreadsheet formula triggers so they render as plain text."""
+    if isinstance(value, str) and value.startswith(_FORMULA_PREFIXES):
+        return "'" + value
+    return value
+
+
 # Chart types rendered by Chart.js (existing)
 CHARTJS_TYPES = {"bar", "line", "pie", "doughnut", "scatter"}
 
@@ -110,13 +121,13 @@ async def generate_chart_from_data(
                 if y_column not in df.columns:
                     return {"success": False, "error": f"Column '{y_column}' not found. Available: {list(df.columns)}"}
 
-                labels = df[x_column].astype(str).tolist()
+                labels = [_safe_label(v) for v in df[x_column].astype(str).tolist()]
                 values = df[y_column].tolist()
                 chart_config["data"] = {
                     "labels": labels,
                     "datasets": [
                         {
-                            "label": y_column,
+                            "label": _safe_label(y_column),
                             "data": values,
                             "backgroundColor": "rgba(99, 102, 241, 0.5)",
                             "borderColor": "rgba(99, 102, 241, 1)",
@@ -129,12 +140,12 @@ async def generate_chart_from_data(
                 if x_column and y_column:
                     if x_column not in df.columns or y_column not in df.columns:
                         return {"success": False, "error": f"Columns not found. Available: {list(df.columns)}"}
-                    labels = df[x_column].astype(str).tolist()
+                    labels = [_safe_label(v) for v in df[x_column].astype(str).tolist()]
                     values = df[y_column].tolist()
                 else:
                     if len(df.columns) < 2:
                         return {"success": False, "error": "Need at least 2 columns for pie/doughnut chart"}
-                    labels = df.iloc[:, 0].astype(str).tolist()
+                    labels = [_safe_label(v) for v in df.iloc[:, 0].astype(str).tolist()]
                     values = df.iloc[:, 1].tolist()
 
                 palette = [

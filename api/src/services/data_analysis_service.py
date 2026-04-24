@@ -1,5 +1,6 @@
 """Data Analysis Service for processing and analyzing data from various sources."""
 
+import asyncio
 import csv
 import io
 import logging
@@ -19,13 +20,50 @@ from src.models.database_connection import DatabaseConnection
 from src.services.data_sources.databricks_connector import DatabricksConnector
 from src.services.data_sources.datadog_connector import DatadogConnector
 from src.services.data_sources.docker_logs_connector import DockerLogsConnector
-from src.services.database import ElasticsearchConnector, PostgreSQLConnector, SQLiteConnector
+from src.services.database import (
+    BigQueryConnector,
+    ClickHouseConnector,
+    DuckDBConnector,
+    ElasticsearchConnector,
+    MongoDBConnector,
+    MySQLConnector,
+    PostgreSQLConnector,
+    SnowflakeConnector,
+    SQLiteConnector,
+    SQLServerConnector,
+    SupabaseConnector,
+)
+from src.services.database import (
+    DatabricksConnector as DBDatabricksConnector,
+)
+from src.services.database import (
+    DatadogConnector as DBDatadogConnector,
+)
+from src.services.database import (
+    DockerConnector as DBDockerConnector,
+)
 
 logger = logging.getLogger(__name__)
 
 # SECURITY: Maximum allowed LIMIT value to prevent DoS
 MAX_LIMIT = 10000
 DEFAULT_LIMIT = 1000
+
+# Formula injection prefixes that are dangerous in spreadsheet apps
+_FORMULA_PREFIXES = ("=", "+", "-", "@")
+
+
+async def _run_sync(fn, *args):
+    """Run a blocking function in the default executor without stalling the event loop."""
+    loop = asyncio.get_event_loop()
+    return await loop.run_in_executor(None, fn, *args)
+
+
+def _sanitize_formula(value: Any) -> Any:
+    """Prefix spreadsheet formula triggers with a single quote so they render as text."""
+    if isinstance(value, str) and value.startswith(_FORMULA_PREFIXES):
+        return "'" + value
+    return value
 
 
 class DataAnalysisService:
@@ -110,29 +148,30 @@ class DataAnalysisService:
             sniffer = csv.Sniffer()
             delimiter = sniffer.sniff(sample).delimiter
 
-            # Read CSV into pandas DataFrame
-            df = pd.read_csv(io.BytesIO(content), delimiter=delimiter)
-
-            # Get basic statistics
-            stats = {
-                "rows": len(df),
-                "columns": len(df.columns),
-                "column_names": df.columns.tolist(),
-                "data_types": df.dtypes.astype(str).to_dict(),
-                "missing_values": df.isnull().sum().to_dict(),
-                "sample_data": df.head(10).to_dict(orient="records"),
-            }
-
-            # Get numeric column statistics
-            numeric_stats = {}
-            for col in df.select_dtypes(include=["number"]).columns:
-                numeric_stats[col] = {
-                    "min": float(df[col].min()),
-                    "max": float(df[col].max()),
-                    "mean": float(df[col].mean()),
-                    "median": float(df[col].median()),
-                    "std": float(df[col].std()),
+            # PERFORMANCE: Run blocking pandas work off the event loop
+            def _parse_csv():
+                _df = pd.read_csv(io.BytesIO(content), delimiter=delimiter)
+                _stats = {
+                    "rows": len(_df),
+                    "columns": len(_df.columns),
+                    "column_names": _df.columns.tolist(),
+                    "data_types": _df.dtypes.astype(str).to_dict(),
+                    "missing_values": _df.isnull().sum().to_dict(),
+                    "sample_data": _df.head(10).to_dict(orient="records"),
                 }
+                _numeric_stats = {}
+                for col in _df.select_dtypes(include=["number"]).columns:
+                    _numeric_stats[col] = {
+                        "min": float(_df[col].min()),
+                        "max": float(_df[col].max()),
+                        "mean": float(_df[col].mean()),
+                        "median": float(_df[col].median()),
+                        "std": float(_df[col].std()),
+                    }
+                _preview = _df.head(100).to_dict(orient="records")
+                return _stats, _numeric_stats, _preview
+
+            stats, numeric_stats, preview = await _run_sync(_parse_csv)
 
             return {
                 "success": True,
@@ -140,7 +179,7 @@ class DataAnalysisService:
                 "delimiter": delimiter,
                 "statistics": stats,
                 "numeric_statistics": numeric_stats,
-                "data_preview": df.head(100).to_dict(orient="records"),
+                "data_preview": preview,
             }
 
         except Exception as e:
@@ -206,11 +245,28 @@ class DataAnalysisService:
                 file_list = zip_file.namelist()
 
                 # SECURITY: Check total uncompressed size before extracting anything
-                total_uncompressed = sum(info.file_size for info in zip_file.infolist())
+                info_list = zip_file.infolist()
+                total_uncompressed = sum(info.file_size for info in info_list)
+
+                # Check file count (zip bomb via many tiny files)
+                if len(file_list) > 200:
+                    return {
+                        "success": False,
+                        "message": f"ZIP archive contains too many files ({len(file_list)}). Maximum is 200.",
+                    }
+
                 if total_uncompressed > MAX_UNCOMPRESSED_BYTES:
                     return {
                         "success": False,
                         "message": f"ZIP archive exceeds maximum uncompressed size ({MAX_UNCOMPRESSED_BYTES // 1024 // 1024} MB)",
+                    }
+
+                # Check compression ratio (zip bomb detection)
+                compressed_size = len(content)
+                if compressed_size > 0 and total_uncompressed / compressed_size > 100:
+                    return {
+                        "success": False,
+                        "message": "ZIP archive has suspicious compression ratio. Possible zip bomb.",
                     }
 
                 # SECURITY: Filter out unsafe file names (path traversal protection)
@@ -242,15 +298,19 @@ class DataAnalysisService:
                             continue
 
                         with zip_file.open(csv_filename) as csv_file:
-                            # Read CSV
-                            df = pd.read_csv(csv_file)
+                            # PERFORMANCE: Read CSV bytes first, then parse off event loop
+                            raw = csv_file.read()
 
-                            results[csv_filename] = {
-                                "rows": len(df),
-                                "columns": len(df.columns),
-                                "column_names": df.columns.tolist(),
-                                "sample_data": df.head(5).to_dict(orient="records"),
+                        def _parse_zip_csv(b):
+                            _df = pd.read_csv(io.BytesIO(b))
+                            return {
+                                "rows": len(_df),
+                                "columns": len(_df.columns),
+                                "column_names": _df.columns.tolist(),
+                                "sample_data": _df.head(5).to_dict(orient="records"),
                             }
+
+                        results[csv_filename] = await _run_sync(_parse_zip_csv, raw)
                     except Exception as e:
                         results[csv_filename] = {"error": str(e)}
 
@@ -274,10 +334,10 @@ class DataAnalysisService:
             return {"success": False, "message": f"ZIP processing failed: {str(e)}", "error": str(e)}
 
     async def query_data_source(self, data_source_id: int, query_params: dict[str, Any]) -> dict[str, Any]:
-        """Query data from a data source.
+        """Query data from a data source (DataSource table, integer ID).
 
         Args:
-            data_source_id: Data source ID
+            data_source_id: Integer ID from the data_sources table
             query_params: Query parameters specific to the data source type
 
         Returns:
@@ -334,7 +394,112 @@ class DataAnalysisService:
             return result
 
         except Exception as e:
+            # Roll back the aborted transaction so subsequent operations on this session still work
+            await self.db.rollback()
             logger.error(f"Failed to query data source: {e}")
+            return {"success": False, "message": f"Query failed: {str(e)}", "error": str(e)}
+
+    async def query_datadog_connection(
+        self, connection_id: UUID, query: str, from_time: str | None = None, to_time: str | None = None
+    ) -> dict[str, Any]:
+        """Query metrics from a Datadog DatabaseConnection (UUID ID).
+
+        Args:
+            connection_id: UUID of the DatabaseConnection record
+            query: Datadog metric query string (e.g. 'avg:system.cpu.user{*}')
+            from_time: Start time in ISO-8601 format (e.g. '2024-01-01T00:00:00Z')
+            to_time: End time in ISO-8601 format
+
+        Returns:
+            Dict with metric series data
+        """
+        try:
+            stmt = select(DatabaseConnection).filter(
+                DatabaseConnection.id == connection_id, DatabaseConnection.tenant_id == self.tenant_id
+            )
+            result = await self.db.execute(stmt)
+            connection = result.scalar_one_or_none()
+
+            if not connection:
+                return {"success": False, "message": "Database connection not found"}
+
+            connector = DBDatadogConnector(database_connection=connection)
+
+            # Convert ISO-8601 strings to Unix timestamps expected by the Datadog API
+            params: dict[str, Any] = {}
+            if from_time:
+                params["from"] = int(datetime.fromisoformat(from_time.replace("Z", "+00:00")).timestamp())
+            if to_time:
+                params["to"] = int(datetime.fromisoformat(to_time.replace("Z", "+00:00")).timestamp())
+
+            return await connector.execute_query(query=query, params=params or None)
+
+        except Exception as e:
+            logger.error(f"Failed to query Datadog connection: {e}")
+            return {"success": False, "message": f"Query failed: {str(e)}", "error": str(e)}
+
+    async def query_databricks_connection(
+        self, connection_id: UUID, query: str, limit: int | None = None
+    ) -> dict[str, Any]:
+        """Execute a SQL query on a Databricks DatabaseConnection (UUID ID).
+
+        Args:
+            connection_id: UUID of the DatabaseConnection record
+            query: SQL query to execute
+            limit: Maximum rows to return (appended as LIMIT clause if not already present)
+
+        Returns:
+            Dict with columns, rows, and row_count
+        """
+        try:
+            stmt = select(DatabaseConnection).filter(
+                DatabaseConnection.id == connection_id, DatabaseConnection.tenant_id == self.tenant_id
+            )
+            result = await self.db.execute(stmt)
+            connection = result.scalar_one_or_none()
+
+            if not connection:
+                return {"success": False, "message": "Database connection not found"}
+
+            # SECURITY: Validate and sanitize LIMIT value to prevent SQL injection
+            if limit is not None and "LIMIT" not in query.upper():
+                if isinstance(limit, int) and 1 <= limit <= MAX_LIMIT:
+                    query = f"{query} LIMIT {int(limit)}"
+                else:
+                    query = f"{query} LIMIT {DEFAULT_LIMIT}"
+
+            connector = DBDatabricksConnector(database_connection=connection)
+            return await connector.execute_query(query=query)
+
+        except Exception as e:
+            logger.error(f"Failed to query Databricks connection: {e}")
+            return {"success": False, "message": f"Query failed: {str(e)}", "error": str(e)}
+
+    async def query_docker_connection(self, connection_id: UUID, query: str) -> dict[str, Any]:
+        """Query a Docker daemon via a DatabaseConnection (UUID ID).
+
+        Args:
+            connection_id: UUID of the DatabaseConnection record
+            query: Docker pseudo-query keyword (e.g. 'containers', 'logs <container_id>')
+
+        Returns:
+            Dict with container/log data
+        """
+        try:
+            stmt = select(DatabaseConnection).filter(
+                DatabaseConnection.id == connection_id, DatabaseConnection.tenant_id == self.tenant_id
+            )
+            result = await self.db.execute(stmt)
+            connection = result.scalar_one_or_none()
+
+            if not connection:
+                return {"success": False, "message": "Database connection not found"}
+
+            connector = DBDockerConnector(database_connection=connection)
+            return await connector.execute_query(query=query)
+
+        except Exception as e:
+            logger.error(f"Failed to query Docker connection: {e}")
             return {"success": False, "message": f"Query failed: {str(e)}", "error": str(e)}
 
     async def query_database_connection(
@@ -384,6 +549,54 @@ class DataAnalysisService:
             elif connection.database_type.value == "ELASTICSEARCH":
                 connector = ElasticsearchConnector(database_connection=connection)
                 result = await connector.search(query)
+
+            elif connection.database_type.value == "MYSQL":
+                connector = MySQLConnector(database_connection=connection)
+                await connector.connect()
+                result = await connector.execute_query(query)
+                await connector.disconnect()
+
+            elif connection.database_type.value == "MONGODB":
+                connector = MongoDBConnector(database_connection=connection)
+                await connector.connect()
+                result = await connector.execute_query(query)
+                await connector.disconnect()
+
+            elif connection.database_type.value == "SUPABASE":
+                connector = SupabaseConnector(database_connection=connection)
+                await connector.connect()
+                result = await connector.execute_query(query)
+                await connector.disconnect()
+
+            elif connection.database_type.value == "BIGQUERY":
+                connector = BigQueryConnector(database_connection=connection)
+                await connector.connect()
+                result = await connector.execute_query(query)
+                await connector.disconnect()
+
+            elif connection.database_type.value == "SNOWFLAKE":
+                connector = SnowflakeConnector(database_connection=connection)
+                await connector.connect()
+                result = await connector.execute_query(query)
+                await connector.disconnect()
+
+            elif connection.database_type.value == "SQLSERVER":
+                connector = SQLServerConnector(database_connection=connection)
+                await connector.connect()
+                result = await connector.execute_query(query)
+                await connector.disconnect()
+
+            elif connection.database_type.value == "CLICKHOUSE":
+                connector = ClickHouseConnector(database_connection=connection)
+                await connector.connect()
+                result = await connector.execute_query(query)
+                await connector.disconnect()
+
+            elif connection.database_type.value == "DUCKDB":
+                connector = DuckDBConnector(database_connection=connection)
+                await connector.connect()
+                result = await connector.execute_query(query)
+                await connector.disconnect()
 
             else:
                 return {

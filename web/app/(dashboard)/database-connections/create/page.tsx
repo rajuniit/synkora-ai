@@ -14,6 +14,7 @@ import {
   Loader2
 } from 'lucide-react'
 import { apiClient } from '@/lib/api/client'
+import { extractErrorMessage } from '@/lib/api/error'
 
 interface ConnectionFormData {
   name: string
@@ -56,29 +57,94 @@ export default function CreateDatabaseConnectionPage() {
   const handleTypeChange = (type: string) => {
     const defaultPorts: Record<string, number> = {
       POSTGRESQL: 5432,
+      SUPABASE: 0,
       ELASTICSEARCH: 9200,
       MYSQL: 3306,
       MONGODB: 27017,
-      SQLITE: 0
+      SQLITE: 0,
+      DUCKDB: 0,
+      SQLSERVER: 1433,
+      CLICKHOUSE: 8123,
+      BIGQUERY: 0,
+      SNOWFLAKE: 0,
+      DATADOG: 0,
+      DATABRICKS: 443,
+      DOCKER: 0,
     }
     setFormData(prev => ({
       ...prev,
       type,
-      port: defaultPorts[type] || 5432
+      port: defaultPorts[type] ?? 5432,
+      connection_params: {}
     }))
     setTestResult(null)
   }
 
+  const handleConnectionParamChange = (key: string, value: string) => {
+    // Coerce 'true'/'false' strings to actual booleans for JSON serialization
+    const coerced: any = value === 'true' ? true : value === 'false' ? false : value
+    setFormData(prev => ({
+      ...prev,
+      connection_params: { ...prev.connection_params, [key]: coerced }
+    }))
+  }
+
   const isSQLite = formData.type === 'SQLITE'
+  const isDuckDB = formData.type === 'DUCKDB'
+  const isPathBased = isSQLite || isDuckDB
+  const isBigQuery = formData.type === 'BIGQUERY'
+  const isSnowflake = formData.type === 'SNOWFLAKE'
+  const isSupabase = formData.type === 'SUPABASE'
+  const isCloudOnly = isBigQuery || isSnowflake || isSupabase
+
+  const buildPayload = (data: ConnectionFormData) => {
+    if (data.type === 'BIGQUERY') {
+      let serviceAccountJson: Record<string, any> | null = null
+      try {
+        serviceAccountJson = JSON.parse(data.password)
+      } catch {
+        // Will be caught by the validation toast below
+      }
+      return {
+        ...data,
+        password: undefined,
+        connection_params: {
+          ...data.connection_params,
+          ...(serviceAccountJson ? { service_account_json: serviceAccountJson } : {}),
+          ...(data.username ? { dataset: data.username } : {}),
+        },
+      }
+    }
+    return data
+  }
 
   const testConnection = async () => {
-    if (!isSQLite && (!formData.host || !formData.port)) {
-      toast.error('Please fill in host and port')
+    if (isPathBased && !formData.database_path) {
+      toast.error('Please provide a database file path')
       return
     }
-    
-    if (isSQLite && !formData.database_path) {
-      toast.error('Please provide database file path')
+    if (isBigQuery && (!formData.database || !formData.password)) {
+      toast.error('Please provide Project ID and Service Account JSON')
+      return
+    }
+    if (isBigQuery) {
+      try {
+        JSON.parse(formData.password)
+      } catch {
+        toast.error('Service Account JSON is not valid JSON')
+        return
+      }
+    }
+    if (isSnowflake && (!formData.host || !formData.username || !formData.password)) {
+      toast.error('Please provide Account, Username and Password')
+      return
+    }
+    if (isSupabase && (!formData.host || !formData.username || !formData.password)) {
+      toast.error('Please provide Project URL, Anon Key and Service Role Key')
+      return
+    }
+    if (!isPathBased && !isCloudOnly && (!formData.host || !formData.port)) {
+      toast.error('Please fill in host and port')
       return
     }
 
@@ -86,7 +152,7 @@ export default function CreateDatabaseConnectionPage() {
     setTestResult(null)
 
     try {
-      const result = await apiClient.testDatabaseConnectionDetails(formData)
+      const result = await apiClient.testDatabaseConnectionDetails(buildPayload(formData))
       
       if (result.success) {
         setTestResult({ success: true, message: result.message || 'Connection successful!' })
@@ -96,7 +162,7 @@ export default function CreateDatabaseConnectionPage() {
         toast.error('Connection test failed')
       }
     } catch (error: any) {
-      const errorMessage = error.response?.data?.detail || error.message || 'Failed to test connection'
+      const errorMessage = extractErrorMessage(error, 'Failed to test connection')
       setTestResult({ success: false, message: errorMessage })
       toast.error(errorMessage)
     } finally {
@@ -112,25 +178,43 @@ export default function CreateDatabaseConnectionPage() {
       return
     }
 
-    if (!isSQLite && (!formData.host || !formData.port)) {
-      toast.error('Please fill in host and port for non-SQLite connections')
+    if (isPathBased && !formData.database_path) {
+      toast.error('Please provide a database file path')
       return
     }
-
-    if (isSQLite && !formData.database_path) {
-      toast.error('Please provide database file path for SQLite')
+    if (isBigQuery && (!formData.database || !formData.password)) {
+      toast.error('Please provide Project ID and Service Account JSON')
+      return
+    }
+    if (isBigQuery) {
+      try {
+        JSON.parse(formData.password)
+      } catch {
+        toast.error('Service Account JSON is not valid JSON')
+        return
+      }
+    }
+    if (isSnowflake && (!formData.host || !formData.username || !formData.password)) {
+      toast.error('Please provide Account, Username and Password')
+      return
+    }
+    if (isSupabase && (!formData.host || !formData.username || !formData.password)) {
+      toast.error('Please provide Project URL, Anon Key and Service Role Key')
+      return
+    }
+    if (!isPathBased && !isCloudOnly && (!formData.host || !formData.port)) {
+      toast.error('Please fill in host and port')
       return
     }
 
     setSaving(true)
 
     try {
-      await apiClient.createDatabaseConnection(formData)
+      await apiClient.createDatabaseConnection(buildPayload(formData))
       toast.success('Database connection created successfully')
       router.push('/database-connections')
     } catch (error: any) {
-      const errorMessage = error.response?.data?.detail || error.message || 'Failed to create connection'
-      toast.error(errorMessage)
+      toast.error(extractErrorMessage(error, 'Failed to create connection'))
     } finally {
       setSaving(false)
     }
@@ -202,12 +286,22 @@ export default function CreateDatabaseConnectionPage() {
                     className="w-full px-3 py-2 text-sm border border-gray-300 rounded-lg focus:ring-2 focus:ring-red-500 focus:border-transparent"
                     required
                   >
-                    <optgroup label="Databases">
+                    <optgroup label="SQL Databases">
                       <option value="POSTGRESQL">PostgreSQL</option>
+                      <option value="SUPABASE">Supabase (REST API)</option>
                       <option value="MYSQL">MySQL</option>
-                      <option value="MONGODB">MongoDB</option>
+                      <option value="SQLSERVER">SQL Server (MSSQL)</option>
                       <option value="SQLITE">SQLite</option>
+                      <option value="DUCKDB">DuckDB</option>
+                    </optgroup>
+                    <optgroup label="NoSQL & Search">
+                      <option value="MONGODB">MongoDB</option>
                       <option value="ELASTICSEARCH">Elasticsearch</option>
+                      <option value="CLICKHOUSE">ClickHouse</option>
+                    </optgroup>
+                    <optgroup label="Cloud Data Warehouses">
+                      <option value="BIGQUERY">BigQuery (Google)</option>
+                      <option value="SNOWFLAKE">Snowflake</option>
                     </optgroup>
                     <optgroup label="Data Analysis Sources">
                       <option value="DATADOG">Datadog (Metrics & Logs)</option>
@@ -417,8 +511,8 @@ export default function CreateDatabaseConnectionPage() {
                     </div>
                   </div>
                 </div>
-              ) : isSQLite ? (
-                /* SQLite-specific fields */
+              ) : isPathBased ? (
+                /* SQLite / DuckDB — file path */
                 <div className="space-y-4">
                   <div>
                     <label className="block text-sm font-medium text-gray-700 mb-1.5">
@@ -428,13 +522,154 @@ export default function CreateDatabaseConnectionPage() {
                       type="text"
                       value={formData.database_path}
                       onChange={(e) => handleInputChange('database_path', e.target.value)}
-                      placeholder="/path/to/database.db or ./data/mydb.sqlite"
+                      placeholder={isDuckDB ? '/path/to/data.duckdb or :memory:' : '/path/to/database.db'}
                       className="w-full px-3 py-2 text-sm border border-gray-300 rounded-lg focus:ring-2 focus:ring-red-500 focus:border-transparent"
                       required
                     />
                     <p className="text-xs text-gray-500 mt-1">
-                      Provide the full path to your SQLite database file
+                      {isDuckDB ? 'Path to DuckDB file, or :memory: for an in-memory database' : 'Full path to your SQLite database file'}
                     </p>
+                  </div>
+                </div>
+              ) : isBigQuery ? (
+                /* BigQuery-specific fields */
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                  <div className="md:col-span-2">
+                    <label className="block text-sm font-medium text-gray-700 mb-1.5">
+                      GCP Project ID <span className="text-red-500">*</span>
+                    </label>
+                    <input
+                      type="text"
+                      value={formData.database}
+                      onChange={(e) => handleInputChange('database', e.target.value)}
+                      placeholder="my-gcp-project"
+                      className="w-full px-3 py-2 text-sm border border-gray-300 rounded-lg focus:ring-2 focus:ring-red-500 focus:border-transparent"
+                      required
+                    />
+                    <p className="text-xs text-gray-500 mt-1">Your Google Cloud project ID</p>
+                  </div>
+                  <div className="md:col-span-2">
+                    <label className="block text-sm font-medium text-gray-700 mb-1.5">
+                      Service Account JSON <span className="text-red-500">*</span>
+                    </label>
+                    <textarea
+                      value={formData.password}
+                      onChange={(e) => handleInputChange('password', e.target.value)}
+                      placeholder={'{\n  "type": "service_account",\n  "project_id": "my-project",\n  ...\n}'}
+                      rows={6}
+                      className="w-full px-3 py-2 text-sm border border-gray-300 rounded-lg focus:ring-2 focus:ring-red-500 focus:border-transparent font-mono"
+                      required
+                    />
+                    <p className="text-xs text-gray-500 mt-1">
+                      Paste the full contents of your service account key JSON file. Stored encrypted.
+                    </p>
+                  </div>
+                  <div className="md:col-span-2">
+                    <label className="block text-sm font-medium text-gray-700 mb-1.5">
+                      Default Dataset (Optional)
+                    </label>
+                    <input
+                      type="text"
+                      value={formData.username}
+                      onChange={(e) => handleInputChange('username', e.target.value)}
+                      placeholder="my_dataset"
+                      className="w-full px-3 py-2 text-sm border border-gray-300 rounded-lg focus:ring-2 focus:ring-red-500 focus:border-transparent"
+                    />
+                    <p className="text-xs text-gray-500 mt-1">Optional default dataset to query</p>
+                  </div>
+                </div>
+              ) : isSnowflake ? (
+                /* Snowflake-specific fields */
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                  <div className="md:col-span-2">
+                    <label className="block text-sm font-medium text-gray-700 mb-1.5">
+                      Account Identifier <span className="text-red-500">*</span>
+                    </label>
+                    <input
+                      type="text"
+                      value={formData.host}
+                      onChange={(e) => handleInputChange('host', e.target.value)}
+                      placeholder="xyz12345.us-east-1"
+                      className="w-full px-3 py-2 text-sm border border-gray-300 rounded-lg focus:ring-2 focus:ring-red-500 focus:border-transparent"
+                      required
+                    />
+                    <p className="text-xs text-gray-500 mt-1">
+                      Found in your Snowflake URL: <code>account.region.snowflakecomputing.com</code>
+                    </p>
+                  </div>
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700 mb-1.5">
+                      Username <span className="text-red-500">*</span>
+                    </label>
+                    <input
+                      type="text"
+                      value={formData.username}
+                      onChange={(e) => handleInputChange('username', e.target.value)}
+                      placeholder="MYUSER"
+                      className="w-full px-3 py-2 text-sm border border-gray-300 rounded-lg focus:ring-2 focus:ring-red-500 focus:border-transparent"
+                      required
+                    />
+                  </div>
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700 mb-1.5">
+                      Password <span className="text-red-500">*</span>
+                    </label>
+                    <input
+                      type="password"
+                      value={formData.password}
+                      onChange={(e) => handleInputChange('password', e.target.value)}
+                      placeholder="••••••••"
+                      className="w-full px-3 py-2 text-sm border border-gray-300 rounded-lg focus:ring-2 focus:ring-red-500 focus:border-transparent"
+                      required
+                    />
+                  </div>
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700 mb-1.5">
+                      Database
+                    </label>
+                    <input
+                      type="text"
+                      value={formData.database}
+                      onChange={(e) => handleInputChange('database', e.target.value)}
+                      placeholder="MY_DATABASE"
+                      className="w-full px-3 py-2 text-sm border border-gray-300 rounded-lg focus:ring-2 focus:ring-red-500 focus:border-transparent"
+                    />
+                  </div>
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700 mb-1.5">
+                      Warehouse
+                    </label>
+                    <input
+                      type="text"
+                      value={formData.connection_params?.warehouse || ''}
+                      onChange={(e) => handleConnectionParamChange('warehouse', e.target.value)}
+                      placeholder="COMPUTE_WH"
+                      className="w-full px-3 py-2 text-sm border border-gray-300 rounded-lg focus:ring-2 focus:ring-red-500 focus:border-transparent"
+                    />
+                  </div>
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700 mb-1.5">
+                      Schema
+                    </label>
+                    <input
+                      type="text"
+                      value={formData.connection_params?.schema || ''}
+                      onChange={(e) => handleConnectionParamChange('schema', e.target.value)}
+                      placeholder="PUBLIC"
+                      className="w-full px-3 py-2 text-sm border border-gray-300 rounded-lg focus:ring-2 focus:ring-red-500 focus:border-transparent"
+                    />
+                  </div>
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700 mb-1.5">
+                      Role (Optional)
+                    </label>
+                    <input
+                      type="text"
+                      value={formData.connection_params?.role || ''}
+                      onChange={(e) => handleConnectionParamChange('role', e.target.value)}
+                      placeholder="SYSADMIN"
+                      className="w-full px-3 py-2 text-sm border border-gray-300 rounded-lg focus:ring-2 focus:ring-red-500 focus:border-transparent"
+                    />
                   </div>
                 </div>
               ) : formData.type === 'ELASTICSEARCH' ? (
@@ -513,6 +748,83 @@ export default function CreateDatabaseConnectionPage() {
                     <p className="text-xs text-gray-500 mt-1">
                       Only required if Elasticsearch security is enabled. Password will be encrypted and stored securely.
                     </p>
+                  </div>
+                </div>
+              ) : isSupabase ? (
+                /* Supabase — API key auth via PostgREST */
+                <div className="grid grid-cols-1 gap-4">
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700 mb-1.5">
+                      Project URL <span className="text-red-500">*</span>
+                    </label>
+                    <input
+                      type="text"
+                      value={formData.host}
+                      onChange={(e) => handleInputChange('host', e.target.value)}
+                      placeholder="https://abcdefghij.supabase.co"
+                      className="w-full px-3 py-2 text-sm border border-gray-300 rounded-lg focus:ring-2 focus:ring-red-500 focus:border-transparent"
+                      required
+                    />
+                    <p className="text-xs text-gray-500 mt-1">
+                      Found in Supabase Dashboard → Settings → API → Project URL
+                    </p>
+                  </div>
+
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700 mb-1.5">
+                      Anon / Publishable Key <span className="text-red-500">*</span>
+                    </label>
+                    <input
+                      type="password"
+                      value={formData.username}
+                      onChange={(e) => handleInputChange('username', e.target.value)}
+                      placeholder="eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9..."
+                      className="w-full px-3 py-2 text-sm border border-gray-300 rounded-lg focus:ring-2 focus:ring-red-500 focus:border-transparent"
+                      required
+                    />
+                    <p className="text-xs text-gray-500 mt-1">
+                      Supabase Dashboard → Settings → API → Project API Keys → <code>anon</code> public key
+                    </p>
+                  </div>
+
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700 mb-1.5">
+                      Service Role / Secret Key <span className="text-red-500">*</span>
+                    </label>
+                    <input
+                      type="password"
+                      value={formData.password}
+                      onChange={(e) => handleInputChange('password', e.target.value)}
+                      placeholder="eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9..."
+                      className="w-full px-3 py-2 text-sm border border-gray-300 rounded-lg focus:ring-2 focus:ring-red-500 focus:border-transparent"
+                      required
+                    />
+                    <p className="text-xs text-gray-500 mt-1">
+                      Supabase Dashboard → Settings → API → Project API Keys → <code>service_role</code> secret key. Stored encrypted.
+                    </p>
+                  </div>
+
+                  <div className="flex items-center gap-3">
+                    <input
+                      type="checkbox"
+                      id="use_service_role"
+                      checked={formData.connection_params?.use_service_role !== false}
+                      onChange={(e) => handleConnectionParamChange('use_service_role', e.target.checked ? 'true' : 'false')}
+                      className="w-4 h-4 rounded border-gray-300 text-red-600 focus:ring-red-500"
+                    />
+                    <label htmlFor="use_service_role" className="text-sm text-gray-700">
+                      Use service role key (bypasses Row Level Security — recommended for agents)
+                    </label>
+                  </div>
+
+                  <div className="bg-blue-50 border border-blue-200 rounded-lg p-3">
+                    <div className="flex items-start gap-2">
+                      <AlertCircle className="w-4 h-4 text-blue-600 mt-0.5 flex-shrink-0" />
+                      <div className="text-xs text-blue-700">
+                        <p className="font-medium mb-1">No database password needed</p>
+                        <p>This connection uses Supabase's REST API (PostgREST) instead of a direct PostgreSQL connection. Only API keys are required — no host port, no database password.</p>
+                      </div>
+                    </div>
                   </div>
                 </div>
               ) : (
@@ -624,7 +936,7 @@ export default function CreateDatabaseConnectionPage() {
               <button
                 type="button"
                 onClick={testConnection}
-                disabled={testing || (!isSQLite && (!formData.host || !formData.port)) || (isSQLite && !formData.database_path)}
+                disabled={testing || (isPathBased && !formData.database_path) || (isBigQuery && (!formData.database || !formData.password)) || (isSnowflake && (!formData.host || !formData.username)) || (isSupabase && (!formData.host || !formData.username || !formData.password)) || (!isPathBased && !isCloudOnly && (!formData.host || !formData.port))}
                 className="inline-flex items-center gap-2 px-5 py-2.5 text-sm font-medium text-red-700 bg-red-50 rounded-lg hover:bg-red-100 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
               >
                 {testing ? (

@@ -19,7 +19,9 @@ def register_data_analysis_tools(registry: Any):
     from src.services.agents.tool_registrations.data_analysis_tool_functions import (
         analyze_data_statistics,
         export_data_report,
+        list_data_sources,
         query_databricks,
+        query_datadog_logs,
         query_datadog_metrics,
         query_docker_logs,
     )
@@ -27,34 +29,111 @@ def register_data_analysis_tools(registry: Any):
         generate_chart_from_data,
     )
 
+    # Register data source discovery tool (must be listed first so agent discovers it)
+    registry.register_tool(
+        name="list_data_sources",
+        description=(
+            "List all configured Datadog, Databricks, and Docker connections available to this agent. "
+            "Call this FIRST whenever you need to query these systems and don't already know the connection_id. "
+            "Each result includes a 'connection_id' (UUID string) and a 'query_tool' field telling you "
+            "which tool to call next. Datadog connections also expose a 'logs_tool' field — use "
+            "query_datadog_metrics for time-series metrics and query_datadog_logs for log events."
+        ),
+        parameters={"type": "object", "properties": {}, "required": []},
+        function=list_data_sources,
+    )
+
     # Register Datadog metrics query tool
     registry.register_tool(
         name="query_datadog_metrics",
-        description="Query metrics from Datadog monitoring platform. Use this to fetch system metrics, application performance data, or custom metrics. Returns time-series data for analysis.",
+        description=(
+            "Query TIME-SERIES METRICS from Datadog (e.g. CPU, memory, request rates, error rates). "
+            "Use DogStatsD query syntax: 'avg:system.cpu.user{*}', 'sum:trace.web.request.hits{service:api}'. "
+            "Returns metric series with timestamps and values. "
+            "To query LOG EVENTS instead, use query_datadog_logs. "
+            "If you don't know the connection_id, call list_data_sources first."
+        ),
         parameters={
             "type": "object",
             "properties": {
-                "data_source_id": {"type": "integer", "description": "The ID of the Datadog data source to query"},
-                "query": {"type": "string", "description": "The Datadog metric query (e.g., 'avg:system.cpu.user{*}')"},
+                "connection_id": {
+                    "type": "string",
+                    "description": "UUID of the Datadog connection (use list_data_sources to discover it)",
+                },
+                "query": {
+                    "type": "string",
+                    "description": "DogStatsD metric query (e.g., 'avg:system.cpu.user{*}' or 'sum:trace.web.request.hits{service:myapp}')",
+                },
                 "from_time": {
                     "type": "string",
-                    "description": "Start time in ISO format (e.g., '2024-01-01T00:00:00Z')",
+                    "description": "Start time in ISO-8601 format (e.g., '2024-01-01T00:00:00Z')",
                 },
-                "to_time": {"type": "string", "description": "End time in ISO format (e.g., '2024-01-31T23:59:59Z')"},
+                "to_time": {
+                    "type": "string",
+                    "description": "End time in ISO-8601 format (e.g., '2024-01-31T23:59:59Z')",
+                },
             },
-            "required": ["data_source_id", "query", "from_time", "to_time"],
+            "required": ["connection_id", "query", "from_time", "to_time"],
         },
         function=query_datadog_metrics,
+    )
+
+    # Register Datadog logs query tool
+    registry.register_tool(
+        name="query_datadog_logs",
+        description=(
+            "Search LOG EVENTS from Datadog using the Logs API v2. "
+            "Use Datadog log search syntax: 'service:account_migration', 'status:error', "
+            "'service:api @http.status_code:500', 'host:web-01 -status:info'. "
+            "Returns log events with timestamp, message, service, status, host, and tags. "
+            "Use this for log analysis, error investigation, and audit trails — NOT for metrics. "
+            "If you don't know the connection_id, call list_data_sources first."
+        ),
+        parameters={
+            "type": "object",
+            "properties": {
+                "connection_id": {
+                    "type": "string",
+                    "description": "UUID of the Datadog connection (use list_data_sources to discover it)",
+                },
+                "query": {
+                    "type": "string",
+                    "description": "Datadog log search query (e.g., 'service:account_migration status:error' or '@http.status_code:[500 TO 599]')",
+                },
+                "from_time": {
+                    "type": "string",
+                    "description": "Start time in ISO-8601 format (e.g., '2024-01-01T00:00:00Z') or relative (e.g., 'now-1h')",
+                },
+                "to_time": {
+                    "type": "string",
+                    "description": "End time in ISO-8601 format or relative (e.g., 'now')",
+                },
+                "limit": {
+                    "type": "integer",
+                    "description": "Maximum number of log events to return (default: 100, max: 1000)",
+                    "default": 100,
+                },
+            },
+            "required": ["connection_id", "query", "from_time", "to_time"],
+        },
+        function=query_datadog_logs,
     )
 
     # Register Databricks SQL query tool
     registry.register_tool(
         name="query_databricks",
-        description="Execute SQL queries on Databricks data lakehouse. Use this to analyze large datasets, run complex queries, or aggregate data. Returns query results with rows and columns.",
+        description=(
+            "Execute SQL queries on Databricks data lakehouse. Use this to analyze large datasets, "
+            "run complex queries, or aggregate data. Returns query results with rows and columns. "
+            "If you don't know the connection_id, call list_data_sources first."
+        ),
         parameters={
             "type": "object",
             "properties": {
-                "data_source_id": {"type": "integer", "description": "The ID of the Databricks data source to query"},
+                "connection_id": {
+                    "type": "string",
+                    "description": "UUID of the Databricks connection (use list_data_sources to discover it)",
+                },
                 "query": {
                     "type": "string",
                     "description": "SQL query to execute (e.g., 'SELECT * FROM users LIMIT 100')",
@@ -65,7 +144,7 @@ def register_data_analysis_tools(registry: Any):
                     "default": 1000,
                 },
             },
-            "required": ["data_source_id", "query"],
+            "required": ["connection_id", "query"],
         },
         function=query_databricks,
     )
@@ -73,11 +152,18 @@ def register_data_analysis_tools(registry: Any):
     # Register Docker logs query tool
     registry.register_tool(
         name="query_docker_logs",
-        description="Fetch logs from Docker containers. Use this to analyze application logs, debug issues, or monitor container activity. Returns log lines with timestamps.",
+        description=(
+            "Fetch logs from Docker containers. Use this to analyze application logs, debug issues, "
+            "or monitor container activity. Returns log lines with timestamps. "
+            "If you don't know the connection_id, call list_data_sources first."
+        ),
         parameters={
             "type": "object",
             "properties": {
-                "data_source_id": {"type": "integer", "description": "The ID of the Docker data source to query"},
+                "connection_id": {
+                    "type": "string",
+                    "description": "UUID of the Docker connection (use list_data_sources to discover it)",
+                },
                 "container_id": {
                     "type": "string",
                     "description": "Docker container ID to fetch logs from (optional if container_name is provided)",
@@ -93,7 +179,7 @@ def register_data_analysis_tools(registry: Any):
                     "default": 1000,
                 },
             },
-            "required": ["data_source_id"],
+            "required": ["connection_id"],
         },
         function=query_docker_logs,
     )
@@ -213,4 +299,4 @@ def register_data_analysis_tools(registry: Any):
         function=generate_chart_from_data,
     )
 
-    logger.info("Registered 6 data analysis tools")
+    logger.info("Registered 8 data analysis tools")

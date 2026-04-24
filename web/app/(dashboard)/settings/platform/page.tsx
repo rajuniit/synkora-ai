@@ -2,6 +2,7 @@
 
 import { useState, useEffect } from 'react'
 import { apiClient } from '@/lib/api/client'
+import { extractErrorMessage } from '@/lib/api/error'
 
 interface PlatformSettings {
   id?: string
@@ -61,7 +62,7 @@ export default function PlatformSettingsPage() {
       })
       loadSettings()
     } catch (error: any) {
-      setMessage({ type: 'error', text: error.response?.data?.detail || 'Failed to save settings' })
+      setMessage({ type: 'error', text: extractErrorMessage(error, 'Failed to save settings') })
     } finally {
       setSaving(false)
     }

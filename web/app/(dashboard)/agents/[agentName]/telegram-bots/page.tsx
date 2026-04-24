@@ -1,6 +1,7 @@
 "use client";
 
 import { useState, useEffect } from "react";
+import { extractErrorMessage } from '@/lib/api/error'
 import { useParams, useRouter } from "next/navigation";
 import { Plus, Power, PowerOff, RefreshCw, Trash2, Settings, ExternalLink, MessageCircle, ChevronRight } from "lucide-react";
 import { apiClient } from "@/lib/api/client";
@@ -61,7 +62,7 @@ export default function TelegramBotsPage() {
       await loadBots();
     } catch (err: any) {
       console.error("Error starting bot:", err);
-      alert(err.response?.data?.detail || "Failed to start bot");
+      alert(extractErrorMessage(err, "Failed to start bot"))
     } finally {
       setActionLoading(null);
     }
@@ -74,7 +75,7 @@ export default function TelegramBotsPage() {
       await loadBots();
     } catch (err: any) {
       console.error("Error stopping bot:", err);
-      alert(err.response?.data?.detail || "Failed to stop bot");
+      alert(extractErrorMessage(err, "Failed to stop bot"))
     } finally {
       setActionLoading(null);
     }
@@ -87,7 +88,7 @@ export default function TelegramBotsPage() {
       await loadBots();
     } catch (err: any) {
       console.error("Error restarting bot:", err);
-      alert(err.response?.data?.detail || "Failed to restart bot");
+      alert(extractErrorMessage(err, "Failed to restart bot"))
     } finally {
       setActionLoading(null);
     }
@@ -104,7 +105,7 @@ export default function TelegramBotsPage() {
       await loadBots();
     } catch (err: any) {
       console.error("Error deleting bot:", err);
-      alert(err.response?.data?.detail || "Failed to delete bot");
+      alert(extractErrorMessage(err, "Failed to delete bot"))
     } finally {
       setActionLoading(null);
     }

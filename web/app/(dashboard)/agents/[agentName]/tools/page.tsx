@@ -213,7 +213,7 @@ const TOOL_GROUPS: ToolGroup[] = [
   {
     id: 'datadog',
     name: 'Datadog',
-    description: 'Query metrics and monitor application performance via Datadog',
+    description: 'Query Datadog metrics (time-series) and search log events for monitoring and debugging',
     icon: Database,
     tools: [],
     expanded: false
@@ -853,8 +853,12 @@ export default function AgentToolsPage() {
         groupId = 'docker';
       } else if (toolName === 'query_databricks') {
         groupId = 'databricks';
-      } else if (toolName === 'query_datadog_metrics') {
+      } else if (toolName === 'query_datadog_metrics' || toolName === 'query_datadog_logs') {
         groupId = 'datadog';
+      } else if (toolName === 'list_data_sources') {
+        groupId = 'database';
+      } else if (toolName === 'analyze_data_statistics' || toolName === 'export_data_report') {
+        groupId = 'csv_json';
       } else if (toolName.includes('database') || toolName.includes('query') || toolName.includes('chart')) {
         groupId = 'database';
       } else if (toolName.startsWith('internal_google_docs_')) {
@@ -1253,6 +1257,7 @@ export default function AgentToolsPage() {
     if (name === 'query_docker_logs') return '🐳';
     if (name === 'query_databricks') return '🧱';
     if (name === 'query_datadog_metrics') return '📈';
+    if (name === 'query_datadog_logs') return '📋';
     if (name.startsWith('internal_hackernews_')) return '🗞️';
     if (name === 'internal_news_search') return '📰';
     if (name === 'internal_fetch_rss_feed') return '📡';

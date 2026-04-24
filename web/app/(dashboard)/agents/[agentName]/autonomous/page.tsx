@@ -1,6 +1,7 @@
 'use client'
 
 import { useEffect, useState, useCallback } from 'react'
+import { extractErrorMessage } from '@/lib/api/error'
 import { useParams } from 'next/navigation'
 import Link from 'next/link'
 import { ArrowLeft, Bot, Settings, History, Brain, ToggleLeft, ToggleRight, ShieldCheck } from 'lucide-react'
@@ -76,7 +77,7 @@ export default function AutonomousPage() {
       setStatus(data)
       setError(null)
     } catch (err: any) {
-      setError(err?.response?.data?.detail ?? err?.message ?? 'Failed to load autonomous config')
+      setError(extractErrorMessage(err, 'Failed to load autonomous config'))
     } finally {
       setLoading(false)
     }
@@ -117,7 +118,7 @@ export default function AutonomousPage() {
       await fetchStatus()
       showToast(status.is_active ? 'Autonomous mode paused' : 'Autonomous mode resumed')
     } catch (err: any) {
-      setError(err?.response?.data?.detail ?? err?.message ?? 'Toggle failed')
+      setError(extractErrorMessage(err, 'Toggle failed'))
     }
   }
 
@@ -132,7 +133,7 @@ export default function AutonomousPage() {
       await fetchStatus()
       showToast('Autonomous mode disabled')
     } catch (err: any) {
-      setError(err?.response?.data?.detail ?? err?.message ?? 'Delete failed')
+      setError(extractErrorMessage(err, 'Delete failed'))
     }
   }
 

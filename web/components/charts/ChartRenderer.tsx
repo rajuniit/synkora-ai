@@ -1,62 +1,36 @@
 'use client'
 
 import { useState, useRef, useCallback } from 'react'
-import {
-  Chart as ChartJS,
-  CategoryScale,
-  LinearScale,
-  PointElement,
-  LineElement,
-  BarElement,
-  ArcElement,
-  Title,
-  Tooltip,
-  Legend,
-  type ChartOptions,
-} from 'chart.js'
-import { Line, Bar, Pie, Doughnut, Scatter } from 'react-chartjs-2'
-import {
-  BarChart,
-  Bar as RBar,
-  AreaChart,
-  Area,
-  XAxis,
-  YAxis,
-  CartesianGrid,
-  Tooltip as RTooltip,
-  Legend as RLegend,
-  RadarChart,
-  Radar,
-  PolarGrid,
-  PolarAngleAxis,
-  PolarRadiusAxis,
-  Treemap,
-  FunnelChart,
-  Funnel,
-  LabelList,
-  Cell,
-  ResponsiveContainer,
-} from 'recharts'
 import dynamic from 'next/dynamic'
 
-const Plot = dynamic(() => import('react-plotly.js') as any, { ssr: false }) as any // eslint-disable-line @typescript-eslint/no-explicit-any
+// ---------------------------------------------------------------------------
+// Lazy-load all three rendering libraries to avoid shipping ~350 KB of
+// Chart.js + Recharts on every page load. Each sub-renderer is a separate
+// dynamic import so only the bundle matching the chart.library value loads.
+// ---------------------------------------------------------------------------
 
-ChartJS.register(
-  CategoryScale,
-  LinearScale,
-  PointElement,
-  LineElement,
-  BarElement,
-  ArcElement,
-  Title,
-  Tooltip,
-  Legend
+const ChartJSRenderer = dynamic(
+  () => import('./renderers/ChartJSRenderer').then((m) => ({ default: m.ChartJSRenderer })),
+  { ssr: false, loading: () => <ChartPlaceholder /> }
 )
 
-const CHART_COLORS = [
-  '#6366f1', '#8b5cf6', '#06b6d4', '#10b981',
-  '#f59e0b', '#ef4444', '#ec4899', '#84cc16',
-]
+const RechartsRenderer = dynamic(
+  () => import('./renderers/RechartsRenderer').then((m) => ({ default: m.RechartsRenderer })),
+  { ssr: false, loading: () => <ChartPlaceholder /> }
+)
+
+const PlotlyRenderer = dynamic(
+  () => import('./renderers/PlotlyRenderer').then((m) => ({ default: m.PlotlyRenderer })),
+  { ssr: false, loading: () => <ChartPlaceholder /> }
+)
+
+function ChartPlaceholder() {
+  return (
+    <div className="flex items-center justify-center h-full text-gray-300 text-sm animate-pulse">
+      Loading chart…
+    </div>
+  )
+}
 
 export interface ChartData {
   id: string
@@ -114,166 +88,14 @@ export function ChartRenderer({ chart, className = '' }: ChartRendererProps) {
     }
   }, [chart.title])
 
-  // --- Chart.js renderer ---
-  const renderChartJS = () => {
-    const options: ChartOptions<'bar'> = {
-      responsive: true,
-      maintainAspectRatio: false,
-      plugins: {
-        legend: { position: 'top' },
-        title: { display: false },
-      },
-      ...(chart.config as object),
-    }
-    const chartData = chart.data
-    if (!chartData || !Array.isArray((chartData as { datasets?: unknown[] }).datasets)) {
-      return (
-        <div className="flex items-center justify-center h-full text-gray-400 text-sm">
-          Chart data unavailable
-        </div>
-      )
-    }
-    switch (chart.chart_type) {
-      case 'line':
-        return <Line data={chartData as any} options={options as ChartOptions<'line'>} />
-      case 'bar':
-        return <Bar data={chartData as any} options={options} />
-      case 'pie':
-        return <Pie data={chartData as any} options={options as ChartOptions<'pie'>} />
-      case 'doughnut':
-        return <Doughnut data={chartData as any} options={options as ChartOptions<'doughnut'>} />
-      case 'scatter':
-        return <Scatter data={chartData as any} options={options as ChartOptions<'scatter'>} />
-      default:
-        return (
-          <div className="flex items-center justify-center h-full text-gray-400 text-sm">
-            Unsupported type: {chart.chart_type}
-          </div>
-        )
-    }
-  }
-
-  // --- Recharts renderer ---
-  const renderRecharts = () => {
-    const d = chart.data as Record<string, unknown>
-    const data = (d?.data as unknown[]) ?? (Array.isArray(d) ? d : [])
-    const xKey = (d?.xKey as string) || (d?.nameKey as string) || 'name'
-    const yKey = (d?.yKey as string) || (d?.dataKey as string) || 'value'
-
-    switch (chart.chart_type) {
-      case 'area':
-        return (
-          <ResponsiveContainer width="100%" height="100%">
-            <AreaChart data={data as object[]}>
-              <CartesianGrid strokeDasharray="3 3" stroke="#f0f0f0" />
-              <XAxis dataKey={xKey} tick={{ fontSize: 11 }} />
-              <YAxis tick={{ fontSize: 11 }} />
-              <RTooltip />
-              <RLegend />
-              <Area type="monotone" dataKey={yKey} stroke="#6366f1" fill="#6366f120" strokeWidth={2} dot={false} />
-            </AreaChart>
-          </ResponsiveContainer>
-        )
-
-      case 'stacked_bar': {
-        const series = (d?.series as string[]) ?? [yKey]
-        return (
-          <ResponsiveContainer width="100%" height="100%">
-            <BarChart data={data as object[]}>
-              <CartesianGrid strokeDasharray="3 3" stroke="#f0f0f0" />
-              <XAxis dataKey={xKey} tick={{ fontSize: 11 }} />
-              <YAxis tick={{ fontSize: 11 }} />
-              <RTooltip />
-              <RLegend />
-              {series.map((s, i) => (
-                <RBar key={s} dataKey={s} stackId="a" fill={CHART_COLORS[i % CHART_COLORS.length]} />
-              ))}
-            </BarChart>
-          </ResponsiveContainer>
-        )
-      }
-
-      case 'radar':
-        return (
-          <ResponsiveContainer width="100%" height="100%">
-            <RadarChart data={data as object[]}>
-              <PolarGrid />
-              <PolarAngleAxis dataKey={xKey} tick={{ fontSize: 11 }} />
-              <PolarRadiusAxis tick={{ fontSize: 10 }} />
-              <Radar dataKey={yKey} stroke="#6366f1" fill="#6366f1" fillOpacity={0.4} />
-              <RTooltip />
-            </RadarChart>
-          </ResponsiveContainer>
-        )
-
-      case 'treemap':
-        return (
-          <ResponsiveContainer width="100%" height="100%">
-            <Treemap
-              data={data as any}
-              dataKey={yKey}
-              nameKey={xKey}
-              aspectRatio={4 / 3}
-              stroke="#fff"
-              fill="#6366f1"
-            />
-          </ResponsiveContainer>
-        )
-
-      case 'funnel':
-        return (
-          <ResponsiveContainer width="100%" height="100%">
-            <FunnelChart>
-              <RTooltip />
-              <Funnel dataKey={yKey} data={data as object[]} isAnimationActive>
-                {(data as object[]).map((_, i) => (
-                  <Cell key={i} fill={CHART_COLORS[i % CHART_COLORS.length]} />
-                ))}
-                <LabelList position="right" fill="#555" stroke="none" dataKey={xKey} />
-              </Funnel>
-            </FunnelChart>
-          </ResponsiveContainer>
-        )
-
-      default:
-        return (
-          <div className="flex items-center justify-center h-full text-gray-400 text-sm">
-            Unsupported type: {chart.chart_type}
-          </div>
-        )
-    }
-  }
-
-  // --- Plotly renderer ---
-  const renderPlotly = () => {
-    const d = chart.data as { data?: object[]; layout?: object }
-    return (
-      <Plot
-        data={d?.data ?? []}
-        layout={{
-          autosize: true,
-          margin: { l: 50, r: 30, t: 10, b: 50 },
-          paper_bgcolor: 'transparent',
-          plot_bgcolor: 'transparent',
-          font: { size: 12, family: 'inherit' },
-          showlegend: true,
-          ...d?.layout,
-        }}
-        config={{ displayModeBar: false, responsive: true }}
-        style={{ width: '100%', height: '100%' }}
-        useResizeHandler
-      />
-    )
-  }
-
   const renderChart = () => {
     switch (chart.library) {
       case 'recharts':
-        return renderRecharts()
+        return <RechartsRenderer chart={chart} />
       case 'plotly':
-        return renderPlotly()
+        return <PlotlyRenderer chart={chart} />
       default:
-        return renderChartJS()
+        return <ChartJSRenderer chart={chart} />
     }
   }
 

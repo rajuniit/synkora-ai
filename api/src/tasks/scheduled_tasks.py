@@ -391,12 +391,12 @@ This is an automated scheduled task. Complete it thoroughly and provide your fin
                 raise ValueError(f"Database connection {task.database_connection_id} not found")
 
             # Create appropriate connector based on type
-            if connection.type == DatabaseConnectionType.POSTGRESQL:
+            if connection.database_type == DatabaseConnectionType.POSTGRESQL:
                 connector = PostgreSQLConnector(connection)
-            elif connection.type == DatabaseConnectionType.ELASTICSEARCH:
+            elif connection.database_type == DatabaseConnectionType.ELASTICSEARCH:
                 connector = ElasticsearchConnector(connection)
             else:
-                raise ValueError(f"Unsupported database type: {connection.type}")
+                raise ValueError(f"Unsupported database type: {connection.database_type}")
 
             # Execute the query using asyncio
             async def execute_async():

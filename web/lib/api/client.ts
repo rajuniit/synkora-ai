@@ -114,6 +114,10 @@ interface ExtendedAPIClient extends APIClient {
   sendMessage: typeof conversations.sendMessage
   getMessages: typeof conversations.getMessages
   uploadChatAttachment: typeof conversations.uploadChatAttachment
+  createConversationShare: typeof conversations.createConversationShare
+  listConversationShares: typeof conversations.listConversationShares
+  revokeConversationShare: typeof conversations.revokeConversationShare
+  getSharedConversation: typeof conversations.getSharedConversation
 
   // Knowledge Bases
   getKnowledgeBases: typeof knowledgeBases.getKnowledgeBases
@@ -330,6 +334,10 @@ export const apiClient: ExtendedAPIClient = Object.assign(_apiClient, {
   sendMessage: conversations.sendMessage,
   getMessages: conversations.getMessages,
   uploadChatAttachment: conversations.uploadChatAttachment,
+  createConversationShare: conversations.createConversationShare,
+  listConversationShares: conversations.listConversationShares,
+  revokeConversationShare: conversations.revokeConversationShare,
+  getSharedConversation: conversations.getSharedConversation,
 
   // Knowledge Bases
   getKnowledgeBases: knowledgeBases.getKnowledgeBases,

@@ -32,6 +32,7 @@ RUN apt-get update && apt-get install -y \
     libpango1.0-dev \
     libgdk-pixbuf2.0-dev \
     libffi-dev \
+    unixodbc-dev \
     nodejs \
     npm \
     && rm -rf /var/lib/apt/lists/*

@@ -11,6 +11,7 @@ import os
 import random
 import time
 from collections.abc import AsyncGenerator
+from contextvars import ContextVar
 from typing import Any
 
 from src.services.agents.config import ModelConfig
@@ -19,6 +20,14 @@ from src.services.performance.circuit_breaker import CircuitBreakerOpen, get_cir
 from src.services.performance.metrics import get_metrics_collector
 
 logger = logging.getLogger(__name__)
+
+# Per-coroutine storage for LLM usage data.
+# Using ContextVar instead of instance state avoids race conditions when the
+# same MultiProviderLLMClient is shared across concurrent requests in a pool.
+_llm_usage_ctx: ContextVar[dict | None] = ContextVar("llm_usage", default=None)
+
+# Anthropic models that support prompt caching
+_ANTHROPIC_CACHEABLE_PREFIXES = ("claude-3", "claude-sonnet", "claude-haiku", "claude-opus")
 
 # Default streaming timeout in seconds (configurable via environment)
 # This prevents hanging connections when LLM providers don't respond
@@ -201,6 +210,78 @@ class MultiProviderLLMClient:
         except ImportError:
             raise ImportError("litellm package not installed. Install with: pip install litellm")
 
+    def _supports_prompt_cache(self) -> bool:
+        """Return True if the current model supports Anthropic prompt caching."""
+        return any(p in self.config.model_name.lower() for p in _ANTHROPIC_CACHEABLE_PREFIXES)
+
+    def set_cost_context(
+        self,
+        tenant_id,
+        agent_id=None,
+        conversation_id=None,
+        routing_rules=None,
+        optimization_flags=None,
+        enable_response_cache: bool = False,
+        system_prompt_hash: str = "",
+        agent_updated_at: str = "",
+    ) -> None:
+        """
+        Store per-request metadata for usage tracking.
+
+        Safe to call on a shared pooled client because this sets request-scoped
+        metadata on the instance before the request starts; ContextVar captures
+        per-coroutine usage data separately during the actual API call.
+        """
+        self._cost_context = {
+            "tenant_id": tenant_id,
+            "agent_id": agent_id,
+            "conversation_id": conversation_id,
+            "routing_rules": routing_rules,
+            "optimization_flags": optimization_flags or {},
+            "enable_response_cache": enable_response_cache,
+            "system_prompt_hash": system_prompt_hash,
+            "agent_updated_at": agent_updated_at,
+        }
+
+    def _read_and_fire_usage(self, response_cache_hit: bool = False) -> None:
+        """
+        Read per-coroutine usage from ContextVar and schedule a DB write.
+
+        Safe for concurrent use: ContextVar is per-coroutine, not shared.
+        Clears the ContextVar after reading to prevent double-firing.
+        """
+        usage = _llm_usage_ctx.get()
+        ctx = getattr(self, "_cost_context", None)
+        if not ctx or not ctx.get("tenant_id"):
+            return
+        if not usage and not response_cache_hit:
+            return
+        if not usage:
+            usage = {"input_tokens": 0, "output_tokens": 0}
+        try:
+            from src.services.billing.llm_cost_service import fire_persist_llm_usage
+
+            flags = {**ctx.get("optimization_flags", {})}
+            flags["response_cache_hit"] = response_cache_hit
+            flags["routing_mode"] = getattr(self.config, "routing_mode", "fixed")
+            fire_persist_llm_usage(
+                tenant_id=ctx["tenant_id"],
+                provider=self.provider,
+                model_name=self.config.model_name,
+                input_tokens=usage.get("input_tokens", 0),
+                output_tokens=usage.get("output_tokens", 0),
+                agent_id=ctx.get("agent_id"),
+                conversation_id=ctx.get("conversation_id"),
+                cache_read_tokens=usage.get("cache_read_tokens", 0),
+                cache_creation_tokens=usage.get("cache_creation_tokens", 0),
+                cached_input_tokens=usage.get("cached_input_tokens", 0),
+                optimization_flags=flags,
+                routing_rules=ctx.get("routing_rules"),
+            )
+        except Exception:
+            pass
+        _llm_usage_ctx.set(None)
+
     async def _with_streaming_timeout(
         self,
         generator: AsyncGenerator[str, None],
@@ -260,6 +341,10 @@ class MultiProviderLLMClient:
                 timeout=chunk_timeout,
                 provider=self.provider,
             )
+        finally:
+            # Fire usage recording after stream completes or fails.
+            # ContextVar is set by the provider-specific generator before it returns.
+            self._read_and_fire_usage()
 
     async def _wrap_with_chunk_timeout(
         self,
@@ -362,6 +447,26 @@ class MultiProviderLLMClient:
         temp = temperature if temperature is not None else self.config.temperature
         max_tok = max_tokens if max_tokens is not None else self.config.max_tokens
 
+        # Response cache check (opt-in, 6 correctness gates enforced inside)
+        _ctx = getattr(self, "_cost_context", {}) or {}
+        if _ctx.get("enable_response_cache"):
+            try:
+                from src.services.cache.llm_response_cache import get_cached_response
+
+                _cached = await get_cached_response(
+                    provider=self.provider,
+                    model_name=self.config.model_name,
+                    temperature=temp,
+                    messages=[{"role": "user", "content": prompt}],
+                    system_prompt_hash=_ctx.get("system_prompt_hash", ""),
+                    agent_updated_at=_ctx.get("agent_updated_at", ""),
+                )
+                if _cached is not None:
+                    self._read_and_fire_usage(response_cache_hit=True)
+                    return _cached
+            except Exception:
+                pass  # fail-open
+
         # PERFORMANCE: Get circuit breaker for this provider
         circuit_breaker = get_circuit_breaker(
             name=f"llm_{self.provider}",
@@ -420,6 +525,26 @@ class MultiProviderLLMClient:
                     raise ValueError(f"Unsupported provider: {self.provider}")
 
             response = await circuit_breaker.call_async(_do_generate)
+
+            # Fire token usage recording (non-blocking)
+            self._read_and_fire_usage()
+
+            # Store in response cache if opt-in
+            if _ctx.get("enable_response_cache") and response:
+                try:
+                    from src.services.cache.llm_response_cache import set_cached_response
+
+                    await set_cached_response(
+                        provider=self.provider,
+                        model_name=self.config.model_name,
+                        temperature=temp,
+                        messages=[{"role": "user", "content": prompt}],
+                        response=response,
+                        system_prompt_hash=_ctx.get("system_prompt_hash", ""),
+                        agent_updated_at=_ctx.get("agent_updated_at", ""),
+                    )
+                except Exception:
+                    pass  # fail-open
 
             # PERFORMANCE: Track request duration
             duration = time.time() - start_time
@@ -557,6 +682,18 @@ class MultiProviderLLMClient:
             **self._build_openai_params(max_tokens, temperature),
             **kwargs,
         )
+        if response.usage:
+            cached = 0
+            details = getattr(response.usage, "prompt_tokens_details", None)
+            if details and hasattr(details, "cached_tokens"):
+                cached = details.cached_tokens or 0
+            _llm_usage_ctx.set(
+                {
+                    "input_tokens": response.usage.prompt_tokens,
+                    "output_tokens": response.usage.completion_tokens,
+                    "cached_input_tokens": cached,
+                }
+            )
         return response.choices[0].message.content
 
     async def _generate_anthropic(self, prompt: str, temperature: float, max_tokens: int | None, **kwargs) -> str:
@@ -569,13 +706,27 @@ class MultiProviderLLMClient:
             if "extra_headers" in self.config.additional_params:
                 extra_headers = self.config.additional_params["extra_headers"]
 
-        response = await self._client.messages.create(
-            model=self.config.model_name,
-            max_tokens=max_tok,
-            temperature=temperature,
-            messages=[{"role": "user", "content": prompt}],
-            extra_headers=extra_headers if extra_headers else None,
-            **kwargs,
+        # Enable prompt-caching beta header for supported models (transparent to output quality)
+        if self._supports_prompt_cache():
+            extra_headers["anthropic-beta"] = "prompt-caching-2024-07-31"
+
+        create_kwargs: dict = {
+            "model": self.config.model_name,
+            "max_tokens": max_tok,
+            "temperature": temperature,
+            "messages": [{"role": "user", "content": prompt}],
+            **({"extra_headers": extra_headers} if extra_headers else {}),
+        }
+
+        response = await self._client.messages.create(**create_kwargs, **kwargs)
+
+        _llm_usage_ctx.set(
+            {
+                "input_tokens": response.usage.input_tokens,
+                "output_tokens": response.usage.output_tokens,
+                "cache_read_tokens": getattr(response.usage, "cache_read_input_tokens", 0) or 0,
+                "cache_creation_tokens": getattr(response.usage, "cache_creation_input_tokens", 0) or 0,
+            }
         )
 
         return response.content[0].text
@@ -874,17 +1025,36 @@ class MultiProviderLLMClient:
         self, messages: list[dict[str, Any]], temperature: float, max_tokens: int | None, **kwargs
     ) -> AsyncGenerator[str, None]:
         """Generate content using OpenAI with streaming and messages array."""
+        # stream_options with include_usage is OpenAI-specific — gate on provider
+        extra_stream: dict = {}
+        if self.provider == "openai":
+            extra_stream["stream_options"] = {"include_usage": True}
+
         stream = await self._client.chat.completions.create(
             model=self.config.model_name,
             messages=messages,
             **self._build_openai_params(max_tokens, temperature),
             stream=True,
+            **extra_stream,
             **kwargs,
         )
 
         async for chunk in stream:
-            if chunk.choices[0].delta.content:
+            if chunk.choices and chunk.choices[0].delta.content:
                 yield chunk.choices[0].delta.content
+            # Final chunk carries usage when stream_options was set
+            if getattr(chunk, "usage", None) and chunk.usage:
+                cached = 0
+                details = getattr(chunk.usage, "prompt_tokens_details", None)
+                if details and hasattr(details, "cached_tokens"):
+                    cached = details.cached_tokens or 0
+                _llm_usage_ctx.set(
+                    {
+                        "input_tokens": chunk.usage.prompt_tokens,
+                        "output_tokens": chunk.usage.completion_tokens,
+                        "cached_input_tokens": cached,
+                    }
+                )
 
     async def _generate_anthropic_stream_with_messages(
         self, messages: list[dict[str, Any]], temperature: float, max_tokens: int | None, **kwargs
@@ -903,12 +1073,29 @@ class MultiProviderLLMClient:
             if "extra_headers" in self.config.additional_params:
                 extra_headers = self.config.additional_params["extra_headers"]
 
+        # Prompt caching for supported models (transparent to output quality).
+        # cache_control on the system prompt caches the entire system prefix,
+        # which is re-used across every turn of the conversation.
+        system_value: str | list | None = None
+        if system_prompt:
+            if self._supports_prompt_cache():
+                extra_headers["anthropic-beta"] = "prompt-caching-2024-07-31"
+                system_value = [
+                    {
+                        "type": "text",
+                        "text": system_prompt,
+                        "cache_control": {"type": "ephemeral"},
+                    }
+                ]
+            else:
+                system_value = system_prompt
+
         stream_kwargs: dict[str, Any] = {
             "model": self.config.model_name,
             "max_tokens": max_tok,
             "temperature": temperature,
             "messages": filtered_messages,
-            **({"system": system_prompt} if system_prompt else {}),
+            **({"system": system_value} if system_value else {}),
             **({"extra_headers": extra_headers} if extra_headers else {}),
             **kwargs,
         }
@@ -917,6 +1104,22 @@ class MultiProviderLLMClient:
             async with self._client.messages.stream(**stream_kwargs) as stream:
                 async for text in stream.text_stream:
                     yield text
+                # Capture usage after stream is fully consumed.
+                # get_final_message() is available in anthropic>=0.42.0 (current pin: 0.50.0).
+                try:
+                    final_msg = await stream.get_final_message()
+                    if final_msg and final_msg.usage:
+                        _llm_usage_ctx.set(
+                            {
+                                "input_tokens": final_msg.usage.input_tokens,
+                                "output_tokens": final_msg.usage.output_tokens,
+                                "cache_read_tokens": getattr(final_msg.usage, "cache_read_input_tokens", 0) or 0,
+                                "cache_creation_tokens": getattr(final_msg.usage, "cache_creation_input_tokens", 0)
+                                or 0,
+                            }
+                        )
+                except Exception:
+                    pass  # usage capture never blocks streaming
         except Exception as e:
             err_str = str(e)
             if "max_tokens" in err_str and "maximum allowed" in err_str:

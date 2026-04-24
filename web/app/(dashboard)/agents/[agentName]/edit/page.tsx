@@ -3,7 +3,8 @@
 import { useState, useEffect } from 'react'
 import { useParams, useRouter, useSearchParams } from 'next/navigation'
 import toast from 'react-hot-toast'
-import { ArrowLeft, Info, Wrench, Settings, FileText, Activity, Zap, X, Sparkles } from 'lucide-react'
+import { ArrowLeft, Info, Wrench, Settings, FileText, Activity, Zap, X, Sparkles, Link } from 'lucide-react'
+import IntegrationsTab from '@/components/agents/integrations/IntegrationsTab'
 import ContextFilesUpload from '@/components/agents/ContextFilesUpload'
 import { apiClient } from '@/lib/api/client'
 import { AvatarUpload } from '@/components/profile/AvatarUpload'
@@ -18,7 +19,7 @@ interface HumanContact {
   email: string
 }
 
-type Tab = 'general' | 'llm-models' | 'context' | 'vision' | 'observability' | 'multi-agent' | 'performance' | 'advanced'
+type Tab = 'general' | 'llm-models' | 'context' | 'vision' | 'observability' | 'multi-agent' | 'performance' | 'advanced' | 'integrations'
 
 export default function EditAgentPage() {
   const params = useParams()
@@ -81,7 +82,20 @@ export default function EditAgentPage() {
     tool_retry_attempts: 2,
     parallel_tools: true,
   })
-  
+
+  // PII redaction config
+  const [piiRedactionConfig, setPiiRedactionConfig] = useState({
+    redact_for_llm: false,
+    redact_for_response: false,
+    patterns: ['email', 'phone', 'ssn', 'credit_card', 'ip_address'],
+  })
+
+  // Integrations config (MCP server + A2A)
+  const [integrationsConfig, setIntegrationsConfig] = useState<any>({})
+
+  // Store the agent ID (not the name) for integrations endpoints
+  const [agentId, setAgentId] = useState<string>('')
+
   // Store original agent_metadata to preserve other fields
   const [originalAgentMetadata, setOriginalAgentMetadata] = useState<any>({})
 
@@ -143,12 +157,20 @@ export default function EditAgentPage() {
         transfer_scope: agent.transfer_scope || 'sub_agents',
       })
 
+      // Store agent UUID for integrations tab endpoints
+      setAgentId(agent.id || '')
+
       // Store original agent_metadata to preserve all fields
       setOriginalAgentMetadata(agent.agent_metadata || {})
       
       // Set performance config from agent_metadata
       if (agent.agent_metadata?.performance_config) {
         setPerformanceConfig(agent.agent_metadata.performance_config)
+      }
+
+      // Set integrations config from agent_metadata
+      if (agent.agent_metadata?.integrations_config) {
+        setIntegrationsConfig(agent.agent_metadata.integrations_config)
       }
 
       // Set agentic config from agent_metadata
@@ -158,6 +180,16 @@ export default function EditAgentPage() {
           max_iterations: ac.max_iterations ?? 100,
           tool_retry_attempts: ac.tool_retry_attempts ?? 2,
           parallel_tools: ac.parallel_tools ?? true,
+        })
+      }
+
+      // Set PII redaction config from agent_metadata
+      if (agent.agent_metadata?.pii_redaction) {
+        const pii = agent.agent_metadata.pii_redaction
+        setPiiRedactionConfig({
+          redact_for_llm: pii.redact_for_llm ?? false,
+          redact_for_response: pii.redact_for_response ?? false,
+          patterns: pii.patterns ?? ['email', 'phone', 'ssn', 'credit_card', 'ip_address'],
         })
       }
 
@@ -251,6 +283,8 @@ export default function EditAgentPage() {
         ...originalAgentMetadata,
         performance_config: performanceConfig,
         agentic_config: agenticConfig,
+        integrations_config: integrationsConfig,
+        pii_redaction: piiRedactionConfig,
       }
 
       await apiClient.updateAgent(agentName, {
@@ -288,6 +322,7 @@ export default function EditAgentPage() {
     { id: 'observability' as Tab, label: 'Observability', icon: Activity },
     { id: 'multi-agent' as Tab, label: 'Multi-Agent', icon: Wrench },
     { id: 'performance' as Tab, label: 'Performance', icon: Zap },
+    { id: 'integrations' as Tab, label: 'Integrations', icon: Link },
     { id: 'advanced' as Tab, label: 'Advanced', icon: Settings },
   ]
 
@@ -415,8 +450,22 @@ export default function EditAgentPage() {
                 setAgenticConfig={setAgenticConfig}
               />
             )}
+            {activeTab === 'integrations' && (
+              <IntegrationsTab
+                agentId={agentId}
+                agentName={formData.name}
+                agentDescription={formData.description}
+                config={integrationsConfig}
+                setConfig={setIntegrationsConfig}
+              />
+            )}
             {activeTab === 'advanced' && (
-              <AdvancedTab formData={formData} setFormData={setFormData} />
+              <AdvancedTab
+                formData={formData}
+                setFormData={setFormData}
+                piiRedactionConfig={piiRedactionConfig}
+                setPiiRedactionConfig={setPiiRedactionConfig}
+              />
             )}
           </div>
 
@@ -1265,8 +1314,18 @@ function MultiAgentTab({ config, setConfig, agentName }: any) {
   )
 }
 
+const ALL_PII_PATTERNS = ['email', 'phone', 'ssn', 'credit_card', 'ip_address']
+
 // Advanced Tab Component
-function AdvancedTab({ formData, setFormData }: any) {
+function AdvancedTab({ formData, setFormData, piiRedactionConfig, setPiiRedactionConfig }: any) {
+  const togglePattern = (pattern: string) => {
+    const current: string[] = piiRedactionConfig.patterns
+    const updated = current.includes(pattern)
+      ? current.filter((p: string) => p !== pattern)
+      : [...current, pattern]
+    setPiiRedactionConfig({ ...piiRedactionConfig, patterns: updated })
+  }
+
   return (
     <div className="space-y-6 max-w-3xl">
       <div>
@@ -1371,6 +1430,94 @@ function AdvancedTab({ formData, setFormData }: any) {
           These settings can significantly affect your agent's behavior. The default values work well for most use cases.
           Only modify if you understand the implications.
         </p>
+      </div>
+
+      {/* Privacy & PII Redaction */}
+      <div className="border border-gray-200 rounded-lg p-5 space-y-4">
+        <div>
+          <h3 className="text-base font-semibold text-gray-900">Privacy & PII Redaction</h3>
+          <p className="text-xs text-gray-500 mt-1">
+            Control how personal data is handled when tools return results to the agent.
+          </p>
+        </div>
+
+        <label className="flex items-start gap-3 cursor-pointer">
+          <div className="relative mt-0.5">
+            <input
+              type="checkbox"
+              className="sr-only"
+              checked={piiRedactionConfig.redact_for_llm}
+              onChange={(e) =>
+                setPiiRedactionConfig({ ...piiRedactionConfig, redact_for_llm: e.target.checked })
+              }
+            />
+            <div
+              className={`w-10 h-6 rounded-full transition-colors ${
+                piiRedactionConfig.redact_for_llm ? 'bg-primary-600' : 'bg-gray-300'
+              }`}
+            />
+            <div
+              className={`absolute top-1 left-1 w-4 h-4 bg-white rounded-full shadow transition-transform ${
+                piiRedactionConfig.redact_for_llm ? 'translate-x-4' : ''
+              }`}
+            />
+          </div>
+          <div>
+            <p className="text-sm font-medium text-gray-900">Redact PII from LLM</p>
+            <p className="text-xs text-gray-500">
+              Replace personal data in tool results with tokens (e.g. [EMAIL_1]) before the LLM
+              sees them. Original values are restored in the response shown to users.
+            </p>
+          </div>
+        </label>
+
+        <label className="flex items-start gap-3 cursor-pointer">
+          <div className="relative mt-0.5">
+            <input
+              type="checkbox"
+              className="sr-only"
+              checked={piiRedactionConfig.redact_for_response}
+              onChange={(e) =>
+                setPiiRedactionConfig({ ...piiRedactionConfig, redact_for_response: e.target.checked })
+              }
+            />
+            <div
+              className={`w-10 h-6 rounded-full transition-colors ${
+                piiRedactionConfig.redact_for_response ? 'bg-primary-600' : 'bg-gray-300'
+              }`}
+            />
+            <div
+              className={`absolute top-1 left-1 w-4 h-4 bg-white rounded-full shadow transition-transform ${
+                piiRedactionConfig.redact_for_response ? 'translate-x-4' : ''
+              }`}
+            />
+          </div>
+          <div>
+            <p className="text-sm font-medium text-gray-900">Redact PII from agent response</p>
+            <p className="text-xs text-gray-500">
+              Mask personal data in the response shown to users as well — users never see raw PII.
+            </p>
+          </div>
+        </label>
+
+        {(piiRedactionConfig.redact_for_llm || piiRedactionConfig.redact_for_response) && (
+          <div>
+            <p className="text-xs font-medium text-gray-700 mb-2">Patterns to detect:</p>
+            <div className="flex flex-wrap gap-2">
+              {ALL_PII_PATTERNS.map((p) => (
+                <label key={p} className="flex items-center gap-1.5 cursor-pointer">
+                  <input
+                    type="checkbox"
+                    checked={piiRedactionConfig.patterns.includes(p)}
+                    onChange={() => togglePattern(p)}
+                    className="rounded border-gray-300 text-primary-600 focus:ring-primary-500"
+                  />
+                  <span className="text-xs text-gray-700 capitalize">{p.replace('_', ' ')}</span>
+                </label>
+              ))}
+            </div>
+          </div>
+        )}
       </div>
     </div>
   )

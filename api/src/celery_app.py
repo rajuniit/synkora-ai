@@ -54,6 +54,8 @@ celery_app = Celery(
         "src.tasks.kb_tasks",  # Knowledge base document processing
         "src.tasks.company_brain_tasks",  # Company brain ingestion and sync
         "src.tasks.digest_tasks",  # Daily digest generation for all data sources
+        "src.tasks.a2a_tasks",  # A2A protocol async task execution
+        "src.tasks.batch_poll_task",  # LLM batch API polling
     ],
 )
 
@@ -98,6 +100,8 @@ celery_app.conf.update(
         # Uses the actual registered task name from @celery_app.task(name=...).
         # tasks.check_scheduled_tasks is lightweight (beat dispatcher) → default queue.
         "tasks.execute_scheduled_task": {"queue": "agents"},
+        "tasks.execute_a2a_task": {"queue": "agents"},
+        "tasks.poll_llm_batches": {"queue": "agents"},
         # Knowledge compilation to agents queue
         "tasks.compile_knowledge_wikis": {"queue": "agents"},
         "tasks.compile_single_knowledge_wiki": {"queue": "agents"},
@@ -153,6 +157,11 @@ celery_app.conf.update(
         "generate-daily-digests": {
             "task": "tasks.generate_all_daily_digests",
             "schedule": crontab(hour=23, minute=0),
+        },
+        # Poll pending LLM batch jobs every 30 minutes
+        "poll-llm-batches": {
+            "task": "tasks.poll_llm_batches",
+            "schedule": crontab(minute="*/30"),
         },
     },
 )

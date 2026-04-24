@@ -20,6 +20,7 @@ import {
   Activity
 } from 'lucide-react'
 import { apiClient } from '@/lib/api/client'
+import { extractErrorMessage } from '@/lib/api/error'
 
 interface ScheduledTask {
   id: string
@@ -96,7 +97,7 @@ export default function ScheduledTaskDetailsPage() {
       toast.success('Task deleted successfully')
       router.push('/scheduled-tasks')
     } catch (error: any) {
-      toast.error(error.response?.data?.detail || 'Failed to delete task')
+      toast.error(extractErrorMessage(error, 'Failed to delete task'))
     } finally {
       setDeleting(false)
       setDeleteModal(false)
@@ -111,7 +112,7 @@ export default function ScheduledTaskDetailsPage() {
       toast.success(`Task ${task.is_active ? 'paused' : 'activated'} successfully`)
       fetchTask()
     } catch (error: any) {
-      toast.error(error.response?.data?.detail || 'Failed to toggle task')
+      toast.error(extractErrorMessage(error, 'Failed to toggle task'))
     }
   }
 
@@ -124,7 +125,7 @@ export default function ScheduledTaskDetailsPage() {
         fetchExecutions()
       }, 2000)
     } catch (error: any) {
-      toast.error(error.response?.data?.detail || 'Failed to execute task')
+      toast.error(extractErrorMessage(error, 'Failed to execute task'))
     }
   }
 

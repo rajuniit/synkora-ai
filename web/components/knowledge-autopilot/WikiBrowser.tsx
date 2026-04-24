@@ -1,6 +1,7 @@
 'use client'
 
 import { useState, useEffect } from 'react'
+import { extractErrorMessage } from '@/lib/api/error'
 import { useRouter } from 'next/navigation'
 import { cn } from '@/lib/utils/cn'
 import type { WikiArticle, AutopilotStatus } from '@/lib/api/knowledge-autopilot'
@@ -48,7 +49,7 @@ export function WikiBrowser({ kbId, kbName }: WikiBrowserProps) {
       setCategories(articlesData.categories || {})
       setStatus(statusData)
     } catch (err: any) {
-      const msg = err?.response?.data?.detail || err?.message || 'Failed to load wiki data'
+      const msg = extractErrorMessage(err, err?.message || 'Failed to load wiki data')
       setError(msg)
       console.error('Failed to load wiki:', err)
     } finally {
@@ -79,7 +80,7 @@ export function WikiBrowser({ kbId, kbName }: WikiBrowserProps) {
       }
       await loadData()
     } catch (err: any) {
-      const msg = err?.response?.data?.detail || err?.message || 'Compilation failed'
+      const msg = extractErrorMessage(err, err?.message || 'Compilation failed')
       setCompileError(msg)
       console.error('Compilation failed:', err)
     } finally {

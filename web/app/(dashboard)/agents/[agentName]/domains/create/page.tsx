@@ -1,6 +1,7 @@
 "use client";
 
 import { useState } from "react";
+import { extractErrorMessage } from '@/lib/api/error'
 import { useParams, useRouter } from "next/navigation";
 import { ArrowLeft, Save, AlertCircle, CheckCircle, Copy, Globe } from "lucide-react";
 import { createAgentDomain, getDNSRecords } from "@/lib/api/agent-domains";
@@ -38,7 +39,7 @@ export default function CreateDomainPage() {
       toast.success("Domain created successfully!");
     } catch (err: any) {
       console.error("Failed to create domain:", err);
-      setError(err.response?.data?.detail || err.message || "Failed to create domain");
+      setError(extractErrorMessage(err, err.message || "Failed to create domain"))
       toast.error("Failed to create domain");
     } finally {
       setLoading(false);

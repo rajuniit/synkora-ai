@@ -1,6 +1,7 @@
 'use client'
 
 import { useState, useEffect, Suspense } from 'react'
+import { extractErrorMessage } from '@/lib/api/error'
 import Link from 'next/link'
 import { useRouter, useSearchParams } from 'next/navigation'
 import toast from 'react-hot-toast'
@@ -49,7 +50,7 @@ function ResetPasswordForm() {
       toast.success('Password reset successfully!')
       router.push('/signin')
     } catch (err: any) {
-      const errorMessage = err.response?.data?.detail || 'Failed to reset password'
+      const errorMessage = extractErrorMessage(err, 'Failed to reset password')
       toast.error(errorMessage)
     } finally {
       setIsLoading(false)

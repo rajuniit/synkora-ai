@@ -334,6 +334,33 @@ class ChatStreamService:
                 llm_client=agent.llm_client if agent else None,
             )
 
+            # Wire cost-tracking context into the LLM client.
+            # Done after system_prompt is built so we can hash it for cache-key stability.
+            if agent and agent.llm_client and tenant_id:
+                try:
+                    import hashlib as _hashlib
+
+                    _selected_llm_cfg = getattr(load_result, "selected_llm_config", None)
+                    _routing_rules = (
+                        _selected_llm_cfg.routing_rules
+                        if _selected_llm_cfg and hasattr(_selected_llm_cfg, "routing_rules")
+                        else None
+                    )
+                    agent.llm_client.set_cost_context(
+                        tenant_id=tenant_id,
+                        agent_id=db_agent.id if db_agent else None,
+                        conversation_id=conversation_uuid,
+                        routing_rules=_routing_rules,
+                        optimization_flags={},
+                        enable_response_cache=bool(perf_config.get("enable_response_cache", False)),
+                        system_prompt_hash=_hashlib.sha256((system_prompt or "").encode()).hexdigest()[:16],
+                        agent_updated_at=str(
+                            db_agent.updated_at.timestamp() if db_agent and db_agent.updated_at else ""
+                        ),
+                    )
+                except Exception:
+                    pass  # cost context is optional; never block the request
+
             # Use accurate token counting (count system prompt + all messages)
             model = agent.llm_client.config.model_name
             messages_content = " ".join([m.get("content", "") for m in structured_messages])
@@ -1713,6 +1740,12 @@ class ChatStreamService:
         # during streaming (concurrent tool commits can expire the session)
         agent_name_cached = db_agent.agent_name
 
+        # Build PII redactor (None when feature is off — zero overhead for all existing agents)
+        from src.services.security.pii_redactor import PIIRedactionConfig, PIIRedactor
+
+        pii_config = PIIRedactionConfig.from_agent_metadata(db_agent.agent_metadata)
+        pii_redactor = PIIRedactor(pii_config) if pii_config.any_enabled else None
+
         function_handler = FunctionCallingHandler(
             agent.llm_client,
             tools=tool_names,
@@ -1721,6 +1754,7 @@ class ChatStreamService:
             observability_config=agent.observability_config,
             agentic_config=agentic_config,
             langfuse_service=agent.langfuse_service,
+            pii_redactor=pii_redactor,
         )
 
         # Use max_tokens and temperature from LLM config (configured in database)
@@ -1754,8 +1788,20 @@ class ChatStreamService:
                         context=f"agent_chat_{agent_name_cached}",
                     )
 
-                    state.assistant_chunks.append(sanitization_result.sanitized_content)
-                    state.total_output_tokens += TokenCounter.count_tokens(sanitization_result.sanitized_content)
+                    chunk_out = sanitization_result.sanitized_content
+
+                    # Restore LLM-facing PII tokens for the user.
+                    # Skipped when redact_for_response is also on (user sees redacted output).
+                    # No-op when pii_redactor is None (all existing agents unaffected).
+                    if (
+                        pii_redactor
+                        and pii_redactor.config.redact_for_llm
+                        and not pii_redactor.config.redact_for_response
+                    ):
+                        chunk_out = pii_redactor.restore_streaming(chunk_out)
+
+                    state.assistant_chunks.append(chunk_out)
+                    state.total_output_tokens += TokenCounter.count_tokens(chunk_out)
 
                     if sanitization_result.detections:
                         logger.warning(
@@ -1763,7 +1809,7 @@ class ChatStreamService:
                             f"Agent: {agent_name_cached}, Action: {sanitization_result.action_taken}"
                         )
 
-                    yield await generate_chunk_event(sanitization_result.sanitized_content)
+                    yield await generate_chunk_event(chunk_out)
 
                 elif event["type"] == "function_call":
                     # Track tool start time
@@ -1833,6 +1879,13 @@ class ChatStreamService:
                     card_payload = {k: v for k, v in event.items() if k != "type"}
                     state.fleet_card_data.append(card_payload)
                     yield await generate_sse_event("fleet_card", card_payload)
+
+            # Flush any partial PII token held back in the streaming buffer
+            if pii_redactor and pii_redactor.config.redact_for_llm and not pii_redactor.config.redact_for_response:
+                trailing = pii_redactor.flush_stream_buffer()
+                if trailing:
+                    state.assistant_chunks.append(trailing)
+                    yield await generate_chunk_event(trailing)
 
         finally:
             # Release compute session (stops ephemeral container, closes SSH, etc.)

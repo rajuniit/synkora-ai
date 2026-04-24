@@ -27,6 +27,7 @@ RUN apt-get update \
         libcairo2-dev \
         libpango1.0-dev \
         libgdk-pixbuf2.0-dev \
+        unixodbc-dev \
     && rm -rf /var/lib/apt/lists/*
 
 # Install Python dependencies system-wide using the lock file
@@ -75,6 +76,8 @@ RUN apt-get update \
         libpango-1.0-0 \
         libpangocairo-1.0-0 \
         libgdk-pixbuf2.0-0 \
+        # SQL Server ODBC runtime (required by aioodbc/pyodbc)
+        libodbc2 \
         # Node.js (Debian bookworm ships Node 18 — sufficient for npx/MCP)
         nodejs \
         npm \

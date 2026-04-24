@@ -119,6 +119,18 @@ ROUTER_REGISTRY: list[RouteConfig] = [
         tags=["autonomous-agents"],
     ),
     RouteConfig(
+        module="src.controllers.agents.conversation_shares",
+        attribute="conversation_shares_router",
+        prefix="/api/v1/agents",
+        tags=["conversation-shares"],
+    ),
+    RouteConfig(
+        module="src.controllers.agents.share_public",
+        attribute="share_public_router",
+        prefix="",
+        tags=["share-public"],
+    ),
+    RouteConfig(
         module="src.controllers.agents.compute",
         attribute="router",
         prefix="/api/v1/agents",
@@ -177,6 +189,20 @@ ROUTER_REGISTRY: list[RouteConfig] = [
         attribute="providers_router",
         prefix="",
         tags=["llm-providers"],
+    ),
+    # ===== MCP Server Host (expose agents as MCP servers) =====
+    RouteConfig(
+        module="src.controllers.agents.mcp_server_host",
+        attribute="mcp_host_router",
+        prefix="/api/mcp",
+        tags=["MCP Server"],
+    ),
+    # ===== A2A Protocol (expose agents via Google A2A) =====
+    RouteConfig(
+        module="src.controllers.agents.a2a",
+        attribute="a2a_router",
+        prefix="/api/a2a",
+        tags=["A2A"],
     ),
     # ===== MCP & Tools =====
     RouteConfig(

@@ -1,6 +1,7 @@
 "use client";
 
 import { useState, useEffect, useCallback } from "react";
+import { extractErrorMessage } from '@/lib/api/error'
 import { useParams, useRouter } from "next/navigation";
 import Link from "next/link";
 import {
@@ -101,7 +102,7 @@ export default function WidgetEditPage() {
       }));
       setRoutes(enriched);
     } catch (err: any) {
-      setError(err.response?.data?.detail || "Failed to load widget");
+      setError(extractErrorMessage(err, "Failed to load widget"))
     } finally {
       setLoading(false);
     }
@@ -129,7 +130,7 @@ export default function WidgetEditPage() {
       });
       toast.success("Widget settings saved");
     } catch (err: any) {
-      toast.error(err.response?.data?.detail || "Failed to save settings");
+      toast.error(extractErrorMessage(err, "Failed to save settings"))
     } finally {
       setSaving(false);
     }
@@ -149,7 +150,7 @@ export default function WidgetEditPage() {
       setShowSecret(true);
       toast.success("New secret generated — copy it now, it won't be shown again");
     } catch (err: any) {
-      toast.error(err.response?.data?.detail || "Failed to regenerate secret");
+      toast.error(extractErrorMessage(err, "Failed to regenerate secret"))
     } finally {
       setRegeneratingSecret(false);
     }
@@ -173,7 +174,7 @@ export default function WidgetEditPage() {
       setNewAgentId("");
       toast.success("Route added");
     } catch (err: any) {
-      toast.error(err.response?.data?.detail || "Failed to add route");
+      toast.error(extractErrorMessage(err, "Failed to add route"))
     } finally {
       setAddingRoute(false);
     }
@@ -185,7 +186,7 @@ export default function WidgetEditPage() {
       setRoutes(routes.filter((r) => r.external_org_id !== orgId));
       toast.success("Route removed");
     } catch (err: any) {
-      toast.error(err.response?.data?.detail || "Failed to remove route");
+      toast.error(extractErrorMessage(err, "Failed to remove route"))
     }
   };
 

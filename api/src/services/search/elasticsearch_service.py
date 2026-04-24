@@ -122,8 +122,8 @@ class ElasticsearchService:
                 if filter_clauses:
                     search_body["query"]["bool"]["filter"] = filter_clauses
 
-            # Execute search
-            response = await self.client.search(index=index_pattern, body=search_body)
+            # Execute search (body= is deprecated in ES 8.x; unpack as kwargs instead)
+            response = await self.client.search(index=index_pattern, **search_body)
 
             # Format results
             hits = response["hits"]["hits"]
@@ -153,8 +153,11 @@ class ElasticsearchService:
     async def get_indices(self) -> list[str]:
         """Get list of available indices."""
         try:
-            indices = await self.client.indices.get_alias(index="*")
-            return sorted(indices.keys())
+            # cat.indices is more compatible with ES 8.x than get_alias(index="*")
+            # and returns actual indices rather than alias mappings.
+            # Filter out system indices (starting with ".") by default.
+            result = await self.client.cat.indices(format="json", h="index,health,status,docs.count,store.size")
+            return sorted([entry["index"] for entry in result if not entry["index"].startswith(".")])
         except Exception as e:
             logger.error(f"Error getting indices: {e}")
             return []

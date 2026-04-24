@@ -65,7 +65,7 @@ def register_micromobility_event_tools(registry) -> None:
         name="internal_micromobility_analyze_event_impact",
         description=(
             "Measure how an external event (transit strike, concert, sports match, public holiday, weather incident) "
-            "affected OtoRide trip demand by comparing trip volumes during the event window against "
+            "affected Micromobility trip demand by comparing trip volumes during the event window against "
             "the same weekday+hour window from prior weeks. "
             "Use this when the operator asks how a specific event or disruption affected demand or bookings."
         ),

@@ -205,5 +205,5 @@ class TestElasticsearchConnector:
         assert result["success"] is True
         assert result["aggregations"] == {"agg1": {"value": 10}}
         mock_client.search.assert_called_once()
-        call_args = mock_client.search.call_args[1]
-        assert call_args["body"]["size"] == 0
+        call_kwargs = mock_client.search.call_args.kwargs
+        assert call_kwargs["size"] == 0

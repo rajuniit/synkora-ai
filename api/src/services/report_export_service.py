@@ -14,6 +14,20 @@ from src.config.storage import get_storage_service
 
 logger = logging.getLogger(__name__)
 
+# Formula injection prefixes that trigger execution in spreadsheet apps (Excel, Google Sheets)
+_FORMULA_PREFIXES = ("=", "+", "-", "@")
+
+
+def _sanitize_row(row: dict[str, Any]) -> dict[str, Any]:
+    """Prefix any formula-like string values with a single quote so they render as text."""
+    sanitized = {}
+    for k, v in row.items():
+        if isinstance(v, str) and v.startswith(_FORMULA_PREFIXES):
+            sanitized[k] = "'" + v
+        else:
+            sanitized[k] = v
+    return sanitized
+
 
 class ReportExportService:
     """Service for exporting data analysis reports."""
@@ -43,8 +57,11 @@ class ReportExportService:
             if not data:
                 return {"success": False, "message": "No data to export"}
 
+            # SECURITY: Sanitize formula injection before export
+            sanitized_data = [_sanitize_row(row) for row in data]
+
             # Convert to DataFrame
-            df = pd.DataFrame(data)
+            df = pd.DataFrame(sanitized_data)
 
             # Generate CSV
             csv_buffer = io.StringIO()
@@ -104,11 +121,15 @@ class ReportExportService:
                     # Multiple sheets
                     for sheet, sheet_data in data.items():
                         if sheet_data:
-                            df = pd.DataFrame(sheet_data)
+                            # SECURITY: Sanitize formula injection per sheet
+                            clean = [_sanitize_row(r) for r in sheet_data]
+                            df = pd.DataFrame(clean)
                             df.to_excel(writer, sheet_name=sheet, index=False)
                 else:
                     # Single sheet
-                    df = pd.DataFrame(data)
+                    # SECURITY: Sanitize formula injection
+                    clean = [_sanitize_row(r) for r in data]
+                    df = pd.DataFrame(clean)
                     df.to_excel(writer, sheet_name=sheet_name, index=False)
 
             excel_content = excel_buffer.getvalue()

@@ -1,7 +1,7 @@
 """
 Micromobility Event Impact & IoT Intelligence Tools.
 
-Tools that cross-reference OtoRide trip/vehicle data with external events,
+Tools that cross-reference Micromobility trip/vehicle data with external events,
 IoT telemetry patterns, and geofence compliance — giving operators insights
 that go beyond standard fleet dashboards.
 """
@@ -41,19 +41,14 @@ async def _fetch_trips_window(
         )
         if not isinstance(resp, dict) or not resp.get("success"):
             break
-        raw = resp.get("data")
-        if isinstance(raw, list):
-            items = raw
-        elif isinstance(raw, dict):
-            items = raw.get("trips") or raw.get("results") or raw.get("data") or []
-        else:
-            items = resp.get("trips") or resp.get("results") or []
+        # list_trips normalizes response: items at resp["trips"]
+        items = resp.get("trips") or []
         if not items:
             break
 
-        # Filter to the hour window
+        # Filter to the hour window — Micromobility uses pick_up_time
         for t in items:
-            ts_str = t.get("started_at") or t.get("created_at") or ""
+            ts_str = t.get("pick_up_time") or ""
             if ts_str:
                 try:
                     ts = datetime.fromisoformat(ts_str.replace("Z", "+00:00"))
@@ -75,9 +70,17 @@ async def _fetch_trips_window(
 def _zone_breakdown(trips: list[dict[str, Any]]) -> dict[str, int]:
     counts: dict[str, int] = {}
     for t in trips:
-        zone = t.get("service_area") or t.get("start_zone") or t.get("fleet_id") or "Unknown"
+        _bike = t.get("bike") or {}
+        _fleet = _bike.get("fleet") or {}
+        zone = _fleet.get("address") or _fleet.get("name") or "Unknown"
         counts[zone] = counts.get(zone, 0) + 1
     return counts
+
+
+def _trip_zone(t: dict[str, Any]) -> str:
+    _bike = t.get("bike") or {}
+    _fleet = _bike.get("fleet") or {}
+    return _fleet.get("address") or _fleet.get("name") or "Unknown"
 
 
 def _weekday_name(date_str: str) -> str:
@@ -102,11 +105,11 @@ async def internal_micromobility_analyze_event_impact(
 ) -> dict[str, Any]:
     """
     Measure how an external event (strike, concert, weather incident, public holiday)
-    affected OtoRide demand by comparing trip volumes during the event window against
+    affected Micromobility demand by comparing trip volumes during the event window against
     the same weekday+hour window from prior weeks.
 
     The LLM describes the external event (from training knowledge or news tools);
-    this tool provides the OtoRide demand response — demand delta, hotspot zones,
+    this tool provides the Micromobility demand response — demand delta, hotspot zones,
     and one-way vs round-trip ratio if available.
 
     Args:
@@ -138,9 +141,9 @@ async def internal_micromobility_analyze_event_impact(
         # ── Event window trips ────────────────────────────────────────────────
         event_trips = await _fetch_trips_window(runtime_context, config, event_date, event_start_hour, event_end_hour)
 
-        # Optional zone filter
+        # Optional zone filter — match against bike.fleet.address
         if zone:
-            event_trips = [t for t in event_trips if zone.lower() in (t.get("service_area") or "").lower()]
+            event_trips = [t for t in event_trips if zone.lower() in _trip_zone(t).lower()]
 
         event_count = len(event_trips)
         event_zone_counts = _zone_breakdown(event_trips)
@@ -157,7 +160,7 @@ async def internal_micromobility_analyze_event_impact(
                 runtime_context, config, baseline_date, event_start_hour, event_end_hour
             )
             if zone:
-                base_trips = [t for t in base_trips if zone.lower() in (t.get("service_area") or "").lower()]
+                base_trips = [t for t in base_trips if zone.lower() in _trip_zone(t).lower()]
             baseline_counts.append(len(base_trips))
             bz = _zone_breakdown(base_trips)
             for z, c in bz.items():
@@ -207,7 +210,7 @@ async def internal_micromobility_analyze_event_impact(
         top_zone = hotspot_zones[0]["service_area"] if hotspot_zones else "N/A"
 
         if abs(demand_delta_pct) < 5:
-            summary = f"The {label} had minimal impact on OtoRide demand during {window_str} (±{abs(demand_delta_pct)}% vs {weekday} baseline)."
+            summary = f"The {label} had minimal impact on Micromobility demand during {window_str} (±{abs(demand_delta_pct)}% vs {weekday} baseline)."
         else:
             summary = (
                 f"The {label} drove a {abs(demand_delta_pct):.0f}% demand {direction} "
@@ -270,7 +273,7 @@ async def internal_micromobility_get_network_health(
 
         vehicles = await _fetch_all_vehicles(runtime_context, config)
         if not vehicles:
-            return {"success": False, "error": "No vehicle data returned from OtoRide API."}
+            return {"success": False, "error": "No vehicle data returned from Micromobility API."}
 
         total = len(vehicles)
         offline_vehicles = []
@@ -278,24 +281,26 @@ async def internal_micromobility_get_network_health(
         zone_offline: dict[str, int] = {}
 
         for v in vehicles:
-            vid = v.get("id") or v.get("vehicle_id", "")
-            status = (v.get("status") or "").lower()
-            zone = v.get("service_area") or v.get("zone") or v.get("fleet_id") or "Unknown"
+            vid = v.get("qr_code") or v.get("name") or v.get("id") or ""
+            _fleet = v.get("fleet") or {}
+            zone = _fleet.get("name") or _fleet.get("id") or "Unknown"
             zone_total[zone] = zone_total.get(zone, 0) + 1
 
-            last_seen = v.get("last_heartbeat_at") or v.get("last_location_at") or v.get("updated_at")
+            # heart_beat is a boolean flag — False means no active heartbeat
+            has_heartbeat = bool(v.get("heart_beat"))
+            last_seen = v.get("last_connected_at") or v.get("last_loc_updated_at")
             hours_silent = _hours_since(last_seen)
 
-            is_offline = status == "offline" or (hours_silent is not None and hours_silent >= offline_threshold_hours)
+            is_offline = not has_heartbeat and (hours_silent is None or hours_silent >= offline_threshold_hours)
 
             if is_offline:
                 zone_offline[zone] = zone_offline.get(zone, 0) + 1
                 offline_vehicles.append(
                     {
-                        "vehicle_id": vid,
+                        "qr_code": vid,
                         "service_area": zone,
-                        "status": status,
-                        "hours_silent": round(hours_silent, 1) if hours_silent else None,
+                        "has_heartbeat": has_heartbeat,
+                        "hours_silent": round(hours_silent, 1) if hours_silent is not None else None,
                         "last_seen": last_seen,
                     }
                 )
@@ -387,7 +392,7 @@ async def internal_micromobility_get_parking_compliance(
         start = (now - timedelta(days=lookback_days)).strftime("%Y-%m-%d")
         end = now.strftime("%Y-%m-%d")
 
-        trips = await _fetch_all_trips(runtime_context, config, start_date=start, end_date=end, status="completed")
+        trips = await _fetch_all_trips(runtime_context, config, start_date=start, end_date=end, status="C")
         total = len(trips)
         if total == 0:
             return {
@@ -397,21 +402,19 @@ async def internal_micromobility_get_parking_compliance(
                 "summary": "No completed trips in the period.",
             }
 
-        # Check parking_area field on trip — OtoRide sets this when trip ends in a valid area
-        non_compliant = [
-            t for t in trips if not (t.get("parking_area") or t.get("end_parking_area") or t.get("parked_in_area"))
-        ]
+        # Micromobility field: vehicle_was_legally_parked (bool) — False = non-compliant
+        non_compliant = [t for t in trips if not t.get("vehicle_was_legally_parked")]
         non_compliant_count = len(non_compliant)
         compliance_rate = round((total - non_compliant_count) / total * 100, 1)
 
-        # Zone breakdown of non-compliant trips
+        # Zone breakdown — Micromobility trips: zone from bike.fleet.address
         zone_counts: dict[str, int] = {}
         zone_total: dict[str, int] = {}
         for t in trips:
-            zone = t.get("service_area") or t.get("end_zone") or "Unknown"
+            zone = _trip_zone(t)
             zone_total[zone] = zone_total.get(zone, 0) + 1
         for t in non_compliant:
-            zone = t.get("service_area") or t.get("end_zone") or "Unknown"
+            zone = _trip_zone(t)
             zone_counts[zone] = zone_counts.get(zone, 0) + 1
 
         worst_zones = sorted(
@@ -490,15 +493,20 @@ async def internal_micromobility_get_battery_degradation(
         start = (now - timedelta(days=30)).strftime("%Y-%m-%d")
         end = now.strftime("%Y-%m-%d")
 
-        trips = await _fetch_all_trips(runtime_context, config, start_date=start, end_date=end, status="completed")
+        trips = await _fetch_all_trips(runtime_context, config, start_date=start, end_date=end, status="C")
 
+        # Micromobility list trips do NOT include start/end battery per trip.
+        # start_power_level / end_power_level (strings) are only on the single trip detail endpoint.
+        # Vehicle id is at bike.qr_code or bike.id (from list), or bike.bike_short_id (from detail).
         vehicle_drains: dict[str, list[float]] = {}
         for t in trips:
-            vid = t.get("vehicle_id") or t.get("vehicle")
+            _bike = t.get("bike") or {}
+            vid = _bike.get("qr_code") or _bike.get("id")
             if not vid:
                 continue
-            start_bat = t.get("battery_level_start") or t.get("start_battery")
-            end_bat = t.get("battery_level_end") or t.get("end_battery")
+            # From detail endpoint: start_power_level / end_power_level (strings)
+            start_bat = t.get("start_power_level") or t.get("battery_level_start")
+            end_bat = t.get("end_power_level") or t.get("battery_level_end")
             if start_bat is not None and end_bat is not None:
                 try:
                     drain = float(start_bat) - float(end_bat)
@@ -580,25 +588,16 @@ async def internal_micromobility_get_ranger_performance(
         from src.services.agents.internal_tools.micromobility_intelligence_tools import _hours_since
         from src.services.agents.internal_tools.micromobility_tools import internal_micromobility_list_tasks
 
-        now = datetime.now(tz=UTC)
-        start = (now - timedelta(days=days)).strftime("%Y-%m-%d")
-        end = now.strftime("%Y-%m-%d")
-
         all_tasks: list[dict[str, Any]] = []
         offset = 0
         while True:
             resp = await internal_micromobility_list_tasks(
-                config=config, runtime_context=runtime_context, start_date=start, end_date=end, limit=100, offset=offset
+                config=config, runtime_context=runtime_context, limit=100, offset=offset
             )
             if not isinstance(resp, dict) or not resp.get("success"):
                 break
-            raw = resp.get("data")
-            if isinstance(raw, list):
-                items = raw
-            elif isinstance(raw, dict):
-                items = raw.get("tasks") or raw.get("results") or raw.get("data") or []
-            else:
-                items = resp.get("tasks") or resp.get("results") or []
+            # list_tasks normalizes response: items at resp["tasks"]
+            items = resp.get("tasks") or []
             if not items:
                 break
             all_tasks.extend(items)
@@ -611,32 +610,38 @@ async def internal_micromobility_get_ranger_performance(
         if not all_tasks:
             return {"success": True, "rangers": [], "summary": "No task data available for this period."}
 
+        # Micromobility task fields:
+        # task_status: "TODO", "ONGOING", "DROPPED" (=completed), "CANCELLED"
+        # task_type: "CHARGING", "REBALANCING", "MAINTENANCE", "UNAVAILABLE"
+        # ranger assigned: user.id / user.full_name
+        # duration: picked_at → dropped_at
         ranger_stats: dict[str, dict[str, Any]] = {}
         task_type_durations: dict[str, list[float]] = {}
 
         for t in all_tasks:
-            ranger_id = t.get("assigned_to") or t.get("ranger_id") or t.get("operator_id") or "Unassigned"
-            task_type = t.get("task_type") or t.get("type") or "unknown"
-            status = (t.get("status") or "").lower()
-            created = t.get("created_at") or ""
-            completed_at = t.get("completed_at") or ""
+            _user = t.get("user") or {}
+            ranger_id = _user.get("full_name") or _user.get("id") or "Unassigned"
+            task_type = t.get("task_type") or "unknown"
+            task_status = (t.get("task_status") or "").upper()
+            picked_at = t.get("picked_at") or ""
+            dropped_at = t.get("dropped_at") or ""
 
             if ranger_id not in ranger_stats:
                 ranger_stats[ranger_id] = {"completed": 0, "pending": 0, "cancelled": 0, "durations": []}
 
-            if status in ("completed", "done"):
+            if task_status == "DROPPED":
                 ranger_stats[ranger_id]["completed"] += 1
-                if created and completed_at:
-                    h_created = _hours_since(created)
-                    h_completed = _hours_since(completed_at)
-                    if h_created is not None and h_completed is not None:
-                        duration_min = round((h_created - h_completed) * 60, 1)
+                if picked_at and dropped_at:
+                    h_picked = _hours_since(picked_at)
+                    h_dropped = _hours_since(dropped_at)
+                    if h_picked is not None and h_dropped is not None:
+                        duration_min = round((h_picked - h_dropped) * 60, 1)
                         if duration_min > 0:
                             ranger_stats[ranger_id]["durations"].append(duration_min)
                             task_type_durations.setdefault(task_type, []).append(duration_min)
-            elif status in ("pending", "assigned", "in_progress"):
+            elif task_status in ("TODO", "PICKED"):
                 ranger_stats[ranger_id]["pending"] += 1
-            elif status in ("cancelled", "failed"):
+            elif task_status == "CANCELLED":
                 ranger_stats[ranger_id]["cancelled"] += 1
 
         rangers = []
