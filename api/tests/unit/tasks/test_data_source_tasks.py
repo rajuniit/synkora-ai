@@ -79,7 +79,7 @@ class TestSyncAllDataSourcesTaskExecution:
         from src.tasks.data_source_tasks import sync_all_data_sources_task
 
         mock_run.return_value = {"queued": 0, "failed": 0}
-        result = sync_all_data_sources_task()
+        sync_all_data_sources_task()
         mock_run.assert_called_once()
 
     @patch("src.tasks.data_source_tasks.asyncio.run")
@@ -89,7 +89,7 @@ class TestSyncAllDataSourcesTaskExecution:
 
         mock_run.return_value = {"queued": 1, "failed": 0}
         tenant_id = str(uuid4())
-        result = sync_all_data_sources_task(tenant_id=tenant_id)
+        sync_all_data_sources_task(tenant_id=tenant_id)
         mock_run.assert_called_once()
 
     @patch("src.tasks.data_source_tasks.asyncio.run")

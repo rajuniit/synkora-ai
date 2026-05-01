@@ -8,7 +8,6 @@ from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
 
-
 PROVIDER = "openai"
 MODEL = "gpt-4o-mini"
 TEMP = 0.0
@@ -82,9 +81,8 @@ class TestGetSetCachedResponse:
         with patch("src.services.cache.llm_response_cache.get_redis_async", side_effect=Exception("redis down")):
             # Should not raise
             from src.services.cache.llm_response_cache import get_cached_response
-            result = await get_cached_response(
-                PROVIDER, MODEL, TEMP, MESSAGES_SIMPLE, SYS_HASH, AGENT_TS
-            )
+
+            result = await get_cached_response(PROVIDER, MODEL, TEMP, MESSAGES_SIMPLE, SYS_HASH, AGENT_TS)
             assert result is None
 
     @pytest.mark.asyncio
@@ -92,10 +90,9 @@ class TestGetSetCachedResponse:
         """If Redis is unavailable, set_cached_response silently passes."""
         with patch("src.services.cache.llm_response_cache.get_redis_async", side_effect=Exception("redis down")):
             from src.services.cache.llm_response_cache import set_cached_response
+
             # Must not raise
-            await set_cached_response(
-                PROVIDER, MODEL, TEMP, MESSAGES_SIMPLE, "response", SYS_HASH, AGENT_TS
-            )
+            await set_cached_response(PROVIDER, MODEL, TEMP, MESSAGES_SIMPLE, "response", SYS_HASH, AGENT_TS)
 
     @pytest.mark.asyncio
     async def test_size_cap_prevents_large_response(self):
@@ -106,9 +103,7 @@ class TestGetSetCachedResponse:
             from src.services.cache.llm_response_cache import set_cached_response
 
             large_response = "x" * 60_000  # > 50 KB
-            await set_cached_response(
-                PROVIDER, MODEL, TEMP, MESSAGES_SIMPLE, large_response, SYS_HASH, AGENT_TS
-            )
+            await set_cached_response(PROVIDER, MODEL, TEMP, MESSAGES_SIMPLE, large_response, SYS_HASH, AGENT_TS)
             mock_redis.set.assert_not_called()
 
     @pytest.mark.asyncio
@@ -120,9 +115,7 @@ class TestGetSetCachedResponse:
         with patch("src.services.cache.llm_response_cache.get_redis_async", return_value=mock_redis):
             from src.services.cache.llm_response_cache import get_cached_response
 
-            result = await get_cached_response(
-                PROVIDER, MODEL, TEMP, MESSAGES_SIMPLE, SYS_HASH, AGENT_TS
-            )
+            result = await get_cached_response(PROVIDER, MODEL, TEMP, MESSAGES_SIMPLE, SYS_HASH, AGENT_TS)
             assert result == "Paris"
 
     @pytest.mark.asyncio

@@ -215,12 +215,12 @@ class TestSplitLargeText:
 @pytest.mark.unit
 class TestChunkText:
     def test_empty_text_returns_empty_list(self, processor):
-        with patch("src.services.knowledge_base.text_processor.SmartChunker") as mock_chunker_cls:
+        with patch("src.services.knowledge_base.text_processor.SmartChunker"):
             result = processor.chunk_text("", chunk_size=500)
         assert result == []
 
     def test_zero_chunk_size_returns_empty(self, processor):
-        with patch("src.services.knowledge_base.text_processor.SmartChunker") as mock_chunker_cls:
+        with patch("src.services.knowledge_base.text_processor.SmartChunker"):
             result = processor.chunk_text("some text", chunk_size=0)
         assert result == []
 

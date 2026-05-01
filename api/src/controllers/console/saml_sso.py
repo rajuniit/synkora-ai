@@ -50,6 +50,7 @@ except Exception:
 # Pydantic schemas
 # ---------------------------------------------------------------------------
 
+
 class SAMLConfigCreateRequest(PydanticModel):
     """Payload for creating or updating a SAML config."""
 
@@ -108,6 +109,7 @@ def _sanitize_relay_state(value: str | None) -> str:
 # Helper: look up tenant by UUID string in URL path
 # ---------------------------------------------------------------------------
 
+
 async def _resolve_tenant_id(tenant_id: str, db: AsyncSession) -> uuid.UUID:
     """Parse and validate the UUID tenant_id path parameter."""
     try:
@@ -122,6 +124,7 @@ async def _resolve_tenant_id(tenant_id: str, db: AsyncSession) -> uuid.UUID:
 # ---------------------------------------------------------------------------
 # Public: SP metadata
 # ---------------------------------------------------------------------------
+
 
 @saml_router.get("/console/api/auth/saml/{tenant_id}/metadata")
 async def saml_metadata(
@@ -142,6 +145,7 @@ async def saml_metadata(
 # ---------------------------------------------------------------------------
 # Public: Initiate SSO
 # ---------------------------------------------------------------------------
+
 
 @saml_router.get("/console/api/auth/saml/{tenant_id}/login")
 async def saml_login(
@@ -165,6 +169,7 @@ async def saml_login(
 # ---------------------------------------------------------------------------
 # Public: ACS callback
 # ---------------------------------------------------------------------------
+
 
 @saml_router.post("/console/api/auth/saml/{tenant_id}/acs")
 async def saml_acs(
@@ -295,9 +300,11 @@ async def saml_slo(
                 xml_bytes = decoded
 
             import re as _re
+
             from sqlalchemy import select as _select
 
-            from src.models.tenant import Account as _Account, TenantAccountJoin as _TAJ
+            from src.models.tenant import Account as _Account
+            from src.models.tenant import TenantAccountJoin as _TAJ
 
             email_match = _re.search(
                 rb"<(?:[^:>]+:)?NameID[^>]*>([^<]+)</",
@@ -349,6 +356,7 @@ async def saml_slo(
 # Authenticated: read config
 # ---------------------------------------------------------------------------
 
+
 @saml_router.get("/api/v1/saml/config")
 async def get_saml_config(
     current_account=Depends(get_current_account),
@@ -374,6 +382,7 @@ async def get_saml_config(
 # ---------------------------------------------------------------------------
 # Authenticated: create / update config
 # ---------------------------------------------------------------------------
+
 
 @saml_router.post("/api/v1/saml/config", status_code=status.HTTP_200_OK)
 async def upsert_saml_config(
@@ -423,6 +432,7 @@ async def upsert_saml_config(
 # Authenticated: delete config
 # ---------------------------------------------------------------------------
 
+
 @saml_router.delete("/api/v1/saml/config", status_code=status.HTTP_200_OK)
 async def delete_saml_config(
     current_account=Depends(get_current_account),
@@ -452,6 +462,7 @@ async def delete_saml_config(
 # ---------------------------------------------------------------------------
 # Serializer
 # ---------------------------------------------------------------------------
+
 
 def _serialize_config(saml_config) -> dict:
     """Convert a SAMLConfig model instance to a JSON-safe dict."""

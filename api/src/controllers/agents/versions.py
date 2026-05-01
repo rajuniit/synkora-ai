@@ -76,9 +76,7 @@ def _version_to_detail(v: AgentVersion) -> AgentVersionDetail:
 
 
 async def _get_agent_or_404(agent_name: str, tenant_id: uuid.UUID, db: AsyncSession) -> Agent:
-    result = await db.execute(
-        select(Agent).filter(Agent.agent_name == agent_name, Agent.tenant_id == tenant_id)
-    )
+    result = await db.execute(select(Agent).filter(Agent.agent_name == agent_name, Agent.tenant_id == tenant_id))
     agent = result.scalar_one_or_none()
     if not agent:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=f"Agent '{agent_name}' not found")

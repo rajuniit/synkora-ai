@@ -230,7 +230,7 @@ class FunctionCallingHandler:
                 content = json.dumps(convert_to_json_serializable(result))
                 # Trust boundary: wrap external tool output to reduce prompt-injection risk
                 if isinstance(content, str) and len(content) > 0:
-                    content = f"<external-tool-result tool=\"{func_name_i}\">\n{content}\n</external-tool-result>"
+                    content = f'<external-tool-result tool="{func_name_i}">\n{content}\n</external-tool-result>'
                 # PII redaction — no-op when pii_redactor is None (all existing agents unaffected)
                 if self.pii_redactor:
                     content = self.pii_redactor.redact_tool_result(content)
@@ -812,7 +812,7 @@ class FunctionCallingHandler:
                 content = json.dumps(convert_to_json_serializable(result)) if not isinstance(result, str) else result
                 # Trust boundary: wrap external tool output to reduce prompt-injection risk
                 if isinstance(content, str) and len(content) > 0:
-                    content = f"<external-tool-result tool=\"{func_name}\">\n{content}\n</external-tool-result>"
+                    content = f'<external-tool-result tool="{func_name}">\n{content}\n</external-tool-result>'
                 # PII redaction — no-op when pii_redactor is None (all existing agents unaffected)
                 if self.pii_redactor:
                     content = self.pii_redactor.redact_tool_result(content)
@@ -861,6 +861,7 @@ class FunctionCallingHandler:
 
         stream = await litellm.acompletion(**completion_params)
         chunks = [chunk async for chunk in stream]
+
         # stream_chunk_builder_async was removed in litellm ≥ 1.55.
         # Wrap the synchronous builder in a coroutine to preserve the async
         # interface without spinning up a thread (it's pure in-memory work).

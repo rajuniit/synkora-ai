@@ -41,6 +41,7 @@ class TestMigration0003:
         """Verify upgrade() calls create_table for kb_* tables."""
         mod = _load_migration(self.MODULE)
         import inspect
+
         source = inspect.getsource(mod.upgrade)
         assert "kb_sync_cursors" in source
         assert "kb_entities" in source
@@ -49,6 +50,7 @@ class TestMigration0003:
     def test_upgrade_drops_company_brain_tables(self):
         mod = _load_migration(self.MODULE)
         import inspect
+
         source = inspect.getsource(mod.upgrade)
         assert "company_brain_relationships" in source
         assert "company_brain_cursors" in source
@@ -57,6 +59,7 @@ class TestMigration0003:
     def test_downgrade_drops_kb_tables(self):
         mod = _load_migration(self.MODULE)
         import inspect
+
         source = inspect.getsource(mod.downgrade)
         assert "kb_relationships" in source
         assert "kb_entities" in source
@@ -65,6 +68,7 @@ class TestMigration0003:
     def test_downgrade_recreates_company_brain_tables(self):
         mod = _load_migration(self.MODULE)
         import inspect
+
         source = inspect.getsource(mod.downgrade)
         assert "company_brain_entities" in source
         assert "company_brain_cursors" in source
@@ -74,12 +78,14 @@ class TestMigration0003:
         """The new kb_entities table must have a knowledge_base_id FK column."""
         mod = _load_migration(self.MODULE)
         import inspect
+
         source = inspect.getsource(mod.upgrade)
         assert "knowledge_base_id" in source
 
     def test_kb_sync_cursors_scoped_by_knowledge_base_id(self):
         mod = _load_migration(self.MODULE)
         import inspect
+
         source = inspect.getsource(mod.upgrade)
         # knowledge_base_id must appear in the upgrade (for kb_sync_cursors)
         assert source.count("knowledge_base_id") >= 2  # in both tables
@@ -114,6 +120,7 @@ class TestDedup:
 
     def test_redis_dedup_key_format(self):
         from src.services.company_brain.ingestion.dedup import _dedup_key
+
         key = _dedup_key("test-tenant-id", "slack")
         assert key.startswith("cb_dedup:")
         assert "slack" in key
@@ -122,11 +129,13 @@ class TestDedup:
 
     def test_hash_external_id_short_passes_through(self):
         from src.services.company_brain.ingestion.dedup import _hash_external_id
+
         short_id = "slack_C01_123"
         assert _hash_external_id(short_id) == short_id
 
     def test_hash_external_id_long_hashed(self):
         from src.services.company_brain.ingestion.dedup import _hash_external_id
+
         long_id = "x" * 100
         hashed = _hash_external_id(long_id)
         assert len(hashed) == 64  # SHA-256 hex digest

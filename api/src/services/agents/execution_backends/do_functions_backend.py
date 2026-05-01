@@ -10,6 +10,7 @@ from .base import BaseExecutionBackend
 
 logger = logging.getLogger(__name__)
 
+
 class DOFunctionsBackend(BaseExecutionBackend):
     """
     Dispatch agent tasks to DigitalOcean Functions via async HTTP invocation.
@@ -50,10 +51,14 @@ class DOFunctionsBackend(BaseExecutionBackend):
 
     def validate(self) -> None:
         """Raise ValueError if required platform config is missing."""
-        missing = [k for k, v in {
-            "DO_FUNCTIONS_ENDPOINT": self._endpoint,
-            "DO_API_TOKEN": self._api_token,
-        }.items() if not v]
+        missing = [
+            k
+            for k, v in {
+                "DO_FUNCTIONS_ENDPOINT": self._endpoint,
+                "DO_API_TOKEN": self._api_token,
+            }.items()
+            if not v
+        ]
         if missing:
             raise ValueError(
                 f"DigitalOcean Functions backend missing required platform config: {missing}. "
@@ -72,8 +77,7 @@ class DOFunctionsBackend(BaseExecutionBackend):
             import httpx  # already in deps (used elsewhere in the codebase)
         except ImportError as exc:
             raise ImportError(
-                "httpx is required for the DO Functions backend. "
-                "Install it with: pip install httpx"
+                "httpx is required for the DO Functions backend. Install it with: pip install httpx"
             ) from exc
 
         self.validate()
@@ -105,14 +109,10 @@ class DOFunctionsBackend(BaseExecutionBackend):
             )
 
         if response.status_code not in (200, 202):
-            raise RuntimeError(
-                f"DO Functions invocation failed: HTTP {response.status_code} — {response.text[:200]}"
-            )
+            raise RuntimeError(f"DO Functions invocation failed: HTTP {response.status_code} — {response.text[:200]}")
 
         request_id: str = response.headers.get("x-request-id", "")
-        logger.info(
-            f"DO Functions dispatch: task={task_id} endpoint={self._endpoint} request_id={request_id}"
-        )
+        logger.info(f"DO Functions dispatch: task={task_id} endpoint={self._endpoint} request_id={request_id}")
         return request_id
 
     def _sign_payload(self, task_id: str, timestamp: str) -> str:

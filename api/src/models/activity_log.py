@@ -154,15 +154,17 @@ class ActivityLog(BaseModel):
         import hashlib
         import hmac as _hmac
 
-        payload = "|".join([
-            str(entry_id),
-            str(action),
-            str(account_id or ""),
-            str(tenant_id or ""),
-            str(activity_type),
-            str(created_at),
-            str(prev_hash),
-        ])
+        payload = "|".join(
+            [
+                str(entry_id),
+                str(action),
+                str(account_id or ""),
+                str(tenant_id or ""),
+                str(activity_type),
+                str(created_at),
+                str(prev_hash),
+            ]
+        )
         return _hmac.new(
             secret_key.encode(),
             payload.encode(),

@@ -100,19 +100,9 @@ def export_account_data(
             from src.models.conversation import Conversation
             from src.models.message import Message
 
-            conversations = (
-                db.query(Conversation)
-                .filter(Conversation.account_id == account_uuid)
-                .limit(1000)
-                .all()
-            )
+            conversations = db.query(Conversation).filter(Conversation.account_id == account_uuid).limit(1000).all()
             for conv in conversations:
-                messages = (
-                    db.query(Message)
-                    .filter(Message.conversation_id == conv.id)
-                    .limit(5000)
-                    .all()
-                )
+                messages = db.query(Message).filter(Message.conversation_id == conv.id).limit(5000).all()
                 export["conversations"].append(
                     {
                         "id": str(conv.id),
@@ -187,11 +177,7 @@ def export_account_data(
         try:
             from src.models.user_oauth_token import UserOAuthToken
 
-            oauth_tokens = (
-                db.query(UserOAuthToken)
-                .filter(UserOAuthToken.account_id == account_uuid)
-                .all()
-            )
+            oauth_tokens = db.query(UserOAuthToken).filter(UserOAuthToken.account_id == account_uuid).all()
             export["oauth_connections"] = [
                 {
                     "provider": getattr(t, "provider", None),
@@ -300,8 +286,7 @@ def erase_account_data(
         )
         if latest is not None:
             logger.warning(
-                f"GDPR erasure task skipped — already {latest.status}: "
-                f"account={account_id} request_id={latest.id}"
+                f"GDPR erasure task skipped — already {latest.status}: account={account_id} request_id={latest.id}"
             )
             db.close()
             return {"erased": False, "account_id": account_id, "reason": f"already_{latest.status}"}
@@ -367,17 +352,12 @@ def _do_erase(
     # via its agent_id.  We erase all conversations owned by this account
     # (across all tenants); that is the correct GDPR scope.
     owned_conv_ids: list[uuid.UUID] = [
-        row.id
-        for row in db.query(Conversation.id)
-        .filter(Conversation.account_id == account_uuid)
-        .all()
+        row.id for row in db.query(Conversation.id).filter(Conversation.account_id == account_uuid).all()
     ]
 
     if owned_conv_ids:
         msg_count = (
-            db.query(Message)
-            .filter(Message.conversation_id.in_(owned_conv_ids))
-            .delete(synchronize_session=False)
+            db.query(Message).filter(Message.conversation_id.in_(owned_conv_ids)).delete(synchronize_session=False)
         )
         summary_parts.append(f"messages:{msg_count}")
     else:
@@ -387,9 +367,7 @@ def _do_erase(
     # 2. Conversations
     # ------------------------------------------------------------------
     conv_count = (
-        db.query(Conversation)
-        .filter(Conversation.account_id == account_uuid)
-        .delete(synchronize_session=False)
+        db.query(Conversation).filter(Conversation.account_id == account_uuid).delete(synchronize_session=False)
     )
     summary_parts.append(f"conversations:{conv_count}")
 
@@ -414,9 +392,7 @@ def _do_erase(
     # 4. OAuth tokens
     # ------------------------------------------------------------------
     oauth_count = (
-        db.query(UserOAuthToken)
-        .filter(UserOAuthToken.account_id == account_uuid)
-        .delete(synchronize_session=False)
+        db.query(UserOAuthToken).filter(UserOAuthToken.account_id == account_uuid).delete(synchronize_session=False)
     )
     summary_parts.append(f"oauth_tokens:{oauth_count}")
 

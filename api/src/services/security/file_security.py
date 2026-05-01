@@ -363,19 +363,15 @@ class FileSecurityService:
             return {"is_clean": False, "scanner": "clamav", "threat": str(result)}
         except ImportError:
             logger.warning(
-                "pyclamd not installed — virus scanning is unavailable. "
-                "Install pyclamd and ClamAV for production use."
+                "pyclamd not installed — virus scanning is unavailable. Install pyclamd and ClamAV for production use."
             )
             raise ScannerUnavailableError(
-                "Virus scanner (pyclamd) is not installed. "
-                "File scanning service unavailable."
+                "Virus scanner (pyclamd) is not installed. File scanning service unavailable."
             )
         except Exception as e:
             # Covers pyclamd.ConnectionError and any other runtime failures.
             logger.error(f"Virus scan failed — scanner unreachable: {e}")
-            raise ScannerUnavailableError(
-                f"Virus scanner could not be reached: {type(e).__name__}"
-            ) from e
+            raise ScannerUnavailableError(f"Virus scanner could not be reached: {type(e).__name__}") from e
 
     def quarantine_file(self, file_content: bytes, reason: str) -> str:
         """

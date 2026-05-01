@@ -4,7 +4,6 @@ import pytest
 
 from src.services.security.pii_redactor import PIIRedactionConfig, PIIRedactor
 
-
 # ---------------------------------------------------------------------------
 # PIIRedactionConfig
 # ---------------------------------------------------------------------------

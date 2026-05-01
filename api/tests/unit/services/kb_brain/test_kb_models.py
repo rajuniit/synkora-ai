@@ -12,6 +12,7 @@ from src.models.kb_brain import KBEntity, KBRelationship, KBSyncCursor
 # KBSyncCursor
 # ---------------------------------------------------------------------------
 
+
 class TestKBSyncCursor:
     def test_tablename(self):
         assert KBSyncCursor.__tablename__ == "kb_sync_cursors"
@@ -38,11 +39,7 @@ class TestKBSyncCursor:
         assert "docs_seen" in cols
 
     def test_unique_constraint_data_source_cursor_type(self):
-        constraint_names = {
-            c.name
-            for c in KBSyncCursor.__table__.constraints
-            if isinstance(c, UniqueConstraint)
-        }
+        constraint_names = {c.name for c in KBSyncCursor.__table__.constraints if isinstance(c, UniqueConstraint)}
         assert "uq_kb_cursor_source_type" in constraint_names
 
     def test_repr(self):
@@ -60,22 +57,27 @@ class TestKBSyncCursor:
 # KBEntity
 # ---------------------------------------------------------------------------
 
+
 class TestKBEntity:
     def test_tablename(self):
         assert KBEntity.__tablename__ == "kb_entities"
 
     def test_required_columns(self):
         cols = {c.key for c in KBEntity.__table__.columns}
-        for col in ("id", "tenant_id", "knowledge_base_id", "entity_type",
-                    "canonical_name", "email", "identifiers", "display_names"):
+        for col in (
+            "id",
+            "tenant_id",
+            "knowledge_base_id",
+            "entity_type",
+            "canonical_name",
+            "email",
+            "identifiers",
+            "display_names",
+        ):
             assert col in cols, f"Missing column: {col}"
 
     def test_unique_constraint_kb_email(self):
-        constraint_names = {
-            c.name
-            for c in KBEntity.__table__.constraints
-            if isinstance(c, UniqueConstraint)
-        }
+        constraint_names = {c.name for c in KBEntity.__table__.constraints if isinstance(c, UniqueConstraint)}
         assert "uq_kb_entity_kb_email" in constraint_names
 
     def test_email_nullable(self):
@@ -103,15 +105,24 @@ class TestKBEntity:
 # KBRelationship
 # ---------------------------------------------------------------------------
 
+
 class TestKBRelationship:
     def test_tablename(self):
         assert KBRelationship.__tablename__ == "kb_relationships"
 
     def test_required_columns(self):
         cols = {c.key for c in KBRelationship.__table__.columns}
-        for col in ("id", "tenant_id", "knowledge_base_id", "source_entity_id",
-                    "target_entity_id", "source_doc_id", "relation_type",
-                    "rel_metadata", "occurred_at"):
+        for col in (
+            "id",
+            "tenant_id",
+            "knowledge_base_id",
+            "source_entity_id",
+            "target_entity_id",
+            "source_doc_id",
+            "relation_type",
+            "rel_metadata",
+            "occurred_at",
+        ):
             assert col in cols, f"Missing column: {col}"
 
     def test_source_entity_nullable(self):
@@ -144,6 +155,7 @@ class TestKBRelationship:
 # ---------------------------------------------------------------------------
 # Foreign key targets
 # ---------------------------------------------------------------------------
+
 
 class TestForeignKeys:
     def test_kb_sync_cursor_kb_fk_targets_knowledge_bases(self):

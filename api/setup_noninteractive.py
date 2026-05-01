@@ -16,10 +16,11 @@ import os
 import re
 import sys
 
+from create_super_admin import create_super_admin
+
 # PYTHONPATH=/app/api is set in Dockerfile.dev — no manual path manipulation needed.
 # Importing create_super_admin works because both files live in /app/api (WORKDIR).
 from src.core.database import get_db
-from create_super_admin import create_super_admin
 
 
 def _require_env(name: str) -> str:

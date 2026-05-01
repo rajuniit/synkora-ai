@@ -22,12 +22,12 @@ import asyncio
 import hashlib
 import uuid
 from contextvars import ContextVar
+from datetime import UTC
 from decimal import Decimal
 from types import SimpleNamespace
 from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
-
 
 # ─── Concrete test data ──────────────────────────────────────────────────────
 
@@ -56,17 +56,15 @@ ANTHROPIC_USAGE_CALL_1 = SimpleNamespace(
 ANTHROPIC_USAGE_CALL_2 = SimpleNamespace(
     input_tokens=450,
     output_tokens=95,
-    cache_read_input_tokens=400,      # served from Anthropic's cache
+    cache_read_input_tokens=400,  # served from Anthropic's cache
     cache_creation_input_tokens=0,
 )
 
-SYSTEM_PROMPT = (
-    "You are a helpful AI assistant. Answer clearly and concisely. "
-    "Be accurate and professional."
-)
+SYSTEM_PROMPT = "You are a helpful AI assistant. Answer clearly and concisely. Be accurate and professional."
 
 
 # ─── Step 1: set_cost_context populates _cost_context correctly ──────────────
+
 
 class TestStep1_SetCostContext:
     """
@@ -75,8 +73,8 @@ class TestStep1_SetCostContext:
     """
 
     def test_cost_context_fields_match_agent_data(self):
-        from src.services.agents.llm_client import MultiProviderLLMClient
         from src.services.agents.config import ModelConfig
+        from src.services.agents.llm_client import MultiProviderLLMClient
 
         config = ModelConfig(
             model_name=AGENT_MODEL,
@@ -101,17 +99,18 @@ class TestStep1_SetCostContext:
         )
 
         ctx = client._cost_context
-        assert ctx["tenant_id"] == TENANT_ID,            f"tenant_id mismatch: {ctx['tenant_id']}"
-        assert ctx["agent_id"] == AGENT_ID,              f"agent_id mismatch: {ctx['agent_id']}"
-        assert ctx["conversation_id"] == CONV_ID,        f"conv_id mismatch: {ctx['conversation_id']}"
-        assert ctx["enable_response_cache"] is False,    "cache should be off for this agent"
-        assert len(ctx["system_prompt_hash"]) == 16,     "SHA256 prefix should be 16 hex chars"
+        assert ctx["tenant_id"] == TENANT_ID, f"tenant_id mismatch: {ctx['tenant_id']}"
+        assert ctx["agent_id"] == AGENT_ID, f"agent_id mismatch: {ctx['agent_id']}"
+        assert ctx["conversation_id"] == CONV_ID, f"conv_id mismatch: {ctx['conversation_id']}"
+        assert ctx["enable_response_cache"] is False, "cache should be off for this agent"
+        assert len(ctx["system_prompt_hash"]) == 16, "SHA256 prefix should be 16 hex chars"
         assert ctx["agent_updated_at"] == AGENT_UPDATED_AT
         # Hash is stable for same prompt
         assert ctx["system_prompt_hash"] == hashlib.sha256(SYSTEM_PROMPT.encode()).hexdigest()[:16]
 
 
 # ─── Step 2: Anthropic prompt caching headers are sent ───────────────────────
+
 
 class TestStep2_PromptCachingHeaders:
     """
@@ -122,24 +121,24 @@ class TestStep2_PromptCachingHeaders:
     """
 
     def test_supports_prompt_cache_for_haiku(self):
-        from src.services.agents.llm_client import MultiProviderLLMClient
         from src.services.agents.config import ModelConfig
+        from src.services.agents.llm_client import MultiProviderLLMClient
 
         config = ModelConfig(model_name=AGENT_MODEL, api_key="x", temperature=0.7)
         client = MultiProviderLLMClient.__new__(MultiProviderLLMClient)
         client.config = config
-        assert client._supports_prompt_cache() is True, \
+        assert client._supports_prompt_cache() is True, (
             f"claude-haiku must support prompt caching, got False for {AGENT_MODEL}"
+        )
 
     def test_does_not_cache_gpt4(self):
-        from src.services.agents.llm_client import MultiProviderLLMClient
         from src.services.agents.config import ModelConfig
+        from src.services.agents.llm_client import MultiProviderLLMClient
 
         config = ModelConfig(model_name="gpt-4o", api_key="x", temperature=0.7)
         client = MultiProviderLLMClient.__new__(MultiProviderLLMClient)
         client.config = config
-        assert client._supports_prompt_cache() is False, \
-            "gpt-4o must NOT have Anthropic prompt caching"
+        assert client._supports_prompt_cache() is False, "gpt-4o must NOT have Anthropic prompt caching"
 
     @pytest.mark.asyncio
     async def test_stream_call_sends_cache_control_on_system_prompt(self):
@@ -151,8 +150,8 @@ class TestStep2_PromptCachingHeaders:
         from messages that carry role="system" — it is NOT a separate kwarg.
         This is how chat_stream_service passes it via structured_messages.
         """
-        from src.services.agents.llm_client import MultiProviderLLMClient, _llm_usage_ctx
         from src.services.agents.config import ModelConfig
+        from src.services.agents.llm_client import MultiProviderLLMClient, _llm_usage_ctx
 
         config = ModelConfig(model_name=AGENT_MODEL, api_key="sk-ant-test", temperature=AGENT_TEMP)
         client = MultiProviderLLMClient.__new__(MultiProviderLLMClient)
@@ -184,7 +183,7 @@ class TestStep2_PromptCachingHeaders:
         # chat_stream_service structures the messages array (not as a separate kwarg)
         messages = [
             {"role": "system", "content": SYSTEM_PROMPT},
-            {"role": "user",   "content": USER_MESSAGE},
+            {"role": "user", "content": USER_MESSAGE},
         ]
         chunks = []
         async for chunk in client._generate_anthropic_stream_with_messages(
@@ -195,27 +194,30 @@ class TestStep2_PromptCachingHeaders:
             chunks.append(chunk)
 
         # Assert full response streamed
-        assert "".join(chunks) == "Machine learning is...", \
-            f"Unexpected streamed text: {''.join(chunks)}"
+        assert "".join(chunks) == "Machine learning is...", f"Unexpected streamed text: {''.join(chunks)}"
 
         # Assert filtered_messages has only the user turn (system is extracted)
         sent_messages = captured_kwargs.get("messages", [])
-        assert all(m.get("role") != "system" for m in sent_messages), \
+        assert all(m.get("role") != "system" for m in sent_messages), (
             f"system role must be filtered out of messages array: {sent_messages}"
+        )
 
         # Assert cache_control is set on system prompt
         system_param = captured_kwargs.get("system")
-        assert isinstance(system_param, list), \
+        assert isinstance(system_param, list), (
             f"system param must be list for cacheable model, got {type(system_param)}"
+        )
         assert system_param[0]["type"] == "text"
         assert system_param[0]["text"] == SYSTEM_PROMPT
-        assert system_param[0]["cache_control"] == {"type": "ephemeral"}, \
+        assert system_param[0]["cache_control"] == {"type": "ephemeral"}, (
             f"cache_control wrong: {system_param[0].get('cache_control')}"
+        )
 
         # Assert anthropic-beta header sent
         extra_headers = captured_kwargs.get("extra_headers", {})
-        assert extra_headers.get("anthropic-beta") == "prompt-caching-2024-07-31", \
+        assert extra_headers.get("anthropic-beta") == "prompt-caching-2024-07-31", (
             f"anthropic-beta header missing or wrong: {extra_headers}"
+        )
 
         # Assert ContextVar captured usage from get_final_message()
         usage = _llm_usage_ctx.get()
@@ -223,11 +225,13 @@ class TestStep2_PromptCachingHeaders:
         assert usage["input_tokens"] == 450
         assert usage["output_tokens"] == 95
         assert usage["cache_read_tokens"] == 0
-        assert usage["cache_creation_tokens"] == 400, \
+        assert usage["cache_creation_tokens"] == 400, (
             f"First call: cache_creation_tokens should be 400, got {usage['cache_creation_tokens']}"
+        )
 
 
 # ─── Step 3: _read_and_fire_usage assembles correct payload ──────────────────
+
 
 class TestStep3_ReadAndFireUsage:
     """
@@ -238,8 +242,8 @@ class TestStep3_ReadAndFireUsage:
 
     @pytest.mark.asyncio
     async def test_fire_usage_called_with_correct_payload(self):
-        from src.services.agents.llm_client import MultiProviderLLMClient, _llm_usage_ctx
         from src.services.agents.config import ModelConfig
+        from src.services.agents.llm_client import MultiProviderLLMClient, _llm_usage_ctx
 
         config = ModelConfig(model_name=AGENT_MODEL, api_key="x", temperature=AGENT_TEMP)
         # routing_mode is NOT a ModelConfig field — _read_and_fire_usage uses
@@ -260,12 +264,14 @@ class TestStep3_ReadAndFireUsage:
         )
 
         # Simulate what get_final_message() sets after first Anthropic call
-        _llm_usage_ctx.set({
-            "input_tokens": 450,
-            "output_tokens": 95,
-            "cache_read_tokens": 0,
-            "cache_creation_tokens": 400,
-        })
+        _llm_usage_ctx.set(
+            {
+                "input_tokens": 450,
+                "output_tokens": 95,
+                "cache_read_tokens": 0,
+                "cache_creation_tokens": 400,
+            }
+        )
 
         captured_payload = {}
 
@@ -292,6 +298,7 @@ class TestStep3_ReadAndFireUsage:
 
 
 # ─── Step 4: Cost calculation ────────────────────────────────────────────────
+
 
 class TestStep4_CostCalculation:
     """
@@ -334,8 +341,7 @@ class TestStep4_CostCalculation:
 
         # Cache creation is MORE expensive than normal input (125%)
         cost_no_cache = calculate_cost(AGENT_MODEL, 450, 95)
-        assert cost > cost_no_cache, \
-            f"cache_creation call should cost MORE than uncached: {cost} vs {cost_no_cache}"
+        assert cost > cost_no_cache, f"cache_creation call should cost MORE than uncached: {cost} vs {cost_no_cache}"
 
     def test_haiku_second_call_cost_with_cache_read(self):
         from src.services.billing.llm_cost_service import calculate_cost
@@ -348,15 +354,13 @@ class TestStep4_CostCalculation:
             cache_read_tokens=400,
         )
 
-        assert cost_with_read < cost_no_cache, \
-            f"cache_read call should be CHEAPER: {cost_with_read} vs {cost_no_cache}"
+        assert cost_with_read < cost_no_cache, f"cache_read call should be CHEAPER: {cost_with_read} vs {cost_no_cache}"
 
         # Cache read is 10% of input rate. Savings depend on input/output ratio.
         # For haiku (input $0.80/1M, output $4.00/1M): output cost dominates,
         # so 400-token cache read saves ~15% of total. Assert it's measurable (>5%).
         savings_pct = (cost_no_cache - cost_with_read) / cost_no_cache
-        assert savings_pct > 0.05, \
-            f"Expected >5% savings from cache read, got {savings_pct:.1%}"
+        assert savings_pct > 0.05, f"Expected >5% savings from cache read, got {savings_pct:.1%}"
         # Confirm savings direction is correct (cheaper, not more expensive)
         assert cost_with_read < cost_no_cache
 
@@ -371,6 +375,7 @@ class TestStep4_CostCalculation:
 
 
 # ─── Step 5: LLMTokenUsage row assembled correctly ───────────────────────────
+
 
 class TestStep5_DBRowAssembled:
     """
@@ -413,16 +418,17 @@ class TestStep5_DBRowAssembled:
         """
         LLMTokenUsage must NOT have FK constraints so it survives agent deletion.
         """
-        from src.models.llm_token_usage import LLMTokenUsage
         from sqlalchemy import inspect as sa_inspect
+
+        from src.models.llm_token_usage import LLMTokenUsage
 
         table = LLMTokenUsage.__table__
         fk_columns = [col.name for col in table.columns if col.foreign_keys]
-        assert fk_columns == [], \
-            f"LLMTokenUsage must have no FK constraints, found on: {fk_columns}"
+        assert fk_columns == [], f"LLMTokenUsage must have no FK constraints, found on: {fk_columns}"
 
 
 # ─── Step 6: Response cache — cache miss on first call, hit on second ────────
+
 
 class TestStep6_ResponseCache:
     """
@@ -435,8 +441,8 @@ class TestStep6_ResponseCache:
     @pytest.mark.asyncio
     async def test_first_call_misses_cache_second_hits(self):
         from src.services.cache.llm_response_cache import (
-            _make_cache_key,
             _is_cacheable,
+            _make_cache_key,
             get_cached_response,
             set_cached_response,
         )
@@ -459,6 +465,7 @@ class TestStep6_ResponseCache:
         class FakeRedis:
             async def get(self, k):
                 return redis_store.get(k)
+
             async def set(self, k, v, ex=None, nx=False):
                 if nx and k in redis_store:
                     return  # NX: don't overwrite
@@ -466,22 +473,16 @@ class TestStep6_ResponseCache:
 
         with patch("src.services.cache.llm_response_cache.get_redis_async", return_value=FakeRedis()):
             # First call: cache miss
-            result1 = await get_cached_response(
-                AGENT_PROVIDER, AGENT_MODEL, temp, messages, system_hash, agent_ts
-            )
+            result1 = await get_cached_response(AGENT_PROVIDER, AGENT_MODEL, temp, messages, system_hash, agent_ts)
             assert result1 is None, f"First call must be a cache miss, got: {result1}"
 
             # Simulate LLM returning a response, then caching it
             llm_response = "4"
-            await set_cached_response(
-                AGENT_PROVIDER, AGENT_MODEL, temp, messages, llm_response, system_hash, agent_ts
-            )
+            await set_cached_response(AGENT_PROVIDER, AGENT_MODEL, temp, messages, llm_response, system_hash, agent_ts)
             assert key in redis_store, "Response must be stored in Redis after set"
 
             # Second call: cache hit
-            result2 = await get_cached_response(
-                AGENT_PROVIDER, AGENT_MODEL, temp, messages, system_hash, agent_ts
-            )
+            result2 = await get_cached_response(AGENT_PROVIDER, AGENT_MODEL, temp, messages, system_hash, agent_ts)
             assert result2 == "4", f"Second call must return cached value '4', got: {result2}"
 
     @pytest.mark.asyncio
@@ -493,10 +494,9 @@ class TestStep6_ResponseCache:
         system_hash = "aabbccddeeff0011"
 
         key_before = _make_cache_key(AGENT_PROVIDER, AGENT_MODEL, 0.0, messages, system_hash, "1000.0")
-        key_after  = _make_cache_key(AGENT_PROVIDER, AGENT_MODEL, 0.0, messages, system_hash, "1001.0")
+        key_after = _make_cache_key(AGENT_PROVIDER, AGENT_MODEL, 0.0, messages, system_hash, "1001.0")
 
-        assert key_before != key_after, \
-            "Agent edit (new updated_at) must produce a different cache key"
+        assert key_before != key_after, "Agent edit (new updated_at) must produce a different cache key"
 
     @pytest.mark.asyncio
     async def test_time_sensitive_query_never_cached(self):
@@ -507,15 +507,13 @@ class TestStep6_ResponseCache:
         mock_redis = AsyncMock()
 
         with patch("src.services.cache.llm_response_cache.get_redis_async", return_value=mock_redis):
-            result = await get_cached_response(
-                AGENT_PROVIDER, AGENT_MODEL, 0.0, messages, "hash", AGENT_UPDATED_AT
-            )
+            result = await get_cached_response(AGENT_PROVIDER, AGENT_MODEL, 0.0, messages, "hash", AGENT_UPDATED_AT)
             assert result is None
-            mock_redis.get.assert_not_called(), \
-                "Redis.get must not be called for time-sensitive queries"
+            mock_redis.get.assert_not_called(), "Redis.get must not be called for time-sensitive queries"
 
 
 # ─── Step 7: fire_persist_llm_usage scheduling guarantees ────────────────────
+
 
 class TestStep7_FireAndForgetGuarantees:
     """
@@ -529,8 +527,10 @@ class TestStep7_FireAndForgetGuarantees:
     def test_never_raises_when_db_down(self):
         from src.services.billing.llm_cost_service import fire_persist_llm_usage
 
-        with patch("src.services.billing.llm_cost_service._persist_llm_usage",
-                   side_effect=RuntimeError("DB connection refused")):
+        with patch(
+            "src.services.billing.llm_cost_service._persist_llm_usage",
+            side_effect=RuntimeError("DB connection refused"),
+        ):
             with patch("asyncio.create_task", side_effect=RuntimeError("no running loop")):
                 # Must not raise
                 fire_persist_llm_usage(
@@ -560,17 +560,20 @@ class TestStep7_FireAndForgetGuarantees:
                 output_tokens=95,
             )
             # Task added to set
-            assert len(llm_cost_service._background_tasks) == initial_count + 1, \
+            assert len(llm_cost_service._background_tasks) == initial_count + 1, (
                 "Task must be added to _background_tasks set"
+            )
 
             # Simulate task completion — done callback fires
             assert len(done_callbacks) == 1, "Exactly one done callback must be registered"
             done_callbacks[0](mock_task)  # simulate asyncio calling it
-            assert len(llm_cost_service._background_tasks) == initial_count, \
+            assert len(llm_cost_service._background_tasks) == initial_count, (
                 "Task must be removed from set after completion (prevents memory leak)"
+            )
 
 
 # ─── Step 8: Billing endpoint response shape ─────────────────────────────────
+
 
 class TestStep8_BillingEndpointShape:
     """
@@ -581,14 +584,15 @@ class TestStep8_BillingEndpointShape:
     @pytest.mark.asyncio
     async def test_get_cost_summary_returns_expected_keys(self):
         from datetime import datetime, timezone
+
         from src.services.billing.llm_cost_service import get_cost_summary
 
         # Mock DB returning one aggregated row
         mock_row = MagicMock()
         mock_row.total_calls = 5
-        mock_row.total_input_tokens = 2250        # 5 * 450
-        mock_row.total_output_tokens = 475        # 5 * 95
-        mock_row.total_cache_read_tokens = 1600   # 4 * 400 (calls 2-5)
+        mock_row.total_input_tokens = 2250  # 5 * 450
+        mock_row.total_output_tokens = 475  # 5 * 95
+        mock_row.total_cache_read_tokens = 1600  # 4 * 400 (calls 2-5)
         mock_row.total_cache_creation_tokens = 400  # call 1
         mock_row.total_cached_input_tokens = 0
         mock_row.total_cost_usd = Decimal("0.00482000")
@@ -599,15 +603,20 @@ class TestStep8_BillingEndpointShape:
         mock_db = AsyncMock()
         mock_db.execute = AsyncMock(return_value=mock_result)
 
-        start = datetime(2026, 4, 16, tzinfo=timezone.utc)
-        end   = datetime(2026, 4, 23, tzinfo=timezone.utc)
+        start = datetime(2026, 4, 16, tzinfo=UTC)
+        end = datetime(2026, 4, 23, tzinfo=UTC)
 
         result = await get_cost_summary(mock_db, TENANT_ID, start, end)
 
         required_keys = {
-            "total_calls", "total_input_tokens", "total_output_tokens",
-            "total_cache_read_tokens", "total_cache_creation_tokens",
-            "total_cost_usd", "period_start", "period_end",
+            "total_calls",
+            "total_input_tokens",
+            "total_output_tokens",
+            "total_cache_read_tokens",
+            "total_cache_creation_tokens",
+            "total_cost_usd",
+            "period_start",
+            "period_end",
         }
         missing = required_keys - set(result.keys())
         assert not missing, f"Summary response missing keys: {missing}"
@@ -628,6 +637,7 @@ class TestStep8_BillingEndpointShape:
         so the mock must return a row with all-NULL aggregate columns.
         """
         from datetime import datetime, timezone
+
         from src.services.billing.llm_cost_service import get_cost_summary
 
         # Aggregate on zero rows → all sums/counts are NULL (not zero, not a missing row)
@@ -647,8 +657,8 @@ class TestStep8_BillingEndpointShape:
         mock_db = AsyncMock()
         mock_db.execute = AsyncMock(return_value=mock_result)
 
-        start = datetime(2026, 4, 16, tzinfo=timezone.utc)
-        end   = datetime(2026, 4, 23, tzinfo=timezone.utc)
+        start = datetime(2026, 4, 16, tzinfo=UTC)
+        end = datetime(2026, 4, 23, tzinfo=UTC)
 
         result = await get_cost_summary(mock_db, TENANT_ID, start, end)
         # Service must convert NULL → 0 via "or 0"
@@ -659,6 +669,7 @@ class TestStep8_BillingEndpointShape:
 
 # ─── Step 9: Anthropic tool caching in function_calling ──────────────────────
 
+
 class TestStep9_ToolCaching:
     """
     When an agent has tools and the model is claude-haiku,
@@ -668,8 +679,8 @@ class TestStep9_ToolCaching:
 
     @pytest.mark.asyncio
     async def test_tool_list_gets_cache_control(self):
-        from src.services.agents.function_calling import FunctionCallingHandler
         from src.services.agents.config import ModelConfig
+        from src.services.agents.function_calling import FunctionCallingHandler
         from src.services.agents.llm_client import MultiProviderLLMClient
 
         config = ModelConfig(model_name=AGENT_MODEL, api_key="sk-ant-x", temperature=AGENT_TEMP)
@@ -683,9 +694,13 @@ class TestStep9_ToolCaching:
         # _generate_anthropic_with_tools calls _convert_to_anthropic_format()
         # which reads self.available_tools. Populate with ADK-style tool defs.
         handler.available_tools = [
-            {"name": "search_web",      "description": "Search the web",      "parameters": {"type": "object", "properties": {}}},
-            {"name": "get_weather",     "description": "Get weather",          "parameters": {"type": "object", "properties": {}}},
-            {"name": "query_database",  "description": "Query a database",     "parameters": {"type": "object", "properties": {}}},
+            {"name": "search_web", "description": "Search the web", "parameters": {"type": "object", "properties": {}}},
+            {"name": "get_weather", "description": "Get weather", "parameters": {"type": "object", "properties": {}}},
+            {
+                "name": "query_database",
+                "description": "Query a database",
+                "parameters": {"type": "object", "properties": {}},
+            },
         ]
 
         captured = {}
@@ -710,22 +725,23 @@ class TestStep9_ToolCaching:
         assert len(sent_tools) == 3, f"Expected 3 tools, got {len(sent_tools)}"
 
         last_tool = sent_tools[-1]
-        assert "cache_control" in last_tool, \
-            f"Last tool must have cache_control, got: {last_tool}"
-        assert last_tool["cache_control"] == {"type": "ephemeral"}, \
+        assert "cache_control" in last_tool, f"Last tool must have cache_control, got: {last_tool}"
+        assert last_tool["cache_control"] == {"type": "ephemeral"}, (
             f"cache_control value wrong: {last_tool['cache_control']}"
+        )
 
         # Other tools must NOT have cache_control added
-        assert "cache_control" not in sent_tools[0], \
-            "Only the last tool should have cache_control"
+        assert "cache_control" not in sent_tools[0], "Only the last tool should have cache_control"
 
         # anthropic-beta header must be set
         extra_headers = captured.get("extra_headers", {})
-        assert extra_headers.get("anthropic-beta") == "prompt-caching-2024-07-31", \
+        assert extra_headers.get("anthropic-beta") == "prompt-caching-2024-07-31", (
             f"anthropic-beta header missing: {extra_headers}"
+        )
 
 
 # ─── Step 10: ContextVar isolation — concurrent requests don't cross-contaminate
+
 
 class TestStep10_ContextVarIsolation:
     """
@@ -754,14 +770,13 @@ class TestStep10_ContextVarIsolation:
 
         await asyncio.gather(simulate_request_a(), simulate_request_b())
 
-        assert usage_a["input_tokens"] == 100, \
-            f"Request A saw wrong tokens: {usage_a}"
-        assert usage_b["input_tokens"] == 999, \
-            f"Request B saw wrong tokens: {usage_b}"
+        assert usage_a["input_tokens"] == 100, f"Request A saw wrong tokens: {usage_a}"
+        assert usage_b["input_tokens"] == 999, f"Request B saw wrong tokens: {usage_b}"
         assert usage_a is not usage_b, "ContextVar must be isolated per-coroutine"
 
 
 # ─── Helpers ─────────────────────────────────────────────────────────────────
+
 
 async def _async_iter(items):
     for item in items:

@@ -211,8 +211,13 @@ async def create_custom_tool(
 
         logger.info(f"Created custom tool: {tool.name} (ID: {tool.id})")
         await _audit_log(
-            db, current_account.id, tenant_id, "create", "custom_tool",
-            resource_id=tool.id, metadata={"name": tool.name},
+            db,
+            current_account.id,
+            tenant_id,
+            "create",
+            "custom_tool",
+            resource_id=tool.id,
+            metadata={"name": tool.name},
         )
 
         return CustomToolResponse(
@@ -556,8 +561,13 @@ async def delete_custom_tool(
 
         logger.info(f"Deleted custom tool: {tool.name} (ID: {tool.id})")
         await _audit_log(
-            db, current_account.id, tenant_id, "delete", "custom_tool",
-            resource_id=tool.id, metadata={"name": tool.name},
+            db,
+            current_account.id,
+            tenant_id,
+            "delete",
+            "custom_tool",
+            resource_id=tool.id,
+            metadata={"name": tool.name},
         )
 
     except HTTPException:

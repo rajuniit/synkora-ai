@@ -219,6 +219,7 @@ async def _crawl_and_process_kb(
             logger.info(f"SPA detected at {page_url} — falling back to Jina Reader")
             try:
                 from src.services.agents.internal_tools.web_tools import _fetch_via_jina
+
                 jina_result = await _fetch_via_jina(page_url)
                 if jina_result.get("error"):
                     logger.warning(f"Crawl skipped {page_url} — Jina fallback failed: {jina_result['error']}")
@@ -231,8 +232,21 @@ async def _crawl_and_process_kb(
                 # and sidesteps domcontentloaded timing issues with SPAs)
                 if include_subpages and not new_links:
                     import re as _re
-                    _ASSET_EXTS = {".svg", ".png", ".jpg", ".jpeg", ".gif", ".webp", ".ico", ".pdf", ".zip", ".css", ".js"}
-                    md_links = _re.findall(r'\[(?:[^\]]*)\]\((https?://[^)\s]+)\)', text)
+
+                    _ASSET_EXTS = {
+                        ".svg",
+                        ".png",
+                        ".jpg",
+                        ".jpeg",
+                        ".gif",
+                        ".webp",
+                        ".ico",
+                        ".pdf",
+                        ".zip",
+                        ".css",
+                        ".js",
+                    }
+                    md_links = _re.findall(r"\[(?:[^\]]*)\]\((https?://[^)\s]+)\)", text)
                     for href in md_links:
                         full = href.split("#")[0].rstrip("/")
                         path_lower = urlparse(full).path.lower()
@@ -272,7 +286,9 @@ async def _crawl_and_process_kb(
         logger.error(f"DataSource {data_source_id} not found — aborting crawl")
         return
 
-    logger.info(f"Starting crawl: data_source={data_source_id} url={url} max_pages={max_pages} subpages={include_subpages}")
+    logger.info(
+        f"Starting crawl: data_source={data_source_id} url={url} max_pages={max_pages} subpages={include_subpages}"
+    )
 
     total_processed = 0
     batch: list[dict[str, Any]] = []

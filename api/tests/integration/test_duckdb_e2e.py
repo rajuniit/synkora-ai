@@ -56,6 +56,7 @@ def _headers(token: str) -> dict:
 # API helpers
 # ---------------------------------------------------------------------------
 
+
 def _create_connection(token: str, name: str, database_path: str = ":memory:") -> dict:
     """Create a DuckDB database connection and return the JSON response body."""
     r = httpx.post(
@@ -88,6 +89,7 @@ def _query(token: str, connection_id: str, sql: str, _retries: int = 5) -> dict:
     Retries up to *_retries* times on 429 (rate limit) with a short back-off.
     """
     import time as _time
+
     for attempt in range(_retries):
         r = httpx.post(
             f"{BASE_URL}/api/v1/data-analysis/query-database",
@@ -107,6 +109,7 @@ def _query(token: str, connection_id: str, sql: str, _retries: int = 5) -> dict:
 # ---------------------------------------------------------------------------
 # DuckDB in-memory connection tests
 # ---------------------------------------------------------------------------
+
 
 class TestDuckDBConnectionLifecycle:
     """Create → test → list → delete via the database-connections REST API."""
@@ -172,6 +175,7 @@ class TestDuckDBConnectionLifecycle:
 # ---------------------------------------------------------------------------
 # DuckDB query execution (in-memory, self-contained SQL)
 # ---------------------------------------------------------------------------
+
 
 class TestDuckDBQueryExecution:
     """Run various SQL statements through /api/v1/data-analysis/query-database."""
@@ -331,6 +335,7 @@ class TestDuckDBQueryExecution:
 # DuckDB file-based persistence
 # ---------------------------------------------------------------------------
 
+
 class TestDuckDBFilePersistence:
     """
     Use a file-based DuckDB so that data created in one API call is visible
@@ -343,9 +348,7 @@ class TestDuckDBFilePersistence:
         self.token = _get_token()
         # Use a unique file path per test run to avoid cross-test pollution
         self.file_path = f"/tmp/duckdb_int_{uuid.uuid4().hex[:8]}.duckdb"
-        conn = _create_connection(
-            self.token, f"duckdb-file-{uuid.uuid4().hex[:6]}", database_path=self.file_path
-        )
+        conn = _create_connection(self.token, f"duckdb-file-{uuid.uuid4().hex[:6]}", database_path=self.file_path)
         self.conn_id = conn["id"]
 
     def teardown_method(self):
@@ -398,7 +401,8 @@ class TestDuckDBFilePersistence:
         """Create a table, export to CSV via DuckDB COPY, read it back."""
         _query(self.token, self.conn_id, "CREATE TABLE nums (n INTEGER)")
         _query(
-            self.token, self.conn_id,
+            self.token,
+            self.conn_id,
             "INSERT INTO nums SELECT * FROM generate_series(1, 10) AS s(n)",
         )
 
@@ -430,6 +434,7 @@ _GUARD_DB_CONN: Any = None  # MagicMock DatabaseConnection used across all guard
 
 def _make_mock_session(db_conn_obj: Any) -> Any:
     """Return an AsyncSession mock whose execute() returns db_conn_obj."""
+
     async def _execute(*args: Any, **kwargs: Any) -> Any:
         mock_result = MagicMock()
         mock_result.scalar_one_or_none = MagicMock(return_value=db_conn_obj)
@@ -470,8 +475,9 @@ class TestRowCountGuard:
         file_path = f"/tmp/duckdb_guard_{uuid.uuid4().hex[:8]}.duckdb"
 
         async def _create_duckdb_file() -> None:
-            from src.services.database.duckdb_connector import DuckDBConnector
             from unittest.mock import MagicMock as _MM
+
+            from src.services.database.duckdb_connector import DuckDBConnector
 
             seed_conn = _MM()
             seed_conn.database_path = file_path
@@ -479,14 +485,8 @@ class TestRowCountGuard:
             seed_conn.password_encrypted = None
             connector = DuckDBConnector(seed_conn)
             await connector.connect()
-            await connector.execute_query(
-                "CREATE TABLE big_table AS "
-                "SELECT * FROM generate_series(1, 100000) AS s(n)"
-            )
-            await connector.execute_query(
-                "CREATE TABLE small_table AS "
-                "SELECT * FROM generate_series(1, 100) AS s(n)"
-            )
+            await connector.execute_query("CREATE TABLE big_table AS SELECT * FROM generate_series(1, 100000) AS s(n)")
+            await connector.execute_query("CREATE TABLE small_table AS SELECT * FROM generate_series(1, 100) AS s(n)")
             await connector.disconnect()
 
         asyncio.run(_create_duckdb_file())
@@ -571,10 +571,7 @@ class TestRowCountGuard:
 
         result = await internal_query_database(
             connection_id=_GUARD_CONN_ID,
-            query=(
-                "SELECT n % 5 AS bucket, COUNT(*) AS cnt "
-                "FROM big_table GROUP BY bucket ORDER BY bucket"
-            ),
+            query=("SELECT n % 5 AS bucket, COUNT(*) AS cnt FROM big_table GROUP BY bucket ORDER BY bucket"),
             tenant_id=_GUARD_TENANT_ID,
             db_session=_make_mock_session(_GUARD_DB_CONN),
         )

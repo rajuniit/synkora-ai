@@ -23,22 +23,22 @@ logger = logging.getLogger(__name__)
 
 _SIZE_MAP: dict[str, tuple[str, str]] = {
     # alias → (openai_size, google_aspect_ratio)
-    "square":    ("1024x1024", "1:1"),
-    "portrait":  ("1024x1536", "9:16"),
+    "square": ("1024x1024", "1:1"),
+    "portrait": ("1024x1536", "9:16"),
     "landscape": ("1536x1024", "16:9"),
 }
 
 _QUALITY_MAP: dict[str, str] = {
     "standard": "medium",
-    "hd":       "high",
-    "low":      "low",
-    "medium":   "medium",
-    "high":     "high",
+    "hd": "high",
+    "low": "low",
+    "medium": "medium",
+    "high": "high",
 }
 
-_GPT_IMAGE_2   = "gpt-image-2"
-_IMAGEN_3      = "imagen-3.0-generate-002"
-_GROK_IMAGE    = "grok-2-image"
+_GPT_IMAGE_2 = "gpt-image-2"
+_IMAGEN_3 = "imagen-3.0-generate-002"
+_GROK_IMAGE = "grok-2-image"
 
 # Providers that use the OpenAI /images/generations endpoint
 _OPENAI_COMPAT = {"openai", "litellm", "azure", "openrouter", "lm_studio", "vllm"}
@@ -111,43 +111,68 @@ async def internal_generate_image(
     # If the agent's LLM config is explicitly set to a Google Imagen model, use Google SDK
     if configured_model in _GOOGLE_IMAGE_MODELS:
         return await _generate_google(
-            prompt=prompt, api_key=api_key, aspect_ratio=google_ratio,
+            prompt=prompt,
+            api_key=api_key,
+            aspect_ratio=google_ratio,
             model=configured_model,
-            tenant_id=tenant_id, date_path=date_path, file_id=file_id,
+            tenant_id=tenant_id,
+            date_path=date_path,
+            file_id=file_id,
         )
 
     # If the agent's LLM config is explicitly set to an OpenAI image model, use it directly
     if configured_model in _OPENAI_IMAGE_MODELS:
         return await _generate_openai_compat(
-            prompt=prompt, api_key=api_key, api_base=api_base,
-            model=configured_model, size=openai_size, quality=gpt_quality,
-            tenant_id=tenant_id, date_path=date_path, file_id=file_id,
+            prompt=prompt,
+            api_key=api_key,
+            api_base=api_base,
+            model=configured_model,
+            size=openai_size,
+            quality=gpt_quality,
+            tenant_id=tenant_id,
+            date_path=date_path,
+            file_id=file_id,
             provider_label=provider,
         )
 
     # Google direct (uses google-genai SDK, not OpenAI-compat)
     if provider in _GOOGLE_PROVIDERS:
         return await _generate_google(
-            prompt=prompt, api_key=api_key, aspect_ratio=google_ratio,
-            tenant_id=tenant_id, date_path=date_path, file_id=file_id,
+            prompt=prompt,
+            api_key=api_key,
+            aspect_ratio=google_ratio,
+            tenant_id=tenant_id,
+            date_path=date_path,
+            file_id=file_id,
         )
 
     # xAI / Grok — OpenAI-compat but different default base URL
     if provider in _GROK_PROVIDERS:
         return await _generate_openai_compat(
-            prompt=prompt, api_key=api_key,
+            prompt=prompt,
+            api_key=api_key,
             api_base=api_base or "https://api.x.ai/v1",
-            model=_GROK_IMAGE, size=openai_size, quality=None,
-            tenant_id=tenant_id, date_path=date_path, file_id=file_id,
+            model=_GROK_IMAGE,
+            size=openai_size,
+            quality=None,
+            tenant_id=tenant_id,
+            date_path=date_path,
+            file_id=file_id,
             provider_label="xai",
         )
 
     # OpenAI / LiteLLM proxy / Azure / OpenRouter / unknown → gpt-image-2
     # AsyncOpenAI with api_base routes through the proxy's /images/generations endpoint
     return await _generate_openai_compat(
-        prompt=prompt, api_key=api_key, api_base=api_base,
-        model=_GPT_IMAGE_2, size=openai_size, quality=gpt_quality,
-        tenant_id=tenant_id, date_path=date_path, file_id=file_id,
+        prompt=prompt,
+        api_key=api_key,
+        api_base=api_base,
+        model=_GPT_IMAGE_2,
+        size=openai_size,
+        quality=gpt_quality,
+        tenant_id=tenant_id,
+        date_path=date_path,
+        file_id=file_id,
         provider_label=provider,
     )
 

@@ -186,7 +186,7 @@ class SystemPromptBuilder:
 
             filename = context_file.get("filename", "unknown")
             context_parts.append(
-                f"<context-document source=\"{filename}\" trust=\"low\">\n{extracted_text}\n</context-document>"
+                f'<context-document source="{filename}" trust="low">\n{extracted_text}\n</context-document>'
             )
             total_length += len(extracted_text)
 

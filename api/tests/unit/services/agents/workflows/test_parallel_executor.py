@@ -173,7 +173,7 @@ class TestParallelExecutorConfig:
 
         executor.execute_sub_agent = slow_agent
 
-        result = await executor.execute("input", "user-1")
+        await executor.execute("input", "user-1")
 
         # Should have a timeout or error indicator
         assert executor.state.get("timeout") is True or "timeout" in str(executor.state.get("error", "")).lower()

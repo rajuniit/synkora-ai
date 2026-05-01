@@ -32,6 +32,7 @@ def _is_url_safe(url: str) -> bool:
     """
     try:
         from src.config import settings
+
         app_base = (settings.app_base_url or "").rstrip("/")
         if app_base and url.startswith(app_base):
             return True
@@ -108,6 +109,7 @@ async def call_remote_agent(
     # Replace APP_BASE_URL with internal service URL so Docker containers can
     # reach the API server directly without going through a public tunnel.
     from src.config import settings
+
     app_base = (settings.app_base_url or "").rstrip("/")
     if app_base and endpoint_url.startswith(app_base):
         endpoint_url = endpoint_url.replace(app_base, "http://synkora-api:5001", 1)

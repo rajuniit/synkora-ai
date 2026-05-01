@@ -34,6 +34,7 @@ def _get_colors(n: int) -> list[str]:
 def _setup_figure(title: str, figsize: tuple[float, float] = (10, 5)):
     """Create a styled figure + axes pair."""
     import matplotlib
+
     matplotlib.use("Agg")  # non-interactive backend — no display required
     import matplotlib.pyplot as plt
 
@@ -54,9 +55,9 @@ def _setup_figure(title: str, figsize: tuple[float, float] = (10, 5)):
 
 def _to_png(fig) -> bytes:
     import matplotlib.pyplot as plt
+
     buf = io.BytesIO()
-    fig.savefig(buf, format="png", dpi=150, bbox_inches="tight",
-                facecolor=fig.get_facecolor())
+    fig.savefig(buf, format="png", dpi=150, bbox_inches="tight", facecolor=fig.get_facecolor())
     plt.close(fig)
     buf.seek(0)
     return buf.read()
@@ -64,45 +65,57 @@ def _to_png(fig) -> bytes:
 
 # ── Chart.js bar / line ───────────────────────────────────────────────────────
 
+
 def _render_chartjs_bar(chart: dict[str, Any]) -> bytes:
     import matplotlib
+
     matplotlib.use("Agg")
     import matplotlib.pyplot as plt
     import numpy as np
 
-    cfg   = chart.get("config") or chart.get("data") or {}
-    data  = cfg.get("data") or chart.get("data") or {}
-    labels   = data.get("labels", [])
+    cfg = chart.get("config") or chart.get("data") or {}
+    data = cfg.get("data") or chart.get("data") or {}
+    labels = data.get("labels", [])
     datasets = data.get("datasets", [])
     title = chart.get("title", "")
 
     if not labels or not datasets:
         raise ValueError("No labels or datasets")
 
-    n_groups  = len(labels)
-    n_series  = len(datasets)
-    colors    = _get_colors(n_series)
+    n_groups = len(labels)
+    n_series = len(datasets)
+    colors = _get_colors(n_series)
     bar_width = 0.8 / max(n_series, 1)
-    x         = np.arange(n_groups)
+    x = np.arange(n_groups)
 
     fig, ax = _setup_figure(title, figsize=(max(8, n_groups * 0.8 + 2), 5))
 
     for i, ds in enumerate(datasets):
         values = [float(v) if v is not None else 0 for v in ds.get("data", [])]
         offset = (i - (n_series - 1) / 2) * bar_width
-        bars = ax.bar(x + offset, values, bar_width * 0.9,
-                      label=ds.get("label", f"Series {i+1}"),
-                      color=colors[i], zorder=3)
+        bars = ax.bar(
+            x + offset, values, bar_width * 0.9, label=ds.get("label", f"Series {i + 1}"), color=colors[i], zorder=3
+        )
         # Value labels on bars
-        for bar, val in zip(bars, values):
+        for bar, val in zip(bars, values, strict=False):
             if val != 0:
-                ax.text(bar.get_x() + bar.get_width() / 2, bar.get_height(),
-                        _compact_num(val), ha="center", va="bottom",
-                        fontsize=8, color="#374151")
+                ax.text(
+                    bar.get_x() + bar.get_width() / 2,
+                    bar.get_height(),
+                    _compact_num(val),
+                    ha="center",
+                    va="bottom",
+                    fontsize=8,
+                    color="#374151",
+                )
 
     ax.set_xticks(x)
-    ax.set_xticklabels([str(l) for l in labels], rotation=30 if n_groups > 6 else 0,
-                       ha="right" if n_groups > 6 else "center", fontsize=9)
+    ax.set_xticklabels(
+        [str(lb) for lb in labels],
+        rotation=30 if n_groups > 6 else 0,
+        ha="right" if n_groups > 6 else "center",
+        fontsize=9,
+    )
     if n_series > 1:
         ax.legend(fontsize=9, framealpha=0.7)
 
@@ -112,12 +125,13 @@ def _render_chartjs_bar(chart: dict[str, Any]) -> bytes:
 
 def _render_chartjs_line(chart: dict[str, Any]) -> bytes:
     import matplotlib
+
     matplotlib.use("Agg")
     import numpy as np
 
-    cfg   = chart.get("config") or chart.get("data") or {}
-    data  = cfg.get("data") or chart.get("data") or {}
-    labels   = data.get("labels", [])
+    cfg = chart.get("config") or chart.get("data") or {}
+    data = cfg.get("data") or chart.get("data") or {}
+    labels = data.get("labels", [])
     datasets = data.get("datasets", [])
     title = chart.get("title", "")
 
@@ -131,14 +145,25 @@ def _render_chartjs_line(chart: dict[str, Any]) -> bytes:
 
     for i, ds in enumerate(datasets):
         values = [float(v) if v is not None else 0 for v in ds.get("data", [])]
-        ax.plot(x, values, marker="o", markersize=5, linewidth=2,
-                color=colors[i], label=ds.get("label", f"Series {i+1}"), zorder=3)
+        ax.plot(
+            x,
+            values,
+            marker="o",
+            markersize=5,
+            linewidth=2,
+            color=colors[i],
+            label=ds.get("label", f"Series {i + 1}"),
+            zorder=3,
+        )
         ax.fill_between(x, values, alpha=0.08, color=colors[i])
 
     ax.set_xticks(x)
-    ax.set_xticklabels([str(l) for l in labels],
-                       rotation=30 if len(labels) > 6 else 0,
-                       ha="right" if len(labels) > 6 else "center", fontsize=9)
+    ax.set_xticklabels(
+        [str(lb) for lb in labels],
+        rotation=30 if len(labels) > 6 else 0,
+        ha="right" if len(labels) > 6 else "center",
+        fontsize=9,
+    )
     if len(datasets) > 1:
         ax.legend(fontsize=9, framealpha=0.7)
 
@@ -148,11 +173,12 @@ def _render_chartjs_line(chart: dict[str, Any]) -> bytes:
 
 def _render_chartjs_pie(chart: dict[str, Any], donut: bool = False) -> bytes:
     import matplotlib
+
     matplotlib.use("Agg")
 
-    cfg   = chart.get("config") or chart.get("data") or {}
-    data  = cfg.get("data") or chart.get("data") or {}
-    labels   = data.get("labels", [])
+    cfg = chart.get("config") or chart.get("data") or {}
+    data = cfg.get("data") or chart.get("data") or {}
+    labels = data.get("labels", [])
     datasets = data.get("datasets", [])
     title = chart.get("title", "")
 
@@ -171,8 +197,12 @@ def _render_chartjs_pie(chart: dict[str, Any], donut: bool = False) -> bytes:
     ax.yaxis.grid(False)
 
     wedges, texts, autotexts = ax.pie(
-        values, labels=labels, colors=colors, autopct="%1.1f%%",
-        startangle=90, pctdistance=0.8,
+        values,
+        labels=labels,
+        colors=colors,
+        autopct="%1.1f%%",
+        startangle=90,
+        pctdistance=0.8,
         wedgeprops={"linewidth": 1.5, "edgecolor": "white"},
     )
     for t in texts:
@@ -183,9 +213,7 @@ def _render_chartjs_pie(chart: dict[str, Any], donut: bool = False) -> bytes:
         at.set_fontweight("bold")
 
     if donut:
-        centre = __import__("matplotlib.patches", fromlist=["Circle"]).Circle(
-            (0, 0), 0.55, fc="white"
-        )
+        centre = __import__("matplotlib.patches", fromlist=["Circle"]).Circle((0, 0), 0.55, fc="white")
         ax.add_patch(centre)
 
     fig.tight_layout()
@@ -194,9 +222,11 @@ def _render_chartjs_pie(chart: dict[str, Any], donut: bool = False) -> bytes:
 
 # ── Recharts / generic bar / line (table_data path) ──────────────────────────
 
+
 def _render_from_table_data(chart: dict[str, Any]) -> bytes:
     """Fallback: render from table_data rows when the config format is unclear."""
     import matplotlib
+
     matplotlib.use("Agg")
     import numpy as np
 
@@ -204,12 +234,12 @@ def _render_from_table_data(chart: dict[str, Any]) -> bytes:
     if not table_data:
         raise ValueError("No table_data")
 
-    title      = chart.get("title", "")
+    title = chart.get("title", "")
     chart_type = (chart.get("chart_type") or "bar").lower()
 
     # Detect columns: first string column = x-axis labels, numeric cols = series
     sample = table_data[0] if table_data else {}
-    x_col  = None
+    x_col = None
     y_cols = []
     for k, v in sample.items():
         try:
@@ -222,31 +252,34 @@ def _render_from_table_data(chart: dict[str, Any]) -> bytes:
     if not y_cols:
         raise ValueError("No numeric columns in table_data")
 
-    labels = [str(row.get(x_col, i)) for i, row in enumerate(table_data)] if x_col else [str(i) for i in range(len(table_data))]
+    labels = (
+        [str(row.get(x_col, i)) for i, row in enumerate(table_data)]
+        if x_col
+        else [str(i) for i in range(len(table_data))]
+    )
     colors = _get_colors(len(y_cols))
-    x      = list(range(len(labels)))
+    x = list(range(len(labels)))
 
     fig, ax = _setup_figure(title, figsize=(max(8, len(labels) * 0.8 + 2), 5))
 
     if chart_type in ("line", "area"):
         for i, col in enumerate(y_cols):
             vals = [float(str(row.get(col, 0)).replace(",", "")) for row in table_data]
-            ax.plot(x, vals, marker="o", markersize=5, linewidth=2,
-                    color=colors[i], label=col, zorder=3)
+            ax.plot(x, vals, marker="o", markersize=5, linewidth=2, color=colors[i], label=col, zorder=3)
             if chart_type == "area":
                 ax.fill_between(x, vals, alpha=0.08, color=colors[i])
     else:  # bar (default)
-        n_series  = len(y_cols)
+        n_series = len(y_cols)
         bar_width = 0.8 / max(n_series, 1)
         for i, col in enumerate(y_cols):
-            vals   = [float(str(row.get(col, 0)).replace(",", "")) for row in table_data]
+            vals = [float(str(row.get(col, 0)).replace(",", "")) for row in table_data]
             offset = (i - (n_series - 1) / 2) * bar_width
-            ax.bar(np.array(x) + offset, vals, bar_width * 0.9,
-                   label=col, color=colors[i], zorder=3)
+            ax.bar(np.array(x) + offset, vals, bar_width * 0.9, label=col, color=colors[i], zorder=3)
 
     ax.set_xticks(x)
-    ax.set_xticklabels(labels, rotation=30 if len(labels) > 6 else 0,
-                       ha="right" if len(labels) > 6 else "center", fontsize=9)
+    ax.set_xticklabels(
+        labels, rotation=30 if len(labels) > 6 else 0, ha="right" if len(labels) > 6 else "center", fontsize=9
+    )
     if len(y_cols) > 1:
         ax.legend(fontsize=9, framealpha=0.7)
 
@@ -256,11 +289,12 @@ def _render_from_table_data(chart: dict[str, Any]) -> bytes:
 
 # ── Public API ────────────────────────────────────────────────────────────────
 
+
 def _compact_num(v: float) -> str:
     if abs(v) >= 1_000_000:
-        return f"{v/1_000_000:.1f}M"
+        return f"{v / 1_000_000:.1f}M"
     if abs(v) >= 1_000:
-        return f"{v/1_000:.1f}K"
+        return f"{v / 1_000:.1f}K"
     if v == int(v):
         return str(int(v))
     return f"{v:.2f}"
@@ -283,21 +317,22 @@ def render_chart_to_png(chart: dict[str, Any]) -> bytes | None:
         # chart_data is the raw data: {"labels":[], "datasets":[]}
         if "chart_config" in chart or "chart_data" in chart:
             chart_config_raw = chart.get("chart_config") or {}
-            chart_data_raw   = chart.get("chart_data") or {}
+            chart_data_raw = chart.get("chart_data") or {}
             chart = {
                 "chart_type": chart.get("chart_type") or chart_config_raw.get("type") or "bar",
-                "library":    chart.get("library") or "chartjs",
-                "title":      chart.get("title") or chart_config_raw.get("title") or "",
+                "library": chart.get("library") or "chartjs",
+                "title": chart.get("title") or chart_config_raw.get("title") or "",
                 # data may live at chart_data directly or nested inside chart_config.data
-                "data":       chart_data_raw if chart_data_raw.get("labels") or chart_data_raw.get("datasets")
-                              else chart_config_raw.get("data") or {},
-                "config":     chart_config_raw,
+                "data": chart_data_raw
+                if chart_data_raw.get("labels") or chart_data_raw.get("datasets")
+                else chart_config_raw.get("data") or {},
+                "config": chart_config_raw,
                 "table_data": chart.get("table_data"),
             }
 
-        library    = (chart.get("library") or "chartjs").lower()
+        library = (chart.get("library") or "chartjs").lower()
         chart_type = (chart.get("chart_type") or chart.get("type") or "bar").lower()
-        title      = chart.get("title", "")
+        title = chart.get("title", "")
 
         logger.info(f"[ChartRenderer] Rendering {library}/{chart_type}: '{title}'")
 

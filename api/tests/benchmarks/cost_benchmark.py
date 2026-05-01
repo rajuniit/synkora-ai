@@ -45,6 +45,7 @@ def print_table(title: str, headers: list[str], rows: list[list[str]]) -> None:
 # Test 1: Anthropic prompt caching
 # ---------------------------------------------------------------------------
 
+
 async def test_anthropic_prompt_cache(api_key: str) -> dict:
     """Verify cache_read_input_tokens appear from call 2 onwards."""
     from src.services.agents.config import ModelConfig
@@ -75,13 +76,15 @@ async def test_anthropic_prompt_cache(api_key: str) -> dict:
             chunks.append(chunk)
         latency_ms = (time.perf_counter() - t0) * 1000
         usage = _llm_usage_ctx.get() or {}
-        rows.append([
-            str(i + 1),
-            f"{usage.get('input_tokens', '?')}",
-            f"{usage.get('cache_creation_tokens', 0)}",
-            f"{usage.get('cache_read_tokens', 0)}",
-            f"{latency_ms:.0f}ms",
-        ])
+        rows.append(
+            [
+                str(i + 1),
+                f"{usage.get('input_tokens', '?')}",
+                f"{usage.get('cache_creation_tokens', 0)}",
+                f"{usage.get('cache_read_tokens', 0)}",
+                f"{latency_ms:.0f}ms",
+            ]
+        )
 
     print_table(
         "Anthropic Prompt Caching",
@@ -97,6 +100,7 @@ async def test_anthropic_prompt_cache(api_key: str) -> dict:
 # ---------------------------------------------------------------------------
 # Test 2: OpenAI cached_tokens tracking
 # ---------------------------------------------------------------------------
+
 
 async def test_openai_cached_tokens(api_key: str) -> dict:
     """Verify cached_input_tokens appear in usage for repeated prompts (>1024 tokens)."""
@@ -125,12 +129,14 @@ async def test_openai_cached_tokens(api_key: str) -> dict:
             chunks.append(chunk)
         latency_ms = (time.perf_counter() - t0) * 1000
         usage = _llm_usage_ctx.get() or {}
-        rows.append([
-            str(i + 1),
-            f"{usage.get('input_tokens', '?')}",
-            f"{usage.get('cached_input_tokens', 0)}",
-            f"{latency_ms:.0f}ms",
-        ])
+        rows.append(
+            [
+                str(i + 1),
+                f"{usage.get('input_tokens', '?')}",
+                f"{usage.get('cached_input_tokens', 0)}",
+                f"{latency_ms:.0f}ms",
+            ]
+        )
 
     print_table(
         "OpenAI Automatic Caching",
@@ -146,6 +152,7 @@ async def test_openai_cached_tokens(api_key: str) -> dict:
 # ---------------------------------------------------------------------------
 # Test 3: Response cache (Redis)
 # ---------------------------------------------------------------------------
+
 
 async def test_response_cache(provider: str, api_key: str) -> dict:
     """Verify Redis response cache returns sub-5ms on 2nd call."""
@@ -222,6 +229,7 @@ async def test_response_cache(provider: str, api_key: str) -> dict:
 # Test 4: Cost calculation
 # ---------------------------------------------------------------------------
 
+
 def test_cost_calculation() -> dict:
     """Verify cost resolution uses existing pricing sources."""
     from src.services.billing.llm_cost_service import _resolve_pricing, calculate_cost
@@ -237,13 +245,15 @@ def test_cost_calculation() -> dict:
     for model, rules, inp, out, cache_read, cache_create in cases:
         cost = calculate_cost(model, inp, out, cache_read, cache_create, rules)
         inp_rate, out_rate = _resolve_pricing(model, rules)
-        rows.append([
-            model[:35],
-            f"{inp}",
-            f"{out}",
-            f"${inp_rate:.5f}/1k" if inp_rate else "unknown",
-            f"${cost:.8f}" if cost is not None else "None",
-        ])
+        rows.append(
+            [
+                model[:35],
+                f"{inp}",
+                f"{out}",
+                f"${inp_rate:.5f}/1k" if inp_rate else "unknown",
+                f"${cost:.8f}" if cost is not None else "None",
+            ]
+        )
         if "unknown-model" not in model and cost is None:
             all_passed = False
 
@@ -260,6 +270,7 @@ def test_cost_calculation() -> dict:
 # Main
 # ---------------------------------------------------------------------------
 
+
 def parse_args():
     p = argparse.ArgumentParser(description="LLM Cost Optimization Benchmark")
     p.add_argument("--provider", choices=["anthropic", "openai"], default="anthropic")
@@ -273,11 +284,9 @@ async def main():
     args = parse_args()
 
     provider = args.provider
-    api_key = args.api_key or os.getenv(
-        "ANTHROPIC_API_KEY" if provider == "anthropic" else "OPENAI_API_KEY", ""
-    )
+    api_key = args.api_key or os.getenv("ANTHROPIC_API_KEY" if provider == "anthropic" else "OPENAI_API_KEY", "")
 
-    print(f"\nLLM Cost Optimization Benchmark")
+    print("\nLLM Cost Optimization Benchmark")
     print(f"Provider: {provider}  |  Model: varies")
     print("=" * 60)
 
@@ -304,7 +313,7 @@ async def main():
     # Summary
     passed = sum(1 for r in results if r.get("passed"))
     total = len(results)
-    print(f"\n{'='*60}")
+    print(f"\n{'=' * 60}")
     print(f"Results: {passed}/{total} tests passed")
 
     # Write markdown results

@@ -13,11 +13,11 @@ import os
 import time
 import uuid
 
-import pytest
 import httpx
+import pytest
 
 BASE_URL = "http://localhost:5001"
-AGENT_ID = "dfff4404-de17-45f4-8f2a-4a0855b24762"   # Sample DB
+AGENT_ID = "dfff4404-de17-45f4-8f2a-4a0855b24762"  # Sample DB
 A2A_KEY = os.environ.get("TEST_A2A_KEY", "")
 MCP_KEY = os.environ.get("TEST_MCP_KEY", "")
 MCP_URL = f"{BASE_URL}/api/mcp/{AGENT_ID}"
@@ -28,20 +28,22 @@ A2A_URL = f"{BASE_URL}/api/a2a/agents/{AGENT_ID}"
 # helpers
 # ---------------------------------------------------------------------------
 
+
 def a2a(method, params=None):
     payload = {"jsonrpc": "2.0", "id": str(uuid.uuid4()), "method": method, "params": params or {}}
-    r = httpx.post(A2A_URL, json=payload,
-                   headers={"Authorization": f"Bearer {A2A_KEY}"}, timeout=30)
+    r = httpx.post(A2A_URL, json=payload, headers={"Authorization": f"Bearer {A2A_KEY}"}, timeout=30)
     r.raise_for_status()
     return r.json()
 
 
 def mcp(method, params=None):
     payload = {"jsonrpc": "2.0", "id": str(uuid.uuid4()), "method": method, "params": params or {}}
-    r = httpx.post(MCP_URL, json=payload,
-                   headers={"Authorization": f"Bearer {MCP_KEY}",
-                             "MCP-Protocol-Version": "2025-06-18"},
-                   timeout=60)
+    r = httpx.post(
+        MCP_URL,
+        json=payload,
+        headers={"Authorization": f"Bearer {MCP_KEY}", "MCP-Protocol-Version": "2025-06-18"},
+        timeout=60,
+    )
     r.raise_for_status()
     return r.json()
 
@@ -50,13 +52,16 @@ def mcp(method, params=None):
 # MCP Server Host
 # ---------------------------------------------------------------------------
 
-class TestMCPServerHost:
 
+class TestMCPServerHost:
     def test_initialize_returns_correct_protocol_version(self):
-        resp = mcp("initialize", {
-            "protocolVersion": "2025-06-18",
-            "clientInfo": {"name": "pytest-client", "version": "1.0"},
-        })
+        resp = mcp(
+            "initialize",
+            {
+                "protocolVersion": "2025-06-18",
+                "clientInfo": {"name": "pytest-client", "version": "1.0"},
+            },
+        )
         result = resp["result"]
         assert result["protocolVersion"] == "2025-06-18"
         assert result["serverInfo"]["name"] == "synkora-agent"
@@ -72,10 +77,13 @@ class TestMCPServerHost:
         assert "message" in tool["inputSchema"]["required"]
 
     def test_tools_call_chat_executes_real_agent(self):
-        resp = mcp("tools/call", {
-            "name": "chat",
-            "arguments": {"message": "Reply with exactly the word: MCP_OK"},
-        })
+        resp = mcp(
+            "tools/call",
+            {
+                "name": "chat",
+                "arguments": {"message": "Reply with exactly the word: MCP_OK"},
+            },
+        )
         result = resp["result"]
         assert result["isError"] is False
         content = result["content"]
@@ -103,10 +111,12 @@ class TestMCPServerHost:
 
     def test_wrong_api_key_returns_401(self):
         payload = {"jsonrpc": "2.0", "id": "x", "method": "ping", "params": {}}
-        r = httpx.post(MCP_URL, json=payload,
-                       headers={"Authorization": "Bearer sk_live_fakekeyXXXXXXXXXXXX",
-                                 "MCP-Protocol-Version": "2025-06-18"},
-                       timeout=10)
+        r = httpx.post(
+            MCP_URL,
+            json=payload,
+            headers={"Authorization": "Bearer sk_live_fakekeyXXXXXXXXXXXX", "MCP-Protocol-Version": "2025-06-18"},
+            timeout=10,
+        )
         assert r.status_code == 401
 
     def test_no_auth_returns_401(self):
@@ -119,15 +129,18 @@ class TestMCPServerHost:
 # A2A Async Tasks
 # ---------------------------------------------------------------------------
 
-class TestA2AAsyncTasks:
 
+class TestA2AAsyncTasks:
     def test_tasks_send_returns_immediately_with_submitted(self):
         """tasks/send must return in <2s — task queued to Celery, not executed inline."""
         t0 = time.time()
-        resp = a2a("tasks/send", {
-            "id": str(uuid.uuid4()),
-            "message": {"role": "user", "parts": [{"type": "text", "text": "Reply: ASYNC_TEST"}]},
-        })
+        resp = a2a(
+            "tasks/send",
+            {
+                "id": str(uuid.uuid4()),
+                "message": {"role": "user", "parts": [{"type": "text", "text": "Reply: ASYNC_TEST"}]},
+            },
+        )
         elapsed = time.time() - t0
 
         assert elapsed < 2, f"tasks/send took {elapsed:.1f}s — must be instant (async)"
@@ -138,10 +151,13 @@ class TestA2AAsyncTasks:
 
     def test_tasks_get_completes_via_celery(self):
         """Full lifecycle: submit → Celery executes → poll to completed."""
-        resp = a2a("tasks/send", {
-            "id": str(uuid.uuid4()),
-            "message": {"role": "user", "parts": [{"type": "text", "text": "Reply with exactly: CELERY_OK"}]},
-        })
+        resp = a2a(
+            "tasks/send",
+            {
+                "id": str(uuid.uuid4()),
+                "message": {"role": "user", "parts": [{"type": "text", "text": "Reply with exactly: CELERY_OK"}]},
+            },
+        )
         task_id = resp["result"]["id"]
 
         # Poll up to 30s
@@ -167,10 +183,13 @@ class TestA2AAsyncTasks:
 
     def test_tasks_cancel_stops_submitted_task(self):
         """Create a task and cancel it before Celery picks it up (race — but cancel must work)."""
-        resp = a2a("tasks/send", {
-            "id": str(uuid.uuid4()),
-            "message": {"role": "user", "parts": [{"type": "text", "text": "Long running task placeholder"}]},
-        })
+        resp = a2a(
+            "tasks/send",
+            {
+                "id": str(uuid.uuid4()),
+                "message": {"role": "user", "parts": [{"type": "text", "text": "Long running task placeholder"}]},
+            },
+        )
         task_id = resp["result"]["id"]
 
         cancel_resp = a2a("tasks/cancel", {"id": task_id})
@@ -195,9 +214,9 @@ class TestA2AAsyncTasks:
         states_seen = []
         got_text = []
 
-        with httpx.stream("POST", A2A_URL, json=payload,
-                          headers={"Authorization": f"Bearer {A2A_KEY}"},
-                          timeout=60) as r:
+        with httpx.stream(
+            "POST", A2A_URL, json=payload, headers={"Authorization": f"Bearer {A2A_KEY}"}, timeout=60
+        ) as r:
             r.raise_for_status()
             for line in r.iter_lines():
                 if not line.startswith("data: "):

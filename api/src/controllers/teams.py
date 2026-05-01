@@ -396,8 +396,8 @@ async def generate_member_reset_link(
 
     from src.models import Account
     from src.models.tenant import TenantAccountJoin
-    from src.services.auth_service import AuthService
     from src.services.activity.activity_log_service import ActivityLogService
+    from src.services.auth_service import AuthService
 
     team_service = TeamService(db)
 
@@ -484,8 +484,7 @@ async def generate_member_reset_link(
         logger.warning(f"Failed to write admin_generated_password_reset_link audit log: {audit_exc}")
 
     logger.info(
-        f"Admin {current_account.id} generated password reset link for account {target_uuid} "
-        f"in tenant {tenant_id}"
+        f"Admin {current_account.id} generated password reset link for account {target_uuid} in tenant {tenant_id}"
     )
 
     return PasswordResetLinkResponse(

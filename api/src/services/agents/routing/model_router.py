@@ -261,9 +261,7 @@ class ModelRouter:
         max_cost = float(routing_config.get("max_cost_per_1k", 999.0))
         affordable = [c for c in non_fallback if self._input_cost(c) <= max_cost]
         if not affordable:
-            logger.warning(
-                f"[cost_opt] No configs within budget ${max_cost:.5f}/1k; ignoring budget cap"
-            )
+            logger.warning(f"[cost_opt] No configs within budget ${max_cost:.5f}/1k; ignoring budget cap")
             affordable = non_fallback
 
         # Quality gate: exclude configs below quality_floor
@@ -273,9 +271,7 @@ class ModelRouter:
             if quality_ok:
                 affordable = quality_ok
             else:
-                logger.warning(
-                    f"[cost_opt] No configs meet quality_floor={quality_floor}; ignoring quality gate"
-                )
+                logger.warning(f"[cost_opt] No configs meet quality_floor={quality_floor}; ignoring quality gate")
 
         # Filter by complexity gate
         viable = [c for c in affordable if self._complexity_fits(c, complexity)]
@@ -339,9 +335,7 @@ class ModelRouter:
                 general_configs.sort(key=lambda c: self._routing_rules(c).get("priority", 99))
                 primary = general_configs[0]
                 # Fallbacks: remaining non-fallback-only first, then fallback-only last
-                remaining_non_fb = [
-                    c for c in non_fallback if str(c.id) != str(primary.id)
-                ]
+                remaining_non_fb = [c for c in non_fallback if str(c.id) != str(primary.id)]
                 ordered_fallbacks = remaining_non_fb + fallback_only
                 logger.info(f"[intent] No match for '{intent}' — using 'general' wildcard → {primary.model_name}")
             else:
@@ -426,6 +420,7 @@ class ModelRouter:
         if cost >= 999.0:
             return 0.5  # Unknown cost — assume medium quality
         import math
+
         # log scale: $0.00005 → ~0.1, $0.003 → ~0.6, $0.015 → ~0.9
         return min(1.0, max(0.0, (math.log10(cost + 1e-6) + 6) / 6.0))
 

@@ -403,9 +403,7 @@ async def patch_user(db: AsyncSession, tenant_id: uuid.UUID, scim_user_id: str, 
                     raise ValueError("replace without path requires a dict value")
                 invalid_keys = {k.lower() for k in value} - _VALID_PATHS
                 if invalid_keys:
-                    raise ValueError(
-                        f"Unsupported SCIM path(s) in replace value: {', '.join(sorted(invalid_keys))}"
-                    )
+                    raise ValueError(f"Unsupported SCIM path(s) in replace value: {', '.join(sorted(invalid_keys))}")
                 # Apply whitelisted fields from the value dict
                 if "active" in value:
                     account.status = AccountStatus.ACTIVE if value["active"] else AccountStatus.INACTIVE
@@ -444,9 +442,7 @@ async def patch_user(db: AsyncSession, tenant_id: uuid.UUID, scim_user_id: str, 
                     raise ValueError("add without path requires a dict value")
                 invalid_keys = {k.lower() for k in value} - _VALID_PATHS
                 if invalid_keys:
-                    raise ValueError(
-                        f"Unsupported SCIM path(s) in add value: {', '.join(sorted(invalid_keys))}"
-                    )
+                    raise ValueError(f"Unsupported SCIM path(s) in add value: {', '.join(sorted(invalid_keys))}")
             elif path not in _VALID_PATHS:
                 raise ValueError(f"Unsupported SCIM path: {raw_path!r}")
             # Handle add operations the same as replace for our supported fields
@@ -523,7 +519,9 @@ async def delete_user(db: AsyncSession, tenant_id: uuid.UUID, scim_user_id: str)
 # ---------------------------------------------------------------------------
 
 
-async def create_scim_token(db: AsyncSession, tenant_id: uuid.UUID, description: str | None = None) -> tuple[str, SCIMToken]:
+async def create_scim_token(
+    db: AsyncSession, tenant_id: uuid.UUID, description: str | None = None
+) -> tuple[str, SCIMToken]:
     """
     Create a new SCIM token for tenant_id.
 
@@ -551,9 +549,7 @@ async def create_scim_token(db: AsyncSession, tenant_id: uuid.UUID, description:
 async def list_scim_tokens(db: AsyncSession, tenant_id: uuid.UUID) -> list[SCIMToken]:
     """List all SCIM tokens for tenant_id (no plaintext)."""
     result = await db.execute(
-        select(SCIMToken)
-        .filter(SCIMToken.tenant_id == tenant_id)
-        .order_by(SCIMToken.created_at.desc())
+        select(SCIMToken).filter(SCIMToken.tenant_id == tenant_id).order_by(SCIMToken.created_at.desc())
     )
     return list(result.scalars().all())
 
@@ -570,9 +566,7 @@ async def revoke_scim_token(db: AsyncSession, tenant_id: uuid.UUID, token_id: uu
     Returns:
         True if found and revoked, False if not found / wrong tenant
     """
-    result = await db.execute(
-        select(SCIMToken).filter(SCIMToken.id == token_id, SCIMToken.tenant_id == tenant_id)
-    )
+    result = await db.execute(select(SCIMToken).filter(SCIMToken.id == token_id, SCIMToken.tenant_id == tenant_id))
     token = result.scalar_one_or_none()
     if not token:
         return False

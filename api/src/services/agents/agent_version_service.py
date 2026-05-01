@@ -42,9 +42,7 @@ async def create_version(
 ) -> AgentVersion:
     """Snapshot the current agent state as a new version."""
     # Get next version number for this agent
-    result = await db.execute(
-        select(func.max(AgentVersion.version_number)).filter(AgentVersion.agent_id == agent.id)
-    )
+    result = await db.execute(select(func.max(AgentVersion.version_number)).filter(AgentVersion.agent_id == agent.id))
     max_version = result.scalar() or 0
     next_version = max_version + 1
 

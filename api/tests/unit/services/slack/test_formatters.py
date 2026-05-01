@@ -1,4 +1,3 @@
-
 from src.services.slack.formatters import (
     SLACK_MAX_BLOCKS,
     SLACK_MAX_TEXT_LENGTH,

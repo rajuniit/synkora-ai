@@ -297,7 +297,9 @@ class TestVerifyTwoFactor:
         mock_result.scalar_one_or_none.return_value = mock_profile
         mock_db.execute = AsyncMock(return_value=mock_result)
 
-        with patch("src.services.auth_service.AuthService.generate_backup_codes", new_callable=AsyncMock) as mock_backup:
+        with patch(
+            "src.services.auth_service.AuthService.generate_backup_codes", new_callable=AsyncMock
+        ) as mock_backup:
             mock_backup.return_value = ["BACKUP1", "BACKUP2"]
             response = test_client.post("/profile/me/2fa/verify", json={"token": "123456"})
 

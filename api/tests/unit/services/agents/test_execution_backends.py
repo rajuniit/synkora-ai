@@ -19,7 +19,6 @@ from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
 
-
 # ─────────────────────────────────────────────────────────────────────────────
 # Factory
 # ─────────────────────────────────────────────────────────────────────────────
@@ -64,7 +63,9 @@ class TestGetExecutionBackend:
         from src.services.agents.execution_backends.do_functions_backend import DOFunctionsBackend
 
         with patch("src.config.settings.settings") as mock_settings:
-            mock_settings.do_functions_endpoint = "https://faas-nyc1-abc.doserverless.co/api/v1/web/fn-xxx/synkora/agent-runner"
+            mock_settings.do_functions_endpoint = (
+                "https://faas-nyc1-abc.doserverless.co/api/v1/web/fn-xxx/synkora/agent-runner"
+            )
             mock_settings.do_api_token = "dop_v1_test"
             mock_settings.do_functions_invocation_secret = None
             b = get_execution_backend("do_functions")
@@ -92,6 +93,7 @@ class TestGetExecutionBackend:
 class TestCeleryBackend:
     def setup_method(self):
         from src.services.agents.execution_backends.celery_backend import CeleryBackend
+
         self.backend = CeleryBackend()
 
     def test_supports_all_task_types(self):
@@ -99,16 +101,12 @@ class TestCeleryBackend:
             assert self.backend.is_supported_task_type(task_type) is True
 
     def test_dispatch_is_noop(self):
-        result = asyncio.run(
-            self.backend.dispatch("task-123", "agent_task", "agent-456", "tenant-789")
-        )
+        result = asyncio.run(self.backend.dispatch("task-123", "agent_task", "agent-456", "tenant-789"))
         assert result == ""
 
     def test_dispatch_returns_empty_string_for_all_task_types(self):
         for task_type in ("agent_task", "database_query", "autonomous_agent", "followup_reminder"):
-            result = asyncio.run(
-                self.backend.dispatch("task-abc", task_type, "agent-1", "tenant-1")
-            )
+            result = asyncio.run(self.backend.dispatch("task-abc", task_type, "agent-1", "tenant-1"))
             assert result == "", f"Expected '' for task_type={task_type}, got {result!r}"
 
     def test_is_instance_of_base(self):
@@ -119,9 +117,7 @@ class TestCeleryBackend:
 
     def test_dispatch_does_not_raise_on_any_args(self):
         """No external calls means any argument combination should succeed silently."""
-        result = asyncio.run(
-            self.backend.dispatch("", "", "", "")
-        )
+        result = asyncio.run(self.backend.dispatch("", "", "", ""))
         assert result == ""
 
     def test_supports_unknown_task_type(self):
@@ -131,8 +127,7 @@ class TestCeleryBackend:
     def test_multiple_dispatches_are_independent(self):
         """Repeated dispatches on the same backend instance should each return ''."""
         results = [
-            asyncio.run(self.backend.dispatch(f"task-{i}", "agent_task", "agent-0", "tenant-0"))
-            for i in range(3)
+            asyncio.run(self.backend.dispatch(f"task-{i}", "agent_task", "agent-0", "tenant-0")) for i in range(3)
         ]
         assert results == ["", "", ""]
 
@@ -151,6 +146,7 @@ class TestLambdaBackend:
             mock_settings.aws_secret_access_key = "supersecret"
             mock_settings.lambda_invocation_secret = secret
             from src.services.agents.execution_backends.lambda_backend import LambdaBackend
+
             return LambdaBackend()
 
     def test_supported_task_types(self):
@@ -178,9 +174,7 @@ class TestLambdaBackend:
         mock_client.invoke.return_value = mock_response
 
         with patch("boto3.client", return_value=mock_client):
-            result = asyncio.run(
-                b.dispatch("task-001", "agent_task", "agent-002", "tenant-003")
-            )
+            result = asyncio.run(b.dispatch("task-001", "agent_task", "agent-002", "tenant-003"))
 
         assert result == "req-abc-123"
         mock_client.invoke.assert_called_once()
@@ -189,6 +183,7 @@ class TestLambdaBackend:
         assert call_kwargs["InvocationType"] == "Event"
 
         import json
+
         payload = json.loads(call_kwargs["Payload"].decode())
         assert payload["task_id"] == "task-001"
         assert payload["task_type"] == "agent_task"
@@ -203,11 +198,10 @@ class TestLambdaBackend:
         mock_client.invoke.return_value = {"ResponseMetadata": {"RequestId": "req-signed"}}
 
         with patch("boto3.client", return_value=mock_client):
-            asyncio.run(
-                b.dispatch("task-signed", "agent_task", "agent-x", "tenant-y")
-            )
+            asyncio.run(b.dispatch("task-signed", "agent_task", "agent-x", "tenant-y"))
 
         import json
+
         payload = json.loads(mock_client.invoke.call_args[1]["Payload"].decode())
         assert "signature" in payload
         assert len(payload["signature"]) == 64  # SHA-256 hex
@@ -232,9 +226,7 @@ class TestLambdaBackend:
         b = self._make_backend()
         with patch.dict("sys.modules", {"boto3": None}):
             with pytest.raises(ImportError, match="boto3"):
-                asyncio.run(
-                    b.dispatch("task-x", "agent_task", "a", "t")
-                )
+                asyncio.run(b.dispatch("task-x", "agent_task", "a", "t"))
 
 
 # ─────────────────────────────────────────────────────────────────────────────
@@ -251,6 +243,7 @@ class TestCloudRunBackend:
             mock_settings.gcp_service_account_json = sa_json
             mock_settings.cloud_run_invocation_secret = secret
             from src.services.agents.execution_backends.cloud_run_backend import CloudRunBackend
+
             return CloudRunBackend()
 
     def test_supports_all_task_types(self):
@@ -271,7 +264,9 @@ class TestCloudRunBackend:
     def test_dispatch_calls_gcp_jobs_api(self):
         # google-cloud-run is an optional dep; stub out the whole module so
         # the test runs regardless of whether it is installed.
-        import json, base64, sys
+        import base64
+        import json
+        import sys
         from unittest.mock import MagicMock
 
         mock_run_v2 = MagicMock()
@@ -280,9 +275,7 @@ class TestCloudRunBackend:
         mock_operation.operation.name = "operations/my-op-name"
 
         mock_client = MagicMock()
-        mock_client.job_path.return_value = (
-            "projects/my-proj/locations/us-central1/jobs/synkora-runner"
-        )
+        mock_client.job_path.return_value = "projects/my-proj/locations/us-central1/jobs/synkora-runner"
         mock_client.run_job.return_value = mock_operation
         mock_run_v2.JobsClient.return_value = mock_client
 
@@ -299,15 +292,17 @@ class TestCloudRunBackend:
         # that has no relationship to mock_run_v2.
         mock_gcloud = MagicMock()
         mock_gcloud.run_v2 = mock_run_v2
-        with patch.dict(sys.modules, {
-                "google.cloud": mock_gcloud,
-                "google.cloud.run_v2": mock_run_v2,
-             }), \
-             patch("google.oauth2.service_account.Credentials.from_service_account_info",
-                   return_value=MagicMock()):
-            result = asyncio.run(
-                b.dispatch("task-cr", "autonomous_agent", "agent-cr", "tenant-cr")
-            )
+        with (
+            patch.dict(
+                sys.modules,
+                {
+                    "google.cloud": mock_gcloud,
+                    "google.cloud.run_v2": mock_run_v2,
+                },
+            ),
+            patch("google.oauth2.service_account.Credentials.from_service_account_info", return_value=MagicMock()),
+        ):
+            result = asyncio.run(b.dispatch("task-cr", "autonomous_agent", "agent-cr", "tenant-cr"))
 
         assert "operations/my-op-name" in result or result != ""
         mock_client.run_job.assert_called_once()
@@ -336,13 +331,18 @@ class TestCloudRunBackend:
 
 
 class TestDOFunctionsBackend:
-    def _make_backend(self, endpoint="https://faas-nyc1-abc.doserverless.co/api/v1/web/fn-xxx/synkora/runner",
-                      token="dop_v1_test", secret=None):
+    def _make_backend(
+        self,
+        endpoint="https://faas-nyc1-abc.doserverless.co/api/v1/web/fn-xxx/synkora/runner",
+        token="dop_v1_test",
+        secret=None,
+    ):
         with patch("src.config.settings.settings") as mock_settings:
             mock_settings.do_functions_endpoint = endpoint
             mock_settings.do_api_token = token
             mock_settings.do_functions_invocation_secret = secret
             from src.services.agents.execution_backends.do_functions_backend import DOFunctionsBackend
+
             return DOFunctionsBackend()
 
     def test_supported_task_types(self):
@@ -375,9 +375,7 @@ class TestDOFunctionsBackend:
         mock_client.post = AsyncMock(return_value=mock_response)
 
         with patch("httpx.AsyncClient", return_value=mock_client):
-            result = asyncio.run(
-                b.dispatch("task-do", "agent_task", "agent-do", "tenant-do")
-            )
+            result = asyncio.run(b.dispatch("task-do", "agent_task", "agent-do", "tenant-do"))
 
         assert result == "do-req-abc123"
         mock_client.post.assert_called_once()
@@ -385,6 +383,7 @@ class TestDOFunctionsBackend:
         assert "Authorization" in call_args[1]["headers"]
 
         import json
+
         payload = call_args[1]["json"]
         assert payload["task_id"] == "task-do"
         assert payload["task_type"] == "agent_task"
@@ -403,9 +402,7 @@ class TestDOFunctionsBackend:
         mock_client.post = AsyncMock(return_value=mock_response)
 
         with patch("httpx.AsyncClient", return_value=mock_client):
-            asyncio.run(
-                b.dispatch("task-signed-do", "agent_task", "a", "t")
-            )
+            asyncio.run(b.dispatch("task-signed-do", "agent_task", "a", "t"))
 
         payload = mock_client.post.call_args[1]["json"]
         assert "signature" in payload
@@ -425,9 +422,7 @@ class TestDOFunctionsBackend:
 
         with patch("httpx.AsyncClient", return_value=mock_client):
             with pytest.raises(RuntimeError, match="DO Functions invocation failed"):
-                asyncio.run(
-                    b.dispatch("task-fail", "agent_task", "a", "t")
-                )
+                asyncio.run(b.dispatch("task-fail", "agent_task", "a", "t"))
 
     def test_hmac_verify_roundtrip(self):
         from src.services.agents.execution_backends.do_functions_backend import DOFunctionsBackend
@@ -456,8 +451,9 @@ class TestLambdaHandler:
             from src.handlers.lambda_handler import handler
 
             def side_effect(task_id):
-                assert os.environ.get("SYNKORA_DIRECT_EXECUTION") == "true", \
+                assert os.environ.get("SYNKORA_DIRECT_EXECUTION") == "true", (
                     "SYNKORA_DIRECT_EXECUTION must be set before executor is called"
+                )
                 return {"status": "ok"}
 
             mock_exec.side_effect = side_effect
@@ -477,7 +473,9 @@ class TestLambdaHandler:
         monkeypatch.setenv("LAMBDA_INVOCATION_SECRET", "correct-secret")
 
         from importlib import reload
+
         import src.handlers.lambda_handler as lh
+
         reload(lh)
 
         event = {
@@ -496,16 +494,21 @@ class TestLambdaHandler:
         monkeypatch.setenv("LAMBDA_INVOCATION_SECRET", secret)
 
         from src.services.agents.execution_backends.lambda_backend import LambdaBackend
+
         task_id = "t-hmac"
         timestamp = "2026-04-26T00:00:00+00:00"
         sig = LambdaBackend.verify_signature.__func__ if False else None  # not needed
         # Build a valid signature directly
-        import hashlib, hmac as hmac_mod
+        import hashlib
+        import hmac as hmac_mod
+
         sig = hmac_mod.new(secret.encode(), f"{task_id}:{timestamp}".encode(), hashlib.sha256).hexdigest()
 
         with patch("src.tasks.scheduled_tasks.execute_scheduled_task", return_value={"status": "ok"}):
             from importlib import reload
+
             import src.handlers.lambda_handler as lh
+
             reload(lh)
 
             event = {"task_id": task_id, "task_type": "agent_task", "timestamp": timestamp, "signature": sig}
@@ -520,7 +523,9 @@ class TestDOFunctionsHandler:
         monkeypatch.delenv("SYNKORA_DIRECT_EXECUTION", raising=False)
 
         from importlib import reload
+
         import src.handlers.do_functions_handler as doh
+
         reload(doh)
 
         result = doh.main({"task_id": "t-001", "task_type": "agent_task"})
@@ -532,7 +537,9 @@ class TestDOFunctionsHandler:
 
         with patch("src.tasks.scheduled_tasks.execute_scheduled_task", return_value={"status": "ok"}):
             from importlib import reload
+
             import src.handlers.do_functions_handler as doh
+
             reload(doh)
 
             result = doh.main({"task_id": "t-001", "task_type": "agent_task"})
@@ -543,7 +550,9 @@ class TestDOFunctionsHandler:
         monkeypatch.setenv("SYNKORA_DIRECT_EXECUTION", "true")
 
         from importlib import reload
+
         import src.handlers.do_functions_handler as doh
+
         reload(doh)
 
         result = doh.main({})
@@ -570,7 +579,9 @@ class TestDirectExecutionGuard:
             with patch("src.services.agents.execution_backends.get_execution_backend") as mock_get_backend:
                 # Simulate the guard check alone (not a full task run)
                 import importlib
+
                 import src.tasks.scheduled_tasks as st
+
                 importlib.reload(st)
 
                 # The guard is: _direct_execution = os.environ.get("SYNKORA_DIRECT_EXECUTION") == "true"

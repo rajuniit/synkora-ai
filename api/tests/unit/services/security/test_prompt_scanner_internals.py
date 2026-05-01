@@ -23,6 +23,7 @@ def scanner():
 # _normalize_text
 # ---------------------------------------------------------------------------
 
+
 @pytest.mark.unit
 class TestNormalizeText:
     def test_strips_leading_trailing_whitespace(self, scanner):
@@ -50,6 +51,7 @@ class TestNormalizeText:
 # _decode_obfuscations
 # ---------------------------------------------------------------------------
 
+
 @pytest.mark.unit
 class TestDecodeObfuscations:
     def test_html_entity_decoded(self, scanner):
@@ -75,6 +77,7 @@ class TestDecodeObfuscations:
 # ---------------------------------------------------------------------------
 # _extract_context
 # ---------------------------------------------------------------------------
+
 
 @pytest.mark.unit
 class TestExtractContext:
@@ -105,6 +108,7 @@ class TestExtractContext:
 # _get_risk_score
 # ---------------------------------------------------------------------------
 
+
 @pytest.mark.unit
 class TestGetRiskScore:
     def test_safe_severity_returns_zero(self, scanner):
@@ -132,6 +136,7 @@ class TestGetRiskScore:
 # ---------------------------------------------------------------------------
 # _calculate_threat_level
 # ---------------------------------------------------------------------------
+
 
 @pytest.mark.unit
 class TestCalculateThreatLevel:
@@ -170,6 +175,7 @@ class TestCalculateThreatLevel:
 # _analyze_reputation
 # ---------------------------------------------------------------------------
 
+
 @pytest.mark.unit
 class TestAnalyzeReputation:
     def test_unknown_user_scores_zero(self, scanner):
@@ -202,6 +208,7 @@ class TestAnalyzeReputation:
 # _update_reputation
 # ---------------------------------------------------------------------------
 
+
 @pytest.mark.unit
 class TestUpdateReputation:
     def test_high_threat_increments_user_violations(self, scanner):
@@ -230,6 +237,7 @@ class TestUpdateReputation:
 # ---------------------------------------------------------------------------
 # get_detection_stats
 # ---------------------------------------------------------------------------
+
 
 @pytest.mark.unit
 class TestGetDetectionStats:
@@ -265,6 +273,7 @@ class TestGetDetectionStats:
 # ---------------------------------------------------------------------------
 # _get_mitigation_advice
 # ---------------------------------------------------------------------------
+
 
 @pytest.mark.unit
 class TestGetMitigationAdvice:

@@ -300,14 +300,17 @@ class TestValidateChatRequest:
         """Test when all validations pass."""
         tenant_id = uuid.uuid4()
 
-        with patch.object(
-            billing_service,
-            "validate_subscription",
-            AsyncMock(return_value=BillingValidationResult(is_valid=True)),
-        ), patch.object(
-            billing_service,
-            "validate_credits",
-            AsyncMock(return_value=BillingValidationResult(is_valid=True)),
+        with (
+            patch.object(
+                billing_service,
+                "validate_subscription",
+                AsyncMock(return_value=BillingValidationResult(is_valid=True)),
+            ),
+            patch.object(
+                billing_service,
+                "validate_credits",
+                AsyncMock(return_value=BillingValidationResult(is_valid=True)),
+            ),
         ):
             result = await billing_service.validate_chat_request(tenant_id, "gpt-4")
 
@@ -339,14 +342,17 @@ class TestValidateChatRequest:
             message="Not enough",
         )
 
-        with patch.object(
-            billing_service,
-            "validate_subscription",
-            AsyncMock(return_value=BillingValidationResult(is_valid=True)),
-        ), patch.object(
-            billing_service,
-            "validate_credits",
-            AsyncMock(return_value=BillingValidationResult(is_valid=False, error=error)),
+        with (
+            patch.object(
+                billing_service,
+                "validate_subscription",
+                AsyncMock(return_value=BillingValidationResult(is_valid=True)),
+            ),
+            patch.object(
+                billing_service,
+                "validate_credits",
+                AsyncMock(return_value=BillingValidationResult(is_valid=False, error=error)),
+            ),
         ):
             result = await billing_service.validate_chat_request(tenant_id, "gpt-4")
 
@@ -358,19 +364,23 @@ class TestValidateChatRequest:
         tenant_id = uuid.uuid4()
         conversation_id = uuid.uuid4()
 
-        with patch.object(
-            billing_service,
-            "validate_subscription",
-            AsyncMock(return_value=BillingValidationResult(is_valid=True)),
-        ), patch.object(
-            billing_service,
-            "validate_credits",
-            AsyncMock(return_value=BillingValidationResult(is_valid=True)),
-        ), patch.object(
-            billing_service,
-            "validate_message_limit",
-            AsyncMock(return_value=BillingValidationResult(is_valid=True)),
-        ) as mock_validate:
+        with (
+            patch.object(
+                billing_service,
+                "validate_subscription",
+                AsyncMock(return_value=BillingValidationResult(is_valid=True)),
+            ),
+            patch.object(
+                billing_service,
+                "validate_credits",
+                AsyncMock(return_value=BillingValidationResult(is_valid=True)),
+            ),
+            patch.object(
+                billing_service,
+                "validate_message_limit",
+                AsyncMock(return_value=BillingValidationResult(is_valid=True)),
+            ) as mock_validate,
+        ):
             await billing_service.validate_chat_request(tenant_id, "gpt-4", conversation_id=conversation_id)
 
         mock_validate.assert_called_once_with(tenant_id, conversation_id)
@@ -392,14 +402,17 @@ class TestValidateConversationCreation:
         tenant_id = uuid.uuid4()
         account_id = uuid.uuid4()
 
-        with patch.object(
-            billing_service,
-            "validate_subscription",
-            AsyncMock(return_value=BillingValidationResult(is_valid=True)),
-        ), patch.object(
-            billing_service,
-            "validate_conversation_limit",
-            AsyncMock(return_value=BillingValidationResult(is_valid=True)),
+        with (
+            patch.object(
+                billing_service,
+                "validate_subscription",
+                AsyncMock(return_value=BillingValidationResult(is_valid=True)),
+            ),
+            patch.object(
+                billing_service,
+                "validate_conversation_limit",
+                AsyncMock(return_value=BillingValidationResult(is_valid=True)),
+            ),
         ):
             result = await billing_service.validate_conversation_creation(tenant_id, account_id)
 
@@ -433,14 +446,17 @@ class TestValidateConversationCreation:
             message="Limit exceeded",
         )
 
-        with patch.object(
-            billing_service,
-            "validate_subscription",
-            AsyncMock(return_value=BillingValidationResult(is_valid=True)),
-        ), patch.object(
-            billing_service,
-            "validate_conversation_limit",
-            AsyncMock(return_value=BillingValidationResult(is_valid=False, error=error)),
+        with (
+            patch.object(
+                billing_service,
+                "validate_subscription",
+                AsyncMock(return_value=BillingValidationResult(is_valid=True)),
+            ),
+            patch.object(
+                billing_service,
+                "validate_conversation_limit",
+                AsyncMock(return_value=BillingValidationResult(is_valid=False, error=error)),
+            ),
         ):
             result = await billing_service.validate_conversation_creation(tenant_id, account_id)
 

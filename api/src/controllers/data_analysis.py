@@ -21,7 +21,6 @@ from src.models import Account
 from src.services.data_analysis_service import DataAnalysisService
 from src.services.report_export_service import ReportExportService
 
-
 logger = logging.getLogger(__name__)
 
 _TOKEN_MAX_AGE_SECONDS = 3600  # Tokens expire after 1 hour
@@ -32,9 +31,7 @@ def _make_download_token(file_path: str) -> str:
     secret = os.getenv("SECRET_KEY", "").encode()
     ts = str(int(time.time()))
     sig = hmac.new(secret, f"{ts}:{file_path}".encode(), hashlib.sha256).hexdigest()
-    payload = base64.urlsafe_b64encode(
-        json.dumps({"path": file_path, "ts": ts, "sig": sig}).encode()
-    ).decode()
+    payload = base64.urlsafe_b64encode(json.dumps({"path": file_path, "ts": ts, "sig": sig}).encode()).decode()
     return payload
 
 

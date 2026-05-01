@@ -10,7 +10,6 @@ from uuid import UUID, uuid4
 
 import pytest
 
-
 TENANT_ID = UUID("00000000-0000-0000-0000-000000000001")
 
 

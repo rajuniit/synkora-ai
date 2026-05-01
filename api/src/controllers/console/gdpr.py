@@ -34,6 +34,7 @@ class DataExportResponse(BaseModel):
     message: str
     request_id: str
 
+
 logger = logging.getLogger(__name__)
 
 router = APIRouter()
@@ -176,9 +177,7 @@ async def request_erasure(
         str(account_id),
     )
 
-    logger.info(
-        f"GDPR erasure requested: account={account_id} tenant={tenant_id} request_id={erasure.id}"
-    )
+    logger.info(f"GDPR erasure requested: account={account_id} tenant={tenant_id} request_id={erasure.id}")
 
     return ErasureRequestResponse(
         id=str(erasure.id),

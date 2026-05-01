@@ -42,6 +42,7 @@ sys.modules.setdefault("src.services.agents.adk_tools", _fake_adk)
 # Helpers
 # ---------------------------------------------------------------------------
 
+
 def _make_llm_client(provider: str = "openai"):
     """Minimal mock LLM client whose provider attribute controls dispatch."""
     client = MagicMock()
@@ -60,6 +61,7 @@ def _tool_call_response(tool_name: str, arguments: dict):
     Uses SimpleNamespace to avoid Python class-body scoping issues.
     """
     from types import SimpleNamespace
+
     args_str = json.dumps(arguments)
     func = SimpleNamespace(name=tool_name, arguments=args_str)
     tool_call = SimpleNamespace(id="call_abc123", type="function", function=func)
@@ -71,6 +73,7 @@ def _tool_call_response(tool_name: str, arguments: dict):
 def _text_response(text: str):
     """Build a mock LLM response (second call) that returns plain text."""
     from types import SimpleNamespace
+
     message = SimpleNamespace(content=text, tool_calls=None)
     choice = SimpleNamespace(message=message, finish_reason="stop")
     return SimpleNamespace(choices=[choice], model="gpt-4o")
@@ -103,8 +106,10 @@ def _build_tool_result(num_rows: int = 100) -> dict:
 # Core fixture: capture every message list sent to the LLM
 # ---------------------------------------------------------------------------
 
+
 class LLMCallCapture:
     """Records the conversation_history passed to each _generate_*_with_tools call."""
+
     def __init__(self):
         self.calls: list[list[dict]] = []
 
@@ -117,12 +122,16 @@ class LLMCallCapture:
 # Tests
 # ---------------------------------------------------------------------------
 
+
 @pytest.mark.asyncio
-@pytest.mark.parametrize("redact_for_llm,redact_for_response", [
-    (True,  False),   # LLM redaction only — tokens restored in response
-    (True,  True),    # Both — LLM sees tokens, user sees tokens
-    (False, True),    # Response-only — after fix, LLM also gets tokens (bug was here)
-])
+@pytest.mark.parametrize(
+    "redact_for_llm,redact_for_response",
+    [
+        (True, False),  # LLM redaction only — tokens restored in response
+        (True, True),  # Both — LLM sees tokens, user sees tokens
+        (False, True),  # Response-only — after fix, LLM also gets tokens (bug was here)
+    ],
+)
 async def test_llm_never_sees_pii_in_tool_result(redact_for_llm, redact_for_response):
     """
     Prove that the conversation_history passed to LLM call #2 (after tool execution)
@@ -195,7 +204,7 @@ async def test_llm_never_sees_pii_in_tool_result(redact_for_llm, redact_for_resp
     # ── Assert: no real PII in the tool content sent to LLM ──
     real_phones = re.findall(r"\b555-\d{3}-\d{4}\b", tool_content)
     real_emails = re.findall(r"\buser\d+@example\.com\b", tool_content)
-    real_ssns   = re.findall(r"\b\d{3}-\d{2}-\d{4}\b", tool_content)
+    real_ssns = re.findall(r"\b\d{3}-\d{2}-\d{4}\b", tool_content)
 
     assert not real_phones, (
         f"LLM received {len(real_phones)} real phone numbers! "
@@ -224,12 +233,8 @@ async def test_llm_never_sees_pii_in_tool_result(redact_for_llm, redact_for_resp
     )
 
     # All 100 rows should have their phones and emails tokenised
-    assert len(phone_tokens) == 100, (
-        f"Expected 100 PHONE tokens, got {len(phone_tokens)}"
-    )
-    assert len(email_tokens) == 100, (
-        f"Expected 100 EMAIL tokens, got {len(email_tokens)}"
-    )
+    assert len(phone_tokens) == 100, f"Expected 100 PHONE tokens, got {len(phone_tokens)}"
+    assert len(email_tokens) == 100, f"Expected 100 EMAIL tokens, got {len(email_tokens)}"
 
 
 @pytest.mark.asyncio
@@ -256,7 +261,7 @@ async def test_no_redaction_when_disabled():
     handler = FunctionCallingHandler(
         llm_client=llm_client,
         tools=["internal_query_database"],
-        pii_redactor=None,   # disabled
+        pii_redactor=None,  # disabled
     )
     handler.available_tools = [{"name": "internal_query_database", "description": "Query DB", "parameters": {}}]
     handler._generate_openai_with_tools = fake_generate_openai
@@ -330,12 +335,10 @@ async def test_all_100_rows_redacted_not_just_one():
         ):
             pass
 
-    tool_content = next(
-        m["content"] for m in capture.calls[1] if m.get("role") == "tool"
-    )
+    tool_content = next(m["content"] for m in capture.calls[1] if m.get("role") == "tool")
 
     phone_tokens = re.findall(r"\[PHONE_\d+\]", tool_content)
-    real_phones  = re.findall(r"\b555-\d{3}-\d{4}\b", tool_content)
+    real_phones = re.findall(r"\b555-\d{3}-\d{4}\b", tool_content)
 
     assert len(phone_tokens) == 100, (
         f"Bug regression: expected 100 PHONE tokens, got {len(phone_tokens)}. "

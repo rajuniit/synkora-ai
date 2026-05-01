@@ -46,19 +46,13 @@ def cleanup_old_conversations() -> dict[str, Any]:
 
         # Collect IDs first to avoid large DELETE without index support
         old_conv_ids = [
-            row.id
-            for row in db.query(Conversation.id)
-            .filter(Conversation.created_at < cutoff)
-            .limit(10000)
-            .all()
+            row.id for row in db.query(Conversation.id).filter(Conversation.created_at < cutoff).limit(10000).all()
         ]
 
         if old_conv_ids:
             # Delete child messages first (in case no FK cascade)
             msg_count = (
-                db.query(Message)
-                .filter(Message.conversation_id.in_(old_conv_ids))
-                .delete(synchronize_session=False)
+                db.query(Message).filter(Message.conversation_id.in_(old_conv_ids)).delete(synchronize_session=False)
             )
             logger.info(
                 "Retention: deleted %d messages from %d old conversations",
@@ -67,9 +61,7 @@ def cleanup_old_conversations() -> dict[str, Any]:
             )
 
             deleted_count = (
-                db.query(Conversation)
-                .filter(Conversation.id.in_(old_conv_ids))
-                .delete(synchronize_session=False)
+                db.query(Conversation).filter(Conversation.id.in_(old_conv_ids)).delete(synchronize_session=False)
             )
 
         db.commit()
@@ -115,15 +107,11 @@ def cleanup_old_messages() -> dict[str, Any]:
     try:
         from sqlalchemy import text
 
-        from src.models.message import Message
         from src.models.conversation import Conversation
+        from src.models.message import Message
 
         # 1. Messages older than the retention window
-        deleted_old = (
-            db.query(Message)
-            .filter(Message.created_at < cutoff)
-            .delete(synchronize_session=False)
-        )
+        deleted_old = db.query(Message).filter(Message.created_at < cutoff).delete(synchronize_session=False)
 
         # 2. Orphaned messages (conversation deleted without cascading)
         existing_conv_ids_subq = db.query(Conversation.id).scalar_subquery()
@@ -183,11 +171,7 @@ def cleanup_old_files() -> dict[str, Any]:
     try:
         from src.models.upload_file import UploadFile
 
-        deleted_count = (
-            db.query(UploadFile)
-            .filter(UploadFile.created_at < cutoff)
-            .delete(synchronize_session=False)
-        )
+        deleted_count = db.query(UploadFile).filter(UploadFile.created_at < cutoff).delete(synchronize_session=False)
         db.commit()
 
         logger.info(

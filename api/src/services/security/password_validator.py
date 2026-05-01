@@ -107,7 +107,7 @@ async def check_hibp(password: str) -> bool:
     SHA-1 hash are sent over the network; the full hash never leaves this
     process.  Fails open (returns False) if the service is unreachable.
     """
-    if not os.getenv("HIBP_CHECK_ENABLED", "true").lower() in ("true", "1", "yes"):
+    if os.getenv("HIBP_CHECK_ENABLED", "true").lower() not in ("true", "1", "yes"):
         return False
     try:
         sha1 = hashlib.sha1(password.encode("utf-8")).hexdigest().upper()  # noqa: S324

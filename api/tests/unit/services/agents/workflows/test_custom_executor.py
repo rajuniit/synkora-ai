@@ -44,14 +44,14 @@ class TestCustomExecutorNoNodes:
         agent.workflow_config = {}  # No nodes key at all
         executor = CustomExecutor(agent, [_make_sub("a")])
         executor.execute_sub_agent = AsyncMock(return_value="out")
-        result = await executor.execute("input", "user-1")
+        await executor.execute("input", "user-1")
         assert "error" in executor.state
 
     @pytest.mark.asyncio
     async def test_returns_error_state_when_nodes_empty(self):
         executor = CustomExecutor(_make_agent(nodes=[]), [_make_sub("a")])
         executor.execute_sub_agent = AsyncMock(return_value="out")
-        result = await executor.execute("input", "user-1")
+        await executor.execute("input", "user-1")
         assert "error" in executor.state
 
 
@@ -71,7 +71,7 @@ class TestCustomExecutorSequentialStage:
             return f"out-{sub_agent.sub_agent.agent_name}"
 
         executor.execute_sub_agent = track
-        result = await executor.execute("input", "user-1")
+        await executor.execute("input", "user-1")
         assert call_order == ["agent-a", "agent-b"]
 
     @pytest.mark.asyncio
@@ -116,7 +116,7 @@ class TestCustomExecutorSequentialStage:
             return None  # Always fail
 
         executor.execute_sub_agent = failing
-        result = await executor.execute("input", "user-1")
+        await executor.execute("input", "user-1")
         # Should stop after first agent
         assert call_count == 1
         assert executor.state.get("stopped_at") == "a"
@@ -182,7 +182,7 @@ class TestCustomExecutorUnknownStage:
         nodes = [{"type": "banana", "agents": ["a"]}]
         executor = CustomExecutor(_make_agent(nodes=nodes, stop_on_error=True), [sub])
         executor.execute_sub_agent = AsyncMock(return_value="out")
-        result = await executor.execute("input", "user-1")
+        await executor.execute("input", "user-1")
         assert "error" in executor.state
 
 

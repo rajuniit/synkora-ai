@@ -14,7 +14,6 @@ import pytest
 
 from src.services.database.duckdb_connector import DuckDBConnector, _validate_identifier
 
-
 # ---------------------------------------------------------------------------
 # Helpers
 # ---------------------------------------------------------------------------
@@ -129,9 +128,7 @@ class TestDuckDBConnectorQueries:
     @pytest.mark.asyncio
     async def test_aggregation_query(self, connector):
         await connector.execute_query("CREATE TABLE sales (region VARCHAR, amount INTEGER)")
-        await connector.execute_query(
-            "INSERT INTO sales VALUES ('east', 100), ('west', 200), ('east', 150)"
-        )
+        await connector.execute_query("INSERT INTO sales VALUES ('east', 100), ('west', 200), ('east', 150)")
         result = await connector.execute_query(
             "SELECT region, SUM(amount) AS total FROM sales GROUP BY region ORDER BY region"
         )
@@ -178,9 +175,7 @@ class TestDuckDBCSVReading:
             writer.writerow(["alice", "95"])
             writer.writerow(["bob", "87"])
 
-        result = await connector.execute_query(
-            f"SELECT * FROM read_csv_auto('{csv_file}') ORDER BY name"
-        )
+        result = await connector.execute_query(f"SELECT * FROM read_csv_auto('{csv_file}') ORDER BY name")
         assert result["success"] is True
         assert result["row_count"] == 2
         assert result["columns"] == ["name", "score"]

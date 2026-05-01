@@ -489,7 +489,9 @@ class AgentLoaderService:
                 raw = await redis.get(cache_key)
                 if raw:
                     rows = json.loads(raw)
-                    logger.debug(f"[routing] LLM config cache HIT for agent '{db_agent.agent_name}' ({len(rows)} configs)")
+                    logger.debug(
+                        f"[routing] LLM config cache HIT for agent '{db_agent.agent_name}' ({len(rows)} configs)"
+                    )
                     return [types.SimpleNamespace(**r) for r in rows]
             except Exception as cache_err:
                 logger.debug(f"[routing] LLM config cache read error (continuing to DB): {cache_err}")

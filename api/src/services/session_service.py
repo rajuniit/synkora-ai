@@ -162,8 +162,7 @@ class SessionService:
                         )
                         blacklist_service.invalidate_refresh_token_family(account_id, family_id)
                         raise ValueError(
-                            f"Session has exceeded the maximum lifetime of {max_age_hours} hours. "
-                            "Please log in again."
+                            f"Session has exceeded the maximum lifetime of {max_age_hours} hours. Please log in again."
                         )
 
             # Use provided tenant_id or try to extract from payload

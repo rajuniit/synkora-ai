@@ -9,8 +9,6 @@ import logging
 from fastapi import APIRouter, Depends, HTTPException, Request, status
 from fastapi.responses import JSONResponse
 from pydantic import BaseModel, EmailStr, Field, field_validator
-
-from src.schemas.base import StrictModel
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -18,6 +16,7 @@ from src.config import settings
 from src.core.database import get_async_db
 from src.middleware import get_current_account
 from src.models import Account
+from src.schemas.base import StrictModel
 from src.services import AuthService, SessionService
 from src.services.security.password_validator import PasswordValidator, check_hibp
 from src.utils.config_helper import get_app_base_url
@@ -85,8 +84,8 @@ async def login(request: Request, data: LoginRequest, db: AsyncSession = Depends
         Authentication tokens and user information
         If 2FA is enabled, returns requires_2fa: true and a temporary token
     """
-    from src.utils.ip_utils import get_client_ip
     from src.services.activity.activity_log_service import ActivityLogService
+    from src.utils.ip_utils import get_client_ip
 
     client_ip = get_client_ip(
         request.client.host if request.client else "",
@@ -109,7 +108,9 @@ async def login(request: Request, data: LoginRequest, db: AsyncSession = Depends
         # Audit: log failed login attempt (best-effort — don't fail the response)
         try:
             from sqlalchemy import select as _select
+
             from src.models import Account as _Account
+
             _result = await db.execute(_select(_Account).filter_by(email=data.email))
             _acct = _result.scalar_one_or_none()
             if _acct:
@@ -164,7 +165,8 @@ async def login(request: Request, data: LoginRequest, db: AsyncSession = Depends
     # SECURITY: Admin-enforced 2FA — if any tenant this account belongs to has
     # mfa_required=true, reject login if the account has no TOTP configured.
     try:
-        from src.models.tenant import TenantAccountJoin as _TAJ, Tenant as _Tenant
+        from src.models.tenant import Tenant as _Tenant
+        from src.models.tenant import TenantAccountJoin as _TAJ
 
         _mfa_result = await db.execute(
             select(_Tenant)
@@ -295,8 +297,9 @@ async def login(request: Request, data: LoginRequest, db: AsyncSession = Depends
                         from src.services.activity.activity_log_service import ActivityLogService
 
                         _mfa_fail_tenant_id = None
-                        from src.models.tenant import TenantAccountJoin as _TAJ_mfa
                         from sqlalchemy import select as _sel_mfa
+
+                        from src.models.tenant import TenantAccountJoin as _TAJ_mfa
 
                         _mfa_res = await db.execute(_sel_mfa(_TAJ_mfa).filter_by(account_id=account.id))
                         _mfa_mem = _mfa_res.scalar_one_or_none()
@@ -328,6 +331,7 @@ async def login(request: Request, data: LoginRequest, db: AsyncSession = Depends
     # Disabled by default to avoid locking out fresh deployments and test environments.
     from src.config import settings as _settings
     from src.models.tenant import AccountRole as _AccountRole
+
     if _settings.require_2fa_for_admin and not (two_factor_enabled and two_factor_secret):
         privileged_roles = {_AccountRole.ADMIN.value, _AccountRole.OWNER.value}
         if any(t["role"] in privileged_roles for t in tenants):
@@ -346,7 +350,9 @@ async def login(request: Request, data: LoginRequest, db: AsyncSession = Depends
     # Audit: persist IP and user-agent to account record for audit trail.
     # Also check whether this is a new-IP login and fire a background notification.
     try:
-        from datetime import UTC, datetime as _datetime, timedelta as _timedelta
+        from datetime import UTC
+        from datetime import datetime as _datetime
+        from datetime import timedelta as _timedelta
 
         prev_ip = getattr(account, "last_login_ip", None)
         prev_login_at_str = getattr(account, "last_login_at", None)
@@ -374,6 +380,7 @@ async def login(request: Request, data: LoginRequest, db: AsyncSession = Depends
             if _fire_notification:
                 try:
                     from src.tasks.email_tasks import send_new_login_notification
+
                     send_new_login_notification.delay(
                         str(account.id),
                         client_ip,
@@ -406,6 +413,7 @@ async def login(request: Request, data: LoginRequest, db: AsyncSession = Depends
         _log_svc = ActivityLogService(db)
         _tenant_id_for_log = tenants[0]["tenant_id"] if tenants else None
         import uuid as _uuid
+
         await _log_svc.log_activity(
             tenant_id=_uuid.UUID(_tenant_id_for_log) if _tenant_id_for_log else None,
             account_id=account.id,
@@ -593,8 +601,8 @@ async def logout(
 
     # Audit: log logout (best-effort — never fail the response)
     try:
-        from src.utils.ip_utils import get_client_ip
         from src.services.activity.activity_log_service import ActivityLogService
+        from src.utils.ip_utils import get_client_ip
 
         _log_svc = ActivityLogService(db)
         await _log_svc.log_activity(

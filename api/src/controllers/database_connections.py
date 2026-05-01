@@ -10,8 +10,6 @@ from uuid import UUID
 
 from fastapi import APIRouter, Depends, HTTPException, status
 from pydantic import BaseModel, ConfigDict, Field, field_validator
-
-from src.schemas.base import StrictModel
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -20,6 +18,7 @@ from src.core.errors import safe_error_message
 from src.middleware.auth_middleware import get_current_account, get_current_tenant_id
 from src.models import Account
 from src.models.database_connection import DatabaseConnection, DatabaseConnectionType
+from src.schemas.base import StrictModel
 from src.services.database import (
     BigQueryConnector,
     ClickHouseConnector,
@@ -294,8 +293,13 @@ async def create_database_connection(
 
         logger.info(f"Created database connection: {connection.id}")
         await _audit_log(
-            db, current_account.id, tenant_id, "create", "database_connection",
-            resource_id=connection.id, metadata={"name": connection.name, "type": str(connection.database_type)},
+            db,
+            current_account.id,
+            tenant_id,
+            "create",
+            "database_connection",
+            resource_id=connection.id,
+            metadata={"name": connection.name, "type": str(connection.database_type)},
         )
 
         # Automatically test the connection and update status
@@ -535,8 +539,13 @@ async def update_database_connection(
 
         logger.info(f"Updated database connection: {connection.id}")
         await _audit_log(
-            db, current_account.id, tenant_id, "update", "database_connection",
-            resource_id=connection.id, metadata={"name": connection.name},
+            db,
+            current_account.id,
+            tenant_id,
+            "update",
+            "database_connection",
+            resource_id=connection.id,
+            metadata={"name": connection.name},
         )
 
         return DatabaseConnectionResponse(
@@ -796,7 +805,11 @@ async def delete_database_connection(
 
         logger.info(f"Deleted database connection: {connection_id}")
         await _audit_log(
-            db, current_account.id, tenant_id, "delete", "database_connection",
+            db,
+            current_account.id,
+            tenant_id,
+            "delete",
+            "database_connection",
             resource_id=connection_id,
         )
 

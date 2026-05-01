@@ -1,4 +1,3 @@
-
 from src.models.knowledge_base import ChunkingStrategy
 from src.services.knowledge_base.smart_chunker import SmartChunker
 

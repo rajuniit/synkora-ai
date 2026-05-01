@@ -262,9 +262,7 @@ class AuthService:
             return False, None
 
         except Exception as e:
-            logger.error(
-                f"SECURITY DEGRADED: Account lockout Redis unavailable — brute force protection disabled: {e}"
-            )
+            logger.error(f"SECURITY DEGRADED: Account lockout Redis unavailable — brute force protection disabled: {e}")
             try:
                 from src.services.performance.metrics import SECURITY_DEGRADED_TOTAL
 
@@ -303,9 +301,7 @@ class AuthService:
                 AuthService._notify_lockout(account_id=key, ip=None)
 
         except Exception as e:
-            logger.error(
-                f"SECURITY DEGRADED: Account lockout Redis unavailable — brute force protection disabled: {e}"
-            )
+            logger.error(f"SECURITY DEGRADED: Account lockout Redis unavailable — brute force protection disabled: {e}")
             try:
                 from src.services.performance.metrics import SECURITY_DEGRADED_TOTAL
 
@@ -873,11 +869,18 @@ class AuthService:
 
         # SECURITY: Check verification link expiry (72 hours)
         if account.email_verification_sent_at:
-            sent_at = datetime.fromisoformat(account.email_verification_sent_at) if isinstance(account.email_verification_sent_at, str) else account.email_verification_sent_at
+            sent_at = (
+                datetime.fromisoformat(account.email_verification_sent_at)
+                if isinstance(account.email_verification_sent_at, str)
+                else account.email_verification_sent_at
+            )
             if hasattr(sent_at, "tzinfo") and sent_at.tzinfo is None:
                 sent_at = sent_at.replace(tzinfo=UTC)
             if datetime.now(UTC) > sent_at + timedelta(hours=72):
-                return {"error": "verification_link_expired", "message": "This verification link has expired. Please request a new one."}
+                return {
+                    "error": "verification_link_expired",
+                    "message": "This verification link has expired. Please request a new one.",
+                }
 
         # Mark email as verified and activate account
         account.email_verification_token = None
@@ -954,11 +957,7 @@ class AuthService:
         if not account or not account.two_factor_backup_codes:
             return False
 
-        stored: list[str] = (
-            account.two_factor_backup_codes
-            if isinstance(account.two_factor_backup_codes, list)
-            else []
-        )
+        stored: list[str] = account.two_factor_backup_codes if isinstance(account.two_factor_backup_codes, list) else []
 
         code_hash = _hashlib.sha256(code.upper().encode()).hexdigest()
 

@@ -56,6 +56,7 @@ class ActionHandler(BaseHTTPRequestHandler):
             args = body.get("value", {})
             try:
                 from src.handlers.do_functions_handler import main
+
                 result = main(args)
                 # OpenWhisk expects {"result": <return_value>}
                 self._send_json(200, {"result": result})

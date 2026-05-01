@@ -127,7 +127,7 @@ async def _is_url_safe(url: str) -> tuple[bool, str | None]:
                     loop.run_in_executor(None, _resolve_hostname, hostname),
                     timeout=5.0,
                 )
-            except asyncio.TimeoutError:
+            except TimeoutError:
                 raise ValueError(f"DNS resolution timeout for hostname: {hostname}")
             for _family, _, _, _, sockaddr in resolved_ips:
                 ip_str = sockaddr[0]

@@ -95,9 +95,7 @@ class DatabaseConnection(BaseModel, TimestampMixin):
                     except (_json.JSONDecodeError, TypeError):
                         result[k] = decrypted
                 except Exception as exc:
-                    raise RuntimeError(
-                        "Credential decryption failed — check ENCRYPTION_KEY configuration"
-                    ) from exc
+                    raise RuntimeError("Credential decryption failed — check ENCRYPTION_KEY configuration") from exc
             else:
                 result[k] = v
         return result

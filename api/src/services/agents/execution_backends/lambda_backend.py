@@ -10,6 +10,7 @@ from .base import BaseExecutionBackend
 
 logger = logging.getLogger(__name__)
 
+
 class LambdaBackend(BaseExecutionBackend):
     """
     Dispatch agent tasks to AWS Lambda via async invocation.
@@ -38,11 +39,15 @@ class LambdaBackend(BaseExecutionBackend):
 
     def validate(self) -> None:
         """Raise ValueError if required platform config is missing."""
-        missing = [k for k, v in {
-            "AWS_LAMBDA_FUNCTION_ARN": self._function_arn,
-            "AWS_ACCESS_KEY_ID": self._access_key,
-            "AWS_SECRET_ACCESS_KEY": self._secret_key,
-        }.items() if not v]
+        missing = [
+            k
+            for k, v in {
+                "AWS_LAMBDA_FUNCTION_ARN": self._function_arn,
+                "AWS_ACCESS_KEY_ID": self._access_key,
+                "AWS_SECRET_ACCESS_KEY": self._secret_key,
+            }.items()
+            if not v
+        ]
         if missing:
             raise ValueError(
                 f"Lambda backend missing required platform config: {missing}. "
@@ -55,8 +60,7 @@ class LambdaBackend(BaseExecutionBackend):
             import boto3  # type: ignore[import-untyped]
         except ImportError as exc:
             raise ImportError(
-                "boto3 is required for the Lambda execution backend. "
-                "Install it with: pip install boto3"
+                "boto3 is required for the Lambda execution backend. Install it with: pip install boto3"
             ) from exc
 
         self.validate()

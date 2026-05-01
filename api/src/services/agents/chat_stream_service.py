@@ -1807,9 +1807,7 @@ class ChatStreamService:
         # connections, enable redact_for_llm by default to prevent PII leakage from
         # query results into the LLM context.
         if not pii_config.any_enabled:
-            _has_db_connections = bool(
-                (db_agent.agent_metadata or {}).get("allowed_database_connections")
-            )
+            _has_db_connections = bool((db_agent.agent_metadata or {}).get("allowed_database_connections"))
             if _has_db_connections:
                 pii_config = PIIRedactionConfig(redact_for_llm=True, redact_for_response=False)
         pii_redactor = PIIRedactor(pii_config) if pii_config.any_enabled else None

@@ -216,8 +216,7 @@ def encrypt_value(value: str) -> str:
 
     if os.getenv("ENCRYPTION_KEY") is None:
         raise ValueError(
-            "ENCRYPTION_KEY environment variable is not set. "
-            "Cannot encrypt values without a persistent key."
+            "ENCRYPTION_KEY environment variable is not set. Cannot encrypt values without a persistent key."
         )
     manager = get_api_key_manager()
     return manager.encrypt_api_key(value)
@@ -240,8 +239,7 @@ def decrypt_value(encrypted_value: str) -> str:
 
     if os.getenv("ENCRYPTION_KEY") is None:
         raise ValueError(
-            "ENCRYPTION_KEY environment variable is not set. "
-            "Cannot decrypt values without a persistent key."
+            "ENCRYPTION_KEY environment variable is not set. Cannot decrypt values without a persistent key."
         )
     manager = get_api_key_manager()
     return manager.decrypt_api_key(encrypted_value)

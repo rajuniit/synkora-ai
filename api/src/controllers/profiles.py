@@ -25,6 +25,7 @@ def _fmt_dt(val: Any) -> str | None:
         return val.isoformat()
     return str(val)
 
+
 # SECURITY: Maximum allowed avatar file size (5MB)
 MAX_AVATAR_SIZE = 5 * 1024 * 1024
 
@@ -429,6 +430,7 @@ async def verify_two_factor(
 
         # 2FA verified — enable it on the account and generate backup codes
         from sqlalchemy import select as _select
+
         from src.models.tenant import Account as _Account
         from src.services.auth_service import AuthService as _AuthService
 

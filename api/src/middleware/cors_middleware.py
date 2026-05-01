@@ -63,8 +63,7 @@ class DynamicCORSMiddleware:
         if not dashboard_origins or dashboard_origins == ["*"]:
             if os.getenv("APP_ENV", "development") == "production":
                 raise RuntimeError(
-                    "CORS_ORIGINS must be explicitly set in production — "
-                    "refusing wildcard + credentials"
+                    "CORS_ORIGINS must be explicitly set in production — refusing wildcard + credentials"
                 )
             self.dashboard_origins = ["*"]  # Only allow wildcard in dev/test
         else:

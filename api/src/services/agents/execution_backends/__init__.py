@@ -50,6 +50,4 @@ def get_execution_backend(name: str) -> BaseExecutionBackend:
     if name == "do_functions":
         return DOFunctionsBackend()
 
-    raise ValueError(
-        f"Unknown execution backend: '{name}'. Valid values: {sorted(_VALID_BACKENDS)}"
-    )
+    raise ValueError(f"Unknown execution backend: '{name}'. Valid values: {sorted(_VALID_BACKENDS)}")

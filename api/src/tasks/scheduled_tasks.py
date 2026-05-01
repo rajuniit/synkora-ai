@@ -72,9 +72,9 @@ def execute_scheduled_task(
                 if _agent_id:
                     from src.models.agent import Agent as _Agent
 
-                    _agent_obj = db.query(_Agent).filter(
-                        _Agent.id == _agent_id, _Agent.tenant_id == task.tenant_id
-                    ).first()
+                    _agent_obj = (
+                        db.query(_Agent).filter(_Agent.id == _agent_id, _Agent.tenant_id == task.tenant_id).first()
+                    )
 
                     if _agent_obj:
                         _backend_name = (getattr(_agent_obj, "execution_backend", None) or "celery").lower()
@@ -113,8 +113,7 @@ def execute_scheduled_task(
                             task.last_run_at = datetime.now(UTC)
                             db.commit()
                             logger.info(
-                                f"Task {task_id} dispatched externally via {_backend_name} "
-                                f"(external_id={_ext_id})"
+                                f"Task {task_id} dispatched externally via {_backend_name} (external_id={_ext_id})"
                             )
                             return {"status": "dispatched_externally", "backend": _backend_name}
 
@@ -582,10 +581,14 @@ async def _run_autonomous_agent(
         from src.models.agent_approval import AgentApprovalRequest
 
         # SECURITY: scope by tenant_id to prevent cross-tenant approval injection
-        _approval = db.query(AgentApprovalRequest).filter(
-            AgentApprovalRequest.id == approval_id,
-            AgentApprovalRequest.tenant_id == task.tenant_id,
-        ).first()
+        _approval = (
+            db.query(AgentApprovalRequest)
+            .filter(
+                AgentApprovalRequest.id == approval_id,
+                AgentApprovalRequest.tenant_id == task.tenant_id,
+            )
+            .first()
+        )
         if _approval:
             approval_context = {
                 "approved": True,
@@ -725,9 +728,7 @@ async def _run_autonomous_agent(
 
         _guard = ContextWindowGuard()
         # Rough estimate: full_prompt + all recent message content
-        _estimated_tokens = len(full_prompt) // 4 + sum(
-            len(str(m.get("content", ""))) // 4 for m in recent
-        )
+        _estimated_tokens = len(full_prompt) // 4 + sum(len(str(m.get("content", ""))) // 4 for m in recent)
         # Get model name from agent's llm_config for accurate limit lookup
         _model_name = "default"
         if agent.llm_config and isinstance(agent.llm_config, dict):
@@ -767,9 +768,7 @@ async def _run_autonomous_agent(
                     _snippet = str(_m.get("content", ""))[:200]
                     _lines.append(f"{_role}: {_snippet}")
                 _compact_parts.append("[Recent messages (compacted due to context limits)]\n" + "\n".join(_lines))
-            _compact_parts.append(
-                "[NOTE: Conversation history was compacted. Focus on the goal below.]"
-            )
+            _compact_parts.append("[NOTE: Conversation history was compacted. Focus on the goal below.]")
             memory_block = "\n\n".join(_compact_parts)
             # Rebuild full_prompt with compacted memory
             full_prompt = (

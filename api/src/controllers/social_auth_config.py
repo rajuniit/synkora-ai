@@ -102,7 +102,7 @@ async def get_provider(
         }
     except HTTPException:
         raise
-    except Exception as e:
+    except Exception:
         logger.exception("Error getting provider %s", provider_name)
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
@@ -147,7 +147,7 @@ async def create_provider(
             status_code=status.HTTP_400_BAD_REQUEST,
             detail=str(e),
         )
-    except Exception as e:
+    except Exception:
         logger.exception("Error creating provider")
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
@@ -194,7 +194,7 @@ async def update_provider(
             status_code=status.HTTP_404_NOT_FOUND,
             detail=str(e),
         )
-    except Exception as e:
+    except Exception:
         logger.exception("Error updating provider %s", provider_name)
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
@@ -233,7 +233,7 @@ async def delete_provider(
         }
     except HTTPException:
         raise
-    except Exception as e:
+    except Exception:
         logger.exception("Error deleting provider %s", provider_name)
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
@@ -261,7 +261,7 @@ async def test_provider(
         result = await service.test_provider(tenant_id, provider_name)
 
         return result
-    except Exception as e:
+    except Exception:
         logger.exception("Error testing provider %s", provider_name)
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,

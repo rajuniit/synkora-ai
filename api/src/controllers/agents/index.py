@@ -360,9 +360,7 @@ async def create_agent(
         await db.rollback()
 
         # Handle duplicate agent name error (constraint is uq_agent_name_tenant)
-        if isinstance(e, IntegrityError) and (
-            "uq_agent_name_tenant" in str(e) or "agents_agent_name_idx" in str(e)
-        ):
+        if isinstance(e, IntegrityError) and ("uq_agent_name_tenant" in str(e) or "agents_agent_name_idx" in str(e)):
             logger.warning(f"Duplicate agent name attempted: {request.config.name}")
             raise HTTPException(
                 status_code=status.HTTP_409_CONFLICT,
@@ -846,12 +844,16 @@ async def get_agent(
                 "workflow_config": db_agent.workflow_config if is_own_agent else None,
                 "routing_mode": getattr(db_agent, "routing_mode", "fixed") or "fixed" if is_own_agent else "fixed",
                 "routing_config": getattr(db_agent, "routing_config", None) if is_own_agent else None,
-                "execution_backend": getattr(db_agent, "execution_backend", "celery") or "celery" if is_own_agent else None,
+                "execution_backend": getattr(db_agent, "execution_backend", "celery") or "celery"
+                if is_own_agent
+                else None,
                 "created_at": db_agent.created_at.isoformat(),
                 "updated_at": db_agent.updated_at.isoformat(),
                 "stats": stats,
                 "role_id": str(db_agent.role_id) if (db_agent.role_id and is_own_agent) else None,
-                "human_contact_id": str(db_agent.human_contact_id) if (db_agent.human_contact_id and is_own_agent) else None,
+                "human_contact_id": str(db_agent.human_contact_id)
+                if (db_agent.human_contact_id and is_own_agent)
+                else None,
                 "role": role_data if is_own_agent else None,
                 "human_contact": human_contact_data if is_own_agent else None,
             },
@@ -1002,9 +1004,7 @@ async def update_agent(
             if not new_name:
                 raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Agent name cannot be empty")
             # Check name is not already taken
-            existing = await db.scalar(
-                select(Agent).filter(Agent.agent_name == new_name, Agent.tenant_id == tenant_id)
-            )
+            existing = await db.scalar(select(Agent).filter(Agent.agent_name == new_name, Agent.tenant_id == tenant_id))
             if existing:
                 raise HTTPException(
                     status_code=status.HTTP_409_CONFLICT,

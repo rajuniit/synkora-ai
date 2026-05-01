@@ -36,11 +36,15 @@ class CloudRunBackend(BaseExecutionBackend):
 
     def validate(self) -> None:
         """Raise ValueError if required platform config is missing."""
-        missing = [k for k, v in {
-            "CLOUD_RUN_JOB_NAME": self._job_name,
-            "GCP_PROJECT_ID": self._project_id,
-            "GCP_SERVICE_ACCOUNT_JSON": self._service_account_json_b64,
-        }.items() if not v]
+        missing = [
+            k
+            for k, v in {
+                "CLOUD_RUN_JOB_NAME": self._job_name,
+                "GCP_PROJECT_ID": self._project_id,
+                "GCP_SERVICE_ACCOUNT_JSON": self._service_account_json_b64,
+            }.items()
+            if not v
+        ]
         if missing:
             raise ValueError(
                 f"Cloud Run backend missing required platform config: {missing}. "
@@ -70,9 +74,7 @@ class CloudRunBackend(BaseExecutionBackend):
         ]
 
         if self._invocation_secret:
-            env_overrides.append(
-                {"name": "INVOCATION_SIGNATURE", "value": self._sign_payload(task_id, timestamp)}
-            )
+            env_overrides.append({"name": "INVOCATION_SIGNATURE", "value": self._sign_payload(task_id, timestamp)})
 
         sa_json = json.loads(base64.b64decode(self._service_account_json_b64).decode())
         credentials = service_account.Credentials.from_service_account_info(

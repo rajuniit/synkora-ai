@@ -3,6 +3,7 @@
 Provides tamper-evident audit logging by chaining each entry's
 HMAC to the previous entry's hash.
 """
+
 import logging
 import os
 from datetime import UTC, datetime
@@ -36,7 +37,7 @@ async def append_audit_log(
     db: AsyncSession,
     *,
     action: str,
-    activity_type,   # ActivityType enum
+    activity_type,  # ActivityType enum
     account_id=None,
     tenant_id=None,
     resource_type=None,

@@ -64,6 +64,7 @@ def _make_slack_event(
 # _verify_timestamp
 # ---------------------------------------------------------------------------
 
+
 def test_verify_timestamp_recent_passes():
     ts = str(int(time.time()))
     _verify_timestamp(ts)  # Should not raise
@@ -97,6 +98,7 @@ def test_verify_timestamp_future_within_tolerance_passes():
 # ---------------------------------------------------------------------------
 # _verify_signature
 # ---------------------------------------------------------------------------
+
 
 def test_verify_signature_valid():
     body = b'{"type":"event_callback"}'
@@ -143,6 +145,7 @@ def test_verify_signature_missing_timestamp_raises():
 # ---------------------------------------------------------------------------
 # _slack_event_to_document
 # ---------------------------------------------------------------------------
+
 
 def test_slack_event_to_document_basic():
     body = {"team_id": "T001"}
@@ -197,6 +200,7 @@ def test_slack_event_to_document_external_id_unique_per_message():
 # _extract_signing_secret
 # ---------------------------------------------------------------------------
 
+
 def test_extract_signing_secret_plain():
     ds = MagicMock()
     ds.config = {"signing_secret": "plaintext-secret"}
@@ -224,6 +228,7 @@ def test_extract_signing_secret_none_config_raises():
 # HTTP endpoint integration via TestClient
 # ---------------------------------------------------------------------------
 
+
 @pytest.fixture
 def app():
     _app = FastAPI()
@@ -246,7 +251,9 @@ def _make_headers(body: bytes, ts: str | None = None, secret: str = SIGNING_SECR
 
 
 def test_slack_endpoint_url_verification(client):
-    body = json.dumps({"type": "url_verification", "challenge": "3eZbrw1aBm2rZgRNFdxV2595E9CY3gmdALWMmHkvFXO7tYXAYM8P"}).encode()
+    body = json.dumps(
+        {"type": "url_verification", "challenge": "3eZbrw1aBm2rZgRNFdxV2595E9CY3gmdALWMmHkvFXO7tYXAYM8P"}
+    ).encode()
     headers = _make_headers(body)
 
     with patch("src.controllers.kb_webhooks._get_slack_data_source", new_callable=AsyncMock) as mock_ds:
@@ -266,8 +273,10 @@ def test_slack_endpoint_event_queued(client):
     body = json.dumps(event_body).encode()
     headers = _make_headers(body)
 
-    with patch("src.controllers.kb_webhooks._get_slack_data_source", new_callable=AsyncMock) as mock_ds, \
-         patch("src.controllers.kb_webhooks._producer") as mock_producer:
+    with (
+        patch("src.controllers.kb_webhooks._get_slack_data_source", new_callable=AsyncMock) as mock_ds,
+        patch("src.controllers.kb_webhooks._producer") as mock_producer,
+    ):
         ds = MagicMock()
         ds.config = {"signing_secret": SIGNING_SECRET}
         ds.tenant_id = uuid.UUID(TENANT_ID)
@@ -289,8 +298,10 @@ def test_slack_endpoint_bot_message_not_queued(client):
     body = json.dumps(event_body).encode()
     headers = _make_headers(body)
 
-    with patch("src.controllers.kb_webhooks._get_slack_data_source", new_callable=AsyncMock) as mock_ds, \
-         patch("src.controllers.kb_webhooks._producer") as mock_producer:
+    with (
+        patch("src.controllers.kb_webhooks._get_slack_data_source", new_callable=AsyncMock) as mock_ds,
+        patch("src.controllers.kb_webhooks._producer") as mock_producer,
+    ):
         ds = MagicMock()
         ds.config = {"signing_secret": SIGNING_SECRET}
         ds.tenant_id = uuid.UUID(TENANT_ID)
@@ -341,6 +352,7 @@ def test_slack_endpoint_no_active_ds_returns_404(client):
 
     with patch("src.controllers.kb_webhooks._get_slack_data_source", new_callable=AsyncMock) as mock_ds:
         from fastapi import HTTPException
+
         mock_ds.side_effect = HTTPException(status_code=404, detail="Slack data source not found")
 
         response = client.post(f"/api/webhooks/kb/{KB_ID}/slack", content=body, headers=headers)

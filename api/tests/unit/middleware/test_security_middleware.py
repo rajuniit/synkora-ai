@@ -148,9 +148,7 @@ class TestExtractScannableStrings:
         body = json.dumps(
             {
                 "message": "new user message",
-                "conversation_history": [
-                    {"role": "assistant", "content": "<script>alert(1)</script>"}
-                ],
+                "conversation_history": [{"role": "assistant", "content": "<script>alert(1)</script>"}],
             }
         )
         result = self.middleware._extract_scannable_strings(body)
@@ -184,7 +182,7 @@ class TestExtractScannableStrings:
         """XSS in the actual message field is still caught after the change."""
         import json
 
-        body = json.dumps({"message": '<script>alert(1)</script>', "agent_name": "Bot"})
+        body = json.dumps({"message": "<script>alert(1)</script>", "agent_name": "Bot"})
         strings = self.middleware._extract_scannable_strings(body)
         assert any(self.middleware._contains_xss(s) for s in strings)
 

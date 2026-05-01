@@ -11,17 +11,38 @@ from src.services.knowledge_base.providers.vector_db_factory import VectorDBProv
 
 # A concrete stub that satisfies the abstract interface for registration tests
 class _StubProvider(BaseVectorDBProvider):
-    def connect(self): pass
-    def disconnect(self): pass
-    def create_collection(self, collection_name, dimension, distance_metric="cosine", **kwargs): pass
-    def delete_collection(self, collection_name): pass
-    def collection_exists(self, collection_name): return False
-    def add_vectors(self, collection_name, vectors): return []
-    def search(self, collection_name, query_vector, limit=10, filters=None, score_threshold=None): return []
-    def delete_vectors(self, collection_name, vector_ids): pass
-    def update_vector(self, collection_name, vector_id, vector=None, payload=None): pass
-    def get_collection_info(self, collection_name): return {}
-    def health_check(self): return True
+    def connect(self):
+        pass
+
+    def disconnect(self):
+        pass
+
+    def create_collection(self, collection_name, dimension, distance_metric="cosine", **kwargs):
+        pass
+
+    def delete_collection(self, collection_name):
+        pass
+
+    def collection_exists(self, collection_name):
+        return False
+
+    def add_vectors(self, collection_name, vectors):
+        return []
+
+    def search(self, collection_name, query_vector, limit=10, filters=None, score_threshold=None):
+        return []
+
+    def delete_vectors(self, collection_name, vector_ids):
+        pass
+
+    def update_vector(self, collection_name, vector_id, vector=None, payload=None):
+        pass
+
+    def get_collection_info(self, collection_name):
+        return {}
+
+    def health_check(self):
+        return True
 
 
 @pytest.mark.unit
@@ -55,8 +76,6 @@ class TestVectorDBProviderFactoryCreate:
 
         config = {"url": "http://qdrant:6333", "collection": "test"}
         received = {}
-
-        original_init = QdrantProvider.__init__
 
         def capture_init(self, cfg):
             received["config"] = cfg

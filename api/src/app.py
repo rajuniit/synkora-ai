@@ -140,7 +140,12 @@ async def lifespan(app: FastAPI):  # noqa: ARG001
     # Unencrypted Redis exposes session tokens and rate-limit state on the wire.
     _redis_url_str = str(settings.redis_url) if settings.redis_url else ""
     _allow_insecure_redis = os.environ.get("ALLOW_INSECURE_REDIS", "false").lower() == "true"
-    if settings.is_production and _redis_url_str and not _redis_url_str.startswith("rediss://") and not _allow_insecure_redis:
+    if (
+        settings.is_production
+        and _redis_url_str
+        and not _redis_url_str.startswith("rediss://")
+        and not _allow_insecure_redis
+    ):
         raise RuntimeError(
             f"Redis connection is NOT using TLS in production "
             f"(URL scheme: '{_redis_url_str.split('://')[0]}://'). "

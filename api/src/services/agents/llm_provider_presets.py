@@ -152,7 +152,13 @@ OPENAI_PRESET = ProviderPreset(
             default_max_tokens=16384,
             default_temperature=1,
         ),
-        ModelPreset(name="GPT-4.1", model_name="gpt-4.1", description="GPT-4.1 base model", default_max_tokens=16384, default_temperature=1),
+        ModelPreset(
+            name="GPT-4.1",
+            model_name="gpt-4.1",
+            description="GPT-4.1 base model",
+            default_max_tokens=16384,
+            default_temperature=1,
+        ),
         # GPT-4o Series
         ModelPreset(
             name="GPT-4o (Latest)",

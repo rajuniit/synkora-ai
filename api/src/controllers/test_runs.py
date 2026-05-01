@@ -88,7 +88,7 @@ async def start_test_run(
 
     except HTTPException:
         raise
-    except Exception as e:
+    except Exception:
         logger.exception("Error starting test run")
         await db.rollback()
         raise HTTPException(status_code=500, detail="An unexpected error occurred")
@@ -137,7 +137,7 @@ async def list_test_runs(
 
     except HTTPException:
         raise
-    except Exception as e:
+    except Exception:
         logger.exception("Error listing test runs")
         raise HTTPException(status_code=500, detail="An unexpected error occurred")
 
@@ -155,7 +155,7 @@ async def get_test_run(
 
     except HTTPException:
         raise
-    except Exception as e:
+    except Exception:
         logger.exception("Error getting test run")
         raise HTTPException(status_code=500, detail="An unexpected error occurred")
 
@@ -190,7 +190,7 @@ async def cancel_test_run(
 
     except HTTPException:
         raise
-    except Exception as e:
+    except Exception:
         logger.exception("Error cancelling test run")
         await db.rollback()
         raise HTTPException(status_code=500, detail="An unexpected error occurred")
@@ -247,7 +247,7 @@ async def get_test_results(
 
     except HTTPException:
         raise
-    except Exception as e:
+    except Exception:
         logger.exception("Error getting test results")
         raise HTTPException(status_code=500, detail="An unexpected error occurred")
 
@@ -314,7 +314,7 @@ async def stream_test_results(
 
     except HTTPException:
         raise
-    except Exception as e:
+    except Exception:
         logger.exception("Error streaming test results")
         raise HTTPException(status_code=500, detail="An unexpected error occurred")
 
@@ -355,7 +355,7 @@ async def export_test_results(
 
     except HTTPException:
         raise
-    except Exception as e:
+    except Exception:
         logger.exception("Error exporting test results")
         raise HTTPException(status_code=500, detail="An unexpected error occurred")
 

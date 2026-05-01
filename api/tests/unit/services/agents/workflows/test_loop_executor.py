@@ -41,7 +41,7 @@ class TestLoopExecutorBasic:
         executor = LoopExecutor(mock_agent, [mock_sub_agent])
         executor.execute_sub_agent = AsyncMock(return_value="output")
 
-        result = await executor.execute("start input", "user-1")
+        await executor.execute("start input", "user-1")
 
         assert executor.execute_sub_agent.call_count >= 1
 
@@ -61,7 +61,7 @@ class TestLoopExecutorBasic:
         executor = LoopExecutor(mock_agent, [mock_sub_agent])
         executor.execute_sub_agent = AsyncMock(return_value="output")
 
-        result = await executor.execute("start input", "user-1")
+        await executor.execute("start input", "user-1")
 
         assert executor.state.get("total_iterations") == 3
 
@@ -133,7 +133,7 @@ class TestLoopExecutorErrorHandling:
 
         executor.execute_sub_agent = failing_after_first
 
-        result = await executor.execute("start input", "user-1")
+        await executor.execute("start input", "user-1")
 
         # Should have stopped early (stopped at sub-agent failure)
         assert executor.state.get("stopped_at") == mock_sub_agent.sub_agent.agent_name

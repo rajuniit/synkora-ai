@@ -248,9 +248,7 @@ async def okta_callback(
 
         logger.info(f"Okta SSO successful for tenant {tenant_id}, user {user_email}")
 
-        return RedirectResponse(
-            url=f"{redirect_url}?login=success&provider=okta&email={quote(user_email, safe='')}"
-        )
+        return RedirectResponse(url=f"{redirect_url}?login=success&provider=okta&email={quote(user_email, safe='')}")
 
     except HTTPException:
         raise

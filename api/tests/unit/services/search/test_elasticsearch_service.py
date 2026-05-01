@@ -17,6 +17,7 @@ from src.services.search.elasticsearch_service import ElasticsearchService
 # Helpers
 # ---------------------------------------------------------------------------
 
+
 def _make_service(
     host="localhost",
     port=9200,
@@ -61,6 +62,7 @@ def _make_search_response(hits=None, total=0, took=5):
 # ---------------------------------------------------------------------------
 # __init__ — authentication path selection
 # ---------------------------------------------------------------------------
+
 
 @pytest.mark.unit
 class TestElasticsearchServiceInit:
@@ -154,15 +156,18 @@ class TestElasticsearchServiceInit:
 # search — success path
 # ---------------------------------------------------------------------------
 
+
 @pytest.mark.unit
 class TestElasticsearchServiceSearch:
     async def test_basic_search_success(self):
         svc = _make_service()
-        svc.client.search = AsyncMock(return_value=_make_search_response(
-            hits=[{"_index": "idx", "_id": "1", "_score": 0.9, "_source": {"msg": "hello"}}],
-            total=1,
-            took=3,
-        ))
+        svc.client.search = AsyncMock(
+            return_value=_make_search_response(
+                hits=[{"_index": "idx", "_id": "1", "_score": 0.9, "_source": {"msg": "hello"}}],
+                total=1,
+                took=3,
+            )
+        )
 
         result = await svc.search("idx", "hello")
 
@@ -224,10 +229,12 @@ class TestElasticsearchServiceSearch:
     async def test_total_as_integer_handled(self):
         """Older ES versions return total as an int, not a dict."""
         svc = _make_service()
-        svc.client.search = AsyncMock(return_value={
-            "hits": {"hits": [], "total": 42},
-            "took": 1,
-        })
+        svc.client.search = AsyncMock(
+            return_value={
+                "hits": {"hits": [], "total": 42},
+                "took": 1,
+            }
+        )
 
         result = await svc.search("idx", "q")
 
@@ -238,15 +245,14 @@ class TestElasticsearchServiceSearch:
 # search — filters
 # ---------------------------------------------------------------------------
 
+
 @pytest.mark.unit
 class TestElasticsearchServiceSearchFilters:
     async def test_date_range_filter_gte_added(self):
         svc = _make_service()
         svc.client.search = AsyncMock(return_value=_make_search_response())
 
-        await svc.search("idx", "q", filters={
-            "date_range": {"field": "created_at", "gte": "2024-01-01"}
-        })
+        await svc.search("idx", "q", filters={"date_range": {"field": "created_at", "gte": "2024-01-01"}})
 
         query = svc.client.search.call_args.kwargs["query"]
         filter_clauses = query["bool"]["filter"]
@@ -257,9 +263,7 @@ class TestElasticsearchServiceSearchFilters:
         svc = _make_service()
         svc.client.search = AsyncMock(return_value=_make_search_response())
 
-        await svc.search("idx", "q", filters={
-            "date_range": {"field": "ts", "lte": "2024-12-31"}
-        })
+        await svc.search("idx", "q", filters={"date_range": {"field": "ts", "lte": "2024-12-31"}})
 
         query = svc.client.search.call_args.kwargs["query"]
         filter_clauses = query["bool"]["filter"]
@@ -270,9 +274,7 @@ class TestElasticsearchServiceSearchFilters:
         svc = _make_service()
         svc.client.search = AsyncMock(return_value=_make_search_response())
 
-        await svc.search("idx", "q", filters={
-            "term_filters": {"status": "active", "tenant_id": "t1"}
-        })
+        await svc.search("idx", "q", filters={"term_filters": {"status": "active", "tenant_id": "t1"}})
 
         query = svc.client.search.call_args.kwargs["query"]
         filter_clauses = query["bool"]["filter"]
@@ -293,6 +295,7 @@ class TestElasticsearchServiceSearchFilters:
 # ---------------------------------------------------------------------------
 # search — error handling
 # ---------------------------------------------------------------------------
+
 
 @pytest.mark.unit
 class TestElasticsearchServiceSearchErrors:
@@ -342,16 +345,19 @@ class TestElasticsearchServiceSearchErrors:
 # get_indices
 # ---------------------------------------------------------------------------
 
+
 @pytest.mark.unit
 class TestElasticsearchServiceGetIndices:
     async def test_returns_sorted_index_names(self):
         svc = _make_service()
         svc.client.cat = MagicMock()
-        svc.client.cat.indices = AsyncMock(return_value=[
-            {"index": "logs-2024"},
-            {"index": "logs-2023"},
-            {"index": "metrics"},
-        ])
+        svc.client.cat.indices = AsyncMock(
+            return_value=[
+                {"index": "logs-2024"},
+                {"index": "logs-2023"},
+                {"index": "metrics"},
+            ]
+        )
 
         result = await svc.get_indices()
 
@@ -371,20 +377,23 @@ class TestElasticsearchServiceGetIndices:
 # get_index_stats
 # ---------------------------------------------------------------------------
 
+
 @pytest.mark.unit
 class TestElasticsearchServiceGetIndexStats:
     async def test_returns_stats_dict(self):
         svc = _make_service()
         svc.client.indices = MagicMock()
-        svc.client.indices.stats = AsyncMock(return_value={
-            "_all": {
-                "total": {
-                    "docs": {"count": 500},
-                    "store": {"size_in_bytes": 102400},
-                }
-            },
-            "indices": {"logs-2024": {}, "logs-2023": {}},
-        })
+        svc.client.indices.stats = AsyncMock(
+            return_value={
+                "_all": {
+                    "total": {
+                        "docs": {"count": 500},
+                        "store": {"size_in_bytes": 102400},
+                    }
+                },
+                "indices": {"logs-2024": {}, "logs-2023": {}},
+            }
+        )
 
         result = await svc.get_index_stats("logs-*")
 
@@ -408,14 +417,17 @@ class TestElasticsearchServiceGetIndexStats:
 # test_connection
 # ---------------------------------------------------------------------------
 
+
 @pytest.mark.unit
 class TestElasticsearchServiceTestConnection:
     async def test_success_returns_version(self):
         svc = _make_service()
-        svc.client.info = AsyncMock(return_value={
-            "version": {"number": "8.11.0"},
-            "cluster_name": "my-cluster",
-        })
+        svc.client.info = AsyncMock(
+            return_value={
+                "version": {"number": "8.11.0"},
+                "cluster_name": "my-cluster",
+            }
+        )
 
         result = await svc.test_connection()
 
@@ -468,6 +480,7 @@ class TestElasticsearchServiceTestConnection:
 # ---------------------------------------------------------------------------
 # close
 # ---------------------------------------------------------------------------
+
 
 @pytest.mark.unit
 class TestElasticsearchServiceClose:

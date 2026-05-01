@@ -36,9 +36,7 @@ class Agent(BaseModel, StatusMixin, TenantMixin):
 
     __tablename__ = "agents"
 
-    __table_args__ = (
-        UniqueConstraint("agent_name", "tenant_id", name="uq_agent_name_tenant"),
-    )
+    __table_args__ = (UniqueConstraint("agent_name", "tenant_id", name="uq_agent_name_tenant"),)
 
     agent_name = Column(String(255), nullable=False, index=True, comment="Unique agent name per tenant")
 
@@ -394,9 +392,7 @@ class Agent(BaseModel, StatusMixin, TenantMixin):
         while current.parent_agent_id and depth < MAX_DEPTH:
             if current.parent_agent_id in visited:
                 # Circular reference detected — return current node
-                logger.warning(
-                    f"Circular agent hierarchy detected at agent {current.id}, breaking traversal"
-                )
+                logger.warning(f"Circular agent hierarchy detected at agent {current.id}, breaking traversal")
                 break
             visited.add(current.parent_agent_id)
             result = await db.execute(

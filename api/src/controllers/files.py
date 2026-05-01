@@ -147,7 +147,6 @@ async def upload_file(
                 detail=f"File validation failed: {error_details}",
             )
 
-
         # Log any warnings
         if validation_result["warnings"]:
             logger.info(f"File upload warnings: {validation_result['warnings']}")

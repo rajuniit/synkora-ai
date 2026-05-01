@@ -17,6 +17,7 @@ from src.services.company_brain.ingestion.chunker import (
 # Fixtures — dummy documents
 # ---------------------------------------------------------------------------
 
+
 def _doc(content: str, **extra) -> dict:
     return {"id": "test-doc-1", "content": content, "title": "Test Doc", **extra}
 
@@ -44,7 +45,10 @@ GITHUB_PR_DOC = {
     "metadata": {
         "source": "github",
         "files": [
-            {"filename": "auth/handler.py", "patch": "@@ -10,6 +10,7 @@\n-def handle():\n+def handle(ctx=None):\n     pass"},
+            {
+                "filename": "auth/handler.py",
+                "patch": "@@ -10,6 +10,7 @@\n-def handle():\n+def handle(ctx=None):\n     pass",
+            },
             {"filename": "tests/test_auth.py", "patch": "@@ -1,3 +1,4 @@\n+import pytest\n def test_handle():"},
         ],
     },
@@ -63,6 +67,7 @@ EMPTY_DOC = {"id": "empty-1", "content": "", "title": "Empty"}
 # ---------------------------------------------------------------------------
 # get_strategy
 # ---------------------------------------------------------------------------
+
 
 def test_get_strategy_defaults_to_fixed():
     fake = type("S", (), {"company_brain_chunking_strategies": '{"default":"fixed"}'})()
@@ -85,6 +90,7 @@ def test_get_strategy_bad_json_falls_back():
 # ---------------------------------------------------------------------------
 # _chunk_fixed
 # ---------------------------------------------------------------------------
+
 
 def test_chunk_fixed_short_content_one_chunk():
     doc = _doc("The quick brown fox jumps over the lazy dog.")
@@ -116,6 +122,7 @@ def test_chunk_fixed_each_chunk_not_empty():
 # _chunk_slack_thread
 # ---------------------------------------------------------------------------
 
+
 def test_chunk_slack_thread_small_thread_one_chunk():
     chunks = _chunk_slack_thread(SLACK_DOC, chunk_size=5000, chunk_overlap=0)
     assert len(chunks) == 1
@@ -145,6 +152,7 @@ def test_chunk_slack_thread_large_splits_at_message_boundary():
 # ---------------------------------------------------------------------------
 # _chunk_pr_diff
 # ---------------------------------------------------------------------------
+
 
 def test_chunk_pr_diff_per_file_chunks():
     chunks = _chunk_pr_diff(GITHUB_PR_DOC, chunk_size=5000, chunk_overlap=0)
@@ -180,6 +188,7 @@ def test_chunk_pr_diff_large_patch_splits_at_hunks():
 # _chunk_by_headings
 # ---------------------------------------------------------------------------
 
+
 def test_chunk_by_headings_splits_at_h2():
     chunks = _chunk_by_headings(CONFLUENCE_DOC, chunk_size=5000, chunk_overlap=0)
     # Should produce at least 3 chunks: intro + Backend + Frontend
@@ -208,9 +217,10 @@ def test_chunk_by_headings_no_headings_fixed_fallback():
 # chunk_document (public API — strategy dispatch)
 # ---------------------------------------------------------------------------
 
+
 def test_chunk_document_adds_chunk_index():
     chunks = chunk_document(SLACK_DOC, "slack")
-    for i, chunk in enumerate(chunks):
+    for _i, chunk in enumerate(chunks):
         assert "chunk_index" in chunk
         assert "chunk_content" in chunk
         assert "chunk_count" in chunk
@@ -227,11 +237,17 @@ def test_chunk_document_inherits_base_metadata():
 
 
 def test_chunk_document_skips_empty_chunks():
-    doc = {"id": "x", "content": "Hello world", "metadata": {"thread_messages": [
-        {"user": "U1", "text": "", "ts": "1"},
-        {"user": "U2", "text": "   ", "ts": "2"},
-        {"user": "U3", "text": "Real content", "ts": "3"},
-    ]}}
+    doc = {
+        "id": "x",
+        "content": "Hello world",
+        "metadata": {
+            "thread_messages": [
+                {"user": "U1", "text": "", "ts": "1"},
+                {"user": "U2", "text": "   ", "ts": "2"},
+                {"user": "U3", "text": "Real content", "ts": "3"},
+            ]
+        },
+    }
     chunks = chunk_document(doc, "slack")
     for chunk in chunks:
         assert chunk["chunk_content"].strip()
@@ -239,12 +255,11 @@ def test_chunk_document_skips_empty_chunks():
 
 def test_chunk_document_fallback_on_exception(monkeypatch):
     """If the strategy handler raises, falls back to fixed chunking."""
+
     def _boom(*a, **kw):
         raise RuntimeError("simulated chunker failure")
 
-    monkeypatch.setattr(
-        "src.services.company_brain.ingestion.chunker._chunk_slack_thread", _boom
-    )
+    monkeypatch.setattr("src.services.company_brain.ingestion.chunker._chunk_slack_thread", _boom)
     chunks = chunk_document(SLACK_DOC, "slack")
     assert len(chunks) >= 1  # fixed fallback should produce at least one chunk
 

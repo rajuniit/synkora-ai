@@ -656,7 +656,9 @@ async def upload_documents(
                         logger.warning(
                             f"KB document upload rejected for tenant {tenant_id}: {file.filename} — {error_details}"
                         )
-                        failed_files.append({"filename": file.filename, "error": f"File validation failed: {error_details}"})
+                        failed_files.append(
+                            {"filename": file.filename, "error": f"File validation failed: {error_details}"}
+                        )
                         continue
                 except ScannerUnavailableError as scan_err:
                     logger.error(f"File scanning service unavailable: {scan_err}")

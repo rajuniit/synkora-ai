@@ -368,10 +368,14 @@ def execute_spawn_agent_task(
         )
 
         # Load parent agent from DB — tenant-scoped to prevent cross-tenant access
-        agent = db.query(Agent).filter(
-            Agent.id == UUID(parent_agent_id),
-            Agent.tenant_id == UUID(tenant_id),
-        ).first()
+        agent = (
+            db.query(Agent)
+            .filter(
+                Agent.id == UUID(parent_agent_id),
+                Agent.tenant_id == UUID(tenant_id),
+            )
+            .first()
+        )
 
         if not agent:
             logger.error(f"Agent {parent_agent_id} not found for tenant {tenant_id} - permanent failure")
@@ -441,15 +445,11 @@ Complete this task thoroughly and provide your findings. Be comprehensive but co
             pending = {t for t in asyncio.all_tasks(loop) if not t.done()}
             if pending:
                 # Give background tasks up to 5 s; cancel whatever is still running.
-                done, still_pending = loop.run_until_complete(
-                    asyncio.wait(pending, timeout=5.0)
-                )
+                done, still_pending = loop.run_until_complete(asyncio.wait(pending, timeout=5.0))
                 for task in still_pending:
                     task.cancel()
                 if still_pending:
-                    loop.run_until_complete(
-                        asyncio.gather(*still_pending, return_exceptions=True)
-                    )
+                    loop.run_until_complete(asyncio.gather(*still_pending, return_exceptions=True))
         finally:
             loop.close()
 

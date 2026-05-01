@@ -1,6 +1,5 @@
 """Tests for FunctionCallingErrorTracker."""
 
-
 from src.services.agents.error_tracker import FunctionCallingErrorTracker
 
 

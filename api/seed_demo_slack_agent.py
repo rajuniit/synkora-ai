@@ -64,11 +64,7 @@ def main() -> None:
 
         from src.models import TenantAccountJoin
 
-        taj = (
-            db.query(TenantAccountJoin)
-            .filter(TenantAccountJoin.account_id == account.id)
-            .first()
-        )
+        taj = db.query(TenantAccountJoin).filter(TenantAccountJoin.account_id == account.id).first()
         if not taj:
             print("[x] Admin account has no tenant association.", flush=True)
             sys.exit(1)
@@ -77,11 +73,7 @@ def main() -> None:
         print(f"[*] Using tenant: {tenant_id}", flush=True)
 
         # 2. Check for existing demo agent
-        existing = (
-            db.query(Agent)
-            .filter(Agent.agent_name == "Demo Assistant", Agent.tenant_id == tenant_id)
-            .first()
-        )
+        existing = db.query(Agent).filter(Agent.agent_name == "Demo Assistant", Agent.tenant_id == tenant_id).first()
         if existing:
             print("[!] Demo Assistant agent already exists — skipping.", flush=True)
             sys.exit(0)

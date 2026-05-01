@@ -54,9 +54,9 @@ from .database_connection import DatabaseConnection, DatabaseConnectionType
 from .dataset import Dataset
 from .debate_session import DebateSession
 from .diagram import Diagram
-from .erasure_request import ErasureRequest
 from .document import Document, DocumentStatus
 from .document_segment import DocumentSegment
+from .erasure_request import ErasureRequest
 from .followup import FollowupConfig, FollowupItem, FollowupPriority, FollowupStatus
 from .ghostwriter_draft import GhostwriterDraft
 from .human_contact import HumanContact
@@ -91,6 +91,7 @@ from .role import Role
 from .role_permission import RolePermission
 from .saml_config import SAMLConfig
 from .scheduled_task import ScheduledTask, TaskExecution, TaskNotification
+from .scim_token import SCIMToken
 from .slack_bot import SlackBot, SlackConversation
 from .social_auth_provider import AccountProvider, SocialAuthProvider
 from .subscription_plan import PlanTier, SubscriptionPlan
@@ -125,7 +126,6 @@ from .workflow_execution import (
     WorkflowStepExecution,
     WorkflowStepStatus,
 )
-from .scim_token import SCIMToken
 from .writing_style_profile import WritingStyleProfile
 
 __all__ = [

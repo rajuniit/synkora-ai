@@ -50,6 +50,7 @@ def _require_saml() -> None:
 # Helpers
 # ---------------------------------------------------------------------------
 
+
 def _get_sp_base_url() -> str:
     """Return the SP base URL from settings or fallback env var."""
     try:
@@ -65,6 +66,7 @@ def _get_sp_base_url() -> str:
 # ---------------------------------------------------------------------------
 # Core service
 # ---------------------------------------------------------------------------
+
 
 class SAMLService:
     """Service layer for SAML 2.0 SSO operations."""
@@ -156,9 +158,7 @@ class SAMLService:
         # IdP block — prefer inline XML so no outbound HTTP is needed at auth time
         if saml_config.idp_metadata_xml:
             # Parse raw XML into the dict python3-saml expects
-            idp_data = OneLogin_Saml2_Settings.parse_remote_metadata(
-                saml_config.idp_metadata_xml.encode("utf-8")
-            )
+            idp_data = OneLogin_Saml2_Settings.parse_remote_metadata(saml_config.idp_metadata_xml.encode("utf-8"))
             saml_settings["idp"] = idp_data
         elif saml_config.idp_metadata_url:
             # python3-saml will fetch and parse the URL when loading settings
@@ -211,7 +211,13 @@ class SAMLService:
         saml_settings = SAMLService.get_settings(saml_config)
         auth = OneLogin_Saml2_Auth(
             # python3-saml needs a request dict; minimal version for redirect-only
-            {"https": "on", "http_host": _get_sp_base_url().split("//")[-1], "script_name": "/", "get_data": {}, "post_data": {}},
+            {
+                "https": "on",
+                "http_host": _get_sp_base_url().split("//")[-1],
+                "script_name": "/",
+                "get_data": {},
+                "post_data": {},
+            },
             old_settings=saml_settings,
         )
         return auth.login(return_to=relay_state)
@@ -263,7 +269,9 @@ class SAMLService:
 
         errors = auth.get_errors()
         if errors:
-            logger.warning("SAML assertion errors for tenant %s: %s — %s", tenant_id, errors, auth.get_last_error_reason())
+            logger.warning(
+                "SAML assertion errors for tenant %s: %s — %s", tenant_id, errors, auth.get_last_error_reason()
+            )
             raise HTTPException(
                 status_code=status.HTTP_401_UNAUTHORIZED,
                 detail=f"SAML assertion invalid: {', '.join(errors)}",
@@ -414,6 +422,7 @@ class SAMLService:
 # ---------------------------------------------------------------------------
 # Utility
 # ---------------------------------------------------------------------------
+
 
 def _first_value(attr_value) -> str | None:
     """Return the first value from a SAML attribute (which may be a list)."""

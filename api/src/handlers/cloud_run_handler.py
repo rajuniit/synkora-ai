@@ -42,6 +42,7 @@ def _process_task(task_id: str, task_type: str, timestamp: str, signature: str) 
     # Set SYNKORA_DIRECT_EXECUTION so the task executor does not try to
     # dispatch back to Cloud Run — that would cause an infinite job loop.
     import os as _os
+
     _os.environ["SYNKORA_DIRECT_EXECUTION"] = "true"
 
     try:
