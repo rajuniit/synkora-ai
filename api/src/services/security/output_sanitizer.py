@@ -210,6 +210,26 @@ class OutputSanitizer:
         },
     }
 
+    # Layer 6: Harmful content / jailbreak output patterns
+    _HARM_PATTERNS = [
+        # Jailbreak indicators in output (model breaking character)
+        (
+            re.compile(
+                r"\b(I\s+am\s+now\s+(DAN|freed?|unchained|unrestricted)|ignore\s+(all\s+)?previous\s+instructions|my\s+true\s+self|pretend\s+I\s+have\s+no\s+restrictions)\b",
+                re.I,
+            ),
+            "jailbreak_output",
+        ),
+        # Instructions to harm
+        (
+            re.compile(
+                r"\b(step[\s\-]+by[\s\-]+step\s+(instructions?|guide|tutorial)\s+(to|for)\s+(hack|synthesize|make|build|create)\s+(a\s+)?(bomb|weapon|malware|ransomware|poison|drug))\b",
+                re.I,
+            ),
+            "harmful_instructions",
+        ),
+    ]
+
     # Layer 5: Error message patterns
     ERROR_PATTERNS = {
         "stack_trace": {
@@ -292,6 +312,13 @@ class OutputSanitizer:
 
         return compiled
 
+    def check_harmful_content(self, text: str) -> dict:
+        """Check output for harmful content patterns (jailbreak indicators, harmful instructions)."""
+        for pattern, category in self._HARM_PATTERNS:
+            if pattern.search(text):
+                return {"is_harmful": True, "category": category}
+        return {"is_harmful": False}
+
     def sanitize(self, content: str, context: str | None = None) -> SanitizationResult:
         """
         Sanitize output content before sending to user.
@@ -310,6 +337,24 @@ class OutputSanitizer:
 
         # Create hash of original content for audit trail
         original_hash = hashlib.sha256(content.encode()).hexdigest()[:16]
+
+        # Harm check: detect jailbreak output or harmful instructions before any other processing
+        harm_result = self.check_harmful_content(content)
+        if harm_result["is_harmful"]:
+            logger.warning(
+                "Harmful content detected in LLM output - Category: %s, Context: %s, Hash: %s",
+                harm_result["category"],
+                context,
+                original_hash,
+            )
+            self.sanitization_stats["total_blocked"] += 1
+            return SanitizationResult(
+                is_safe=False,
+                sanitized_content="[Content blocked by safety filter]",
+                detections=[{"type": f"harm:{harm_result['category']}", "severity": "CRITICAL", "action": "block"}],
+                action_taken="BLOCKED",
+                original_hash=original_hash,
+            )
 
         # Step 1: Extract allowlisted content (e.g., S3 presigned URLs) and replace
         # with placeholders so they don't get caught by sanitization patterns
@@ -445,5 +490,9 @@ class OutputSanitizer:
         }
 
 
-# Global instance
-output_sanitizer = OutputSanitizer(strict_mode=False)
+# Global instance — strict_mode enabled in production so HIGH/CRITICAL detections
+# block the entire response rather than just redacting/masking inline.
+import os as _os
+
+_strict_mode = _os.getenv("APP_ENV", "development") == "production"
+output_sanitizer = OutputSanitizer(strict_mode=_strict_mode)

@@ -468,6 +468,13 @@ CAPABILITIES = [
         ],
     },
     {
+        "id": "image-generation",
+        "name": "Image Generation",
+        "description": "Generate AI images from text prompts (gpt-image-2, Google Imagen, Grok Aurora)",
+        "icon": "🎨",
+        "tool_patterns": ["internal_generate_image"],
+    },
+    {
         "id": "documents",
         "name": "Documents",
         "description": "Generate PDFs, PowerPoints, Google Docs and Sheets",

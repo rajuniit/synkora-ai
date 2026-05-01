@@ -5,6 +5,8 @@ The existing test_advanced_prompt_scanner.py covers scan_comprehensive()
 end-to-end. This file targets the helper methods directly.
 """
 
+from unittest.mock import patch
+
 import pytest
 
 from src.services.security.advanced_prompt_scanner import AdvancedPromptScanner, ThreatLevel
@@ -12,7 +14,9 @@ from src.services.security.advanced_prompt_scanner import AdvancedPromptScanner,
 
 @pytest.fixture
 def scanner():
-    return AdvancedPromptScanner()
+    """Fresh scanner per test with Redis patched out to avoid cross-test state."""
+    with patch("src.config.redis.get_redis", return_value=None):
+        yield AdvancedPromptScanner()
 
 
 # ---------------------------------------------------------------------------

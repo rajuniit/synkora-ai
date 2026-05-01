@@ -1,0 +1,19 @@
+# DigitalOcean Functions project definition
+# Deploy with: doctl serverless deploy do-functions/
+#
+# The function runs inside the same Docker image as the API/Celery worker
+# (registry.digitalocean.com/synkora/api:latest) so all dependencies are identical.
+# The image is pushed to DO Container Registry on every deploy by the GitHub Actions workflow.
+#
+# Secrets (DATABASE_URL, REDIS_URL, SECRET_KEY, etc.) are injected at the namespace level:
+#   doctl serverless namespaces secret set <namespace-id> --secret KEY=value
+# They are NOT stored in this file.
+
+packages:
+  - name: synkora
+    functions:
+      - name: agent-runner
+        web: true
+        memory: 4096
+        environment:
+          SYNKORA_DIRECT_EXECUTION: "true"

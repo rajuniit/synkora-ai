@@ -10,7 +10,7 @@ from fastapi.testclient import TestClient
 
 from src.controllers.custom_tools import router
 from src.core.database import get_async_db
-from src.middleware.auth_middleware import get_current_tenant_id
+from src.middleware.auth_middleware import get_current_account, get_current_tenant_id
 
 
 @pytest.fixture
@@ -48,9 +48,12 @@ def client(mock_db_session, mock_openapi_parser, mock_encrypt_value):
 
     app.dependency_overrides[get_async_db] = mock_db
 
-    # Mock tenant ID
+    # Mock tenant ID and current account
     tenant_id = uuid.uuid4()
     app.dependency_overrides[get_current_tenant_id] = lambda: tenant_id
+    mock_account = MagicMock()
+    mock_account.id = uuid.uuid4()
+    app.dependency_overrides[get_current_account] = lambda: mock_account
 
     return TestClient(app), tenant_id, mock_db_session, mock_openapi_parser
 

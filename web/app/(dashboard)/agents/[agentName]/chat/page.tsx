@@ -490,6 +490,12 @@ export default function AdvancedChatPage() {
         .catch((error) => console.error('Failed to update conversation name:', error))
     }
 
+    // Track whether the stream actually started. If the request is rejected
+    // before the first event (e.g. by a middleware returning 400/401), no
+    // events are yielded and we must NOT reload messages from the backend —
+    // that would overwrite the locally-displayed error with stale old messages.
+    let streamStarted = false
+
     try {
       let fullResponse = ''
       let responseSources: any[] = []
@@ -507,6 +513,8 @@ export default function AdvancedChatPage() {
           content: msg.content,
         })),
       })) {
+        streamStarted = true
+
         if (event.type === 'chunk') {
           fullResponse += event.content
           setThinkingStatus('')
@@ -624,6 +632,25 @@ export default function AdvancedChatPage() {
             }
             return newMessages
           })
+        } else if (event.type === 'generated_image' && event.generated_image) {
+          setMessages((prev) => {
+            const newMessages = [...prev]
+            const lastIndex = newMessages.length - 1
+            if (lastIndex >= 0 && newMessages[lastIndex].role === 'assistant') {
+              const currentMetadata = newMessages[lastIndex].metadata || {}
+              newMessages[lastIndex] = {
+                ...newMessages[lastIndex],
+                metadata: {
+                  ...currentMetadata,
+                  generated_images: [
+                    ...(currentMetadata.generated_images || []),
+                    event.generated_image as import('@/components/chat/types').GeneratedImageData,
+                  ],
+                },
+              }
+            }
+            return newMessages
+          })
         } else if (event.type === 'done') {
           setThinkingStatus('')
           responseSources = event.sources || []
@@ -680,6 +707,14 @@ export default function AdvancedChatPage() {
       setToolStatus(null)
       setRecentTools([])
       setStreamStartTime(null)
+      // Reload messages from backend so all IDs are real DB UUIDs (required for delete).
+      // Only do this if the stream actually started — if the request was rejected before
+      // the first event (middleware 400/401, network error, etc.), the backend never saved
+      // anything, so reloading would overwrite the locally-displayed error with stale data.
+      const convId = activeConversation?.id || currentConversation?.id
+      if (convId && streamStarted) {
+        loadConversationMessages(convId)
+      }
     }
   }
 
@@ -699,6 +734,18 @@ export default function AdvancedChatPage() {
         setMessages((prev) => prev.slice(0, messageIndex))
         handleSend(previousUserMessage.content)
       }
+    }
+  }
+
+  const handleDeleteMessage = async (messageId: string) => {
+    if (!currentConversation) return
+    try {
+      await apiClient.axios.delete(
+        `/api/v1/agents/conversations/${currentConversation.id}/messages/${messageId}`
+      )
+      setMessages((prev) => prev.filter((m) => m.id !== messageId))
+    } catch (err) {
+      console.error('Failed to delete message:', err)
     }
   }
 
@@ -1110,7 +1157,7 @@ export default function AdvancedChatPage() {
         {/* Main Content Area */}
         <div className="flex-1 flex overflow-hidden">
           {/* Center - Chat Widget */}
-          <div className="flex-1 flex flex-col h-screen bg-white">
+          <div className="flex-1 flex flex-col h-screen bg-white min-w-0">
               {/* Error Message */}
               {agentLoadError && (
                 <div className="flex-shrink-0 p-3 bg-red-50 border-b border-red-200">
@@ -1201,12 +1248,13 @@ export default function AdvancedChatPage() {
               </div>
 
               {/* Messages Area */}
-              <div className="flex-1 overflow-y-auto">
+              <div className="flex-1 overflow-y-auto min-w-0">
                 <ChatMessages
                   messages={messages}
                   isStreaming={isStreaming}
                   onCopyMessage={handleCopyMessage}
                   onRetry={handleRetry}
+                  onDeleteMessage={handleDeleteMessage}
                   thinkingStatus={thinkingStatus}
                   toolStatus={toolStatus}
                   recentTools={recentTools}

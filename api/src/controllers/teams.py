@@ -146,6 +146,15 @@ async def update_team_member(
         # Normalize role if provided
         if "role" in update_data:
             update_data["role"] = member_data.get_normalized_role()
+
+        # SECURITY: Only an existing owner can promote another member to owner
+        if update_data.get("role", "").lower() == "owner":
+            if not current_member or current_member["role"].lower() != "owner":
+                raise HTTPException(
+                    status_code=status.HTTP_403_FORBIDDEN,
+                    detail="Only organization owners can transfer ownership",
+                )
+
         updated_member = await team_service.update_team_member(tenant_id, account_id, **update_data)
 
         return updated_member
@@ -216,6 +225,15 @@ async def create_invitation(
             raise HTTPException(
                 status_code=status.HTTP_403_FORBIDDEN, detail="Insufficient permissions to invite team members"
             )
+
+        # SECURITY: Only an existing owner can invite a new member directly as owner
+        normalized_invite_role = invitation_data.get_normalized_role()
+        if normalized_invite_role.lower() == "owner":
+            if not current_member or current_member["role"].lower() != "owner":
+                raise HTTPException(
+                    status_code=status.HTTP_403_FORBIDDEN,
+                    detail="Only organization owners can invite members with the owner role",
+                )
 
         invitation = await team_service.create_invitation(
             tenant_id=tenant_id,
@@ -343,6 +361,144 @@ async def resend_invitation(
     except Exception as e:
         logger.error(f"Error resending invitation: {str(e)}")
         raise HTTPException(status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail="Failed to resend invitation")
+
+
+class PasswordResetLinkResponse(BaseModel):
+    """Response from the admin-assisted password reset endpoint."""
+
+    account_id: str
+    account_email: str
+    reset_link: str
+    expires_at: str
+    message: str
+
+
+@router.post(
+    "/members/{account_id}/reset-password-link",
+    response_model=PasswordResetLinkResponse,
+    summary="Generate a one-time password reset link for a team member (admin only)",
+)
+async def generate_member_reset_link(
+    account_id: str,
+    db: AsyncSession = Depends(get_async_db),
+    current_account=Depends(get_current_account),
+    tenant_id: uuid.UUID = Depends(get_current_tenant_id),
+):
+    """
+    Generate a one-time password reset link for a team member.
+
+    The link is returned to the calling admin — it is NOT emailed automatically.
+    The admin is responsible for sending it to the user through a secure channel.
+
+    Requires OWNER or ADMIN role.
+    """
+    from datetime import UTC, datetime, timedelta
+
+    from src.models import Account
+    from src.models.tenant import TenantAccountJoin
+    from src.services.auth_service import AuthService
+    from src.services.activity.activity_log_service import ActivityLogService
+
+    team_service = TeamService(db)
+
+    # --- Permission check ---
+    current_member = await team_service.get_team_member(tenant_id, str(current_account.id))
+    if not current_member or current_member["role"] not in ["owner", "admin"]:
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="Only owners and admins can generate password reset links for team members.",
+        )
+
+    try:
+        target_uuid = uuid.UUID(account_id)
+    except ValueError:
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Invalid account_id format.")
+
+    # Verify the target account belongs to this tenant
+    stmt = select(TenantAccountJoin).filter_by(account_id=target_uuid, tenant_id=tenant_id)
+    result = await db.execute(stmt)
+    membership = result.scalar_one_or_none()
+    if not membership:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="Account not found in this tenant.",
+        )
+
+    # Prevent an admin from generating a reset link for an owner (privilege escalation guard)
+    if membership.role and hasattr(membership.role, "value"):
+        target_role = membership.role.value.lower()
+    else:
+        target_role = str(membership.role).lower()
+
+    requesting_role = current_member["role"].lower()
+    if target_role in ("owner",) and requesting_role != "owner":
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="Only owners can generate reset links for other owners.",
+        )
+
+    # Load the target account
+    stmt = select(Account).filter_by(id=target_uuid)
+    result = await db.execute(stmt)
+    target_account = result.scalar_one_or_none()
+    if not target_account:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Account not found.")
+
+    # Generate reset token using the same mechanism as forgot-password
+    reset_token = AuthService.generate_reset_token()
+    expires_at = datetime.now(UTC) + timedelta(hours=1)
+
+    # Store hashed token on the account
+    target_account.reset_token = AuthService.hash_token(reset_token)
+    target_account.reset_token_expires_at = expires_at.isoformat()
+    await db.commit()
+    await db.refresh(target_account)
+
+    # Build the reset link using APP_BASE_URL (falls back to api_base_url)
+    from src.config.settings import settings as _settings
+    from src.utils.config_helper import get_app_base_url
+
+    try:
+        base_url = await get_app_base_url(db)
+    except Exception:
+        base_url = _settings.app_base_url or _settings.api_base_url
+
+    reset_link = f"{base_url}/reset-password?token={reset_token}"
+
+    # Audit log — records the admin action for compliance
+    try:
+        activity_service = ActivityLogService(db)
+        await activity_service.log_activity(
+            tenant_id=tenant_id,
+            account_id=current_account.id,
+            action="admin_generated_password_reset_link",
+            resource_type="account",
+            resource_id=target_uuid,
+            details={
+                "target_account_id": str(target_uuid),
+                "target_email": target_account.email,
+                "generated_by": str(current_account.id),
+            },
+        )
+    except Exception as audit_exc:
+        logger.warning(f"Failed to write admin_generated_password_reset_link audit log: {audit_exc}")
+
+    logger.info(
+        f"Admin {current_account.id} generated password reset link for account {target_uuid} "
+        f"in tenant {tenant_id}"
+    )
+
+    return PasswordResetLinkResponse(
+        account_id=str(target_uuid),
+        account_email=target_account.email,
+        reset_link=reset_link,
+        expires_at=expires_at.isoformat(),
+        message=(
+            "A one-time password reset link has been generated. "
+            "Send it to the user through a secure channel. "
+            "It expires in 1 hour."
+        ),
+    )
 
 
 # Domain configuration models and endpoints

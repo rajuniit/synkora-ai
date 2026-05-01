@@ -10,6 +10,7 @@ import hashlib
 import logging
 import re
 import time
+import unicodedata
 from dataclasses import dataclass
 from enum import Enum
 
@@ -288,6 +289,15 @@ class AdvancedPromptScanner:
 
     def _normalize_text(self, text: str) -> str:
         """Normalize text for consistent analysis"""
+        # NFKC normalization resolves homoglyphs (e.g. Cyrillic а → Latin a, fullwidth chars)
+        text = unicodedata.normalize("NFKC", text)
+
+        # Remove RTL/LTR override and directional control characters to defeat
+        # bidirectional text attacks (e.g. hidden payloads reversed via U+202E)
+        bidi_controls = "\u202a\u202b\u202c\u202d\u202e\u2066\u2067\u2068\u2069\u200f\u200e"
+        for char in bidi_controls:
+            text = text.replace(char, "")
+
         # Remove excess whitespace
         normalized = re.sub(r"\s+", " ", text.strip())
 
@@ -307,13 +317,13 @@ class AdvancedPromptScanner:
         # HTML entity decoding
         try:
             decoded = html.unescape(decoded)
-        except:
+        except Exception:
             pass
 
         # URL decoding
         try:
             decoded = urllib.parse.unquote(decoded)
-        except:
+        except Exception:
             pass
 
         # Remove zero-width characters
@@ -431,17 +441,46 @@ class AdvancedPromptScanner:
 
         return detections
 
+    def _get_reputation_violations(self, key: str) -> int:
+        """Fetch violation count from Redis (sync fallback to in-memory on error)."""
+        try:
+            from src.config.redis import get_redis
+
+            redis = get_redis()
+            if redis:
+                raw = redis.get(f"reputation:{key}")
+                if raw is not None:
+                    return int(raw)
+        except Exception:
+            pass
+        # Fall back to in-memory cache
+        return self.reputation_cache.get(key, {"violations": 0})["violations"]
+
+    def _set_reputation_violations(self, key: str, violations: int) -> None:
+        """Persist violation count to Redis (TTL=24h) and always update in-memory cache."""
+        # Always update in-memory cache so callers that inspect reputation_cache
+        # directly (e.g., unit tests without Redis) see current values.
+        self.reputation_cache[key] = {"score": 0, "violations": violations}
+        try:
+            from src.config.redis import get_redis
+
+            redis = get_redis()
+            if redis:
+                redis.setex(f"reputation:{key}", 86400, violations)
+        except Exception:
+            pass
+
     def _analyze_reputation(self, user_id: str | None, ip_address: str | None) -> int:
         """Layer 5: Reputation analysis"""
         reputation_score = 0
 
         if user_id:
-            user_reputation = self.reputation_cache.get(f"user_{user_id}", {"score": 0, "violations": 0})
-            reputation_score += user_reputation["violations"] * 10
+            violations = self._get_reputation_violations(f"user_{user_id}")
+            reputation_score += violations * 10
 
         if ip_address:
-            ip_reputation = self.reputation_cache.get(f"ip_{ip_address}", {"score": 0, "violations": 0})
-            reputation_score += ip_reputation["violations"] * 5
+            violations = self._get_reputation_violations(f"ip_{ip_address}")
+            reputation_score += violations * 5
 
         return min(reputation_score, 50)  # Cap reputation penalty
 
@@ -562,13 +601,13 @@ class AdvancedPromptScanner:
         if threat_level in [ThreatLevel.HIGH, ThreatLevel.CRITICAL]:
             if user_id:
                 key = f"user_{user_id}"
-                self.reputation_cache[key] = self.reputation_cache.get(key, {"score": 0, "violations": 0})
-                self.reputation_cache[key]["violations"] += 1
+                current = self._get_reputation_violations(key)
+                self._set_reputation_violations(key, current + 1)
 
             if ip_address:
                 key = f"ip_{ip_address}"
-                self.reputation_cache[key] = self.reputation_cache.get(key, {"score": 0, "violations": 0})
-                self.reputation_cache[key]["violations"] += 1
+                current = self._get_reputation_violations(key)
+                self._set_reputation_violations(key, current + 1)
 
     def _detection_to_dict(self, detection: Detection) -> dict:
         """Convert Detection object to dictionary"""

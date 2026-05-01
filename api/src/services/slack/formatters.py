@@ -9,6 +9,185 @@ logger = logging.getLogger(__name__)
 SLACK_MAX_TEXT_LENGTH = 3000
 SLACK_MAX_BLOCKS = 50
 
+# Column name hints for smart number formatting
+_CURRENCY_HINTS = {"balance", "amount", "price", "cost", "revenue", "total", "fee",
+                   "payment", "salary", "profit", "loss", "value", "spend", "budget"}
+_PCT_HINTS      = {"pct", "percent", "rate", "ratio", "share"}
+
+_non_ascii_re = re.compile(r"[^\x00-\x7F]+")
+
+# SQL keyword detection — used to auto-fence bare SQL queries in monospaced blocks
+_SQL_RE = re.compile(
+    r"^(SELECT|INSERT|UPDATE|DELETE|WITH|CREATE|DROP|ALTER|EXPLAIN)\b",
+    re.IGNORECASE | re.MULTILINE,
+)
+
+# Emoji → ASCII substitutions applied to table cells before monospace alignment
+_EMOJI_NORM: list[tuple[str, str]] = [
+    ("✅", "Yes"), ("☑️", "Yes"), ("✓", "Yes"),
+    ("❌", "No"),  ("✗", "No"),
+    ("🟢", "OK"),  ("🔴", "FAIL"), ("🟡", "WARN"),
+    ("⚠️", "WARN"), ("⭕", "-"),
+]
+
+
+def _normalise_cell(text: str) -> str:
+    """Strip emojis and non-ASCII from a table cell; return '—' if empty."""
+    for emoji, replacement in _EMOJI_NORM:
+        text = text.replace(emoji, replacement)
+    return _non_ascii_re.sub("", text).strip() or "—"
+
+
+# ── Visual enrichment helpers ──────────────────────────────────────────────────
+
+# Keywords → emoji prefix for section headings
+_HEADER_EMOJI_MAP: list[tuple[str, str]] = [
+    ("key takeaway", ":bulb:"),
+    ("takeaway",     ":bulb:"),
+    ("insight",      ":bulb:"),
+    ("recommendation", ":pushpin:"),
+    ("next step",    ":arrow_right:"),
+    ("action item",  ":zap:"),
+    ("summary",      ":bar_chart:"),
+    ("overview",     ":eyes:"),
+    ("report",       ":memo:"),
+    ("finding",      ":mag:"),
+    ("analysis",     ":mag:"),
+    ("result",       ":clipboard:"),
+    ("warning",      ":warning:"),
+    ("alert",        ":warning:"),
+    ("important",    ":exclamation:"),
+    ("error",        ":x:"),
+    ("fail",         ":x:"),
+    ("success",      ":white_check_mark:"),
+    ("complete",     ":white_check_mark:"),
+    ("migration",    ":arrows_counterclockwise:"),
+    ("worker",       ":gear:"),
+    ("job",          ":briefcase:"),
+    ("status",       ":traffic_light:"),
+    ("performance",  ":racing_car:"),
+    ("security",     ":lock:"),
+    ("revenue",      ":moneybag:"),
+    ("cost",         ":moneybag:"),
+    ("growth",       ":chart_with_upwards_trend:"),
+    ("trend",        ":chart_with_upwards_trend:"),
+    ("database",     ":floppy_disk:"),
+    ("user",         ":bust_in_silhouette:"),
+]
+
+# Prefixes that mark a line as a footnote-style context annotation
+_CONTEXT_PREFIXES = ("note:", "source:", "data from:", "powered by:", "as of ", "last updated", "via ")
+
+
+def _auto_emoji_header(text: str) -> str:
+    """Return an emoji prefix for a heading based on keyword matching.
+
+    Returns empty string if the heading already starts with an emoji/symbol.
+    """
+    if re.match(r"^[^\w\s]", text):  # already starts with emoji or punctuation
+        return ""
+    lower = text.lower()
+    for keyword, emoji in _HEADER_EMOJI_MAP:
+        if keyword in lower:
+            return emoji + " "
+    return ""
+
+
+def _parse_inline_elements(text: str) -> list[dict]:
+    """Convert markdown inline formatting into Slack rich_text element objects."""
+    elements: list[dict] = []
+    pattern = re.compile(r"\*\*([^*\n]+)\*\*|\*([^*\n]+)\*|`([^`\n]+)`|\[([^\]]+)\]\(([^)]+)\)")
+    last = 0
+    for m in pattern.finditer(text):
+        if m.start() > last:
+            elements.append({"type": "text", "text": text[last:m.start()]})
+        if m.group(1):    # **bold**
+            elements.append({"type": "text", "text": m.group(1), "style": {"bold": True}})
+        elif m.group(2):  # *bold* (Slack uses * for bold)
+            elements.append({"type": "text", "text": m.group(2), "style": {"bold": True}})
+        elif m.group(3):  # `code`
+            elements.append({"type": "text", "text": m.group(3), "style": {"code": True}})
+        elif m.group(4):  # [text](url)
+            elements.append({"type": "link", "url": m.group(5), "text": m.group(4)})
+        last = m.end()
+    if last < len(text):
+        elements.append({"type": "text", "text": text[last:]})
+    return elements or [{"type": "text", "text": text}]
+
+
+_BULLET_LINE_RE  = re.compile(r"^[•\-\*]\s+(.*)$")
+_ORDERED_LINE_RE = re.compile(r"^\d+[.)]\s+(.*)$")
+
+
+def _to_rich_text_list(lines: list[str], style: str) -> dict:
+    """Build a Slack rich_text block containing a bullet or ordered list."""
+    strip_re = re.compile(r"^(?:[•\-\*]|\d+[.)]) +")
+    items = []
+    for line in lines:
+        content = strip_re.sub("", line.strip())
+        if content:
+            items.append({
+                "type": "rich_text_section",
+                "elements": _parse_inline_elements(content),
+            })
+    return {
+        "type": "rich_text",
+        "elements": [{"type": "rich_text_list", "style": style, "indent": 0, "elements": items}],
+    }
+
+
+def _is_numeric_col(values: list[str]) -> bool:
+    """Return True if ≥80 % of non-empty column values are numeric."""
+    total = valid = 0
+    for v in values:
+        if v and v != "—":
+            total += 1
+            try:
+                float(re.sub(r"[$,%]", "", v))
+                valid += 1
+            except ValueError:
+                pass
+    return total > 0 and valid / total >= 0.8
+
+
+def _fmt_number(value: str, col_name: str) -> str:
+    """Format a numeric string with commas, currency prefix, or % suffix."""
+    col = col_name.lower()
+    try:
+        cleaned = re.sub(r"[$,%]", "", value).strip()
+        if not cleaned:
+            return value
+        num = float(cleaned)
+
+        # Percentage column
+        if any(h in col for h in _PCT_HINTS):
+            return f"{num:.1f}%"
+
+        # Currency column
+        if any(h in col for h in _CURRENCY_HINTS):
+            if num.is_integer():
+                return f"${int(num):,}"
+            # Crypto-scale small values — strip trailing zeros
+            if 0 < abs(num) < 0.001:
+                return "$" + f"{num:.8f}".rstrip("0")
+            return f"${num:,.2f}"
+
+        # Integer-like
+        if num.is_integer():
+            return f"{int(num):,}"
+
+        # Small decimal (crypto balances, rates)
+        if 0 < abs(num) < 0.01:
+            return f"{num:.8f}"
+
+        # Large float
+        if abs(num) >= 1000:
+            return f"{num:,.2f}"
+
+        return str(num)
+    except (ValueError, OverflowError):
+        return value
+
 # Auto-inject emojis for common status / value words in table cells.
 # Checked against the lowercased cell value — first match wins.
 _STATUS_EMOJI: list[tuple[str, str]] = [
@@ -171,37 +350,69 @@ def convert_markdown_table_to_slack_blocks(markdown_table: str) -> list:
                 blocks.append({"type": "divider"})
 
     else:
-        # ── Multi-column table → formatted text block ─────────────────────
-        col_widths = [len(h) for h in headers]
-        for row in data:
+        # ── Multi-column table → code block (monospaced = guaranteed alignment) ──
+        norm_headers = [_normalise_cell(h) for h in headers]
+        # Replace empty/null cells with em-dash
+        norm_data = [
+            [_normalise_cell(c) if c.strip() else "—" for c in row]
+            for row in data
+        ]
+
+        # Detect numeric columns for formatting + right-alignment
+        num_cols: list[bool] = []
+        for j, hdr in enumerate(norm_headers):
+            col_vals = [row[j] for row in norm_data if j < len(row)]
+            num_cols.append(_is_numeric_col(col_vals))
+
+        # Apply number formatting to numeric columns
+        for row in norm_data:
+            for j, cell in enumerate(row):
+                if j < len(num_cols) and num_cols[j] and cell != "—":
+                    row[j] = _fmt_number(cell, norm_headers[j])
+
+        col_widths = [len(h) for h in norm_headers]
+        for row in norm_data:
             for j, cell in enumerate(row):
                 if j < len(col_widths):
                     col_widths[j] = max(col_widths[j], len(cell))
 
-        def _fmt_row(cells: list[str], bold: bool = False) -> str:
+        col_sep = "  "
+
+        def _fmt_row(cells: list[str], is_header: bool = False) -> str:
             parts = []
             for j, cell in enumerate(cells):
                 w = col_widths[j] if j < len(col_widths) else len(cell)
-                padded = cell.ljust(w)
-                parts.append(f"*{padded}*" if bold else padded)
-            return " │ ".join(parts)
+                # Right-align numeric columns, left-align everything else
+                if not is_header and j < len(num_cols) and num_cols[j]:
+                    parts.append(cell.rjust(w))
+                else:
+                    parts.append(cell.ljust(w))
+            return col_sep.join(parts)
 
-        separator = "─" * min(sum(col_widths) + 3 * (len(headers) - 1), 80)
-        header_line = _fmt_row(headers, bold=True)
-        current_lines = [header_line, separator]
+        separator = col_sep.join("─" * w for w in col_widths)
+        table_lines = [_fmt_row(norm_headers, is_header=True), separator]
+        for row in norm_data:
+            table_lines.append(_fmt_row(row))
 
-        for row in data:
-            row_line = _fmt_row(row)
-            candidate = "\n".join(current_lines + [row_line])
-            if len(candidate) > SLACK_MAX_TEXT_LENGTH:
-                blocks.append({"type": "section", "text": {"type": "mrkdwn", "text": "\n".join(current_lines)}})
-                blocks.append({"type": "divider"})
-                current_lines = [header_line, separator, row_line]
-            else:
-                current_lines.append(row_line)
+        # Chunk at SLACK_MAX_TEXT_LENGTH, always keeping header + separator.
+        # Track running char count (O(n)) rather than re-joining the full list each row (O(n²)).
+        # +6 accounts for the ``` fences wrapping the final table_text.
+        chunk_lines: list[str] = [table_lines[0], table_lines[1]]
+        # header len + \n + separator len
+        current_len = len(table_lines[0]) + 1 + len(table_lines[1])
+        total_rows = len(norm_data)
+        rows_added = 0
+        for row_line in table_lines[2:]:
+            added = 1 + len(row_line)  # leading \n + line content
+            if current_len + added + 6 > SLACK_MAX_TEXT_LENGTH:
+                chunk_lines.append(f"… {total_rows - rows_added} more rows")
+                break
+            chunk_lines.append(row_line)
+            current_len += added
+            rows_added += 1
 
-        if current_lines:
-            blocks.append({"type": "section", "text": {"type": "mrkdwn", "text": "\n".join(current_lines)}})
+        table_text = "\n".join(chunk_lines)
+        blocks.append({"type": "section", "text": {"type": "mrkdwn", "text": f"```{table_text}```"}})
 
     return blocks
 
@@ -270,7 +481,8 @@ def create_slack_blocks(text: str) -> list:
             continue
 
         # ── Non-table: replace HR markers, split into paragraphs ────────────
-        part = re.sub(r"\n\s*([-*]{3,})\s*\n", "\n\n<HR_DIVIDER>\n\n", part)
+        # Match --- / *** / ___ on their own line, with or without surrounding blank lines
+        part = re.sub(r"(?m)^[ \t]*([-*_]{3,})[ \t]*$", "<HR_DIVIDER>", part)
         sections = re.split(r"(?:\r\n|\n){2,}", part)
 
         for section in sections:
@@ -296,7 +508,12 @@ def create_slack_blocks(text: str) -> list:
                 heading_text = heading_match.group(2).strip()
                 # Strip any inline markdown from the heading text
                 heading_text = re.sub(r"\*\*?([^*]+)\*\*?", r"\1", heading_text)
+                # Auto-prepend a context emoji if the heading doesn't already have one
+                heading_text = _auto_emoji_header(heading_text) + heading_text
                 if level <= 2 and len(heading_text) <= 150:
+                    # Add a visual section break before H1/H2 (skip if nothing above yet)
+                    if blocks and blocks[-1].get("type") not in ("divider", "header"):
+                        blocks.append({"type": "divider"})
                     blocks.append(
                         {
                             "type": "header",
@@ -312,8 +529,55 @@ def create_slack_blocks(text: str) -> list:
                     )
                 continue
 
+            # ── SQL / code block: auto-tag bare SQL so Slack renders it monospaced ──
+            if stripped.startswith("```") or (
+                not stripped.startswith("`") and _SQL_RE.match(stripped)
+            ):
+                # Already fenced or looks like a bare SQL query — wrap in ```sql
+                if stripped.startswith("```"):
+                    formatted = stripped  # keep as-is
+                else:
+                    formatted = f"```sql\n{stripped}\n```"
+                blocks.append({"type": "section", "text": {"type": "mrkdwn", "text": formatted}})
+                continue
+
+            # ── Pure bullet list → native rich_text block ────────────────────
+            sec_lines = [l for l in stripped.split("\n") if l.strip()]
+            if sec_lines and all(_BULLET_LINE_RE.match(l.strip()) for l in sec_lines):
+                blocks.append(_to_rich_text_list(sec_lines, "bullet"))
+                continue
+
+            # ── Pure ordered list → native rich_text block ───────────────────
+            if sec_lines and all(_ORDERED_LINE_RE.match(l.strip()) for l in sec_lines):
+                blocks.append(_to_rich_text_list(sec_lines, "ordered"))
+                continue
+
+            # ── Mixed intro text + bullet list → section + rich_text ─────────
+            # e.g. "Here are the findings:\n• Item 1\n• Item 2"
+            if sec_lines:
+                bullet_start = next(
+                    (i for i, l in enumerate(sec_lines) if _BULLET_LINE_RE.match(l.strip())), None
+                )
+                if bullet_start and bullet_start > 0:
+                    tail = sec_lines[bullet_start:]
+                    if all(_BULLET_LINE_RE.match(l.strip()) for l in tail):
+                        intro = format_text_for_slack("\n".join(sec_lines[:bullet_start]))
+                        if intro.strip():
+                            blocks.append({"type": "section", "text": {"type": "mrkdwn", "text": intro.strip()}})
+                        blocks.append(_to_rich_text_list(tail, "bullet"))
+                        continue
+
             # ── Regular text section ─────────────────────────────────────────
             formatted = format_text_for_slack(section)
+
+            # Short footnote-style lines → context block (small grey text)
+            if (
+                len(formatted.strip()) < 200
+                and "\n" not in formatted.strip()
+                and any(formatted.strip().lower().startswith(p) for p in _CONTEXT_PREFIXES)
+            ):
+                blocks.append({"type": "context", "elements": [{"type": "mrkdwn", "text": formatted.strip()}]})
+                continue
 
             if len(formatted) > SLACK_MAX_TEXT_LENGTH:
                 chunks = re.split(r"([.!?]\s+|\n)", formatted)
@@ -338,7 +602,17 @@ def create_slack_blocks(text: str) -> list:
             else:
                 blocks.append({"type": "section", "text": {"type": "mrkdwn", "text": formatted}})
 
-    return blocks
+    # ── Deduplicate consecutive dividers ────────────────────────────────────
+    deduped: list[dict] = []
+    for block in blocks:
+        if block.get("type") == "divider" and deduped and deduped[-1].get("type") == "divider":
+            continue
+        deduped.append(block)
+    # Drop trailing divider — nothing useful follows
+    if deduped and deduped[-1].get("type") == "divider":
+        deduped.pop()
+
+    return deduped
 
 
 def chunk_blocks(blocks: list, max_blocks: int = SLACK_MAX_BLOCKS) -> list:

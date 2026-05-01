@@ -38,11 +38,11 @@ def mock_tenant_id():
 
 
 @pytest.fixture
-def sample_agent():
-    """Create a sample agent mock."""
+def sample_agent(mock_tenant_id):
+    """Create a sample agent mock whose tenant_id matches the test tenant."""
     agent = Mock()
     agent.id = uuid4()
-    agent.tenant_id = uuid4()
+    agent.tenant_id = mock_tenant_id
     agent.agent_name = "test-agent"
     agent.agent_type = "llm"
     agent.description = "Test agent description"
@@ -535,7 +535,8 @@ class TestGetAgent:
         setup_db_execute_mock(mock_db, sample_agent)
 
         with patch("src.controllers.agents.index.agent_manager") as mock_manager:
-            mock_manager.registry = {}
+            mock_manager.registry = MagicMock()
+            mock_manager.registry.contains.return_value = False
 
             with patch("src.controllers.agents.index.convert_s3_uri_to_presigned_url") as mock_convert:
                 mock_convert.return_value = "https://presigned-url.com/avatar.png"
@@ -567,7 +568,8 @@ class TestGetAgent:
         setup_db_execute_mock(mock_db, sample_agent)
 
         with patch("src.controllers.agents.index.agent_manager") as mock_manager:
-            mock_manager.registry = {"test-agent": Mock()}
+            mock_manager.registry = MagicMock()
+            mock_manager.registry.contains.return_value = True
             mock_manager.get_agent_stats.return_value = {"executions": 50}
 
             with patch("src.controllers.agents.index.convert_s3_uri_to_presigned_url"):
@@ -679,13 +681,17 @@ class TestUpdateAgent:
         request.human_contact_id = None
         request.routing_mode = None
         request.routing_config = None
+        request.name = None
+        request.execution_backend = None
+        request.transfer_scope = None
 
         with (
             patch("src.controllers.agents.index.agent_manager") as mock_manager,
             patch("src.controllers.agents.index.get_agent_cache") as mock_cache,
             patch("src.controllers.agents.index.convert_s3_uri_to_presigned_url", return_value="https://url.com"),
         ):
-            mock_manager.registry = {}
+            mock_manager.registry = MagicMock()
+            mock_manager.registry.contains.return_value = False
 
             mock_cache_instance = Mock()
             mock_cache_instance.invalidate_agent = AsyncMock()
@@ -769,7 +775,7 @@ class TestResetAgent:
         result = await reset_agent(agent_name="test-agent", tenant_id=mock_tenant_id, db=mock_db)
 
         assert result.success is True
-        mock_manager.reset_agent.assert_called_once_with("test-agent")
+        mock_manager.reset_agent.assert_called_once_with("test-agent", str(mock_tenant_id))
 
     @pytest.mark.asyncio
     @patch("src.controllers.agents.index.agent_manager")

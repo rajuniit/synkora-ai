@@ -22,18 +22,18 @@ router = APIRouter(prefix="/api/v1/activity-logs", tags=["activity-logs"])
 
 # Pydantic models for request/response
 class ActivityLogResponse(BaseModel):
-    id: int
-    tenant_id: str
-    account_id: str
-    account_name: str
-    account_email: str
+    id: uuid.UUID
+    tenant_id: uuid.UUID | None
+    account_id: uuid.UUID | None
     action: str
-    resource_type: str
-    resource_id: str | None
-    details: dict | None
-    ip_address: str | None
-    user_agent: str | None
-    created_at: str
+    resource_type: str | None = None
+    resource_id: uuid.UUID | None = None
+    description: str | None = None
+    activity_metadata: dict | None = None
+    ip_address: str | None = None
+    user_agent: str | None = None
+    status: str | None = None
+    created_at: datetime
 
     model_config = ConfigDict(from_attributes=True)
 

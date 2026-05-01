@@ -63,6 +63,7 @@ class RateLimitMiddleware:
         "/api/v1/data-analysis/query-database": {"requests": 15, "window": 60},
         "/api/v1/data-analysis/query-data-source": {"requests": 15, "window": 60},
         "/api/v1/database-connections": {"requests": 20, "window": 60},
+        "/api/v1/custom-tools": {"requests": 20, "window": 60},
         # Public webhook endpoints - moderate
         "/webhook/": {"requests": 100, "window": 60},
         # Health check - very permissive

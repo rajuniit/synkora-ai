@@ -38,7 +38,11 @@ class SystemPromptBuilder:
         self.db = db
 
     async def build_enhanced_prompt(
-        self, agent: Agent, include_context_files: bool = True, max_context_length: int | None = None
+        self,
+        agent: Agent,
+        include_context_files: bool = True,
+        max_context_length: int | None = None,
+        override_system_prompt: str | None = None,
     ) -> str:
         """
         Build an enhanced system prompt for an agent.
@@ -47,6 +51,9 @@ class SystemPromptBuilder:
             agent: The agent to build the prompt for
             include_context_files: Whether to include context files (default: True)
             max_context_length: Maximum length for context text (optional)
+            override_system_prompt: If provided, replaces agent.system_prompt without
+                touching the ORM object (used by spawned workers to avoid inheriting
+                the orchestrator's instructions)
 
         Returns:
             Enhanced system prompt string
@@ -64,9 +71,10 @@ class SystemPromptBuilder:
         )
         prompt_parts.append(date_context)
 
-        # 1. Add original system prompt if available
-        if agent.system_prompt:
-            prompt_parts.append(agent.system_prompt.strip())
+        # 1. Add system prompt — use override if provided, otherwise use agent's stored prompt
+        effective_system_prompt = override_system_prompt if override_system_prompt is not None else agent.system_prompt
+        if effective_system_prompt:
+            prompt_parts.append(effective_system_prompt.strip())
 
         # 2. Add context files if requested and available
         if include_context_files:
@@ -176,7 +184,10 @@ class SystemPromptBuilder:
                 if len(extracted_text) > remaining_length:
                     extracted_text = extracted_text[:remaining_length] + "\n\n[Content truncated due to length limit]"
 
-            context_parts.append(extracted_text)
+            filename = context_file.get("filename", "unknown")
+            context_parts.append(
+                f"<context-document source=\"{filename}\" trust=\"low\">\n{extracted_text}\n</context-document>"
+            )
             total_length += len(extracted_text)
 
         # Add closing separator

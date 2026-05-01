@@ -66,3 +66,27 @@ data:
   WORKSPACE_TTL_HOURS: "24"
   WORKSPACE_MAX_SIZE_MB: "2000"
   WORKSPACE_MAX_PER_TENANT: "100"
+
+  # Session & Auth Security
+  # Maximum total session lifetime regardless of activity — forces re-login after this period.
+  JWT_MAX_SESSION_AGE_HOURS: "12"
+  # Days of inactivity before account is automatically disabled (PCI-DSS 8.1.4: 90 days)
+  DORMANT_ACCOUNT_DAYS: "90"
+  # Check new passwords against HaveIBeenPwned breach database (k-anonymity, no key needed)
+  HIBP_CHECK_ENABLED: "true"
+
+  # LLM / Agent Security
+  # Hard ceiling on max_tokens per LLM response — prevents token-padding / data exfiltration
+  PLATFORM_MAX_TOKENS_PER_RESPONSE: "32000"
+  # Comma-separated domain blocklist for agent web-fetch tool
+  AGENT_BLOCKED_DOMAINS: ""
+  # Hide real model name and provider from cross-tenant public agent responses
+  HIDE_MODEL_INFO_IN_PUBLIC: "false"
+
+  # Audit & Compliance — Retention Policies
+  # SOC 2 and PCI DSS require minimum 1 year (365 days) audit log retention
+  AUDIT_LOG_RETENTION_DAYS: "365"
+  CONVERSATION_RETENTION_DAYS: "365"
+  MESSAGE_RETENTION_DAYS: "365"
+  # Files can have a shorter retention window
+  FILE_RETENTION_DAYS: "90"

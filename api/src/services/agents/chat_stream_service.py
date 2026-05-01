@@ -45,6 +45,7 @@ class StreamState:
     chart_data: list[dict[str, Any]]
     diagram_data: list[dict[str, Any]] = None
     infographic_data: list[dict[str, Any]] = None
+    generated_images_data: list[dict[str, Any]] = None
     fleet_card_data: list[dict[str, Any]] = None
     total_output_tokens: int = 0
     first_token_time: float | None = None
@@ -55,6 +56,8 @@ class StreamState:
             self.diagram_data = []
         if self.infographic_data is None:
             self.infographic_data = []
+        if self.generated_images_data is None:
+            self.generated_images_data = []
         if self.fleet_card_data is None:
             self.fleet_card_data = []
         if self.tool_start_times is None:
@@ -90,6 +93,8 @@ class ChatStreamService:
         trigger_detail: str | None = None,
         tenant_id: Any | None = None,
         shared_state: dict[str, Any] | None = None,
+        override_agentic_config: dict[str, Any] | None = None,
+        override_system_prompt: str | None = None,
     ) -> AsyncGenerator[str, None]:
         """
         Stream agent response using SSE with function calling, RAG support, and attachments.
@@ -332,6 +337,7 @@ class ChatStreamService:
                 perf_config=perf_config,
                 conversation_id=conversation_id,
                 llm_client=agent.llm_client if agent else None,
+                override_system_prompt=override_system_prompt,
             )
 
             # Wire cost-tracking context into the LLM client.
@@ -354,9 +360,6 @@ class ChatStreamService:
                         optimization_flags={},
                         enable_response_cache=bool(perf_config.get("enable_response_cache", False)),
                         system_prompt_hash=_hashlib.sha256((system_prompt or "").encode()).hexdigest()[:16],
-                        agent_updated_at=str(
-                            db_agent.updated_at.timestamp() if db_agent and db_agent.updated_at else ""
-                        ),
                     )
                 except Exception:
                     pass  # cost context is optional; never block the request
@@ -392,24 +395,31 @@ class ChatStreamService:
 
             trace_id = self._create_trace(agent, agent_name, message, final_tool_names)
 
-            # --- Fallback chain: if primary model's circuit is open, reload with
-            # the next available config before any streaming begins. --------
+            # --- Fallback chain -----------------------------------------------
+            # Two triggers for switching to a fallback LLM config:
+            #   1. Pre-flight: primary provider's circuit breaker is already OPEN.
+            #   2. Mid-stream: primary raises LLMProviderError (rate-limit, 500,
+            #      auth failure, etc.) before any content has been yielded so the
+            #      response can be retried cleanly.
+            #
+            # When a fallback is used the full stream is replayed from scratch
+            # against the next config — this is only safe when no chunks have been
+            # sent yet.  Once at least one chunk has been yielded we break out
+            # and let the partial response stand rather than confuse the client.
+            # -----------------------------------------------------------------
+            from src.services.agents.llm_client import LLMProviderError
             from src.services.performance.circuit_breaker import CircuitState, get_circuit_breaker
 
             _active_agent = agent
-            for _attempt, _candidate_config_id in enumerate(
-                [None] + load_result.fallback_config_ids  # None = already-loaded primary
-            ):
-                if _attempt > 0:
-                    # Primary circuit is open — reload agent with fallback config
-                    cb_name = f"llm_{_active_agent.llm_client.provider}"
-                    cb = get_circuit_breaker(name=cb_name, failure_threshold=5, recovery_timeout=60)
-                    if cb.state != CircuitState.OPEN:
-                        break  # Primary is fine after all (recovered between checks)
+            _all_config_ids = [None] + list(load_result.fallback_config_ids)  # None = already-loaded primary
 
+            for _attempt, _candidate_config_id in enumerate(_all_config_ids):
+                if _attempt > 0:
+                    # Load the next fallback config.
                     logger.warning(
-                        f"[routing] Primary model circuit open, switching to fallback "
-                        f"config {_candidate_config_id} for agent '{agent_name}'"
+                        f"[fallback] Provider '{_active_agent.llm_client.provider if _active_agent and _active_agent.llm_client else 'unknown'}' "
+                        f"failed, switching to fallback config '{_candidate_config_id}' "
+                        f"for agent '{agent_name}' (attempt {_attempt + 1}/{len(_all_config_ids)})"
                     )
                     fallback_result = await self.agent_loader.load_agent(
                         agent_name=agent_name,
@@ -417,41 +427,82 @@ class ChatStreamService:
                         llm_config_id=_candidate_config_id,
                     )
                     if fallback_result.error or not fallback_result.agent:
-                        logger.warning(f"[routing] Fallback load failed: {fallback_result.error}")
+                        logger.warning(f"[fallback] Fallback load failed: {fallback_result.error}")
                         continue
                     _active_agent = fallback_result.agent
                 else:
+                    # First attempt: also do the legacy pre-flight circuit check so
+                    # we don't even start if the circuit is already open.
+                    if _active_agent and _active_agent.llm_client:
+                        cb_name = f"llm_{_active_agent.llm_client.provider}"
+                        cb = get_circuit_breaker(name=cb_name, failure_threshold=5, recovery_timeout=60)
+                        if cb.state == CircuitState.OPEN and load_result.fallback_config_ids:
+                            logger.warning(
+                                f"[fallback] Primary model circuit open for '{_active_agent.llm_client.provider}', "
+                                f"will attempt fallback configs for agent '{agent_name}'"
+                            )
+                            continue  # skip straight to first fallback
                     _active_agent = agent
 
-                if final_tool_names:
-                    async for event in self._stream_with_tools(
-                        agent=_active_agent,
-                        db_agent=db_agent,
-                        prompt=system_prompt,
-                        messages=structured_messages,
-                        tool_names=final_tool_names,
-                        trace_id=trace_id,
-                        conversation_uuid=conversation_uuid,
-                        user_message_id=user_message_saved.id if user_message_saved else None,
-                        start_time=start_time,
-                        state=state,
-                        db=db,
-                        user_id=user_id,
-                        shared_state=shared_state,
-                        caller_tenant_id=tenant_id,
-                    ):
-                        yield event
-                else:
-                    async for event in self._stream_without_tools(
-                        agent=_active_agent,
-                        system_prompt=system_prompt,
-                        messages=structured_messages,
-                        start_time=start_time,
-                        state=state,
-                        agent_name=agent_name,
-                    ):
-                        yield event
-                break  # Successful stream — exit fallback loop
+                # Attempt to stream with current config.  Wrap in try/except so
+                # that LLMProviderError before any content is yielded triggers the
+                # next fallback rather than surfacing an error to the user.
+                _chunks_yielded_this_attempt = 0
+                try:
+                    if final_tool_names:
+                        async for event in self._stream_with_tools(
+                            agent=_active_agent,
+                            db_agent=db_agent,
+                            prompt=system_prompt,
+                            messages=structured_messages,
+                            tool_names=final_tool_names,
+                            trace_id=trace_id,
+                            conversation_uuid=conversation_uuid,
+                            user_message_id=user_message_saved.id if user_message_saved else None,
+                            start_time=start_time,
+                            state=state,
+                            db=db,
+                            user_id=user_id,
+                            shared_state=shared_state,
+                            caller_tenant_id=tenant_id,
+                            override_agentic_config=override_agentic_config,
+                        ):
+                            _chunks_yielded_this_attempt += 1
+                            yield event
+                    else:
+                        async for event in self._stream_without_tools(
+                            agent=_active_agent,
+                            system_prompt=system_prompt,
+                            messages=structured_messages,
+                            start_time=start_time,
+                            state=state,
+                            agent_name=agent_name,
+                        ):
+                            _chunks_yielded_this_attempt += 1
+                            yield event
+                    break  # Successful stream — exit fallback loop
+
+                except LLMProviderError as provider_err:
+                    failed_provider = provider_err.provider
+                    if _chunks_yielded_this_attempt > 0:
+                        # Content already sent — cannot restart; surface the error.
+                        logger.warning(
+                            f"[fallback] Provider '{failed_provider}' failed after {_chunks_yielded_this_attempt} "
+                            f"chunks; cannot retry cleanly, surfacing error."
+                        )
+                        raise
+                    if _attempt < len(_all_config_ids) - 1:
+                        logger.warning(
+                            f"[fallback] Provider '{failed_provider}' failed before any content was yielded: "
+                            f"{provider_err.original_error}. Trying next fallback config."
+                        )
+                        continue  # try next config
+                    # No more fallbacks — re-raise so the outer handler surfaces the error.
+                    logger.warning(
+                        f"[fallback] All {len(_all_config_ids)} LLM configs exhausted for agent '{agent_name}'. "
+                        f"Last error: {provider_err.original_error}"
+                    )
+                    raise
 
             end_time = time.time()
             timing_metrics = calculate_time_metrics(start_time, state.first_token_time, end_time)
@@ -510,6 +561,7 @@ class ChatStreamService:
                     charts=state.chart_data,
                     diagrams=state.diagram_data,
                     infographics=state.infographic_data,
+                    generated_images=state.generated_images_data,
                     fleet_cards=state.fleet_card_data,
                     timing=timing_metrics,
                     usage={
@@ -1402,6 +1454,7 @@ class ChatStreamService:
         perf_config: dict[str, Any],
         conversation_id: str | None = None,
         llm_client: Any = None,
+        override_system_prompt: str | None = None,
     ) -> tuple[str, list[dict[str, str]]]:
         from src.services.agents.prompt_builder import SystemPromptBuilder
 
@@ -1416,6 +1469,7 @@ class ChatStreamService:
             agent=db_agent,
             include_context_files=True,
             max_context_length=10000,
+            override_system_prompt=override_system_prompt,
         )
         if enhanced_system_prompt:
             prompt_parts.append(enhanced_system_prompt)
@@ -1669,6 +1723,7 @@ class ChatStreamService:
         user_id: str | None = None,
         shared_state: dict[str, Any] | None = None,
         caller_tenant_id: Any | None = None,
+        override_agentic_config: dict[str, Any] | None = None,
     ) -> AsyncGenerator[str, None]:
         import uuid as uuid_module
 
@@ -1724,13 +1779,17 @@ class ChatStreamService:
         from src.services.agents.config import AgenticConfig
 
         agentic_meta = (db_agent.agent_metadata or {}).get("agentic_config", {}) if db_agent.agent_metadata else {}
+        # Caller-supplied overrides (e.g. spawned workers enabling parallel_tools
+        # regardless of the orchestrator agent's stored setting)
+        if override_agentic_config:
+            agentic_meta = {**agentic_meta, **override_agentic_config}
         logger.info(
             f"🔧 agentic_config loaded for '{db_agent.agent_name}': "
-            f"max_iterations={agentic_meta.get('max_iterations', 150)}, "
+            f"max_iterations={agentic_meta.get('max_iterations', 20)}, "
             f"raw_agent_metadata={db_agent.agent_metadata}"
         )
         agentic_config = AgenticConfig(
-            max_iterations=agentic_meta.get("max_iterations", 150),
+            max_iterations=agentic_meta.get("max_iterations", 20),
             parallel_tools=agentic_meta.get("parallel_tools", True),
             tool_retry_attempts=agentic_meta.get("tool_retry_attempts", 2),
             tool_retry_delay=agentic_meta.get("tool_retry_delay", 1.0),
@@ -1744,6 +1803,15 @@ class ChatStreamService:
         from src.services.security.pii_redactor import PIIRedactionConfig, PIIRedactor
 
         pii_config = PIIRedactionConfig.from_agent_metadata(db_agent.agent_metadata)
+        # If PII redaction is not explicitly configured but the agent has database
+        # connections, enable redact_for_llm by default to prevent PII leakage from
+        # query results into the LLM context.
+        if not pii_config.any_enabled:
+            _has_db_connections = bool(
+                (db_agent.agent_metadata or {}).get("allowed_database_connections")
+            )
+            if _has_db_connections:
+                pii_config = PIIRedactionConfig(redact_for_llm=True, redact_for_response=False)
         pii_redactor = PIIRedactor(pii_config) if pii_config.any_enabled else None
 
         function_handler = FunctionCallingHandler(
@@ -1870,6 +1938,12 @@ class ChatStreamService:
                     state.infographic_data.append(infographic)
                     infographic_payload = {k: v for k, v in event.items() if k != "type"}
                     yield await generate_sse_event("infographic", infographic_payload)
+
+                elif event["type"] == "generated_image":
+                    image = event.get("generated_image", {})
+                    state.generated_images_data.append(image)
+                    image_payload = {k: v for k, v in event.items() if k != "type"}
+                    yield await generate_sse_event("generated_image", image_payload)
 
                 elif event["type"] == "vehicle_map":
                     map_payload = {k: v for k, v in event.items() if k != "type"}

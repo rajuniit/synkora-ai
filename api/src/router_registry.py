@@ -254,6 +254,20 @@ ROUTER_REGISTRY: list[RouteConfig] = [
         prefix="",
         tags=["okta-sso"],
     ),
+    # ===== SAML 2.0 SSO =====
+    RouteConfig(
+        module="src.controllers.console.saml_sso",
+        attribute="saml_router",
+        prefix="",
+        tags=["saml-sso"],
+    ),
+    # ===== SCIM 2.0 User Provisioning =====
+    RouteConfig(
+        module="src.controllers.scim",
+        attribute="scim_router",
+        prefix="",
+        tags=["scim"],
+    ),
     # ===== Knowledge Bases & Data =====
     RouteConfig(
         module="src.controllers.knowledge_bases",

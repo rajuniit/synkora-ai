@@ -38,6 +38,7 @@ interface ChatMessagesProps {
   isStreaming?: boolean
   onCopyMessage?: (content: string, messageId: string) => void
   onRetry?: (messageId: string) => void
+  onDeleteMessage?: (messageId: string) => void
   thinkingStatus?: string
   toolStatus?: ToolStatus | null
   recentTools?: ToolStatus[]
@@ -61,6 +62,7 @@ export function ChatMessages({
   isStreaming = false,
   onCopyMessage,
   onRetry,
+  onDeleteMessage,
   thinkingStatus,
   toolStatus,
   recentTools = [],
@@ -104,7 +106,7 @@ export function ChatMessages({
       ref={containerRef}
       onScroll={handleScroll}
       className={cn(
-        'flex-1 overflow-y-auto overflow-x-hidden px-6 lg:px-10 py-6',
+        'flex-1 overflow-y-auto overflow-x-hidden px-4 sm:px-6 lg:px-10 py-6',
         className
       )}
     >
@@ -131,6 +133,7 @@ export function ChatMessages({
                 streamStartTime={isStreamingMessage ? streamStartTime : undefined}
                 onCopy={onCopyMessage}
                 onRetry={onRetry}
+                onDelete={onDeleteMessage}
                 onActionClick={onActionClick}
                 chatConfig={chatConfig}
                 agentAvatar={agentAvatar}

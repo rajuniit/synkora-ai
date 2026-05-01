@@ -18,9 +18,12 @@ def register_remote_agent_tools(registry) -> None:
         name="call_remote_agent",
         function=call_remote_agent,
         description=(
-            "Call a remote AI agent via A2A or MCP protocol. "
-            "Use this to delegate work to specialized agents at external endpoints. "
-            "Returns the agent's response text."
+            "Call a REMOTE agent at an external URL via A2A or MCP protocol. "
+            "SYNCHRONOUS — blocks until the remote agent replies and returns the full result immediately. "
+            "No polling required. "
+            "Use this to delegate work to a specific agent at a known endpoint URL "
+            "(e.g. https://host/api/a2a/agents/{agent_id}). "
+            "Do NOT use for local sub-tasks on the same server — use spawn_agent instead."
         ),
         parameters={
             "type": "object",

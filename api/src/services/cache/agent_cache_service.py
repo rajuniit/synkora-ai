@@ -358,6 +358,8 @@ class AgentCacheService:
 
             if agent_name:
                 keys_to_delete.append(self._build_key("config", agent_name))
+                # Also invalidate the routing LLM-configs cache (keyed by name)
+                keys_to_delete.append(self._build_key("llm_configs", agent_name))
 
             if agent_id:
                 keys_to_delete.append(self._build_key("tools", agent_id))

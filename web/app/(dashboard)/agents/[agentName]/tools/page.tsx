@@ -195,6 +195,14 @@ const TOOL_GROUPS: ToolGroup[] = [
     expanded: false
   },
   {
+    id: 'image_generation',
+    name: 'Image Generation',
+    description: 'Generate AI images from text prompts using gpt-image-2, Google Imagen, or Grok Aurora — uses the agent\'s configured LLM API key',
+    icon: Package,
+    tools: [],
+    expanded: false
+  },
+  {
     id: 'docker',
     name: 'Docker',
     description: 'Query Docker container logs and monitor running services',
@@ -739,7 +747,7 @@ export default function AgentToolsPage() {
       
       let groupId = 'system'; // default
 
-      const AGENT_TOOLS = new Set(['spawn_agent', 'transfer_to_agent', 'check_task', 'list_background_tasks', 'escalate_to_human', 'get_my_human_contact', 'get_project_agents', 'get_my_role', 'internal_escalate_followup', 'check_escalation_status', 'get_pending_escalations', 'internal_search_available_tools', 'internal_list_tool_categories']);
+      const AGENT_TOOLS = new Set(['spawn_agent', 'check_task', 'list_background_tasks', 'call_remote_agent', 'transfer_to_agent', 'escalate_to_human', 'get_my_human_contact', 'get_project_agents', 'get_my_role', 'internal_escalate_followup', 'check_escalation_status', 'get_pending_escalations', 'internal_search_available_tools', 'internal_list_tool_categories']);
 
       // Priority-based categorization by integration name
       if (AGENT_TOOLS.has(toolName)) {
@@ -845,6 +853,8 @@ export default function AgentToolsPage() {
         groupId = 'diagram';
       } else if (toolName === 'internal_generate_infographic' || toolName === 'internal_generate_slack_infographic') {
         groupId = 'infographic';
+      } else if (toolName === 'internal_generate_image') {
+        groupId = 'image_generation';
       } else if (toolName === 'internal_generate_chart' || toolName === 'internal_query_and_chart') {
         groupId = 'charts';
       } else if (toolName === 'generate_chart_from_data') {
@@ -2067,7 +2077,7 @@ export default function AgentToolsPage() {
                           ) : (
                             <div>
                               <select
-                                value={toolConfig[field.key] || ''}
+                                value={toolConfig[field.key] != null ? String(toolConfig[field.key]) : ''}
                                 onChange={(e) => handleConfigChange(field.key, e.target.value)}
                                 className="w-full px-3 py-2 text-sm border border-gray-300 rounded-lg focus:ring-2 focus:ring-red-500 focus:border-red-500"
                               >

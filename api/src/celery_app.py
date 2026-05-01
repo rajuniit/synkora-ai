@@ -10,6 +10,7 @@ import sentry_sdk
 from celery import Celery
 from celery.schedules import crontab
 from celery.signals import task_failure, task_retry
+from prometheus_client import Counter
 from sentry_sdk.integrations.celery import CeleryIntegration
 from sentry_sdk.integrations.logging import LoggingIntegration
 
@@ -56,6 +57,8 @@ celery_app = Celery(
         "src.tasks.digest_tasks",  # Daily digest generation for all data sources
         "src.tasks.a2a_tasks",  # A2A protocol async task execution
         "src.tasks.batch_poll_task",  # LLM batch API polling
+        "src.tasks.gdpr_tasks",  # GDPR Article 15 export + Article 17 erasure
+        "src.tasks.retention_tasks",  # Data retention policy enforcement
     ],
 )
 
@@ -96,10 +99,10 @@ celery_app.conf.update(
         # Agent tasks to agents queue
         "execute_spawn_agent_task": {"queue": "agents"},
         "process_webhook_event": {"queue": "agents"},
-        # Autonomous agent execution (the heavy scheduled task runner).
-        # Uses the actual registered task name from @celery_app.task(name=...).
-        # tasks.check_scheduled_tasks is lightweight (beat dispatcher) → default queue.
-        "tasks.execute_scheduled_task": {"queue": "agents"},
+        # Scheduled task execution goes to default queue so it doesn't block
+        # spawn_agent / webhook tasks on the agents queue.
+        # tasks.check_scheduled_tasks (beat dispatcher) → default queue.
+        "tasks.execute_scheduled_task": {"queue": "default"},
         "tasks.execute_a2a_task": {"queue": "agents"},
         "tasks.poll_llm_batches": {"queue": "agents"},
         # Knowledge compilation to agents queue
@@ -163,6 +166,31 @@ celery_app.conf.update(
             "task": "tasks.poll_llm_batches",
             "schedule": crontab(minute="*/30"),
         },
+        # Purge audit logs older than AUDIT_LOG_RETENTION_DAYS (default 365) daily at 1 AM
+        "cleanup-audit-logs": {
+            "task": "tasks.cleanup_audit_logs",
+            "schedule": crontab(hour=1, minute=0),
+        },
+        # Disable dormant (inactive) accounts every Sunday at 2 AM UTC
+        "disable-dormant-accounts-weekly": {
+            "task": "tasks.disable_dormant_accounts",
+            "schedule": crontab(hour=2, minute=0, day_of_week=0),  # 0 = Sunday
+        },
+        # Data retention: delete old conversations weekly on Sunday at 3 AM UTC
+        "cleanup-old-conversations-weekly": {
+            "task": "tasks.cleanup_old_conversations",
+            "schedule": crontab(hour=3, minute=0, day_of_week=0),
+        },
+        # Data retention: delete old/orphaned messages weekly on Sunday at 3:30 AM UTC
+        "cleanup-old-messages-weekly": {
+            "task": "tasks.cleanup_old_messages",
+            "schedule": crontab(hour=3, minute=30, day_of_week=0),
+        },
+        # Data retention: delete old uploaded files weekly on Sunday at 4 AM UTC
+        "cleanup-old-files-weekly": {
+            "task": "tasks.cleanup_old_files",
+            "schedule": crontab(hour=4, minute=0, day_of_week=0),
+        },
     },
 )
 
@@ -200,6 +228,13 @@ if settings.celery_broker_url_str.startswith("sentinel://"):
     )
 
 
+# Prometheus counter for Celery task failures (labelled by task name)
+CELERY_TASK_FAILURES = Counter(
+    "celery_task_failures_total",
+    "Total number of Celery task failures after all retries exhausted",
+    ["task_name"],
+)
+
 # Global Dead-Letter Queue handlers for failed tasks
 DLQ_KEY = "celery:dlq"
 DLQ_MAX_ENTRIES = 10000  # Limit DLQ size to prevent unbounded growth
@@ -220,6 +255,12 @@ def handle_task_failure(sender, task_id, exception, args, kwargs, traceback, ein
             return
 
         task_name = sender.name if sender else "unknown"
+
+        # Increment Prometheus failure counter (safe — labels are deduplicated)
+        try:
+            CELERY_TASK_FAILURES.labels(task_name=task_name).inc()
+        except Exception as _prom_err:
+            logging.debug("Prometheus counter update failed: %s", _prom_err)
         failed_at = datetime.now(UTC)
 
         # Build failure record
@@ -234,13 +275,11 @@ def handle_task_failure(sender, task_id, exception, args, kwargs, traceback, ein
             "failed_at": failed_at.isoformat(),
         }
 
-        # Store in sorted set (score = timestamp for ordering)
-        redis.zadd(DLQ_KEY, {json.dumps(failed_data): failed_at.timestamp()})
-
-        # Trim old entries if over limit (keep most recent)
-        dlq_size = redis.zcard(DLQ_KEY)
-        if dlq_size > DLQ_MAX_ENTRIES:
-            redis.zremrangebyrank(DLQ_KEY, 0, dlq_size - DLQ_MAX_ENTRIES - 1)
+        # Store in sorted set (score = timestamp for ordering) and trim atomically
+        pipe = redis.pipeline()
+        pipe.zadd(DLQ_KEY, {json.dumps(failed_data): failed_at.timestamp()})
+        pipe.zremrangebyrank(DLQ_KEY, 0, -(DLQ_MAX_ENTRIES + 1))  # Keep only newest DLQ_MAX_ENTRIES
+        pipe.execute()
 
         logging.warning(f"DLQ: Stored failed task {task_name} (id={task_id}): {type(exception).__name__}")
 

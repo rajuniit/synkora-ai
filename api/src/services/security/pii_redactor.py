@@ -1,12 +1,15 @@
 """
 PII Redactor — per-conversation stateful redaction for tool results.
 
-Supports two independent modes (both opt-in, both default off):
+Supports two independent modes:
   - redact_for_llm:       Replace PII with tokens before sending tool results to the LLM.
+                          Opt-in; defaults to False.
                           Tokens are restored back to original values in the streamed response.
   - redact_for_response:  Strip PII from the final user-facing response (no restoration).
-                          Works independently; when combined with redact_for_llm the LLM
-                          never sees real PII AND the user never sees it either.
+                          Defaults to False (opt-in). When True, PII tokens are never restored
+                          in the streamed response so the user never sees raw PII.
+                          When combined with redact_for_llm the LLM never sees real PII AND
+                          the user never sees it either.
 
 Performance design:
   Redaction:   patterns compiled once at module level; single re.sub pass per pattern.
@@ -30,7 +33,10 @@ _PII_PATTERNS: dict[str, tuple[re.Pattern, str]] = {
         "EMAIL",
     ),
     "phone": (
-        re.compile(r"\b(?:\+?1[-.\s]?)?\(?\d{3}\)?[-.\s]?\d{3}[-.\s]?\d{4}\b"),
+        re.compile(
+            r"\+[1-9]\d{6,14}"  # E.164 international: +60123456789, +919876543210, +12125551234
+            r"|\b(?:\+?1[-.\s]?)?\(?\d{3}\)?[-.\s]?\d{3}[-.\s]?\d{4}\b"  # US/Canada: (555) 123-4567
+        ),
         "PHONE",
     ),
     "ssn": (
@@ -61,7 +67,7 @@ _TOKEN_PATTERN = re.compile(r"\[(?:EMAIL|PHONE|SSN|CARD|IP)_\d+\]")
 
 @dataclass
 class PIIRedactionConfig:
-    """Configuration for per-agent PII redaction.  All flags default to False."""
+    """Configuration for per-agent PII redaction."""
 
     redact_for_llm: bool = False
     """Replace PII in tool results with tokens before they reach the LLM.
@@ -69,6 +75,8 @@ class PIIRedactionConfig:
 
     redact_for_response: bool = False
     """Mask PII in the final response shown to the user (no restoration).
+    Defaults to False (opt-in). When True, tokens are NOT restored in the streamed
+    response, so PII is never echoed back to the end user.
     Works independently of redact_for_llm."""
 
     patterns: list[str] = field(default_factory=lambda: list(_PII_PATTERNS.keys()))
@@ -118,14 +126,8 @@ class PIIRedactor:
     # Redaction (write path)
     # ------------------------------------------------------------------
 
-    def redact(self, text: str) -> str:
-        """Replace PII with tokens.  Same value always produces the same token (idempotent).
-
-        Only active when config.redact_for_llm is True.
-        """
-        if not self.config.redact_for_llm:
-            return text
-
+    def _tokenize(self, text: str) -> str:
+        """Internal tokenisation pass — replaces PII matches with stable tokens."""
         for pattern_name in self.config.patterns:
             entry = _PII_PATTERNS.get(pattern_name)
             if not entry:
@@ -145,8 +147,33 @@ class PIIRedactor:
                 return token
 
             text = regex.sub(_replacer, text)
-
         return text
+
+    def redact(self, text: str) -> str:
+        """Replace PII with tokens.  Same value always produces the same token (idempotent).
+
+        Active only when redact_for_llm is True.  Token injection is needed so the LLM
+        can reproduce tokens in its response, which are later restored to real values.
+        When only redact_for_response is True, tool results are passed through unchanged
+        and PII is stripped from the final response via redact_response() instead.
+        """
+        if not self.config.redact_for_llm:
+            return text
+        return self._tokenize(text)
+
+    def redact_tool_result(self, text: str) -> str:
+        """Tokenise PII in a tool result before it is appended to the conversation history.
+
+        Active when *any* redaction flag is set (redact_for_llm OR redact_for_response).
+        This prevents raw PII from ever reaching the LLM regardless of whether tokens will
+        be restored in the final response.
+
+        When redact_for_llm=True  the tokens ARE restored in the streamed response.
+        When redact_for_response=True only the tokens are emitted (PII never shown to user).
+        """
+        if not self.config.any_enabled:
+            return text
+        return self._tokenize(text)
 
     # ------------------------------------------------------------------
     # Restoration (read path)
@@ -161,9 +188,21 @@ class PIIRedactor:
     def restore_streaming(self, chunk: str, *, flush: bool = False) -> str:
         """Buffer partial tokens split across SSE chunk boundaries, then restore.
 
+        Restoration only runs when redact_for_llm is True.  When only redact_for_response
+        is True the buffer still accumulates but tokens are NOT swapped back — they are
+        emitted as-is so PII is never revealed in the user-facing stream.
+
         Call with flush=True at end-of-stream to drain the buffer.
         """
         self._stream_buffer += chunk
+
+        if not self.config.redact_for_llm:
+            # No restoration. Drain buffer on flush; otherwise pass through immediately.
+            if flush:
+                result, self._stream_buffer = self._stream_buffer, ""
+                return result
+            result, self._stream_buffer = self._stream_buffer, ""
+            return result
 
         if not self._token_to_value:
             # No tokens seen yet — pass everything through

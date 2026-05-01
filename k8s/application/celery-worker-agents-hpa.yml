@@ -1,5 +1,9 @@
-apiVersion: autoscaling/v2
-kind: HorizontalPodAutoscaler
+# DISABLED — replaced by celery-worker-agents-keda.yml (KEDA ScaledObject).
+# Kept here for rollback reference. To re-enable: delete the ScaledObject and
+# remove this comment block, then apply this file.
+#
+# apiVersion: autoscaling/v2
+# kind: HorizontalPodAutoscaler
 metadata:
   name: synkora-celery-worker-agents-hpa
   namespace: synkora-production

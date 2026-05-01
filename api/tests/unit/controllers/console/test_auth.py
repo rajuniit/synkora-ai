@@ -16,6 +16,11 @@ from src.middleware.auth_middleware import get_current_account
 @pytest.fixture
 def mock_db_session():
     db = AsyncMock()
+    # Use a plain MagicMock for execute() return so scalar_one_or_none() is NOT
+    # an async coroutine (coroutines are truthy and would trigger SAML/MFA 403 checks).
+    mock_result = MagicMock()
+    mock_result.scalar_one_or_none.return_value = None
+    db.execute = AsyncMock(return_value=mock_result)
     return db
 
 

@@ -28,6 +28,7 @@ dependencies = [
     "pyjwt>=2.10.0,<3.0.0",
     "bcrypt>=4.2.0,<5.0.0",
     "cryptography>=44.0.0,<45.0.0",
+    "pyotp>=2.9.0,<3.0.0",
     # Task Queue
     "celery>=5.5.0,<6.0.0",
     "flower>=2.0.0,<3.0.0",
@@ -44,6 +45,7 @@ dependencies = [
     "google-genai>=1.0.0,<2.0.0",
     "fastmcp==2.13.0.2",
     "asyncpg>=0.30.0",
+    "jsonschema>=4.0.0,<5.0.0",
     # Multi-Provider LLM Support
     "litellm>=1.55.0,<2.0.0",
     "openai>=1.59.0,<2.0.0",
@@ -94,6 +96,7 @@ dependencies = [
     # Data Analysis
     "pandas>=2.0.0,<3.0.0",
     "numpy>=1.24.0,<2.0.0",  # Pin to 1.x for pyarrow compatibility
+    "matplotlib>=3.7.0,<4.0.0",  # Server-side chart rendering for Slack
     "openpyxl>=3.1.0,<4.0.0",
     "pyarrow>=14.0.0,<18.0.0",
     "databricks-sql-connector>=3.0.0,<4.0.0",
@@ -158,6 +161,17 @@ llm = [
 diagrams = [
     # Optional server-side PNG export for diagram generation
     "cairosvg>=2.7.0,<3.0.0",
+]
+
+lambda = [
+    # AWS Lambda execution backend
+    "boto3>=1.35",
+]
+
+cloud-run = [
+    # Google Cloud Run execution backend
+    "google-cloud-run>=0.10",
+    "google-auth>=2.0",
 ]
 
 vector = [
@@ -250,9 +264,9 @@ line-ending = "auto"
 python_version = "3.11"
 warn_return_any = false
 warn_unused_configs = true
-disallow_untyped_defs = false
+disallow_untyped_defs = true
 disallow_incomplete_defs = false
-check_untyped_defs = false
+check_untyped_defs = true
 disallow_untyped_calls = false
 disallow_untyped_decorators = false
 no_implicit_optional = true
@@ -293,7 +307,7 @@ disable_error_code = [
 
 [[tool.mypy.overrides]]
 module = "src.models.*"
-disable_error_code = ["assignment", "name-defined", "var-annotated", "return-value"]
+disable_error_code = ["assignment", "var-annotated", "return-value"]
 
 [[tool.mypy.overrides]]
 module = "src.services.*"

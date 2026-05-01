@@ -8,11 +8,17 @@ import asyncio
 import datetime
 import json
 import logging
+import os
 import time
 import uuid
 from collections.abc import AsyncGenerator
 from dataclasses import dataclass
 from typing import TYPE_CHECKING, Any, Optional
+
+# Timeout for non-streaming LLM calls (function calling / tool detection).
+# Large contexts (many tool results) can take several minutes to process.
+# Configurable via LLM_FUNCTION_CALLING_TIMEOUT env var.
+LLM_FUNCTION_CALLING_TIMEOUT = int(os.getenv("LLM_FUNCTION_CALLING_TIMEOUT", "600"))
 
 if TYPE_CHECKING:
     from src.services.security.pii_redactor import PIIRedactor
@@ -23,6 +29,18 @@ from src.services.agents.error_tracker import FunctionCallingErrorTracker
 from src.services.observability.langfuse_service import LangfuseService
 
 logger = logging.getLogger(__name__)
+
+
+def _scrub_for_observability(data: dict) -> dict:
+    """Remove message content from observability payloads to avoid PII in traces."""
+    import copy
+
+    scrubbed = copy.deepcopy(data)
+    if "messages" in scrubbed:
+        for msg in scrubbed["messages"]:
+            if isinstance(msg, dict) and "content" in msg:
+                msg["content"] = f"[{len(str(msg.get('content', '')))} chars]"
+    return scrubbed
 
 
 @dataclass
@@ -152,7 +170,7 @@ class FunctionCallingHandler:
         ]
 
     async def generate_with_functions(
-        self, prompt: str, temperature: float = 0.7, max_tokens: int | None = None, max_iterations: int = 150
+        self, prompt: str, temperature: float = 0.7, max_tokens: int | None = None, max_iterations: int = 20
     ) -> str:
         """
         Generate content with function calling support.
@@ -208,10 +226,14 @@ class FunctionCallingHandler:
             # Add function results as tool messages — use index to match call_id exactly
             for i, exec_result in enumerate(execution_results):
                 result = exec_result.result if isinstance(exec_result, ToolExecutionResult) else exec_result
+                func_name_i = function_calls[i]["name"] if i < len(function_calls) else "unknown"
                 content = json.dumps(convert_to_json_serializable(result))
+                # Trust boundary: wrap external tool output to reduce prompt-injection risk
+                if isinstance(content, str) and len(content) > 0:
+                    content = f"<external-tool-result tool=\"{func_name_i}\">\n{content}\n</external-tool-result>"
                 # PII redaction — no-op when pii_redactor is None (all existing agents unaffected)
                 if self.pii_redactor:
-                    content = self.pii_redactor.redact(content)
+                    content = self.pii_redactor.redact_tool_result(content)
                 conversation_history.append(
                     {
                         "role": "tool",
@@ -249,7 +271,7 @@ class FunctionCallingHandler:
         prompt: str,
         temperature: float = 0.7,
         max_tokens: int | None = None,
-        max_iterations: int = 150,
+        max_iterations: int = 20,
         messages: list[dict[str, str]] | None = None,
     ) -> AsyncGenerator[dict[str, Any], None]:
         """
@@ -278,10 +300,21 @@ class FunctionCallingHandler:
                 yield {"type": "text", "content": chunk}
             return
 
+        # Build PII-aware system prompt suffix when redact_for_response is active
+        pii_system_note = ""
+        if self.pii_redactor and self.pii_redactor.config.redact_for_response:
+            pii_system_note = (
+                "\n\nIMPORTANT — PII REDACTION: Tool results may contain placeholder tokens "
+                "such as [EMAIL_1], [PHONE_1], [SSN_1], [CARD_1], [IP_1]. "
+                "These tokens represent redacted personal data. "
+                "Always reproduce them exactly as-is (e.g. show '[EMAIL_1]' in a table cell, not '—' or empty). "
+                "Never attempt to infer, reconstruct, or omit these values."
+            )
+
         # Build conversation history from structured messages if provided
         if messages:
             # Start with system message containing the prompt (system instructions)
-            conversation_history = [{"role": "system", "content": prompt}]
+            conversation_history = [{"role": "system", "content": prompt + pii_system_note}]
             # Add structured conversation messages
             for msg in messages:
                 role = msg.get("role", "user")
@@ -290,7 +323,7 @@ class FunctionCallingHandler:
                     conversation_history.append({"role": role, "content": content})
             logger.info(f"📝 Using structured conversation: {len(messages)} messages passed to LLM")
         else:
-            conversation_history = [{"role": "user", "content": prompt}]
+            conversation_history = [{"role": "user", "content": prompt + pii_system_note}]
 
         error_tracker = FunctionCallingErrorTracker(max_repeated_errors=3)
 
@@ -322,6 +355,9 @@ class FunctionCallingHandler:
         # the agent is stuck doing the same thing without making progress.
         _iteration_tool_sequences: list[tuple[str, ...]] = []
         LOOP_REPEAT_THRESHOLD = 3
+        # Polling/status tools are designed to be called repeatedly while waiting
+        # for background work to complete — exclude them from loop detection.
+        _POLLING_TOOL_NAMES: frozenset[str] = frozenset({"check_task", "list_background_tasks"})
 
         # "Not found" note deduplication: tracks keys we've already injected a
         # persistent user message for so we don't spam the conversation.
@@ -428,9 +464,14 @@ class FunctionCallingHandler:
                     return fc["name"]
 
             current_sequence = tuple(_call_fingerprint(fc) for fc in function_calls)
-            _iteration_tool_sequences.append(current_sequence)
-            if len(_iteration_tool_sequences) > LOOP_REPEAT_THRESHOLD:
-                _iteration_tool_sequences.pop(0)
+            # Only track iterations where at least one non-polling tool is called.
+            # check_task / list_background_tasks are designed for repeated polling
+            # and must not trigger the stuck-loop guard.
+            _non_polling_calls = [fc for fc in function_calls if fc["name"] not in _POLLING_TOOL_NAMES]
+            if _non_polling_calls:
+                _iteration_tool_sequences.append(current_sequence)
+                if len(_iteration_tool_sequences) > LOOP_REPEAT_THRESHOLD:
+                    _iteration_tool_sequences.pop(0)
             if len(_iteration_tool_sequences) == LOOP_REPEAT_THRESHOLD and len(set(_iteration_tool_sequences)) == 1:
                 loop_tools = ", ".join(f"`{fc['name']}`" for fc in function_calls)
                 logger.warning(
@@ -673,6 +714,23 @@ class FunctionCallingHandler:
                             },
                         }
 
+                # Image generation tool detection
+                if func_name == "internal_generate_image":
+                    if isinstance(result, dict) and result.get("success"):
+                        yield {
+                            "type": "generated_image",
+                            "generated_image": {
+                                "id": f"img_{uuid.uuid4().hex[:8]}",
+                                "url": result.get("url"),
+                                "prompt": result.get("prompt", ""),
+                                "revised_prompt": result.get("revised_prompt", ""),
+                                "model": result.get("model", ""),
+                                "provider": result.get("provider", ""),
+                                "size": result.get("size", ""),
+                                "created_at": datetime.datetime.now().isoformat(),
+                            },
+                        }
+
                 # Infographic tool detection
                 if func_name in ["internal_generate_infographic", "internal_generate_slack_infographic"]:
                     if isinstance(result, dict) and result.get("success"):
@@ -730,6 +788,16 @@ class FunctionCallingHandler:
                             },
                         }
 
+                # Strip URL from image generation results — already emitted as a separate SSE event.
+                if exec_result.name == "internal_generate_image":
+                    if isinstance(result, dict) and result.get("success"):
+                        result = {
+                            "success": True,
+                            "message": "Image generated and displayed to the user inline.",
+                            "model": result.get("model"),
+                            "provider": result.get("provider"),
+                        }
+
                 # Strip SVG content from infographic results — already emitted as a separate SSE event.
                 if exec_result.name in ("internal_generate_infographic", "internal_generate_slack_infographic"):
                     if isinstance(result, dict) and result.get("success"):
@@ -742,9 +810,12 @@ class FunctionCallingHandler:
                         }
 
                 content = json.dumps(convert_to_json_serializable(result)) if not isinstance(result, str) else result
+                # Trust boundary: wrap external tool output to reduce prompt-injection risk
+                if isinstance(content, str) and len(content) > 0:
+                    content = f"<external-tool-result tool=\"{func_name}\">\n{content}\n</external-tool-result>"
                 # PII redaction — no-op when pii_redactor is None (all existing agents unaffected)
                 if self.pii_redactor:
-                    content = self.pii_redactor.redact(content)
+                    content = self.pii_redactor.redact_tool_result(content)
                 conversation_history.append({"role": "tool", "tool_call_id": call_ids[i], "content": content})
 
         # Max iterations reached - generate a final summary response without tools
@@ -769,6 +840,39 @@ class FunctionCallingHandler:
             messages=filtered_messages, temperature=temperature, max_tokens=max_tokens
         ):
             yield {"type": "text", "content": chunk}
+
+    @staticmethod
+    async def _litellm_stream_and_collect(completion_params: dict[str, Any]) -> Any:
+        """Stream a LiteLLM call and accumulate into a single response object.
+
+        Using stream=True avoids Cloudflare 524 errors on proxied LiteLLM deployments:
+        streaming connections keep Cloudflare's proxy read timeout from firing because
+        the server sends chunks before the 120-second window expires.
+        """
+        import litellm
+
+        completion_params = {**completion_params, "stream": True}
+        logger.debug(
+            "LiteLLM streaming acompletion starting for model: %s, messages: %d",
+            completion_params.get("model"),
+            len(completion_params.get("messages", [])),
+        )
+        import asyncio
+
+        stream = await litellm.acompletion(**completion_params)
+        chunks = [chunk async for chunk in stream]
+        # stream_chunk_builder_async was removed in litellm ≥ 1.55.
+        # Wrap the synchronous builder in a coroutine to preserve the async
+        # interface without spinning up a thread (it's pure in-memory work).
+        async def _build() -> Any:
+            return litellm.stream_chunk_builder(
+                chunks=chunks,
+                messages=completion_params.get("messages"),
+            )
+
+        response = await _build()
+        logger.debug("LiteLLM streaming acompletion completed for model: %s", completion_params.get("model"))
+        return response
 
     async def _generate_with_tools(
         self, conversation_history: list[dict[str, Any]], temperature: float, max_tokens: int | None
@@ -902,15 +1006,16 @@ class FunctionCallingHandler:
                     "tools": tools,
                     "tool_choice": "auto",
                     "api_key": self.llm_client.config.api_key,
-                    "timeout": 300,  # 5 minute timeout for LLM calls
-                    "num_retries": 3,  # Retry on 429/503 with exponential backoff
+                    "timeout": LLM_FUNCTION_CALLING_TIMEOUT,
+                    "num_retries": 1,  # One retry on 429/503 to avoid silent hangs
+                    "drop_params": True,  # Silently drop unsupported params (e.g. temperature for gpt-5)
                 }
 
                 # Add base URL if provided
                 if self.llm_client.config.api_base:
                     completion_params["api_base"] = self.llm_client.config.api_base
 
-                response = await litellm.acompletion(**completion_params)
+                response = await self._litellm_stream_and_collect(completion_params)
             else:
                 response = await self.llm_client._client.chat.completions.create(
                     model=self.llm_client.config.model_name,
@@ -918,6 +1023,7 @@ class FunctionCallingHandler:
                     **self.llm_client._build_openai_params(max_tokens, temperature),
                     tools=tools,
                     tool_choice="auto",
+                    timeout=LLM_FUNCTION_CALLING_TIMEOUT,
                 )
 
             # Create Langfuse generation if tracing is enabled (after getting response)
@@ -946,7 +1052,7 @@ class FunctionCallingHandler:
                 self.langfuse_service.create_generation(
                     name="llm_generation_with_tools",
                     model=self.llm_client.config.model_name,
-                    input_data={"messages": messages, "tools_count": len(tools)},
+                    input_data=_scrub_for_observability({"messages": messages, "tools_count": len(tools)}),
                     output_data={
                         "response": response_content,
                         "function_calls": function_calls,
@@ -974,7 +1080,7 @@ class FunctionCallingHandler:
                 self.langfuse_service.create_generation(
                     name="llm_generation_with_tools",
                     model=self.llm_client.config.model_name,
-                    input_data={"messages": messages, "tools_count": len(tools)},
+                    input_data=_scrub_for_observability({"messages": messages, "tools_count": len(tools)}),
                     output_data={"error": str(e)},
                     metadata={
                         "provider": self.provider,
@@ -1012,15 +1118,16 @@ class FunctionCallingHandler:
                 "messages": messages,
                 "tools": tools,
                 "api_key": self.llm_client.config.api_key,
-                "timeout": 300,  # 5 minute timeout for LLM calls
-                "num_retries": 3,  # Retry on 429/503 with exponential backoff
+                "timeout": LLM_FUNCTION_CALLING_TIMEOUT,
+                "num_retries": 1,  # One retry on 429/503 to avoid silent hangs
+                "drop_params": True,  # Silently drop unsupported params (e.g. temperature for gpt-5)
             }
 
             # Add base URL if provided
             if self.llm_client.config.api_base:
                 completion_params["api_base"] = self.llm_client.config.api_base
 
-            response = await litellm.acompletion(**completion_params)
+            response = await self._litellm_stream_and_collect(completion_params)
         else:
             # For native Anthropic client
             # Cap max_tokens for this non-streaming tool-detection call.
@@ -1052,7 +1159,7 @@ class FunctionCallingHandler:
                 except Exception:
                     pass  # caching is optional; fall back to uncached call
 
-            response = await self.llm_client._client.messages.create(**create_params)
+            response = await self.llm_client._client.messages.create(**create_params, timeout=300)
 
         return response
 
@@ -1154,6 +1261,33 @@ class FunctionCallingHandler:
                     logger.info(f"Retrying function: {func_name} (attempt {attempt + 1}/{max_retries + 1})")
 
                 logger.info(f"Executing function: {func_name} with args: {func_args}")
+
+                # Validate func_args against the tool's declared JSON schema
+                tool_schema = next(
+                    (
+                        t
+                        for t in self.available_tools
+                        if t.get("name") == func_name or t.get("function", {}).get("name") == func_name
+                    ),
+                    None,
+                )
+                if tool_schema:
+                    params_schema = tool_schema.get("parameters") or tool_schema.get("function", {}).get(
+                        "parameters", {}
+                    )
+                    if params_schema and params_schema.get("properties"):
+                        try:
+                            import jsonschema
+
+                            jsonschema.validate(func_args, params_schema)
+                        except jsonschema.ValidationError as ve:
+                            logger.warning(f"Tool {func_name} called with invalid args: {ve.message}")
+                            return ToolExecutionResult(
+                                name=func_name,
+                                result={"error": f"Invalid tool arguments: {ve.message}"},
+                                success=False,
+                                error=ve.message,
+                            )
 
                 # Execute with appropriate context
                 if self.runtime_context:

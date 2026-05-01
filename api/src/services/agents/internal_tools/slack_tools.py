@@ -245,7 +245,7 @@ async def internal_slack_read_channel_messages(
                             "name": user_data.get("real_name") or user_data.get("name"),
                             "display_name": user_data.get("profile", {}).get("display_name", ""),
                         }
-                    except:
+                    except Exception:
                         user_cache[user_id] = {"name": "Unknown", "display_name": ""}
 
                 user = user_cache.get(user_id, {"name": "Unknown", "display_name": ""})
@@ -326,7 +326,7 @@ async def internal_slack_read_thread(
                         "name": user_data.get("real_name") or user_data.get("name"),
                         "display_name": user_data.get("profile", {}).get("display_name", ""),
                     }
-                except:
+                except Exception:
                     user_cache[user_id] = {"name": "Unknown", "display_name": ""}
 
             user = user_cache.get(user_id, {"name": "Unknown", "display_name": ""})

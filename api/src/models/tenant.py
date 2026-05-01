@@ -96,6 +96,14 @@ class Tenant(BaseModel, StatusMixin):
         comment="Email domain for auto-assigning users (e.g., synkora.ai)",
     )
 
+    # Admin-enforced 2FA for all tenant members
+    mfa_required = Column(
+        String(10),
+        nullable=False,
+        default="false",
+        comment="Whether 2FA is required for all members of this tenant (stored as string)",
+    )
+
     # Whether to auto-assign new users with matching email domain
     auto_assign_domain_users = Column(
         String(10),
@@ -318,6 +326,12 @@ class Account(BaseModel, StatusMixin):
         String(255),
         nullable=True,
         comment="2FA secret key (encrypted)",
+    )
+
+    two_factor_backup_codes = Column(
+        JSON,
+        nullable=True,
+        comment="Hashed 2FA backup/recovery codes (SHA-256); each consumed on use",
     )
 
     last_login_at = Column(

@@ -89,9 +89,9 @@ async def start_test_run(
     except HTTPException:
         raise
     except Exception as e:
-        logger.error(f"Error starting test run: {e}", exc_info=True)
+        logger.exception("Error starting test run")
         await db.rollback()
-        raise HTTPException(status_code=500, detail=str(e))
+        raise HTTPException(status_code=500, detail="An unexpected error occurred")
 
 
 @router.get("", response_model=TestRunListResponse)
@@ -138,8 +138,8 @@ async def list_test_runs(
     except HTTPException:
         raise
     except Exception as e:
-        logger.error(f"Error listing test runs: {e}", exc_info=True)
-        raise HTTPException(status_code=500, detail=str(e))
+        logger.exception("Error listing test runs")
+        raise HTTPException(status_code=500, detail="An unexpected error occurred")
 
 
 @router.get("/{test_run_id}", response_model=TestRunDetailResponse)
@@ -156,8 +156,8 @@ async def get_test_run(
     except HTTPException:
         raise
     except Exception as e:
-        logger.error(f"Error getting test run: {e}", exc_info=True)
-        raise HTTPException(status_code=500, detail=str(e))
+        logger.exception("Error getting test run")
+        raise HTTPException(status_code=500, detail="An unexpected error occurred")
 
 
 @router.post("/{test_run_id}/cancel", response_model=TestRunResponse)
@@ -191,9 +191,9 @@ async def cancel_test_run(
     except HTTPException:
         raise
     except Exception as e:
-        logger.error(f"Error cancelling test run: {e}", exc_info=True)
+        logger.exception("Error cancelling test run")
         await db.rollback()
-        raise HTTPException(status_code=500, detail=str(e))
+        raise HTTPException(status_code=500, detail="An unexpected error occurred")
 
 
 @router.get("/{test_run_id}/results", response_model=TestResultsResponse)
@@ -248,8 +248,8 @@ async def get_test_results(
     except HTTPException:
         raise
     except Exception as e:
-        logger.error(f"Error getting test results: {e}", exc_info=True)
-        raise HTTPException(status_code=500, detail=str(e))
+        logger.exception("Error getting test results")
+        raise HTTPException(status_code=500, detail="An unexpected error occurred")
 
 
 @router.get("/{test_run_id}/stream")
@@ -315,8 +315,8 @@ async def stream_test_results(
     except HTTPException:
         raise
     except Exception as e:
-        logger.error(f"Error streaming test results: {e}", exc_info=True)
-        raise HTTPException(status_code=500, detail=str(e))
+        logger.exception("Error streaming test results")
+        raise HTTPException(status_code=500, detail="An unexpected error occurred")
 
 
 @router.post("/{test_run_id}/export", response_model=ExportResponse)
@@ -356,8 +356,8 @@ async def export_test_results(
     except HTTPException:
         raise
     except Exception as e:
-        logger.error(f"Error exporting test results: {e}", exc_info=True)
-        raise HTTPException(status_code=500, detail=str(e))
+        logger.exception("Error exporting test results")
+        raise HTTPException(status_code=500, detail="An unexpected error occurred")
 
 
 # ============================================================================

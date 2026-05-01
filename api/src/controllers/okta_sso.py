@@ -8,11 +8,12 @@ import json
 import logging
 import secrets
 import uuid
-from urllib.parse import quote
+from typing import Any
+from urllib.parse import quote, urlparse
 
 from fastapi import APIRouter, Depends, HTTPException, Query
 from fastapi.responses import RedirectResponse
-from pydantic import BaseModel
+from pydantic import BaseModel, ConfigDict
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -21,6 +22,7 @@ from src.utils.config_helper import get_app_base_url
 from ..core.database import get_async_db
 from ..middleware.auth_middleware import get_current_tenant_id
 from ..models.okta_tenant import OktaTenant
+from ..services.agents.security import decrypt_value, encrypt_value
 from ..services.sso import OktaSSOService
 
 logger = logging.getLogger(__name__)
@@ -28,6 +30,14 @@ logger = logging.getLogger(__name__)
 router = APIRouter(prefix="/api/v1/sso/okta", tags=["okta-sso"])
 
 _STATE_TTL = 600  # 10 minutes
+
+
+def _fmt_dt(val: Any) -> str | None:
+    if val is None:
+        return None
+    if hasattr(val, "isoformat"):
+        return val.isoformat()
+    return str(val)
 
 
 def _get_redis():
@@ -41,6 +51,21 @@ def _get_redis():
     except Exception as e:
         logger.error(f"Redis unavailable for Okta SSO state: {e}")
         raise RuntimeError("SSO service temporarily unavailable")
+
+
+def _validate_redirect_url(url: str | None, base_url: str) -> str:
+    """Validate redirect_url is same origin as app base URL to prevent open redirect."""
+    if not url:
+        return f"{base_url}/dashboard"
+    parsed = urlparse(url)
+    base_parsed = urlparse(base_url)
+    if parsed.scheme not in ("http", "https"):
+        return f"{base_url}/dashboard"
+    # Must match scheme+host of the app base URL
+    if (parsed.scheme, parsed.netloc) != (base_parsed.scheme, base_parsed.netloc):
+        logger.warning(f"Rejected open redirect attempt to: {url}")
+        return f"{base_url}/dashboard"
+    return url
 
 
 async def _store_okta_state(state: str, data: dict) -> None:
@@ -61,19 +86,27 @@ async def _consume_okta_state(state: str) -> dict | None:
 
 # Pydantic models
 class OktaTenantCreate(BaseModel):
-    okta_domain: str
+    model_config = ConfigDict(strict=True)
+
+    domain: str
     client_id: str
     client_secret: str
-    redirect_uri: str | None = None
-    is_active: bool = True
+    issuer_url: str
+    authorization_server_id: str | None = None
+    jit_provisioning_enabled: bool = True
+    enabled: bool = True
 
 
 class OktaTenantUpdate(BaseModel):
-    okta_domain: str | None = None
+    model_config = ConfigDict(strict=True)
+
+    domain: str | None = None
     client_id: str | None = None
     client_secret: str | None = None
-    redirect_uri: str | None = None
-    is_active: bool | None = None
+    issuer_url: str | None = None
+    authorization_server_id: str | None = None
+    jit_provisioning_enabled: bool | None = None
+    enabled: bool | None = None
 
 
 # Okta SSO Endpoints
@@ -93,18 +126,35 @@ async def okta_login(
     try:
         # Get Okta tenant configuration
         tenant_uuid = uuid.UUID(tenant_id)
-        result = await db.execute(select(OktaTenant).filter(OktaTenant.tenant_id == tenant_uuid, OktaTenant.is_active))
+        result = await db.execute(
+            select(OktaTenant).filter(OktaTenant.tenant_id == tenant_uuid, OktaTenant.enabled == "true")
+        )
         okta_tenant = result.scalar_one_or_none()
 
         if not okta_tenant:
             raise HTTPException(status_code=404, detail="Okta SSO not configured for this tenant")
+
         base_url = await get_app_base_url(db, tenant_uuid)
+
+        # Validate redirect_url to prevent open redirect
+        safe_redirect_url = _validate_redirect_url(redirect_url, base_url)
+
+        # Derive the OIDC callback URI from app base URL
+        callback_uri = f"{base_url}/api/v1/sso/okta/callback"
+
+        # Decrypt client_secret for use with OIDC service
+        try:
+            decrypted_secret = decrypt_value(okta_tenant.client_secret)
+        except Exception:
+            logger.error(f"Failed to decrypt Okta client_secret for tenant {tenant_id}")
+            raise HTTPException(status_code=500, detail="SSO configuration error")
+
         # Initialize SSO service
         sso = OktaSSOService(
-            okta_domain=okta_tenant.okta_domain,
+            domain=okta_tenant.domain,
             client_id=okta_tenant.client_id,
-            client_secret=okta_tenant.client_secret,
-            redirect_uri=okta_tenant.redirect_uri,
+            client_secret=decrypted_secret,
+            redirect_uri=callback_uri,
         )
 
         # Generate state for CSRF protection
@@ -115,13 +165,13 @@ async def okta_login(
             state,
             {
                 "tenant_id": tenant_id,
-                "redirect_url": redirect_url or f"{base_url}/dashboard",
+                "redirect_url": safe_redirect_url,
                 "flow_type": "okta_sso",
             },
         )
 
         # Get authorization URL
-        auth_url = sso.get_authorization_url(state=state)
+        auth_url = sso.get_oidc_authorization_url(state=state)
 
         logger.info(f"Initiating Okta SSO for tenant {tenant_id}")
 
@@ -155,42 +205,52 @@ async def okta_callback(
         redirect_url = state_data["redirect_url"]
 
         # Get Okta tenant configuration
-        result = await db.execute(select(OktaTenant).filter(OktaTenant.tenant_id == tenant_id, OktaTenant.is_active))
+        result = await db.execute(
+            select(OktaTenant).filter(OktaTenant.tenant_id == tenant_id, OktaTenant.enabled == "true")
+        )
         okta_tenant = result.scalar_one_or_none()
 
         if not okta_tenant:
             raise HTTPException(status_code=404, detail="Okta SSO not configured for this tenant")
 
+        base_url = await get_app_base_url(db, tenant_id)
+        callback_uri = f"{base_url}/api/v1/sso/okta/callback"
+
+        # Decrypt client_secret for use with OIDC service
+        try:
+            decrypted_secret = decrypt_value(okta_tenant.client_secret)
+        except Exception:
+            logger.error(f"Failed to decrypt Okta client_secret for tenant {tenant_id}")
+            raise HTTPException(status_code=500, detail="SSO configuration error")
+
         # Initialize SSO service
         sso = OktaSSOService(
-            okta_domain=okta_tenant.okta_domain,
+            domain=okta_tenant.domain,
             client_id=okta_tenant.client_id,
-            client_secret=okta_tenant.client_secret,
-            redirect_uri=okta_tenant.redirect_uri,
+            client_secret=decrypted_secret,
+            redirect_uri=callback_uri,
         )
 
         # Exchange code for token
-        token_data = await sso.exchange_code(code)
+        token_data = await sso.get_oidc_access_token(code)
 
         if not token_data.get("access_token"):
             raise HTTPException(status_code=400, detail="Failed to get access token")
 
         # Get user info
-        user_info = await sso.get_user_info(token_data["access_token"])
+        user_info = await sso.get_oidc_user_info(token_data["access_token"])
 
         # Extract user details
         user_email = user_info.get("email")
-        user_info.get("name")
 
         if not user_email:
             raise HTTPException(status_code=400, detail="Failed to get user information from Okta")
 
-        # Account creation/linking is handled by the SSO callback in social_auth
-        # This endpoint redirects with success message
-
         logger.info(f"Okta SSO successful for tenant {tenant_id}, user {user_email}")
 
-        return RedirectResponse(url=f"{redirect_url}?login=success&provider=okta&email={user_email}")
+        return RedirectResponse(
+            url=f"{redirect_url}?login=success&provider=okta&email={quote(user_email, safe='')}"
+        )
 
     except HTTPException:
         raise
@@ -221,11 +281,13 @@ async def get_okta_config(
 
         return {
             "configured": True,
-            "okta_domain": okta_tenant.okta_domain,
+            "domain": okta_tenant.domain,
             "client_id": okta_tenant.client_id,
-            "redirect_uri": okta_tenant.redirect_uri,
-            "is_active": okta_tenant.is_active,
-            "created_at": okta_tenant.created_at.isoformat(),
+            "issuer_url": okta_tenant.issuer_url,
+            "authorization_server_id": okta_tenant.authorization_server_id,
+            "jit_provisioning_enabled": okta_tenant.jit_provisioning_enabled,
+            "enabled": okta_tenant.enabled,
+            "created_at": _fmt_dt(okta_tenant.created_at),
         }
 
     except Exception as e:
@@ -250,14 +312,22 @@ async def create_okta_config(
         if existing:
             raise HTTPException(status_code=400, detail="Okta SSO configuration already exists for this tenant")
 
+        # Encrypt client_secret before storing
+        try:
+            encrypted_secret = encrypt_value(data.client_secret)
+        except Exception as exc:
+            raise HTTPException(status_code=500, detail="Failed to encrypt client secret") from exc
+
         # Create new configuration
         okta_tenant = OktaTenant(
             tenant_id=tenant_id,
-            okta_domain=data.okta_domain,
+            domain=data.domain,
             client_id=data.client_id,
-            client_secret=data.client_secret,
-            redirect_uri=data.redirect_uri or "http://localhost:8000/api/v1/sso/okta/callback",
-            is_active=data.is_active,
+            client_secret=encrypted_secret,
+            issuer_url=data.issuer_url,
+            authorization_server_id=data.authorization_server_id,
+            jit_provisioning_enabled="true" if data.jit_provisioning_enabled else "false",
+            enabled="true" if data.enabled else "false",
         )
 
         db.add(okta_tenant)
@@ -269,7 +339,7 @@ async def create_okta_config(
         return {
             "success": True,
             "message": "Okta SSO configuration created successfully",
-            "okta_domain": okta_tenant.okta_domain,
+            "domain": okta_tenant.domain,
         }
 
     except HTTPException:
@@ -297,16 +367,23 @@ async def update_okta_config(
             raise HTTPException(status_code=404, detail="Okta SSO configuration not found for this tenant")
 
         # Update fields if provided
-        if data.okta_domain is not None:
-            okta_tenant.okta_domain = data.okta_domain
+        if data.domain is not None:
+            okta_tenant.domain = data.domain
         if data.client_id is not None:
             okta_tenant.client_id = data.client_id
         if data.client_secret is not None:
-            okta_tenant.client_secret = data.client_secret
-        if data.redirect_uri is not None:
-            okta_tenant.redirect_uri = data.redirect_uri
-        if data.is_active is not None:
-            okta_tenant.is_active = data.is_active
+            try:
+                okta_tenant.client_secret = encrypt_value(data.client_secret)
+            except Exception as exc:
+                raise HTTPException(status_code=500, detail="Failed to encrypt client secret") from exc
+        if data.issuer_url is not None:
+            okta_tenant.issuer_url = data.issuer_url
+        if data.authorization_server_id is not None:
+            okta_tenant.authorization_server_id = data.authorization_server_id
+        if data.jit_provisioning_enabled is not None:
+            okta_tenant.jit_provisioning_enabled = "true" if data.jit_provisioning_enabled else "false"
+        if data.enabled is not None:
+            okta_tenant.enabled = "true" if data.enabled else "false"
 
         await db.commit()
         await db.refresh(okta_tenant)

@@ -558,6 +558,7 @@ class TestEmailVerification:
         account = MagicMock()
         account.email_verification_token = token_hash
         account.status = AccountStatus.INACTIVE
+        account.email_verification_sent_at = None  # no expiry check needed
 
         mock_result = MagicMock()
         mock_result.scalar_one_or_none.return_value = account

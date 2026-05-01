@@ -31,29 +31,41 @@ class AgentRegistry:
 
     Provides a centralized location for agent registration, discovery,
     and lifecycle management across the application.
+
+    Keys are ``(tenant_id, agent_name)`` tuples so that agents with the
+    same name belonging to different tenants never collide in the
+    in-memory store.
     """
 
     def __init__(self):
         """Initialize the agent registry."""
-        self._agents: dict[str, BaseAgent] = {}
-        self._configs: dict[str, AgentConfig] = {}
+        # Key: (tenant_id, agent_name) — tenant-scoped to prevent cross-tenant collisions
+        self._agents: dict[tuple[str, str], BaseAgent] = {}
+        self._configs: dict[tuple[str, str], AgentConfig] = {}
         logger.info("Agent registry initialized")
 
-    def register(self, agent: BaseAgent) -> None:
+    @staticmethod
+    def _key(tenant_id: str, agent_name: str) -> tuple[str, str]:
+        """Build a registry key from tenant_id and agent_name."""
+        return (str(tenant_id), agent_name)
+
+    def register(self, agent: BaseAgent, tenant_id: str = "") -> None:
         """
         Register an agent instance.
 
         Args:
             agent: Agent instance to register
+            tenant_id: Tenant identifier (scopes the registry key)
 
         Raises:
-            ValueError: If agent with same name already exists
+            ValueError: If agent with same name already exists for this tenant
         """
-        if agent.config.name in self._agents:
-            raise ValueError(f"Agent '{agent.config.name}' is already registered")
+        key = self._key(tenant_id, agent.config.name)
+        if key in self._agents:
+            raise ValueError(f"Agent '{agent.config.name}' is already registered for tenant '{tenant_id}'")
 
-        self._agents[agent.config.name] = agent
-        self._configs[agent.config.name] = agent.config
+        self._agents[key] = agent
+        self._configs[key] = agent.config
 
         # PERFORMANCE: Sync to Redis for horizontal scaling
         redis_registry = _get_redis_registry()
@@ -71,23 +83,25 @@ class AgentRegistry:
             except Exception as e:
                 logger.warning(f"Failed to sync agent to Redis: {e}")
 
-        logger.info(f"Registered agent: {agent.config.name}")
+        logger.info(f"Registered agent: {agent.config.name} (tenant={tenant_id})")
 
-    def unregister(self, agent_name: str) -> None:
+    def unregister(self, agent_name: str, tenant_id: str = "") -> None:
         """
         Unregister an agent.
 
         Args:
             agent_name: Name of the agent to unregister
+            tenant_id: Tenant identifier
 
         Raises:
             KeyError: If agent not found
         """
-        if agent_name not in self._agents:
-            raise KeyError(f"Agent '{agent_name}' not found in registry")
+        key = self._key(tenant_id, agent_name)
+        if key not in self._agents:
+            raise KeyError(f"Agent '{agent_name}' not found in registry for tenant '{tenant_id}'")
 
-        del self._agents[agent_name]
-        del self._configs[agent_name]
+        del self._agents[key]
+        del self._configs[key]
 
         # PERFORMANCE: Sync to Redis for horizontal scaling
         redis_registry = _get_redis_registry()
@@ -97,40 +111,46 @@ class AgentRegistry:
             except Exception as e:
                 logger.warning(f"Failed to unregister agent from Redis: {e}")
 
-        logger.info(f"Unregistered agent: {agent_name}")
+        logger.info(f"Unregistered agent: {agent_name} (tenant={tenant_id})")
 
-    def get(self, agent_name: str) -> BaseAgent | None:
+    def get(self, agent_name: str, tenant_id: str = "") -> BaseAgent | None:
         """
-        Get an agent by name.
+        Get an agent by name scoped to a tenant.
 
         Args:
             agent_name: Name of the agent
+            tenant_id: Tenant identifier
 
         Returns:
             Agent instance or None if not found
         """
-        return self._agents.get(agent_name)
+        return self._agents.get(self._key(tenant_id, agent_name))
 
-    def get_config(self, agent_name: str) -> AgentConfig | None:
+    def get_config(self, agent_name: str, tenant_id: str = "") -> AgentConfig | None:
         """
-        Get agent configuration by name.
+        Get agent configuration by name scoped to a tenant.
 
         Args:
             agent_name: Name of the agent
+            tenant_id: Tenant identifier
 
         Returns:
             Agent configuration or None if not found
         """
-        return self._configs.get(agent_name)
+        return self._configs.get(self._key(tenant_id, agent_name))
+
+    def contains(self, agent_name: str, tenant_id: str = "") -> bool:
+        """Check if agent is registered for a specific tenant."""
+        return self._key(tenant_id, agent_name) in self._agents
 
     def list_agents(self) -> list[str]:
         """
-        List all registered agent names.
+        List all registered agent names (across all tenants).
 
         Returns:
             List of agent names
         """
-        return list(self._agents.keys())
+        return [name for (_tid, name) in self._agents.keys()]
 
     def get_all_stats(self) -> dict[str, dict[str, Any]]:
         """
@@ -139,7 +159,7 @@ class AgentRegistry:
         Returns:
             Dictionary mapping agent names to their statistics
         """
-        return {name: agent.get_stats() for name, agent in self._agents.items()}
+        return {name: agent.get_stats() for (_tid, name), agent in self._agents.items()}
 
     def reset_all(self) -> None:
         """Reset all registered agents."""
@@ -158,8 +178,13 @@ class AgentRegistry:
         return len(self._agents)
 
     def __contains__(self, agent_name: str) -> bool:
-        """Check if agent is registered."""
-        return agent_name in self._agents
+        """
+        Backward-compatible __contains__ check without tenant scope.
+
+        Prefer ``registry.contains(agent_name, tenant_id)`` for accurate
+        tenant-scoped lookups.
+        """
+        return any(name == agent_name for (_tid, name) in self._agents)
 
     def __repr__(self) -> str:
         """String representation."""

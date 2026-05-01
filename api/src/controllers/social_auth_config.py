@@ -64,10 +64,10 @@ async def list_providers(
             "providers": providers,
         }
     except Exception as e:
-        logger.error(f"Error listing providers: {e}")
+        logger.exception("Error listing providers")
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail=f"Error listing providers: {str(e)}",
+            detail=str(e),
         )
 
 
@@ -103,10 +103,10 @@ async def get_provider(
     except HTTPException:
         raise
     except Exception as e:
-        logger.error(f"Error getting provider {provider_name}: {e}")
+        logger.exception("Error getting provider %s", provider_name)
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail=f"Error getting provider: {str(e)}",
+            detail="An unexpected error occurred",
         )
 
 
@@ -148,10 +148,10 @@ async def create_provider(
             detail=str(e),
         )
     except Exception as e:
-        logger.error(f"Error creating provider: {e}")
+        logger.exception("Error creating provider")
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail=f"Error creating provider: {str(e)}",
+            detail="An unexpected error occurred",
         )
 
 
@@ -195,10 +195,10 @@ async def update_provider(
             detail=str(e),
         )
     except Exception as e:
-        logger.error(f"Error updating provider {provider_name}: {e}")
+        logger.exception("Error updating provider %s", provider_name)
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail=f"Error updating provider: {str(e)}",
+            detail="An unexpected error occurred",
         )
 
 
@@ -234,10 +234,10 @@ async def delete_provider(
     except HTTPException:
         raise
     except Exception as e:
-        logger.error(f"Error deleting provider {provider_name}: {e}")
+        logger.exception("Error deleting provider %s", provider_name)
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail=f"Error deleting provider: {str(e)}",
+            detail="An unexpected error occurred",
         )
 
 
@@ -262,8 +262,8 @@ async def test_provider(
 
         return result
     except Exception as e:
-        logger.error(f"Error testing provider {provider_name}: {e}")
+        logger.exception("Error testing provider %s", provider_name)
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail=f"Error testing provider: {str(e)}",
+            detail="An unexpected error occurred",
         )

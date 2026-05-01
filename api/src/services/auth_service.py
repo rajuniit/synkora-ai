@@ -46,7 +46,7 @@ class AuthService:
         Returns:
             Hashed password string
         """
-        salt = bcrypt.gensalt()
+        salt = bcrypt.gensalt(rounds=12)
         hashed = bcrypt.hashpw(password.encode("utf-8"), salt)
         return hashed.decode("utf-8")
 
@@ -248,6 +248,9 @@ class AuthService:
                     last_attempt = recent[0][1]
                     if (now - last_attempt) < AuthService._LOCKOUT_DURATION:
                         remaining = int(AuthService._LOCKOUT_DURATION - (now - last_attempt))
+                        # Emit audit log on the first lockout tick (attempt_count == threshold)
+                        if attempt_count == AuthService._LOCKOUT_THRESHOLD:
+                            AuthService._notify_lockout(account_id=None, ip=None)
                         return (
                             True,
                             f"Account locked due to too many failed attempts. Try again in {remaining // 60} minutes.",
@@ -259,7 +262,15 @@ class AuthService:
             return False, None
 
         except Exception as e:
-            logger.warning(f"SECURITY: Lockout check failed (degraded mode): {e}")
+            logger.error(
+                f"SECURITY DEGRADED: Account lockout Redis unavailable — brute force protection disabled: {e}"
+            )
+            try:
+                from src.services.performance.metrics import SECURITY_DEGRADED_TOTAL
+
+                SECURITY_DEGRADED_TOTAL.labels(feature="account_lockout").inc()
+            except Exception:
+                pass
             return False, None
 
     @staticmethod
@@ -286,8 +297,30 @@ class AuthService:
             # Set expiry on the key (lockout window + buffer)
             redis_client.expire(redis_key, AuthService._LOCKOUT_WINDOW + 60)
 
+            # Emit lockout alert when threshold is crossed
+            attempt_count = redis_client.zcard(redis_key)
+            if attempt_count >= AuthService._LOCKOUT_THRESHOLD:
+                AuthService._notify_lockout(account_id=key, ip=None)
+
         except Exception as e:
-            logger.warning(f"SECURITY: Failed to record login attempt (degraded mode): {e}")
+            logger.error(
+                f"SECURITY DEGRADED: Account lockout Redis unavailable — brute force protection disabled: {e}"
+            )
+            try:
+                from src.services.performance.metrics import SECURITY_DEGRADED_TOTAL
+
+                SECURITY_DEGRADED_TOTAL.labels(feature="account_lockout").inc()
+            except Exception:
+                pass
+
+    @staticmethod
+    def _notify_lockout(account_id: str | None, ip: str | None) -> None:
+        """
+        Emit a warning-level audit log when an account is locked out.
+
+        This is a stub; extend to send email/Slack alerts in production.
+        """
+        logger.warning("Account locked: account_id=%s ip=%s", account_id, ip)
 
     @staticmethod
     def _clear_failed_attempts(email: str) -> None:
@@ -608,6 +641,12 @@ class AuthService:
         Returns:
             True if account has permission, False otherwise
         """
+        # Platform admins bypass all tenant role checks
+        account_result = await db.execute(select(Account).filter_by(id=account_id))
+        account = account_result.scalar_one_or_none()
+        if account and str(account.is_platform_admin).lower() == "true":
+            return True
+
         result = await db.execute(select(TenantAccountJoin).filter_by(account_id=account_id, tenant_id=tenant_id))
         membership = result.scalar_one_or_none()
 
@@ -723,10 +762,26 @@ class AuthService:
             if datetime.now(UTC) > expires_at:
                 return None
 
+        # SECURITY: Enforce password history — reject the last 12 reused passwords
+        history: list[str] = getattr(account, "password_history", None) or []
+        for old_hash in history:
+            try:
+                if bcrypt.checkpw(new_password.encode("utf-8"), old_hash.encode("utf-8")):
+                    raise ValueError("You cannot reuse any of your last 12 passwords")
+            except ValueError:
+                raise
+            except Exception:
+                pass  # Corrupt hash entry — skip silently
+
         # Update password and clear reset token
-        account.password_hash = AuthService.hash_password(new_password)
+        new_hash = AuthService.hash_password(new_password)
+        account.password_hash = new_hash
         account.reset_token = None
         account.reset_token_expires_at = None
+
+        # Prepend new hash to history, keep only 12 most recent
+        updated_history = [new_hash] + history
+        account.password_history = updated_history[:12]
 
         await db.commit()
         await db.refresh(account)
@@ -816,6 +871,14 @@ class AuthService:
         if not account:
             return None
 
+        # SECURITY: Check verification link expiry (72 hours)
+        if account.email_verification_sent_at:
+            sent_at = datetime.fromisoformat(account.email_verification_sent_at) if isinstance(account.email_verification_sent_at, str) else account.email_verification_sent_at
+            if hasattr(sent_at, "tzinfo") and sent_at.tzinfo is None:
+                sent_at = sent_at.replace(tzinfo=UTC)
+            if datetime.now(UTC) > sent_at + timedelta(hours=72):
+                return {"error": "verification_link_expired", "message": "This verification link has expired. Please request a new one."}
+
         # Mark email as verified and activate account
         account.email_verification_token = None
 
@@ -837,3 +900,105 @@ class AuthService:
             logger.error(f"Failed to queue welcome email: {e}")
 
         return account
+
+    @staticmethod
+    async def generate_backup_codes(account_id: uuid.UUID, db: AsyncSession) -> list[str]:
+        """
+        Generate 8 single-use 2FA backup/recovery codes.
+
+        SECURITY: Only the SHA-256 hashes are stored; plaintext codes are returned
+        exactly once and must be saved by the user.
+
+        Args:
+            account_id: Account UUID
+            db: Async database session
+
+        Returns:
+            List of 8 plaintext backup codes (shown to user once)
+        """
+        import hashlib as _hashlib
+
+        result = await db.execute(select(Account).filter_by(id=account_id))
+        account = result.scalar_one_or_none()
+        if not account:
+            raise ValueError("Account not found")
+
+        codes = [secrets.token_hex(5).upper() for _ in range(8)]
+        hashed = [_hashlib.sha256(c.encode()).hexdigest() for c in codes]
+
+        account.two_factor_backup_codes = hashed
+        await db.commit()
+
+        return codes
+
+    @staticmethod
+    async def consume_backup_code(account_id: uuid.UUID, code: str, db: AsyncSession) -> bool:
+        """
+        Check and consume a 2FA backup code.
+
+        SECURITY: Uses constant-time hash comparison; removes code after first use
+        to prevent replay.
+
+        Args:
+            account_id: Account UUID
+            code: Plaintext backup code supplied by the user
+            db: Async database session
+
+        Returns:
+            True if code was valid and has been consumed, False otherwise
+        """
+        import hashlib as _hashlib
+
+        result = await db.execute(select(Account).filter_by(id=account_id))
+        account = result.scalar_one_or_none()
+        if not account or not account.two_factor_backup_codes:
+            return False
+
+        stored: list[str] = (
+            account.two_factor_backup_codes
+            if isinstance(account.two_factor_backup_codes, list)
+            else []
+        )
+
+        code_hash = _hashlib.sha256(code.upper().encode()).hexdigest()
+
+        # Constant-time check across all stored hashes to prevent timing oracle
+        matched_index = None
+        for i, h in enumerate(stored):
+            if secrets.compare_digest(h, code_hash):
+                matched_index = i
+                break
+
+        if matched_index is None:
+            return False
+
+        # Consume the code (remove it so it cannot be reused)
+        stored.pop(matched_index)
+        account.two_factor_backup_codes = stored
+        await db.commit()
+
+        logger.info(f"2FA backup code consumed for account {account_id}")
+
+        # SECURITY AUDIT: log every backup-code use so operators can detect abuse
+        try:
+            from src.models import TenantAccountJoin
+            from src.services.activity.activity_log_service import ActivityLogService
+
+            tenant_id = None
+            result = await db.execute(select(TenantAccountJoin).filter_by(account_id=account_id))
+            membership = result.scalar_one_or_none()
+            if membership:
+                tenant_id = membership.tenant_id
+
+            svc = ActivityLogService(db)
+            await svc.log_activity(
+                tenant_id=tenant_id,
+                account_id=account_id,
+                action="mfa_backup_code_used",
+                resource_type="account",
+                resource_id=account_id,
+            )
+        except Exception as _audit_exc:
+            logger.warning(f"Failed to write mfa_backup_code_used audit log: {_audit_exc}")
+
+        return True

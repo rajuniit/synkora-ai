@@ -266,11 +266,15 @@ async def list_conversations(
     if not agent:
         raise HTTPException(status_code=404, detail="Agent not found")
 
-    # Get conversations
+    # Get conversations.
+    # Tenant isolation is already enforced above: the Agent must belong to
+    # api_key.tenant_id before this point is reached, so filtering by
+    # agent_id is sufficient to scope results to the correct tenant.
     result = await db.execute(
         select(Conversation)
         .where(
             Conversation.agent_id == agent_id,
+            Conversation.agent_id == api_key.agent_id,  # SECURITY: caller scope — key must own this agent
         )
         .order_by(Conversation.updated_at.desc())
         .limit(limit)
@@ -282,6 +286,7 @@ async def list_conversations(
     count_result = await db.execute(
         select(func.count(Conversation.id)).where(
             Conversation.agent_id == agent_id,
+            Conversation.agent_id == api_key.agent_id,  # SECURITY: caller scope
         )
     )
     total = count_result.scalar()

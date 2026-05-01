@@ -429,3 +429,56 @@ async def get_conversation_messages(
     except Exception as e:
         logger.error(f"Failed to get conversation messages: {e}", exc_info=True)
         raise HTTPException(status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail="Failed to get messages")
+
+
+@agents_conversations_router.delete(
+    "/conversations/{conversation_id}/messages/{message_id}", response_model=AgentResponse
+)
+async def delete_message(
+    conversation_id: str,
+    message_id: str,
+    current_account: Account = Depends(get_current_account),
+    db: AsyncSession = Depends(get_async_db),
+):
+    """Delete a single message from a conversation."""
+    try:
+        from src.models.conversation import Conversation
+        from src.models.message import Message
+
+        try:
+            conversation_uuid = uuid.UUID(conversation_id)
+            message_uuid = uuid.UUID(message_id)
+        except ValueError:
+            raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Invalid ID format")
+
+        # SECURITY: verify conversation belongs to current user
+        conv_result = await db.execute(
+            select(Conversation).filter(
+                Conversation.id == conversation_uuid,
+                Conversation.account_id == current_account.id,
+            )
+        )
+        if not conv_result.scalar_one_or_none():
+            raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Conversation not found")
+
+        # Fetch and delete the message
+        msg_result = await db.execute(
+            select(Message).filter(
+                Message.id == message_uuid,
+                Message.conversation_id == conversation_uuid,
+            )
+        )
+        message = msg_result.scalar_one_or_none()
+        if not message:
+            raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Message not found")
+
+        await db.delete(message)
+        await db.commit()
+
+        return AgentResponse(success=True, message="Message deleted successfully")
+
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"Failed to delete message: {e}", exc_info=True)
+        raise HTTPException(status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail="Failed to delete message")

@@ -3,8 +3,9 @@ Profile management controller
 """
 
 import logging
+from typing import Any
 
-from fastapi import APIRouter, Depends, File, HTTPException, UploadFile, status
+from fastapi import APIRouter, Depends, File, HTTPException, Request, UploadFile, status
 from pydantic import BaseModel, ConfigDict, Field, field_validator
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -14,6 +15,15 @@ from src.services.profile.profile_service import ProfileService
 from src.services.security.password_validator import PasswordValidator
 
 logger = logging.getLogger(__name__)
+
+
+def _fmt_dt(val: Any) -> str | None:
+    """Return ISO-format string from a datetime or an already-string timestamp."""
+    if val is None:
+        return None
+    if hasattr(val, "isoformat"):
+        return val.isoformat()
+    return str(val)
 
 # SECURITY: Maximum allowed avatar file size (5MB)
 MAX_AVATAR_SIZE = 5 * 1024 * 1024
@@ -146,9 +156,9 @@ async def get_my_profile(current_account=Depends(get_current_account), db: Async
             "two_factor_enabled": profile.two_factor_enabled or False,
             "is_platform_admin": profile.is_platform_admin or False,
             "notification_preferences": profile.notification_preferences or {},
-            "last_login_at": profile.last_login_at.isoformat() if profile.last_login_at else None,
-            "created_at": profile.created_at.isoformat() if profile.created_at else None,
-            "updated_at": profile.updated_at.isoformat() if profile.updated_at else None,
+            "last_login_at": _fmt_dt(profile.last_login_at),
+            "created_at": _fmt_dt(profile.created_at),
+            "updated_at": _fmt_dt(profile.updated_at),
         }
 
     except HTTPException:
@@ -196,9 +206,9 @@ async def update_my_profile(
             "two_factor_enabled": updated_profile.two_factor_enabled or False,
             "is_platform_admin": updated_profile.is_platform_admin or False,
             "notification_preferences": updated_profile.notification_preferences or {},
-            "last_login_at": updated_profile.last_login_at.isoformat() if updated_profile.last_login_at else None,
-            "created_at": updated_profile.created_at.isoformat() if updated_profile.created_at else None,
-            "updated_at": updated_profile.updated_at.isoformat() if updated_profile.updated_at else None,
+            "last_login_at": _fmt_dt(updated_profile.last_login_at),
+            "created_at": _fmt_dt(updated_profile.created_at),
+            "updated_at": _fmt_dt(updated_profile.updated_at),
         }
 
     except ValueError as e:
@@ -267,9 +277,9 @@ async def upload_avatar(
             "two_factor_enabled": updated_profile.two_factor_enabled or False,
             "is_platform_admin": updated_profile.is_platform_admin or False,
             "notification_preferences": updated_profile.notification_preferences or {},
-            "last_login_at": updated_profile.last_login_at.isoformat() if updated_profile.last_login_at else None,
-            "created_at": updated_profile.created_at.isoformat() if updated_profile.created_at else None,
-            "updated_at": updated_profile.updated_at.isoformat() if updated_profile.updated_at else None,
+            "last_login_at": _fmt_dt(updated_profile.last_login_at),
+            "created_at": _fmt_dt(updated_profile.created_at),
+            "updated_at": _fmt_dt(updated_profile.updated_at),
         }
 
     except HTTPException:
@@ -301,9 +311,9 @@ async def delete_avatar(current_account=Depends(get_current_account), db: AsyncS
             "two_factor_enabled": updated_profile.two_factor_enabled or False,
             "is_platform_admin": updated_profile.is_platform_admin or False,
             "notification_preferences": updated_profile.notification_preferences or {},
-            "last_login_at": updated_profile.last_login_at.isoformat() if updated_profile.last_login_at else None,
-            "created_at": updated_profile.created_at.isoformat() if updated_profile.created_at else None,
-            "updated_at": updated_profile.updated_at.isoformat() if updated_profile.updated_at else None,
+            "last_login_at": _fmt_dt(updated_profile.last_login_at),
+            "created_at": _fmt_dt(updated_profile.created_at),
+            "updated_at": _fmt_dt(updated_profile.updated_at),
         }
 
     except Exception as e:
@@ -335,13 +345,32 @@ async def change_password(
 async def enable_two_factor(
     request: TwoFactorEnable, current_account=Depends(get_current_account), db: AsyncSession = Depends(get_async_db)
 ):
-    """Enable two-factor authentication"""
+    """Initiate two-factor authentication setup — returns secret + QR code URL for scanning."""
     try:
+        import pyotp
+
+        from src.services.auth_service import AuthService
+
+        # Verify the user's current password before showing the 2FA secret
+        if not AuthService.verify_password(request.password, current_account.password_hash or ""):
+            raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Invalid password")
+
+        # Generate a new TOTP secret
+        secret = pyotp.random_base32()
+
+        # Build otpauth:// URI for QR code scanners (e.g. Google Authenticator)
+        issuer = "Synkora"
+        totp = pyotp.TOTP(secret)
+        qr_code_url = totp.provisioning_uri(name=current_account.email, issuer_name=issuer)
+
+        # Store the pending secret (user must verify with /2fa/verify before 2FA is activated)
         profile_service = ProfileService(db)
-        result = await profile_service.enable_two_factor(current_account.id, request.password)
+        await profile_service.enable_two_factor(current_account.id, secret)
 
-        return result
+        return {"secret": secret, "qr_code_url": qr_code_url}
 
+    except HTTPException:
+        raise
     except ValueError as e:
         raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(e))
     except Exception as e:
@@ -393,7 +422,29 @@ async def verify_two_factor(
             )
 
         profile_service = ProfileService(db)
-        updated_profile = await profile_service.verify_two_factor(current_account.id, request.token)
+        is_valid = await profile_service.verify_two_factor(current_account.id, request.token)
+
+        if not is_valid:
+            raise ValueError("Invalid or expired TOTP code")
+
+        # 2FA verified — enable it on the account and generate backup codes
+        from sqlalchemy import select as _select
+        from src.models.tenant import Account as _Account
+        from src.services.auth_service import AuthService as _AuthService
+
+        _result = await db.execute(_select(_Account).where(_Account.id == current_account.id))
+        updated_profile = _result.scalar_one_or_none()
+        if not updated_profile:
+            raise ValueError("Account not found")
+
+        # If not yet enabled, enable it now (verify step completes the setup)
+        if not updated_profile.two_factor_enabled:
+            updated_profile.two_factor_enabled = "true"
+            await db.commit()
+            await db.refresh(updated_profile)
+
+        # Generate backup codes — returned once and must be saved by the user
+        backup_codes = await _AuthService.generate_backup_codes(updated_profile.id, db)
 
         # Convert to dict with proper serialization
         return {
@@ -410,9 +461,10 @@ async def verify_two_factor(
             "two_factor_enabled": updated_profile.two_factor_enabled or False,
             "is_platform_admin": updated_profile.is_platform_admin or False,
             "notification_preferences": updated_profile.notification_preferences or {},
-            "last_login_at": updated_profile.last_login_at.isoformat() if updated_profile.last_login_at else None,
-            "created_at": updated_profile.created_at.isoformat() if updated_profile.created_at else None,
-            "updated_at": updated_profile.updated_at.isoformat() if updated_profile.updated_at else None,
+            "last_login_at": _fmt_dt(updated_profile.last_login_at),
+            "created_at": _fmt_dt(updated_profile.created_at),
+            "updated_at": _fmt_dt(updated_profile.updated_at),
+            "backup_codes": backup_codes,  # Plaintext — shown once, must be saved
         }
 
     except ValueError as e:
@@ -421,6 +473,216 @@ async def verify_two_factor(
         logger.error(f"Error verifying 2FA: {str(e)}")
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail="Failed to verify two-factor authentication"
+        )
+
+
+# ---------------------------------------------------------------------------
+# Session management endpoints
+# ---------------------------------------------------------------------------
+
+
+@router.get("/me/sessions")
+async def list_sessions(
+    request: Request,
+    current_account=Depends(get_current_account),
+) -> dict[str, Any]:
+    """List active sessions for the current account.
+
+    Returns all active refresh-token families stored in Redis, each with
+    available metadata (creation time, last-used time, IP, user-agent).
+    The current session is identified by matching the family ID embedded in
+    the request's Authorization token.
+    """
+    try:
+        from src.config.redis import get_redis
+
+        redis = get_redis()
+        if not redis:
+            raise HTTPException(
+                status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
+                detail="Session store unavailable",
+            )
+
+        account_id = str(current_account.id)
+
+        # Discover all family keys: refresh:family:{account_id}:*
+        pattern = f"refresh:family:{account_id}:*"
+        cursor = 0
+        family_keys: list[str] = []
+        while True:
+            cursor, keys = redis.scan(cursor, match=pattern, count=200)
+            family_keys.extend(k.decode() if isinstance(k, bytes) else k for k in keys)
+            if cursor == 0:
+                break
+
+        # Determine current family_id from the JWT in the Authorization header
+        current_family_id: str | None = None
+        auth_header = request.headers.get("Authorization", "")
+        if auth_header.startswith("Bearer "):
+            try:
+                from src.services.auth_service import AuthService
+
+                payload = AuthService.decode_token(auth_header[7:])
+                current_family_id = payload.get("fid")
+            except Exception:
+                pass
+
+        sessions: list[dict[str, Any]] = []
+        for key in family_keys:
+            # key format: refresh:family:{account_id}:{family_id}
+            parts = key.split(":")
+            if len(parts) < 4:
+                continue
+            family_id = parts[3]
+
+            # Retrieve session creation timestamp
+            ts_key = f"session:created:{account_id}:{family_id}"
+            ts_raw = redis.get(ts_key)
+            created_at: str | None = None
+            if ts_raw:
+                try:
+                    from datetime import UTC, datetime
+
+                    ts = float(ts_raw.decode() if isinstance(ts_raw, bytes) else ts_raw)
+                    created_at = datetime.fromtimestamp(ts, tz=UTC).isoformat()
+                except Exception:
+                    pass
+
+            # Retrieve per-session metadata (ip, user-agent) if stored
+            meta_key = f"session:meta:{account_id}:{family_id}"
+            meta_raw = redis.get(meta_key)
+            meta: dict[str, Any] = {}
+            if meta_raw:
+                try:
+                    import json
+
+                    meta = json.loads(meta_raw.decode() if isinstance(meta_raw, bytes) else meta_raw)
+                except Exception:
+                    pass
+
+            sessions.append(
+                {
+                    "session_id": family_id,
+                    "created_at": created_at,
+                    "last_used_at": meta.get("last_used_at"),
+                    "ip_address": meta.get("ip_address"),
+                    "user_agent": meta.get("user_agent"),
+                    "is_current": family_id == current_family_id,
+                }
+            )
+
+        return {"sessions": sessions, "total": len(sessions)}
+
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error("Error listing sessions for account %s: %s", current_account.id, e)
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail="Failed to list sessions",
+        )
+
+
+@router.delete("/me/sessions/{session_id}", status_code=status.HTTP_204_NO_CONTENT)
+async def revoke_session(
+    session_id: str,
+    request: Request,
+    current_account=Depends(get_current_account),
+):
+    """Revoke a specific session (refresh-token family) by its family ID.
+
+    The current session is NOT protected from self-revocation — the caller
+    should avoid passing their own session_id if they want to stay logged in.
+    """
+    try:
+        from src.services.security.token_blacklist import get_token_blacklist_service
+
+        blacklist_service = get_token_blacklist_service()
+        blacklist_service.invalidate_refresh_token_family(current_account.id, session_id)
+        logger.info(
+            "Session %s revoked by account %s (remote revocation)",
+            session_id,
+            current_account.id,
+        )
+
+    except Exception as e:
+        logger.error("Error revoking session %s: %s", session_id, e)
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail="Failed to revoke session",
+        )
+
+
+@router.delete("/me/sessions")
+async def revoke_all_other_sessions(
+    request: Request,
+    current_account=Depends(get_current_account),
+) -> dict[str, Any]:
+    """Revoke all sessions except the current one.
+
+    Returns the count of revoked sessions.
+    """
+    try:
+        from src.config.redis import get_redis
+        from src.services.security.token_blacklist import get_token_blacklist_service
+
+        redis = get_redis()
+        if not redis:
+            raise HTTPException(
+                status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
+                detail="Session store unavailable",
+            )
+
+        account_id = str(current_account.id)
+
+        # Identify the current family
+        current_family_id: str | None = None
+        auth_header = request.headers.get("Authorization", "")
+        if auth_header.startswith("Bearer "):
+            try:
+                from src.services.auth_service import AuthService
+
+                payload = AuthService.decode_token(auth_header[7:])
+                current_family_id = payload.get("fid")
+            except Exception:
+                pass
+
+        # Scan all family keys
+        pattern = f"refresh:family:{account_id}:*"
+        cursor = 0
+        family_keys: list[str] = []
+        while True:
+            cursor, keys = redis.scan(cursor, match=pattern, count=200)
+            family_keys.extend(k.decode() if isinstance(k, bytes) else k for k in keys)
+            if cursor == 0:
+                break
+
+        blacklist_service = get_token_blacklist_service()
+        revoked = 0
+        for key in family_keys:
+            parts = key.split(":")
+            if len(parts) < 4:
+                continue
+            family_id = parts[3]
+            if family_id == current_family_id:
+                continue  # Keep the current session
+            blacklist_service.invalidate_refresh_token_family(current_account.id, family_id)
+            revoked += 1
+
+        logger.info(
+            "Revoked %d other sessions for account %s",
+            revoked,
+            current_account.id,
+        )
+        return {"revoked": revoked}
+
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error("Error revoking other sessions for account %s: %s", current_account.id, e)
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail="Failed to revoke sessions",
         )
 
 
@@ -446,13 +708,70 @@ async def disable_two_factor(current_account=Depends(get_current_account), db: A
             "two_factor_enabled": updated_profile.two_factor_enabled or False,
             "is_platform_admin": updated_profile.is_platform_admin or False,
             "notification_preferences": updated_profile.notification_preferences or {},
-            "last_login_at": updated_profile.last_login_at.isoformat() if updated_profile.last_login_at else None,
-            "created_at": updated_profile.created_at.isoformat() if updated_profile.created_at else None,
-            "updated_at": updated_profile.updated_at.isoformat() if updated_profile.updated_at else None,
+            "last_login_at": _fmt_dt(updated_profile.last_login_at),
+            "created_at": _fmt_dt(updated_profile.created_at),
+            "updated_at": _fmt_dt(updated_profile.updated_at),
         }
 
     except Exception as e:
         logger.error(f"Error disabling 2FA: {str(e)}")
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail="Failed to disable two-factor authentication"
+        )
+
+
+@router.post("/me/2fa/backup-codes", status_code=status.HTTP_200_OK)
+async def regenerate_backup_codes(
+    current_account=Depends(get_current_account), db: AsyncSession = Depends(get_async_db)
+):
+    """Regenerate 2FA backup/recovery codes. Previous codes are invalidated."""
+    try:
+        if not current_account.two_factor_enabled or current_account.two_factor_enabled == "false":
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail="Two-factor authentication is not enabled",
+            )
+
+        from src.services.auth_service import AuthService as _AuthService
+
+        codes = await _AuthService.generate_backup_codes(current_account.id, db)
+        return {
+            "backup_codes": codes,
+            "message": "New backup codes generated. Save these — they will not be shown again.",
+        }
+
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"Error regenerating backup codes: {str(e)}")
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail="Failed to regenerate backup codes"
+        )
+
+
+@router.get("/me/2fa/backup-codes", status_code=status.HTTP_200_OK)
+async def get_backup_codes_status(
+    current_account=Depends(get_current_account), db: AsyncSession = Depends(get_async_db)
+):
+    """Return how many backup codes remain (not the codes themselves)."""
+    try:
+        from sqlalchemy import select as _select
+
+        from src.models import Account as _Account
+
+        result = await db.execute(_select(_Account).filter_by(id=current_account.id))
+        account = result.scalar_one_or_none()
+        stored = account.two_factor_backup_codes if account else None
+        count = len(stored) if isinstance(stored, list) else 0
+        return {
+            "remaining_codes": count,
+            "two_factor_enabled": bool(
+                account and account.two_factor_enabled and account.two_factor_enabled != "false"
+            ),
+        }
+
+    except Exception as e:
+        logger.error(f"Error getting backup codes status: {str(e)}")
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail="Failed to get backup codes status"
         )

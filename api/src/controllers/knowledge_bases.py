@@ -4,7 +4,7 @@ import logging
 from uuid import UUID
 
 import magic
-from fastapi import APIRouter, Depends, File, HTTPException, Query, UploadFile
+from fastapi import APIRouter, Depends, File, HTTPException, Query, UploadFile, status
 from fastapi.responses import StreamingResponse
 from pydantic import BaseModel, ConfigDict, Field
 from sqlalchemy import delete, func, select
@@ -25,8 +25,12 @@ from src.models.knowledge_base import (
 from src.models.tenant import Tenant, TenantPlan, TenantStatus
 from src.services.knowledge_base import RAGService
 from src.services.knowledge_base.embedding_service import EmbeddingService
+from src.services.security.file_security import FileSecurityService, ScannerUnavailableError
 from src.services.storage.s3_storage import S3StorageService
 from src.tasks.kb_tasks import crawl_and_process_kb, process_kb_documents
+
+# SECURITY: Global file security service instance for KB document uploads
+_kb_file_security = FileSecurityService()
 
 logger = logging.getLogger(__name__)
 
@@ -638,6 +642,28 @@ async def upload_documents(
                         }
                     )
                     continue
+
+                # SECURITY: Comprehensive file validation (magic bytes, dangerous extensions,
+                # malicious content patterns) before any further processing.
+                try:
+                    validation_result = _kb_file_security.validate_file(
+                        file_content=content,
+                        filename=file.filename or "unnamed",
+                        category="document",
+                    )
+                    if not validation_result["is_valid"]:
+                        error_details = "; ".join(validation_result["errors"])
+                        logger.warning(
+                            f"KB document upload rejected for tenant {tenant_id}: {file.filename} — {error_details}"
+                        )
+                        failed_files.append({"filename": file.filename, "error": f"File validation failed: {error_details}"})
+                        continue
+                except ScannerUnavailableError as scan_err:
+                    logger.error(f"File scanning service unavailable: {scan_err}")
+                    raise HTTPException(
+                        status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
+                        detail="File scanning service unavailable. Please try again later.",
+                    )
 
                 # Detect MIME type
                 mime = magic.from_buffer(content, mime=True)

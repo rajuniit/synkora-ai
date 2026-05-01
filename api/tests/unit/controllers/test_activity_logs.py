@@ -67,18 +67,18 @@ class TestListActivityLogs:
 
         # Mock logs
         mock_log = MagicMock()
-        mock_log.id = 1
-        mock_log.tenant_id = str(tenant_id)
-        mock_log.account_id = str(uuid.uuid4())
-        mock_log.account_name = "Test User"
-        mock_log.account_email = "test@example.com"
+        mock_log.id = uuid.uuid4()
+        mock_log.tenant_id = tenant_id
+        mock_log.account_id = uuid.uuid4()
         mock_log.action = "create"
         mock_log.resource_type = "agent"
-        mock_log.resource_id = str(uuid.uuid4())
-        mock_log.details = {"key": "value"}
+        mock_log.resource_id = uuid.uuid4()
+        mock_log.description = None
+        mock_log.activity_metadata = None
         mock_log.ip_address = "127.0.0.1"
         mock_log.user_agent = "TestClient"
-        mock_log.created_at = datetime.now(UTC).isoformat()
+        mock_log.status = None
+        mock_log.created_at = datetime.now(UTC)
 
         mock_activity.list_logs.return_value = [mock_log]
 
@@ -219,18 +219,18 @@ class TestGetActivityLog:
         mock_team.get_team_member.return_value = {"role": AccountRole.OWNER.value}
 
         mock_log = MagicMock()
-        mock_log.id = 1
-        mock_log.tenant_id = str(tenant_id)
-        mock_log.account_id = str(uuid.uuid4())  # Different user
-        mock_log.account_name = "Other User"
-        mock_log.account_email = "other@example.com"
+        mock_log.id = uuid.uuid4()
+        mock_log.tenant_id = tenant_id
+        mock_log.account_id = uuid.uuid4()  # Different user
         mock_log.action = "update"
         mock_log.resource_type = "agent"
-        mock_log.resource_id = str(uuid.uuid4())
-        mock_log.details = {}
+        mock_log.resource_id = uuid.uuid4()
+        mock_log.description = None
+        mock_log.activity_metadata = None
         mock_log.ip_address = "127.0.0.1"
         mock_log.user_agent = "TestClient"
-        mock_log.created_at = datetime.now(UTC).isoformat()
+        mock_log.status = None
+        mock_log.created_at = datetime.now(UTC)
 
         mock_activity.get_log.return_value = mock_log
 
@@ -273,18 +273,18 @@ class TestGetActivityLog:
         mock_team.get_team_member.return_value = {"role": "member"}
 
         mock_log = MagicMock()
-        mock_log.id = 1
-        mock_log.tenant_id = str(tenant_id)
-        mock_log.account_id = str(mock_account.id)  # Own log
-        mock_log.account_name = "Test User"
-        mock_log.account_email = "test@example.com"
+        mock_log.id = uuid.uuid4()
+        mock_log.tenant_id = tenant_id
+        mock_log.account_id = mock_account.id  # Own log
         mock_log.action = "create"
         mock_log.resource_type = "agent"
-        mock_log.resource_id = str(uuid.uuid4())
-        mock_log.details = {}
+        mock_log.resource_id = uuid.uuid4()
+        mock_log.description = None
+        mock_log.activity_metadata = None
         mock_log.ip_address = "127.0.0.1"
         mock_log.user_agent = "TestClient"
-        mock_log.created_at = datetime.now(UTC).isoformat()
+        mock_log.status = None
+        mock_log.created_at = datetime.now(UTC)
 
         mock_activity.get_log.return_value = mock_log
 
@@ -321,18 +321,18 @@ class TestGetMyRecentActivities:
         mock_activity = mocks["activity"].return_value
 
         mock_log = MagicMock()
-        mock_log.id = 1
-        mock_log.tenant_id = str(tenant_id)
-        mock_log.account_id = str(mock_account.id)
-        mock_log.account_name = "Test User"
-        mock_log.account_email = "test@example.com"
+        mock_log.id = uuid.uuid4()
+        mock_log.tenant_id = tenant_id
+        mock_log.account_id = mock_account.id
         mock_log.action = "create"
         mock_log.resource_type = "agent"
-        mock_log.resource_id = str(uuid.uuid4())
-        mock_log.details = {}
+        mock_log.resource_id = uuid.uuid4()
+        mock_log.description = None
+        mock_log.activity_metadata = None
         mock_log.ip_address = "127.0.0.1"
         mock_log.user_agent = "TestClient"
-        mock_log.created_at = datetime.now(UTC).isoformat()
+        mock_log.status = None
+        mock_log.created_at = datetime.now(UTC)
 
         mock_activity.list_logs.return_value = [mock_log]
 

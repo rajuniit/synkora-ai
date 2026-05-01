@@ -5,6 +5,7 @@ Creates and configures the FastAPI application instance.
 """
 
 import logging
+import os
 from contextlib import asynccontextmanager
 
 import sentry_sdk
@@ -124,6 +125,28 @@ async def lifespan(app: FastAPI):  # noqa: ARG001
         logging.info("Async DB connection pool pre-warmed")
     except Exception as e:
         logging.warning(f"Failed to pre-warm async DB pool: {e}")
+
+    # SECURITY: Fail fast if AUDIT_CHAIN_SECRET is missing in production.
+    # Without this secret, audit log entries cannot be HMAC-chained and
+    # tamper detection is completely disabled.
+    if settings.is_production and not settings.audit_chain_secret:
+        raise RuntimeError(
+            "AUDIT_CHAIN_SECRET must be set in production. "
+            "Audit log tamper detection is disabled — refusing to start. "
+            'Generate with: python -c "import secrets; print(secrets.token_hex(32))"'
+        )
+
+    # SECURITY: Fail fast if Redis is not using TLS in production.
+    # Unencrypted Redis exposes session tokens and rate-limit state on the wire.
+    _redis_url_str = str(settings.redis_url) if settings.redis_url else ""
+    _allow_insecure_redis = os.environ.get("ALLOW_INSECURE_REDIS", "false").lower() == "true"
+    if settings.is_production and _redis_url_str and not _redis_url_str.startswith("rediss://") and not _allow_insecure_redis:
+        raise RuntimeError(
+            f"Redis connection is NOT using TLS in production "
+            f"(URL scheme: '{_redis_url_str.split('://')[0]}://'). "
+            "Use rediss:// to encrypt Redis traffic. "
+            "Set ALLOW_INSECURE_REDIS=true to suppress this check only when Redis is on an isolated private network."
+        )
 
     # Initialize encryption key for security module
     from src.services.agents.security import set_encryption_key
@@ -289,13 +312,17 @@ def create_app() -> FastAPI:
         )
         logging.info("Sentry initialized for error tracking")
 
+    # SECURITY: Hide OpenAPI schema in production regardless of APP_DEBUG setting.
+    # A developer may set APP_DEBUG=true in production for verbose logging — the schema
+    # must remain hidden to avoid exposing endpoint details to attackers.
+    _expose_docs = not settings.is_production
     app = FastAPI(
         title="Synkora API",
         description="Production-ready LLM application platform API",
         version="1.0.0",
-        docs_url="/api/v1/docs" if settings.app_debug else None,
-        redoc_url="/api/v1/redoc" if settings.app_debug else None,
-        openapi_url="/api/v1/openapi.json" if settings.app_debug else None,
+        docs_url="/api/v1/docs" if _expose_docs else None,
+        redoc_url="/api/v1/redoc" if _expose_docs else None,
+        openapi_url="/api/v1/openapi.json" if _expose_docs else None,
         lifespan=lifespan,
     )
 

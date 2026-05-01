@@ -5,6 +5,7 @@ Handles API key generation, validation, rate limiting, and usage tracking.
 """
 
 import hmac
+import ipaddress
 import logging
 import secrets
 import time
@@ -191,9 +192,52 @@ class AgentApiKeyService:
         return None
 
     @staticmethod
+    def _ip_matches_allowlist(client_ip: str, allowed_ips: list[str]) -> bool:
+        """
+        Check whether client_ip is covered by any entry in allowed_ips.
+
+        Supports:
+        - Exact IP match (IPv4 or IPv6)
+        - CIDR notation (e.g. "10.0.0.0/8", "2001:db8::/32")
+        - Wildcard "*" to allow all IPs
+
+        Args:
+            client_ip: The incoming request IP address string
+            allowed_ips: List of allowed IP addresses / CIDR ranges
+
+        Returns:
+            True if the client IP is covered by at least one allowlist entry
+        """
+        try:
+            client_addr = ipaddress.ip_address(client_ip)
+        except ValueError:
+            logger.warning(f"Invalid client IP address for allowlist check: {client_ip!r}")
+            return False
+
+        for entry in allowed_ips:
+            entry = entry.strip()
+            if entry == "*":
+                return True
+            try:
+                if "/" in entry:
+                    # CIDR range — strict=False allows host bits to be set
+                    if client_addr in ipaddress.ip_network(entry, strict=False):
+                        return True
+                else:
+                    if client_addr == ipaddress.ip_address(entry):
+                        return True
+            except ValueError:
+                logger.warning(f"Invalid allowlist entry ignored: {entry!r}")
+                continue
+
+        return False
+
+    @staticmethod
     def validate_ip_address(api_key: AgentApiKey, ip_address: str) -> bool:
         """
         Validate request IP against allowed IPs.
+
+        Supports exact IPs, CIDR ranges (e.g. 10.0.0.0/8), and wildcard "*".
 
         Args:
             api_key: API key record
@@ -206,17 +250,7 @@ class AgentApiKeyService:
         if not api_key.allowed_ips:
             return True
 
-        # Check if IP matches any allowed IP
-        for allowed_ip in api_key.allowed_ips:
-            if allowed_ip == "*":
-                return True
-            if allowed_ip == ip_address:
-                return True
-            # Support CIDR notation in the future
-            # if ip_address_in_network(ip_address, allowed_ip):
-            #     return True
-
-        return False
+        return AgentApiKeyService._ip_matches_allowlist(ip_address, api_key.allowed_ips)
 
     @staticmethod
     def validate_origin(api_key: AgentApiKey, origin: str | None) -> bool:

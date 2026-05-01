@@ -97,6 +97,12 @@ _RATE_LIMIT_EXCEEDED = Counter(
     "Total rate limit exceeded events",
     registry=_registry,
 )
+SECURITY_DEGRADED_TOTAL = Counter(
+    "security_degraded_total",
+    "Total security feature degradation events (e.g. Redis unavailable for lockout/2FA)",
+    labelnames=["feature"],
+    registry=_registry,
+)
 
 # Map metric names to their prometheus_client objects for generic access.
 # NOTE: _HTTP_REQUESTS and _HTTP_DURATION are labeled and tracked by

@@ -105,8 +105,6 @@ SAFE_COMMANDS: dict[str, list[str]] = {
     "sha256sum": [],
     "gzip": [],
     "gunzip": [],
-    "env": [],
-    "printenv": [],
     # --- File/Directory (Write) ---
     "mkdir": [],
     "touch": [],
@@ -157,9 +155,7 @@ SAFE_COMMANDS: dict[str, list[str]] = {
     "whereis": [],
     "locate": [],
     "date": [],
-    "whoami": [],
-    "hostname": [],
-    "uname": [],
+    # SECURITY: whoami, hostname, uname removed — leak container identity / infra topology / kernel version
     "df": [],
     "du": [],
     "ps": [],
@@ -174,7 +170,6 @@ SAFE_COMMANDS: dict[str, list[str]] = {
         "clean",
         "clone",
         "commit",
-        "config",
         "diff",
         "fetch",
         "init",
@@ -271,8 +266,7 @@ SAFE_COMMANDS: dict[str, list[str]] = {
         "check",
     ],
     # --- Build Systems & Compilers ---
-    "make": [],
-    "cmake": [],
+    # SECURITY: make and cmake removed — can execute arbitrary Makefile/CMakeLists targets
     "gcc": [],
     "g++": [],
     "javac": [],
@@ -736,6 +730,9 @@ async def internal_run_command(
         - Commands run with timeout protection
         - Sensitive information is sanitized in logs
     """
+    MAX_TIMEOUT = 300
+    timeout = min(timeout, MAX_TIMEOUT)
+
     # Handle string commands by converting to list
     if isinstance(command, str):
         logger.debug(f"Converting string command to list: '{command}'")

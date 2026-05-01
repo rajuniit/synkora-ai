@@ -402,3 +402,45 @@ def send_team_invitation_email_task(
     except Exception as exc:
         logger.error(f"❌ Error sending team invitation to {to_email}: {exc}", exc_info=True)
         raise self.retry(exc=exc, countdown=60 * (2**self.request.retries))
+
+
+@celery_app.task(
+    name="tasks.send_new_login_notification",
+    bind=True,
+    max_retries=2,
+    default_retry_delay=30,
+)
+def send_new_login_notification(
+    self,
+    account_id: str,
+    ip: str,
+    user_agent: str,
+    timestamp: str,
+) -> dict:
+    """Send a notification email when a new login is detected from an unfamiliar IP.
+
+    Currently a stub — logs the notification instead of delivering an email.
+    Replace the logger.info call with an actual email dispatch when the email
+    templates are ready.
+
+    Args:
+        account_id: UUID of the account that logged in.
+        ip:         Client IP address from the login request.
+        user_agent: User-Agent header value from the login request.
+        timestamp:  ISO-8601 UTC timestamp of the login event.
+    """
+    try:
+        logger.info(
+            "New login notification: account=%s ip=%s ua=%s timestamp=%s",
+            account_id,
+            ip,
+            user_agent,
+            timestamp,
+        )
+        # TODO: replace with actual email delivery
+        # e.g. send_email_task.delay(tenant_id=..., to_email=account.email,
+        #          subject="New sign-in to your account", html_body=...)
+        return {"sent": True, "account_id": account_id}
+    except Exception as exc:
+        logger.error("Failed to send new login notification for account %s: %s", account_id, exc)
+        raise self.retry(exc=exc)

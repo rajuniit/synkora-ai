@@ -4,7 +4,11 @@ Agent Model
 Database model for storing AI agent configurations.
 """
 
-from sqlalchemy import JSON, Boolean, Column, ForeignKey, Integer, String, Text, select
+import logging
+
+from sqlalchemy import JSON, Boolean, Column, ForeignKey, Integer, String, Text, UniqueConstraint, select
+
+logger = logging.getLogger(__name__)
 from sqlalchemy.dialects.postgresql import ARRAY, UUID
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import relationship
@@ -32,7 +36,11 @@ class Agent(BaseModel, StatusMixin, TenantMixin):
 
     __tablename__ = "agents"
 
-    agent_name = Column(String(255), nullable=False, unique=True, index=True, comment="Unique agent name")
+    __table_args__ = (
+        UniqueConstraint("agent_name", "tenant_id", name="uq_agent_name_tenant"),
+    )
+
+    agent_name = Column(String(255), nullable=False, index=True, comment="Unique agent name per tenant")
 
     agent_type = Column(String(50), nullable=False, default="LLM", comment="Agent type (llm, research, code)")
 
@@ -143,6 +151,14 @@ class Agent(BaseModel, StatusMixin, TenantMixin):
         JSON,
         nullable=True,
         comment="Routing configuration: quality_floor, max_cost_per_1k, etc.",
+    )
+
+    # Execution backend
+    execution_backend = Column(
+        String(30),
+        nullable=False,
+        server_default="celery",
+        comment="Execution backend: celery | lambda | cloud_run",
     )
 
     # ADK-style workflow agent fields
@@ -313,6 +329,7 @@ class Agent(BaseModel, StatusMixin, TenantMixin):
             select(Agent)
             .join(AgentSubAgent, AgentSubAgent.sub_agent_id == Agent.id)
             .filter(AgentSubAgent.parent_agent_id == self.id)
+            .filter(Agent.tenant_id == self.tenant_id)
         )
 
         if active_only:
@@ -341,7 +358,9 @@ class Agent(BaseModel, StatusMixin, TenantMixin):
         elif self.transfer_scope == "siblings":
             # Can transfer to siblings (same parent)
             if self.parent_agent_id:
-                result = await db.execute(select(Agent).filter(Agent.id == self.parent_agent_id))
+                result = await db.execute(
+                    select(Agent).filter(Agent.id == self.parent_agent_id, Agent.tenant_id == self.tenant_id)
+                )
                 parent = result.scalar_one_or_none()
                 if parent:
                     siblings = await parent.get_sub_agents(db)
@@ -350,7 +369,9 @@ class Agent(BaseModel, StatusMixin, TenantMixin):
         elif self.transfer_scope == "parent":
             # Can transfer to parent or siblings
             if self.parent_agent_id:
-                result = await db.execute(select(Agent).filter(Agent.id == self.parent_agent_id))
+                result = await db.execute(
+                    select(Agent).filter(Agent.id == self.parent_agent_id, Agent.tenant_id == self.tenant_id)
+                )
                 parent = result.scalar_one_or_none()
                 if parent and parent.agent_name == name:
                     return parent
@@ -362,20 +383,29 @@ class Agent(BaseModel, StatusMixin, TenantMixin):
 
     async def get_root_agent(self, db: AsyncSession) -> "Agent":
         """
-        Get root agent in hierarchy.
-
-        Args:
-            db: Database session
-
-        Returns:
-            Root agent instance
+        Get root agent in hierarchy. Uses iterative traversal with cycle detection.
+        Max depth: 10 levels.
         """
-        if not self.parent_agent_id:
-            return self
+        MAX_DEPTH = 10
+        visited: set = {self.id}
+        current = self
+        depth = 0
 
-        result = await db.execute(select(Agent).filter(Agent.id == self.parent_agent_id))
-        parent = result.scalar_one_or_none()
-        if parent:
-            return await parent.get_root_agent(db)
+        while current.parent_agent_id and depth < MAX_DEPTH:
+            if current.parent_agent_id in visited:
+                # Circular reference detected — return current node
+                logger.warning(
+                    f"Circular agent hierarchy detected at agent {current.id}, breaking traversal"
+                )
+                break
+            visited.add(current.parent_agent_id)
+            result = await db.execute(
+                select(Agent).filter(Agent.id == current.parent_agent_id, Agent.tenant_id == self.tenant_id)
+            )
+            parent = result.scalar_one_or_none()
+            if parent is None:
+                break
+            current = parent
+            depth += 1
 
-        return self
+        return current

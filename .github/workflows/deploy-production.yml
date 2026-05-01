@@ -16,8 +16,21 @@ concurrency:
   cancel-in-progress: false
 
 jobs:
+  secret-scan:
+   name: Secret Scan
+   runs-on: ubuntu-latest
+   steps:
+     - name: Checkout code
+       uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683  # v4.2.2
+       with:
+         fetch-depth: 0
+     - name: Run Gitleaks
+       uses: gitleaks/gitleaks-action@v2
+       env:
+         GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
   release:
     name: Create GitHub Release
+    needs: secret-scan
     runs-on: ubuntu-latest
     permissions:
       contents: write
@@ -54,7 +67,7 @@ jobs:
           df -h
 
       - name: Checkout code
-        uses: actions/checkout@v4
+        uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683  # v4.2.2
 
       - name: Set image tag
         id: meta
@@ -69,7 +82,7 @@ jobs:
           fi
 
       - name: Configure AWS credentials
-        uses: aws-actions/configure-aws-credentials@v4
+        uses: aws-actions/configure-aws-credentials@e3dd6a429d7300a6a4c196c26e071d42e0343502  # v4.0.2
         with:
           aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
           aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
@@ -80,10 +93,10 @@ jobs:
           aws ecr get-login-password --region ${{ env.AWS_REGION }} | docker login --username AWS --password-stdin ${{ env.ECR_REGISTRY }}
 
       - name: Set up Docker Buildx
-        uses: docker/setup-buildx-action@v3
+        uses: docker/setup-buildx-action@f7ce87c0d5b56ef9db0f72c709a93aeeb6527e4e  # v3.9.0
 
       - name: Build and push API image
-        uses: docker/build-push-action@v5
+        uses: docker/build-push-action@67a2d409c0a876cbe6b11854e3e25193efe4e62d  # v5.4.0
         with:
           context: ./api
           file: ./api/Dockerfile
@@ -97,10 +110,39 @@ jobs:
           cache-from: type=gha,scope=api
           cache-to: type=gha,mode=max,scope=api
 
+      - name: Scan API image for CVEs (Trivy)
+        uses: aquasecurity/trivy-action@master
+        with:
+          image-ref: "${{ env.ECR_REGISTRY }}/synkora-api:${{ github.sha }}"
+          format: table
+          exit-code: "1"
+          severity: CRITICAL
+          ignore-unfixed: true
+
       - name: Clean up after API build
         run: |
           docker builder prune -f
           df -h
+      
+      - name: Authenticate to Google Cloud
+        uses: google-github-actions/auth@v2
+        with:
+          credentials_json: ${{ secrets.GCP_SERVICE_ACCOUNT_JSON }}
+
+
+      - name: Login to Google Artifact Registry
+        run: |
+          gcloud auth configure-docker ${{ vars.GCP_REGION || 'us-central1' }}-docker.pkg.dev --quiet
+
+
+      - name: Push API image to Google Artifact Registry
+        run: |
+         GAR_IMAGE="${{ vars.GCP_REGION || 'us-central1' }}-docker.pkg.dev/${{ secrets.GCP_PROJECT_ID }}/synkora/api"
+         docker tag ${{ env.ECR_REGISTRY }}/synkora-api:${{ github.sha }} ${GAR_IMAGE}:${{ github.sha }}
+         docker tag ${{ env.ECR_REGISTRY }}/synkora-api:${{ github.sha }} ${GAR_IMAGE}:latest
+         docker push ${GAR_IMAGE}:${{ github.sha }}
+         docker push ${GAR_IMAGE}:latest
+
 
       - name: Build and push ML service image
         uses: docker/build-push-action@v5
@@ -157,7 +199,7 @@ jobs:
           df -h
 
       - name: Build and push Frontend image
-        uses: docker/build-push-action@v5
+        uses: docker/build-push-action@67a2d409c0a876cbe6b11854e3e25193efe4e62d  # v5.4.0
         with:
           context: ./web
           file: ./web/Dockerfile
@@ -181,7 +223,7 @@ jobs:
     needs: build-and-push
     steps:
       - name: Checkout code
-        uses: actions/checkout@v4
+        uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683  # v4.2.2
 
       - name: Install doctl
         uses: digitalocean/action-doctl@v2
@@ -196,7 +238,7 @@ jobs:
         run: kubectl apply -f k8s/base/namespace.yaml
 
       - name: Configure AWS credentials (for ECR secret)
-        uses: aws-actions/configure-aws-credentials@v4
+        uses: aws-actions/configure-aws-credentials@e3dd6a429d7300a6a4c196c26e071d42e0343502  # v4.0.2
         with:
           aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
           aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
@@ -257,7 +299,26 @@ jobs:
             --from-literal=SENTRY_ENVIRONMENT="${{ vars.SENTRY_ENVIRONMENT }}" \
             --from-literal=CORS_ORIGINS="${{ secrets.K8S_CORS_ORIGINS }}" \
             --from-literal=METRICS_AUTH_TOKEN="${{ secrets.K8S_METRICS_AUTH_TOKEN }}" \
+            --from-literal=GCP_PROJECT_ID="${{ secrets.GCP_PROJECT_ID }}" \
+            --from-literal=GCP_REGION="${{ vars.GCP_REGION || 'us-central1' }}" \
+            --from-literal=GCP_SERVICE_ACCOUNT_JSON="${{ secrets.GCP_SERVICE_ACCOUNT_JSON }}" \
+            --from-literal=CLOUD_RUN_JOB_NAME="${{ secrets.K8S_CLOUD_RUN_JOB_NAME }}" \
+            --from-literal=CLOUD_RUN_INVOCATION_SECRET="${{ secrets.K8S_CLOUD_RUN_INVOCATION_SECRET }}" \
             --dry-run=client -o yaml | kubectl apply -f -
+     
+      - name: Authenticate to Google Cloud
+        uses: google-github-actions/auth@v2
+        with:
+         credentials_json: ${{ secrets.GCP_SERVICE_ACCOUNT_JSON }}
+
+      - name: Update Cloud Run Job with new image
+        run: |
+         GAR_IMAGE="${{ vars.GCP_REGION || 'us-central1' }}-docker.pkg.dev/${{ secrets.GCP_PROJECT_ID }}/synkora/api:${{ github.sha }}"
+         gcloud run jobs update ${{ secrets.K8S_CLOUD_RUN_JOB_NAME }} \
+           --image="${GAR_IMAGE}" \
+           --region="${{ vars.GCP_REGION || 'us-central1' }}" \
+           --project="${{ secrets.GCP_PROJECT_ID }}"
+
 
       - name: Apply deployment manifests
         run: |

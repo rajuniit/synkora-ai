@@ -28,6 +28,8 @@ spec:
         runAsNonRoot: true
         runAsUser: 1000
         fsGroup: 1000
+        seccompProfile:
+          type: RuntimeDefault
       containers:
       - name: celery-beat
         image: IMAGE_PLACEHOLDER

@@ -58,6 +58,8 @@ async def get_shared_conversation(
             agent_result = await db.execute(select(Agent).filter(Agent.id == conversation.agent_id))
             agent = agent_result.scalar_one_or_none()
             if agent:
+                if str(agent.tenant_id) != str(share.tenant_id):
+                    raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Share link not found or expired")
                 agent_info = {
                     "name": getattr(agent, "agent_name", None),
                     "avatar": getattr(agent, "avatar", None),

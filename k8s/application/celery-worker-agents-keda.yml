@@ -1,0 +1,28 @@
+apiVersion: keda.sh/v1alpha1
+kind: ScaledObject
+metadata:
+  name: celery-worker-agents-scaledobject
+  namespace: synkora-production
+  annotations:
+    # KEDA must be installed first:
+    # helm repo add kedacore https://kedacore.github.io/charts
+    # helm install keda kedacore/keda --namespace keda --create-namespace
+spec:
+  scaleTargetRef:
+    apiVersion: apps/v1
+    kind: Deployment
+    name: synkora-celery-worker-agents
+  minReplicaCount: 1
+  maxReplicaCount: 10
+  # 10-minute cooldown — agent tasks can run up to 55 min; don't kill workers mid-task
+  cooldownPeriod: 600
+  pollingInterval: 15
+  triggers:
+    - type: redis
+      metadata:
+        # Address of Redis service inside the cluster
+        address: redis-service:6379
+        # Celery queue key for the agents queue
+        listName: agents
+        # Scale 1 pod per 2 queued tasks
+        listLength: "2"

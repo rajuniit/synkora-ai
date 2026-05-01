@@ -161,7 +161,7 @@ class ProfileService:
         if not account:
             return None
 
-        account.two_factor_enabled = True
+        account.two_factor_enabled = "true"
         # SECURITY: Encrypt 2FA secret before storing
         try:
             account.two_factor_secret = encrypt_value(two_factor_secret)
@@ -299,6 +299,15 @@ class ProfileService:
         if len(new_password) < 8:
             return False, "New password must be at least 8 characters"
 
+        # SECURITY: Enforce password history — reject the last 12 reused passwords
+        history: list[str] = getattr(account, "password_history", None) or []
+        for old_hash in history:
+            try:
+                if bcrypt.checkpw(new_password.encode("utf-8"), old_hash.encode("utf-8")):
+                    return False, "You cannot reuse any of your last 12 passwords"
+            except Exception:
+                pass  # Corrupt hash entry — skip silently
+
         # SECURITY: Hash new password with bcrypt
         try:
             new_hash = bcrypt.hashpw(
@@ -307,6 +316,11 @@ class ProfileService:
             ).decode("utf-8")
 
             account.password_hash = new_hash
+
+            # Prepend new hash to history, keep only 12 most recent
+            updated_history = [new_hash] + history
+            account.password_history = updated_history[:12]
+
             await self.db.commit()
 
             # SECURITY: Invalidate all existing sessions/tokens for this account
@@ -366,7 +380,7 @@ class ProfileService:
         if not account:
             return None
 
-        account.two_factor_enabled = False
+        account.two_factor_enabled = "false"
         account.two_factor_secret = None
 
         await self.db.commit()
@@ -390,7 +404,7 @@ class ProfileService:
         if not account:
             return None
 
-        account.last_login_at = datetime.now(UTC)
+        account.last_login_at = datetime.now(UTC).isoformat()
         account.last_login_ip = ip_address
 
         await self.db.commit()
@@ -456,7 +470,7 @@ class ProfileService:
 
         # Soft delete - you might want to add an 'is_active' field
         # For now, we'll just clear sensitive data
-        account.two_factor_enabled = False
+        account.two_factor_enabled = "false"
         account.two_factor_secret = None
         account.notification_preferences = {}
 

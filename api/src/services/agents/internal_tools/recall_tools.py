@@ -48,7 +48,7 @@ async def _get_recall_service(
             logger.warning("No Recall.ai API key configured. Add a Recall.ai integration in OAuth Apps settings.")
             return None
 
-        logger.info(f"🔧 Recall.ai credentials: region={region}, api_key={api_key[:10]}...")
+        logger.debug(f"Recall.ai configured: region={region}")
 
         # Get webhook_base_url from feature config if available
         webhook_base_url = None

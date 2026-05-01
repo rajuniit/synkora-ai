@@ -212,7 +212,7 @@ export function ChatInput({
     <div className={cn('bg-white', className)}>
       {/* Formatting Toolbar */}
       {showToolbar && (
-        <div className="px-6 lg:px-10 pb-2">
+        <div className="px-4 sm:px-6 lg:px-10 pb-2">
           <div className="flex items-center gap-0.5 p-1 bg-gray-50 rounded-lg w-fit">
             <button
               onClick={() => insertFormatting('bold')}
@@ -255,7 +255,7 @@ export function ChatInput({
 
       {/* Upload Error */}
       {uploadError && (
-        <div className="px-6 lg:px-10 pb-2">
+        <div className="px-4 sm:px-6 lg:px-10 pb-2">
           <div>
             <div className="flex items-center gap-2 px-3 py-2 bg-red-50 rounded-lg text-red-700 text-sm">
               <X size={14} />
@@ -273,7 +273,7 @@ export function ChatInput({
 
       {/* Upload Progress */}
       {uploadProgress.length > 0 && (
-        <div className="px-6 lg:px-10 pb-2">
+        <div className="px-4 sm:px-6 lg:px-10 pb-2">
           <div className="space-y-1.5">
             {uploadProgress.map((progress) => (
               <div key={progress.fileId} className="flex items-center gap-2 text-sm">
@@ -296,7 +296,7 @@ export function ChatInput({
 
       {/* Selected Files Preview */}
       {(selectedFiles.length > 0 || uploadedAttachments.length > 0) && (
-        <div className="px-6 lg:px-10 pb-2">
+        <div className="px-4 sm:px-6 lg:px-10 pb-2">
           <div className="flex flex-wrap gap-1.5">
             {selectedFiles.map((file, index) => (
               <div
@@ -334,7 +334,7 @@ export function ChatInput({
       )}
 
       {/* Input Area */}
-      <div className="px-6 lg:px-10 py-3">
+      <div className="px-4 sm:px-6 lg:px-10 py-3">
         <div>
           <div className="flex items-end gap-2 p-2 bg-gray-50 rounded-xl border border-gray-200 focus-within:border-gray-300 focus-within:bg-white transition-all">
             {/* Action Buttons - Left */}

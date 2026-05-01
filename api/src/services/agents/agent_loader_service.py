@@ -131,6 +131,7 @@ class AgentLoaderService:
         llm_config_id: str | None = None,
         query: str | None = None,
         conversation_history: list[dict[str, Any]] | None = None,
+        tenant_id: str = "",
     ) -> AgentLoadResult:
         """
         Load agent from cache or database, with optional intelligent model routing.
@@ -144,6 +145,7 @@ class AgentLoaderService:
             llm_config_id: Explicit LLM config ID override (bypasses routing)
             query: User message (used by router for intent/complexity classification)
             conversation_history: Prior turns (used by router for complexity scoring)
+            tenant_id: Tenant identifier for tenant-scoped registry lookup
 
         Returns:
             AgentLoadResult with loaded agent, routing decision, and fallback IDs
@@ -157,7 +159,7 @@ class AgentLoaderService:
         #   - llm_config_id is set (needs fresh DB config)
         #   - query is set (routing may select a different config)
         if not llm_config_id and not query:
-            in_memory_agent = self.agent_manager.registry.get(agent_name)
+            in_memory_agent = self.agent_manager.registry.get(agent_name, tenant_id)
             if in_memory_agent and in_memory_agent.llm_client:
                 cached_data = await self.cache.get_agent_config(agent_name)
                 if cached_data:
@@ -183,7 +185,7 @@ class AgentLoaderService:
             cache_hit = True
             logger.info(f"Cache HIT for agent '{agent_name}' ({time.time() - start_time:.3f}s)")
         else:
-            db_agent = await self._load_from_database(agent_name, db)
+            db_agent = await self._load_from_database(agent_name, db, tenant_id=tenant_id)
             cache_hit = False
 
             if db_agent:
@@ -242,25 +244,28 @@ class AgentLoaderService:
         )
 
     async def _load_from_cache(self, cached_data: dict[str, Any], db: AsyncSession) -> Agent:
-        """Load agent from cached data."""
-        from datetime import datetime
+        """Load agent from cached data.
 
-        # Remove non-model fields
-        agent_data = {k: v for k, v in cached_data.items() if k not in ["default_llm_config"]}
+        Returns a detached (transient) Agent instance — same as the fast-path
+        _reconstruct_agent() — so the object is never tracked by the SQLAlchemy
+        session.  This avoids autoflush errors when tools or credential resolvers
+        run SELECT queries on the same session during streaming.
+        """
+        return self._reconstruct_agent(cached_data)
 
-        # Parse datetime fields from ISO format strings
-        for dt_field in ["created_at", "updated_at"]:
-            if agent_data.get(dt_field) and isinstance(agent_data[dt_field], str):
-                agent_data[dt_field] = datetime.fromisoformat(agent_data[dt_field])
+    async def _load_from_database(self, agent_name: str, db: AsyncSession, tenant_id: str = "") -> Agent | None:
+        """Load agent from database, scoped to tenant to prevent cross-tenant leakage."""
+        from uuid import UUID
 
-        db_agent = Agent(**agent_data)
-        db_agent = await db.merge(db_agent)  # Attach to session
+        filters = [Agent.agent_name == agent_name]
+        if tenant_id:
+            try:
+                filters.append(Agent.tenant_id == UUID(tenant_id))
+            except ValueError:
+                logger.error("Invalid tenant_id format '%s' — refusing cross-tenant load", tenant_id)
+                return None
 
-        return db_agent
-
-    async def _load_from_database(self, agent_name: str, db: AsyncSession) -> Agent | None:
-        """Load agent from database."""
-        result = await db.execute(select(Agent).filter(Agent.agent_name == agent_name))
+        result = await db.execute(select(Agent).filter(*filters))
         return result.scalar_one_or_none()
 
     async def _cache_agent(self, db_agent: Agent, db: AsyncSession) -> None:
@@ -322,20 +327,23 @@ class AgentLoaderService:
         db: AsyncSession,
     ) -> Any:
         """Load agent into memory with LLM client."""
-        # Check if already in memory
-        agent = self.agent_manager.registry.get(agent_name)
+        _tenant_id = str(db_agent.tenant_id) if db_agent.tenant_id else ""
 
-        if agent and agent.llm_client:
+        # Check if already in memory (tenant-scoped).
+        agent = self.agent_manager.registry.get(agent_name, _tenant_id)
+
+        if agent and agent.llm_client and not llm_config_id:
             logger.info(f"Agent '{agent_name}' already in memory with LLM client")
             return agent
 
-        # Remove broken agent from memory if exists
+        # Remove broken agent from memory if exists (no llm_client means init failed)
         if agent and not agent.llm_client:
             logger.warning(f"Agent '{agent_name}' in memory but LLM client not initialized, reloading...")
             try:
-                await self.agent_manager.delete_agent(agent_name)
+                await self.agent_manager.delete_agent(agent_name, _tenant_id)
             except Exception as e:
                 logger.warning(f"Failed to remove broken agent: {e}")
+            agent = None
 
         # Load LLM configuration
         llm_config, api_key, error = await self._resolve_llm_config(
@@ -367,17 +375,41 @@ class AgentLoaderService:
         }
         agent_class = agent_class_map.get(db_agent.agent_type.lower() if db_agent.agent_type else "llm", LLMAgent)
 
-        # Create agent
+        # When routing selected a specific config (llm_config_id is set) and the agent is
+        # already registered with the default model, build a temporary agent instance for
+        # this request only — do NOT register it, so the default agent stays cached.
+        if llm_config_id and agent:
+            try:
+                from src.services.agents.security import get_api_key_manager
+
+                key_manager = get_api_key_manager()
+                encrypted_key = key_manager.encrypt_api_key(api_key) if api_key else None
+                if encrypted_key:
+                    config.llm_config.api_key = encrypted_key
+                routed_agent = agent_class(config, observability_config=db_agent.observability_config or {})
+                if api_key:
+                    routed_agent.initialize_client(api_key)
+                logger.info(
+                    f"[routing] Built temporary agent for '{agent_name}' with model "
+                    f"'{llm_config.model_name}' (config_id={llm_config_id})"
+                )
+                return routed_agent
+            except Exception as e:
+                logger.warning(f"[routing] Failed to build routed agent, falling back to registered: {e}")
+                return agent
+
+        # Create and register agent (tenant-scoped registry entry)
         try:
-            agent = await self.agent_manager.create_agent(
+            new_agent = await self.agent_manager.create_agent(
                 config=config,
                 agent_class=agent_class,
                 api_key=api_key,
                 observability_config=db_agent.observability_config or {},
+                tenant_id=_tenant_id,
             )
 
             logger.info(f"Agent '{agent_name}' loaded into memory")
-            return agent
+            return new_agent
 
         except Exception as e:
             logger.error(f"Failed to create agent: {e}")
@@ -393,20 +425,17 @@ class AgentLoaderService:
         """
         Classify the query and pick the best LLM config using the model router.
 
+        LLM configs are cached in Redis (TTL=300s) to avoid a DB query on every
+        routed request.  The cache is keyed by agent_id so it's invalidated
+        automatically when configs change (via agent update → cache eviction).
+
         Returns:
             (RoutingDecision, selected_config_id, fallback_config_ids)
         """
         from src.models.agent_llm_config import AgentLLMConfig
 
         try:
-            # Load all enabled configs for this agent
-            stmt = (
-                select(AgentLLMConfig)
-                .where(AgentLLMConfig.agent_id == db_agent.id, AgentLLMConfig.enabled)
-                .order_by(AgentLLMConfig.display_order, AgentLLMConfig.created_at)
-            )
-            result = await db.execute(stmt)
-            all_configs = list(result.scalars().all())
+            all_configs = await self._load_llm_configs_cached(db_agent, db)
 
             if not all_configs:
                 return None, None, []
@@ -426,7 +455,8 @@ class AgentLoaderService:
 
             logger.info(
                 f"[routing] agent={db_agent.agent_name} {decision} "
-                f"intent={classification.intent} complexity={classification.complexity:.2f}"
+                f"intent={classification.intent} complexity={classification.complexity:.2f} "
+                f"tokens~={classification.estimated_input_tokens}"
             )
 
             return decision, decision.primary_config_id, decision.fallback_config_ids
@@ -434,6 +464,71 @@ class AgentLoaderService:
         except Exception as e:
             logger.warning(f"[routing] Failed for agent '{db_agent.agent_name}', using default: {e}")
             return None, None, []
+
+    async def _load_llm_configs_cached(self, db_agent: Agent, db: AsyncSession) -> list:
+        """
+        Return all enabled AgentLLMConfig rows for the agent.
+
+        Tries Redis first (TTL=300s).  On miss, loads from DB and populates the cache.
+        Returns lightweight proxy objects that expose the same attributes the router
+        reads (id, model_name, provider, is_default, enabled, routing_rules,
+        routing_weight, display_order).
+        """
+        import json
+        import types
+
+        from src.models.agent_llm_config import AgentLLMConfig
+
+        # Key consistent with AgentCacheService._build_key so invalidation works
+        cache_key = self.cache._build_key("llm_configs", db_agent.agent_name)
+
+        # ── Redis fast path ──────────────────────────────────────────────────
+        redis = self.cache._get_redis()
+        if redis:
+            try:
+                raw = await redis.get(cache_key)
+                if raw:
+                    rows = json.loads(raw)
+                    logger.debug(f"[routing] LLM config cache HIT for agent '{db_agent.agent_name}' ({len(rows)} configs)")
+                    return [types.SimpleNamespace(**r) for r in rows]
+            except Exception as cache_err:
+                logger.debug(f"[routing] LLM config cache read error (continuing to DB): {cache_err}")
+
+        # ── DB slow path ─────────────────────────────────────────────────────
+        stmt = (
+            select(AgentLLMConfig)
+            .where(AgentLLMConfig.agent_id == db_agent.id, AgentLLMConfig.enabled)
+            .order_by(AgentLLMConfig.display_order, AgentLLMConfig.created_at)
+        )
+        result = await db.execute(stmt)
+        db_configs = list(result.scalars().all())
+
+        # Serialize only the fields the router reads (no api_key — not needed for routing)
+        serializable = [
+            {
+                "id": str(c.id),
+                "model_name": c.model_name,
+                "provider": c.provider,
+                "is_default": bool(c.is_default),
+                "enabled": bool(c.enabled),
+                "routing_rules": c.routing_rules or {},
+                "routing_weight": float(c.routing_weight) if c.routing_weight is not None else None,
+                "display_order": int(c.display_order or 0),
+            }
+            for c in db_configs
+        ]
+
+        if redis and serializable:
+            try:
+                await redis.setex(cache_key, 300, json.dumps(serializable))
+                logger.debug(
+                    f"[routing] LLM config cache SET for agent '{db_agent.agent_name}' "
+                    f"({len(serializable)} configs, TTL=300s)"
+                )
+            except Exception as cache_err:
+                logger.debug(f"[routing] LLM config cache write error: {cache_err}")
+
+        return [types.SimpleNamespace(**r) for r in serializable]
 
     async def _resolve_llm_config(
         self, db_agent: Agent, cached_data: dict[str, Any] | None, llm_config_id: str | None, db: AsyncSession

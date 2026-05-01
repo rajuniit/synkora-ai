@@ -4,8 +4,15 @@ Password validation service.
 Provides secure password policy enforcement.
 """
 
+import hashlib
+import logging
+import os
 import re
 from typing import ClassVar
+
+import httpx
+
+logger = logging.getLogger(__name__)
 
 
 class PasswordValidator:
@@ -90,6 +97,34 @@ class PasswordValidator:
             f"Password must be at least {cls.MIN_LENGTH} characters and include: "
             "uppercase letter, lowercase letter, number, and special character."
         )
+
+
+async def check_hibp(password: str) -> bool:
+    """
+    Return True if the password has appeared in a known data breach.
+
+    Uses the HaveIBeenPwned k-anonymity API — only the first 5 chars of the
+    SHA-1 hash are sent over the network; the full hash never leaves this
+    process.  Fails open (returns False) if the service is unreachable.
+    """
+    if not os.getenv("HIBP_CHECK_ENABLED", "true").lower() in ("true", "1", "yes"):
+        return False
+    try:
+        sha1 = hashlib.sha1(password.encode("utf-8")).hexdigest().upper()  # noqa: S324
+        prefix, suffix = sha1[:5], sha1[5:]
+        async with httpx.AsyncClient(timeout=3.0) as client:
+            resp = await client.get(
+                f"https://api.pwnedpasswords.com/range/{prefix}",
+                headers={"Add-Padding": "true"},
+            )
+            if resp.status_code == 200:
+                for line in resp.text.splitlines():
+                    h, count = line.split(":")
+                    if h == suffix and int(count) > 0:
+                        return True
+    except Exception:
+        pass  # Fail open — don't block registration if HIBP is unreachable
+    return False
 
 
 def validate_password(password: str, email: str | None = None) -> tuple[bool, str | None]:

@@ -80,6 +80,8 @@ export default function KnowledgeBaseDetailsPage() {
   const [pasteTitle, setPasteTitle] = useState('')
   const [pasteContent, setPasteContent] = useState('')
   const [websiteUrl, setWebsiteUrl] = useState('')
+  const [includeSubpages, setIncludeSubpages] = useState(false)
+  const [maxPages, setMaxPages] = useState(20)
   const [addingContent, setAddingContent] = useState(false)
 
   useEffect(() => {
@@ -192,10 +194,12 @@ export default function KnowledgeBaseDetailsPage() {
 
     setAddingContent(true)
     try {
-      const result = await apiClient.crawlWebsite(id, websiteUrl)
+      const result = await apiClient.crawlWebsite(id, websiteUrl, { includeSubpages, maxPages })
       toast.success(result.message || 'Website content added successfully')
       setShowWebsiteModal(false)
       setWebsiteUrl('')
+      setIncludeSubpages(false)
+      setMaxPages(20)
       fetchKnowledgeBase()
       // Refresh documents tab
       setActiveTab('overview')
@@ -843,9 +847,44 @@ export default function KnowledgeBaseDetailsPage() {
                   className="w-full px-4 py-3 border border-gray-200 rounded-xl focus:ring-2 focus:ring-red-500 focus:border-transparent"
                 />
                 <p className="text-xs text-gray-500 mt-2">
-                  We'll extract the main content from this page and add it to your knowledge base.
+                  Supports regular and JavaScript-rendered (SPA) pages.
                 </p>
               </div>
+
+              {/* Include subpages toggle */}
+              <div className="flex items-center justify-between py-3 border-t border-gray-100">
+                <div>
+                  <p className="text-sm font-medium text-gray-700">Include subpages</p>
+                  <p className="text-xs text-gray-500 mt-0.5">Crawl same-domain links found on this page</p>
+                </div>
+                <button
+                  type="button"
+                  onClick={() => setIncludeSubpages(v => !v)}
+                  className={`relative inline-flex h-6 w-11 items-center rounded-full transition-colors ${includeSubpages ? 'bg-red-600' : 'bg-gray-200'}`}
+                >
+                  <span className={`inline-block h-4 w-4 transform rounded-full bg-white shadow transition-transform ${includeSubpages ? 'translate-x-6' : 'translate-x-1'}`} />
+                </button>
+              </div>
+
+              {/* Max pages — only shown when subpages enabled */}
+              {includeSubpages && (
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-2">
+                    Max pages <span className="text-gray-400 font-normal">(1–50)</span>
+                  </label>
+                  <input
+                    type="number"
+                    min={1}
+                    max={50}
+                    value={maxPages}
+                    onChange={(e) => setMaxPages(Math.min(50, Math.max(1, parseInt(e.target.value) || 1)))}
+                    className="w-full px-4 py-3 border border-gray-200 rounded-xl focus:ring-2 focus:ring-red-500 focus:border-transparent"
+                  />
+                  <p className="text-xs text-gray-500 mt-2">
+                    Crawl will follow links from the starting URL up to this limit.
+                  </p>
+                </div>
+              )}
             </div>
 
             <div className="flex justify-end gap-3 mt-6">
@@ -853,6 +892,8 @@ export default function KnowledgeBaseDetailsPage() {
                 onClick={() => {
                   setShowWebsiteModal(false)
                   setWebsiteUrl('')
+                  setIncludeSubpages(false)
+                  setMaxPages(20)
                 }}
                 disabled={addingContent}
                 className="px-4 py-2.5 text-sm font-medium text-gray-700 bg-gray-100 rounded-xl hover:bg-gray-200 transition-colors disabled:opacity-50"

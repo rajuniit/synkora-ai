@@ -11,11 +11,13 @@ from typing import Any
 from fastapi import APIRouter, Depends, HTTPException, status
 from pydantic import BaseModel, Field
 from sqlalchemy import or_, select
+from sqlalchemy.orm import selectinload
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from src.controllers.agents.models import AgentResponse, AttachKnowledgeBaseRequest
 from src.core.database import get_async_db
-from src.middleware.auth_middleware import get_current_tenant_id
+from src.middleware.auth_middleware import get_current_tenant_id, require_role
+from src.models import AccountRole
 from src.models.agent import Agent
 from src.services.agents.agent_manager import AgentManager
 
@@ -45,6 +47,7 @@ async def attach_knowledge_base(
     request: AttachKnowledgeBaseRequest,
     tenant_id: uuid.UUID = Depends(get_current_tenant_id),
     db: AsyncSession = Depends(get_async_db),
+    _: None = Depends(require_role(AccountRole.ADMIN)),
 ):
     """
     Attach a knowledge base to an agent.
@@ -167,8 +170,13 @@ async def list_agent_knowledge_bases(
         if not agent:
             raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=f"Agent with ID '{agent_id}' not found")
 
-        # Get all knowledge bases for this agent
-        result = await db.execute(select(AgentKnowledgeBase).filter(AgentKnowledgeBase.agent_id == agent_uuid))
+        # Get all knowledge bases for this agent, eagerly loading the relationship
+        # to avoid lazy-load in async context (greenlet_spawn error).
+        result = await db.execute(
+            select(AgentKnowledgeBase)
+            .filter(AgentKnowledgeBase.agent_id == agent_uuid)
+            .options(selectinload(AgentKnowledgeBase.knowledge_base))
+        )
         agent_kbs = result.scalars().all()
 
         kb_list = []
@@ -207,6 +215,7 @@ async def update_retrieval_config(
     config: dict[str, Any],
     tenant_id: uuid.UUID = Depends(get_current_tenant_id),
     db: AsyncSession = Depends(get_async_db),
+    _: None = Depends(require_role(AccountRole.ADMIN)),
 ):
     """
     Update retrieval configuration for an agent-KB association.
@@ -271,6 +280,7 @@ async def detach_knowledge_base(
     kb_id: int,
     tenant_id: uuid.UUID = Depends(get_current_tenant_id),
     db: AsyncSession = Depends(get_async_db),
+    _: None = Depends(require_role(AccountRole.ADMIN)),
 ):
     """
     Detach a knowledge base from an agent.

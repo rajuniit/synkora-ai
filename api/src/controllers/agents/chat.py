@@ -356,6 +356,7 @@ async def chat_stream(
             "X-Risk-Score": str(scan_result["risk_score"]),
             "X-Scan-ID": f"CHAT_SC_{uuid.uuid4().hex[:8]}",
             "X-Layers-Triggered": str(scan_result["layers_triggered"]),
+            "X-AI-Generated": "true",
         },
     )
 
@@ -630,6 +631,10 @@ async def chat_websocket(websocket: WebSocket) -> None:
 
         if not agent_name or not message:
             await websocket.send_json({"type": "error", "error": "agent_name and message are required"})
+            continue
+
+        if len(message) > 32000:
+            await websocket.send_json({"type": "error", "error": "Message exceeds maximum length of 32000 characters"})
             continue
 
         conversation_id: str | None = frame.get("conversation_id")

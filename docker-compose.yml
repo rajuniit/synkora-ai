@@ -19,6 +19,7 @@ services:
   postgres:
     image: pgvector/pgvector:pg14
     container_name: synkora-postgres
+    command: postgres -c max_connections=300
     environment:
       POSTGRES_DB: ${POSTGRES_DB:-synkora}
       POSTGRES_USER: ${POSTGRES_USER:-synkora}
@@ -93,12 +94,13 @@ services:
     image: qdrant/qdrant:latest
     container_name: synkora-qdrant
     ports:
-      - "6333:6333"
-      - "6334:6334"
+      - "127.0.0.1:6333:6333"
+      - "127.0.0.1:6334:6334"
     volumes:
       - qdrant_data:/qdrant/storage
     environment:
       - QDRANT__SERVICE__GRPC_PORT=6334
+      - QDRANT__SERVICE__API_KEY=${QDRANT_API_KEY:-}
     networks:
       - synkora-network
 
@@ -109,7 +111,8 @@ services:
     container_name: synkora-elasticsearch
     environment:
       - discovery.type=single-node
-      - xpack.security.enabled=false
+      - xpack.security.enabled=true
+      - ELASTIC_PASSWORD=${ELASTIC_PASSWORD:-changeme}
       - xpack.ml.enabled=false
       - xpack.watcher.enabled=false
       - xpack.graph.enabled=false
@@ -117,13 +120,13 @@ services:
       - bootstrap.memory_lock=false
     mem_limit: 2g
     ports:
-      - "9200:9200"
-      - "9300:9300"
+      - "127.0.0.1:9200:9200"
+      - "127.0.0.1:9300:9300"
     volumes:
       - elasticsearch_data:/usr/share/elasticsearch/data
     healthcheck:
       test:
-        ["CMD-SHELL", "curl -f http://localhost:9200/_cluster/health || exit 1"]
+        ["CMD-SHELL", "curl -f -u elastic:${ELASTIC_PASSWORD:-changeme} http://localhost:9200/_cluster/health || exit 1"]
       interval: 30s
       timeout: 10s
       retries: 5
@@ -138,7 +141,7 @@ services:
     environment:
       POSTGRES_DB: langfuse
       POSTGRES_USER: langfuse
-      POSTGRES_PASSWORD: langfuse
+      POSTGRES_PASSWORD: langfuse  # DEV ONLY - CHANGE IN PRODUCTION
       TZ: UTC
       PGTZ: UTC
     ports:
@@ -160,8 +163,8 @@ services:
     user: "101:101"
     environment:
       CLICKHOUSE_DB: default
-      CLICKHOUSE_USER: langfuse_clickhouse
-      CLICKHOUSE_PASSWORD: langfuse_clickhouse
+      CLICKHOUSE_USER: langfuse_clickhouse  # DEV ONLY - CHANGE IN PRODUCTION
+      CLICKHOUSE_PASSWORD: langfuse_clickhouse  # DEV ONLY - CHANGE IN PRODUCTION
     ports:
       - "8123:8123"
       - "9002:9000"
@@ -210,15 +213,15 @@ services:
       - "3030:3030"
     environment:
       - NEXTAUTH_URL=http://localhost:3001
-      - DATABASE_URL=postgresql://langfuse:langfuse@langfuse-postgres:5432/langfuse
-      - SALT=${LANGFUSE_SALT:-langfuse_dev_salt}
-      - ENCRYPTION_KEY=${LANGFUSE_ENCRYPTION_KEY:-deadbeefdeadbeefdeadbeefdeadbeefdeadbeefdeadbeefdeadbeefdeadbeef}
+      - DATABASE_URL=postgresql://langfuse:langfuse@langfuse-postgres:5432/langfuse  # DEV ONLY - CHANGE IN PRODUCTION
+      - SALT=${LANGFUSE_SALT:-langfuse_dev_salt}  # DEV ONLY - set LANGFUSE_SALT in production
+      - ENCRYPTION_KEY=${LANGFUSE_ENCRYPTION_KEY:-deadbeefdeadbeefdeadbeefdeadbeefdeadbeefdeadbeefdeadbeefdeadbeef}  # DEV ONLY - set LANGFUSE_ENCRYPTION_KEY in production
       - TELEMETRY_ENABLED=false
       - LANGFUSE_ENABLE_EXPERIMENTAL_FEATURES=true
-      - CLICKHOUSE_MIGRATION_URL=clickhouse://langfuse_clickhouse:langfuse_clickhouse@langfuse-clickhouse:9000
+      - CLICKHOUSE_MIGRATION_URL=clickhouse://langfuse_clickhouse:langfuse_clickhouse@langfuse-clickhouse:9000  # DEV ONLY
       - CLICKHOUSE_URL=http://langfuse-clickhouse:8123
-      - CLICKHOUSE_USER=langfuse_clickhouse
-      - CLICKHOUSE_PASSWORD=langfuse_clickhouse
+      - CLICKHOUSE_USER=langfuse_clickhouse  # DEV ONLY - CHANGE IN PRODUCTION
+      - CLICKHOUSE_PASSWORD=langfuse_clickhouse  # DEV ONLY - CHANGE IN PRODUCTION
       - CLICKHOUSE_CLUSTER_ENABLED=false
       - LANGFUSE_S3_EVENT_UPLOAD_BUCKET=langfuse
       - LANGFUSE_S3_EVENT_UPLOAD_REGION=auto
@@ -236,7 +239,7 @@ services:
       - LANGFUSE_S3_MEDIA_UPLOAD_PREFIX=media/
       - REDIS_HOST=langfuse-redis
       - REDIS_PORT=6379
-      - REDIS_AUTH=${LANGFUSE_REDIS_PASSWORD:-langfuse_redis_dev}
+      - REDIS_AUTH=${LANGFUSE_REDIS_PASSWORD:-langfuse_redis_dev}  # DEV ONLY - set LANGFUSE_REDIS_PASSWORD in production
     networks:
       - synkora-network
 
@@ -258,16 +261,16 @@ services:
       - "3001:3000"
     environment:
       - NEXTAUTH_URL=http://localhost:3001
-      - NEXTAUTH_SECRET=${LANGFUSE_NEXTAUTH_SECRET:-langfuse_dev_secret_change_in_prod}
-      - DATABASE_URL=postgresql://langfuse:langfuse@langfuse-postgres:5432/langfuse
-      - SALT=${LANGFUSE_SALT:-langfuse_dev_salt}
-      - ENCRYPTION_KEY=${LANGFUSE_ENCRYPTION_KEY:-deadbeefdeadbeefdeadbeefdeadbeefdeadbeefdeadbeefdeadbeefdeadbeef}
+      - NEXTAUTH_SECRET=${LANGFUSE_NEXTAUTH_SECRET:-langfuse_dev_secret_change_in_prod}  # DEV ONLY - set LANGFUSE_NEXTAUTH_SECRET in production
+      - DATABASE_URL=postgresql://langfuse:langfuse@langfuse-postgres:5432/langfuse  # DEV ONLY - CHANGE IN PRODUCTION
+      - SALT=${LANGFUSE_SALT:-langfuse_dev_salt}  # DEV ONLY - set LANGFUSE_SALT in production
+      - ENCRYPTION_KEY=${LANGFUSE_ENCRYPTION_KEY:-deadbeefdeadbeefdeadbeefdeadbeefdeadbeefdeadbeefdeadbeefdeadbeef}  # DEV ONLY - set LANGFUSE_ENCRYPTION_KEY in production
       - TELEMETRY_ENABLED=false
       - LANGFUSE_ENABLE_EXPERIMENTAL_FEATURES=true
-      - CLICKHOUSE_MIGRATION_URL=clickhouse://langfuse_clickhouse:langfuse_clickhouse@langfuse-clickhouse:9000
+      - CLICKHOUSE_MIGRATION_URL=clickhouse://langfuse_clickhouse:langfuse_clickhouse@langfuse-clickhouse:9000  # DEV ONLY
       - CLICKHOUSE_URL=http://langfuse-clickhouse:8123
-      - CLICKHOUSE_USER=langfuse_clickhouse
-      - CLICKHOUSE_PASSWORD=langfuse_clickhouse
+      - CLICKHOUSE_USER=langfuse_clickhouse  # DEV ONLY - CHANGE IN PRODUCTION
+      - CLICKHOUSE_PASSWORD=langfuse_clickhouse  # DEV ONLY - CHANGE IN PRODUCTION
       - CLICKHOUSE_CLUSTER_ENABLED=false
       - LANGFUSE_S3_EVENT_UPLOAD_BUCKET=langfuse
       - LANGFUSE_S3_EVENT_UPLOAD_REGION=auto
@@ -285,7 +288,7 @@ services:
       - LANGFUSE_S3_MEDIA_UPLOAD_PREFIX=media/
       - REDIS_HOST=langfuse-redis
       - REDIS_PORT=6379
-      - REDIS_AUTH=${LANGFUSE_REDIS_PASSWORD:-langfuse_redis_dev}
+      - REDIS_AUTH=${LANGFUSE_REDIS_PASSWORD:-langfuse_redis_dev}  # DEV ONLY - set LANGFUSE_REDIS_PASSWORD in production
     networks:
       - synkora-network
 
@@ -505,7 +508,7 @@ services:
       context: ./api
       dockerfile: Dockerfile.dev
     container_name: synkora-celery-worker-agents
-    command: celery -A src.celery_app worker --loglevel=info --concurrency=2 -Q agents
+    command: celery -A src.celery_app worker --loglevel=info --concurrency=${CELERY_AGENTS_CONCURRENCY:-6} -Q agents
     env_file:
       - ./api/.env
     environment:

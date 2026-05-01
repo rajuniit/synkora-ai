@@ -10,6 +10,8 @@ from uuid import UUID
 
 from fastapi import APIRouter, Depends, HTTPException, status
 from pydantic import BaseModel, ConfigDict, Field, field_validator
+
+from src.schemas.base import StrictModel
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -38,6 +40,32 @@ from src.services.database import (
 logger = logging.getLogger(__name__)
 
 router = APIRouter(prefix="/api/v1/database-connections", tags=["database-connections"])
+
+
+async def _audit_log(
+    db: AsyncSession,
+    account_id: UUID,
+    tenant_id: UUID,
+    action: str,
+    resource_type: str,
+    resource_id: UUID | None = None,
+    metadata: dict | None = None,
+) -> None:
+    """Fire-and-forget audit log — never raises, never blocks the main response."""
+    try:
+        from src.services.activity.activity_log_service import ActivityLogService
+
+        svc = ActivityLogService(db)
+        await svc.log_activity(
+            tenant_id=tenant_id,
+            account_id=account_id,
+            action=action,
+            resource_type=resource_type,
+            resource_id=resource_id,
+            details=metadata or {},
+        )
+    except Exception:
+        pass  # Audit logging must never break the main flow
 
 
 def _make_connector(db_type: DatabaseConnectionType, connection: "DatabaseConnection"):
@@ -76,7 +104,7 @@ def _make_connector(db_type: DatabaseConnectionType, connection: "DatabaseConnec
 
 
 # Request/Response Models
-class DatabaseConnectionCreate(BaseModel):
+class DatabaseConnectionCreate(StrictModel):
     """Request model for creating a database connection."""
 
     name: str = Field(..., min_length=1, max_length=255)
@@ -104,7 +132,7 @@ class DatabaseConnectionCreate(BaseModel):
         return v
 
 
-class DatabaseConnectionUpdate(BaseModel):
+class DatabaseConnectionUpdate(StrictModel):
     """Request model for updating a database connection."""
 
     name: str | None = Field(None, min_length=1, max_length=255)
@@ -172,6 +200,10 @@ async def create_database_connection(
                 raise HTTPException(
                     status_code=status.HTTP_400_BAD_REQUEST, detail="database_path is required for SQLite connections"
                 )
+        elif connection_data.type == DatabaseConnectionType.DUCKDB:
+            # DuckDB is in-process — no host/port needed.
+            # database_path may be ':memory:' (default) or a file path.
+            pass  # all configurations valid; connector defaults to :memory:
         elif connection_data.type == DatabaseConnectionType.DATADOG:
             if not connection_data.password:
                 raise HTTPException(
@@ -261,6 +293,10 @@ async def create_database_connection(
         await db.refresh(connection)
 
         logger.info(f"Created database connection: {connection.id}")
+        await _audit_log(
+            db, current_account.id, tenant_id, "create", "database_connection",
+            resource_id=connection.id, metadata={"name": connection.name, "type": str(connection.database_type)},
+        )
 
         # Automatically test the connection and update status
         try:
@@ -498,6 +534,10 @@ async def update_database_connection(
         await db.refresh(connection)
 
         logger.info(f"Updated database connection: {connection.id}")
+        await _audit_log(
+            db, current_account.id, tenant_id, "update", "database_connection",
+            resource_id=connection.id, metadata={"name": connection.name},
+        )
 
         return DatabaseConnectionResponse(
             id=str(connection.id),
@@ -637,7 +677,20 @@ async def test_database_connection(
         raise
     except Exception as e:
         logger.error(f"Error testing database connection: {e}", exc_info=True)
-        return ConnectionTestResponse(success=False, message=f"Connection failed: {str(e)}", details={"error": str(e)})
+        error_str = str(e).lower()
+        if "authentication" in error_str or "password" in error_str:
+            category = "authentication_failed"
+        elif "timeout" in error_str or "timed out" in error_str:
+            category = "connection_timeout"
+        elif "refused" in error_str or "unreachable" in error_str:
+            category = "host_unreachable"
+        else:
+            category = "connection_failed"
+        return ConnectionTestResponse(
+            success=False,
+            message=f"Connection failed: {category}",
+            details={"error_code": category},
+        )
 
 
 @router.post("/{connection_id}/test", response_model=ConnectionTestResponse)
@@ -695,8 +748,19 @@ async def test_existing_database_connection(
         raise
     except Exception as e:
         logger.error(f"Error testing database connection: {e}", exc_info=True)
+        error_str = str(e).lower()
+        if "authentication" in error_str or "password" in error_str:
+            category = "authentication_failed"
+        elif "timeout" in error_str or "timed out" in error_str:
+            category = "connection_timeout"
+        elif "refused" in error_str or "unreachable" in error_str:
+            category = "host_unreachable"
+        else:
+            category = "connection_failed"
         return ConnectionTestResponse(
-            success=False, message=f"Connection test failed: {str(e)}", details={"error": str(e)}
+            success=False,
+            message=f"Connection test failed: {category}",
+            details={"error_code": category},
         )
 
 
@@ -731,6 +795,10 @@ async def delete_database_connection(
         await db.commit()
 
         logger.info(f"Deleted database connection: {connection_id}")
+        await _audit_log(
+            db, current_account.id, tenant_id, "delete", "database_connection",
+            resource_id=connection_id,
+        )
 
     except HTTPException:
         raise

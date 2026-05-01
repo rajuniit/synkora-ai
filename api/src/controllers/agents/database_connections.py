@@ -7,12 +7,14 @@ from fastapi import APIRouter, Depends, HTTPException, status
 from pydantic import BaseModel
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
+from sqlalchemy.orm.attributes import flag_modified
 
 from src.core.database import get_async_db
 from src.middleware.auth_middleware import get_current_account, get_current_tenant_id
 from src.models import Account
 from src.models.agent import Agent
 from src.models.database_connection import DatabaseConnection
+from src.services.cache import get_agent_cache
 
 logger = logging.getLogger(__name__)
 router = APIRouter()
@@ -105,6 +107,10 @@ async def update_agent_database_connections(
     metadata = dict(agent.agent_metadata or {})
     metadata["allowed_database_connections"] = body.connection_ids
     agent.agent_metadata = metadata
+    flag_modified(agent, "agent_metadata")
     await db.commit()
+
+    cache = get_agent_cache()
+    await cache.invalidate_agent(agent_name=agent_name, agent_id=str(agent.id))
 
     return {"connection_ids": body.connection_ids}

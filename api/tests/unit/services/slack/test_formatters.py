@@ -121,7 +121,8 @@ class TestSlackFormatters:
         # Check content
         block_texts = [b["text"]["text"] for b in blocks if b.get("type") == "section" and b.get("text")]
 
-        has_table = any("*Header*" in t for t in block_texts)
+        # 1-column table → monospace code block (no bold), just check "Header" is present
+        has_table = any("Header" in t for t in block_texts)
         assert has_table
 
     def test_create_slack_blocks_long_text(self):

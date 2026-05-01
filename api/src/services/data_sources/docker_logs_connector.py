@@ -174,7 +174,7 @@ class DockerLogsConnector(BaseConnector):
                             log_lines.append({"timestamp": parts[0], "message": parts[1]})
                         else:
                             log_lines.append({"timestamp": None, "message": line})
-                    except:
+                    except Exception:
                         log_lines.append({"timestamp": None, "message": line})
                 else:
                     log_lines.append({"timestamp": None, "message": line})

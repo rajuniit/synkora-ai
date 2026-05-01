@@ -22,7 +22,13 @@ def mock_profile_service():
 
 @pytest.fixture
 def mock_db_session():
-    return AsyncMock()
+    db = AsyncMock()
+    # Use a plain MagicMock for execute() return so scalar_one_or_none() is NOT
+    # an async coroutine (coroutines are truthy and cause attribute errors).
+    mock_result = MagicMock()
+    mock_result.scalar_one_or_none.return_value = None
+    db.execute = AsyncMock(return_value=mock_result)
+    return db
 
 
 @pytest.fixture
@@ -246,12 +252,15 @@ class TestEnableTwoFactor:
         """Test enabling 2FA."""
         test_client, mock_account, mock_db, mock_service = client
 
-        mock_service.return_value.enable_two_factor.return_value = {
-            "secret": "JBSWY3DPEHPK3PXP",
-            "qr_code_url": "otpauth://totp/Synkora:test@example.com?secret=JBSWY3DPEHPK3PXP",
-        }
+        mock_pyotp = MagicMock()
+        mock_pyotp.random_base32.return_value = "JBSWY3DPEHPK3PXP"
+        mock_totp = MagicMock()
+        mock_totp.provisioning_uri.return_value = "otpauth://totp/App:test@example.com?secret=JBSWY3DPEHPK3PXP"
+        mock_pyotp.TOTP.return_value = mock_totp
 
-        response = test_client.post("/profile/me/2fa/enable", json={"password": "SecureTestPass123!"})
+        with patch.dict("sys.modules", {"pyotp": mock_pyotp}):
+            with patch("src.services.auth_service.AuthService.verify_password", return_value=True):
+                response = test_client.post("/profile/me/2fa/enable", json={"password": "SecureTestPass123!"})
 
         assert response.status_code == status.HTTP_200_OK
         data = response.json()
@@ -262,9 +271,12 @@ class TestEnableTwoFactor:
         """Test enabling 2FA with wrong password."""
         test_client, mock_account, mock_db, mock_service = client
 
-        mock_service.return_value.enable_two_factor.side_effect = ValueError("Invalid password")
+        mock_pyotp = MagicMock()
+        mock_pyotp.random_base32.return_value = "JBSWY3DPEHPK3PXP"
 
-        response = test_client.post("/profile/me/2fa/enable", json={"password": "wrong_password"})
+        with patch.dict("sys.modules", {"pyotp": mock_pyotp}):
+            with patch("src.services.auth_service.AuthService.verify_password", return_value=False):
+                response = test_client.post("/profile/me/2fa/enable", json={"password": "wrong_password"})
 
         assert response.status_code == status.HTTP_400_BAD_REQUEST
 
@@ -277,9 +289,17 @@ class TestVerifyTwoFactor:
         test_client, mock_account, mock_db, mock_service = client
 
         mock_profile = _create_mock_profile(mock_account.id, two_factor_enabled=True)
-        mock_service.return_value.verify_two_factor.return_value = mock_profile
+        # Controller uses is_valid = await profile_service.verify_two_factor(...) as a bool check
+        mock_service.return_value.verify_two_factor.return_value = True
 
-        response = test_client.post("/profile/me/2fa/verify", json={"token": "123456"})
+        # Controller re-queries DB for updated_profile; provide it via mock_db
+        mock_result = MagicMock()
+        mock_result.scalar_one_or_none.return_value = mock_profile
+        mock_db.execute = AsyncMock(return_value=mock_result)
+
+        with patch("src.services.auth_service.AuthService.generate_backup_codes", new_callable=AsyncMock) as mock_backup:
+            mock_backup.return_value = ["BACKUP1", "BACKUP2"]
+            response = test_client.post("/profile/me/2fa/verify", json={"token": "123456"})
 
         assert response.status_code == status.HTTP_200_OK
         data = response.json()

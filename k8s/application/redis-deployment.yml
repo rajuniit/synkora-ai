@@ -51,6 +51,9 @@ spec:
         component: redis
         version: v1
     spec:
+      securityContext:
+        seccompProfile:
+          type: RuntimeDefault
       containers:
         - name: redis
           image: redis:7-alpine

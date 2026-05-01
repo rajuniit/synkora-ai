@@ -22,7 +22,7 @@ from src.core.database import get_async_db
 from src.core.errors import safe_error_message
 from src.middleware.auth_middleware import get_current_tenant_id
 from src.models.agent import Agent
-from src.services.security.file_security import FileSecurityService
+from src.services.security.file_security import FileSecurityService, ScannerUnavailableError
 from src.services.storage.s3_storage import S3StorageService
 
 # SECURITY: Global file security service instance
@@ -126,11 +126,18 @@ async def upload_file(
         # SECURITY: Comprehensive file validation using FileSecurityService
         # This includes magic byte validation, malicious content scanning, and size limits
         category = "avatar" if entity_type == "agent_avatar" else "default"
-        validation_result = file_security.validate_file(
-            file_content=content,
-            filename=file.filename or "unnamed",
-            category=category,
-        )
+        try:
+            validation_result = file_security.validate_file(
+                file_content=content,
+                filename=file.filename or "unnamed",
+                category=category,
+            )
+        except ScannerUnavailableError as scan_err:
+            logger.error(f"File scanning service unavailable: {scan_err}")
+            raise HTTPException(
+                status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
+                detail="File scanning service unavailable. Please try again later.",
+            )
 
         if not validation_result["is_valid"]:
             error_details = "; ".join(validation_result["errors"])
@@ -139,6 +146,7 @@ async def upload_file(
                 status_code=status.HTTP_400_BAD_REQUEST,
                 detail=f"File validation failed: {error_details}",
             )
+
 
         # Log any warnings
         if validation_result["warnings"]:

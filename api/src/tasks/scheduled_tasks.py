@@ -4,6 +4,7 @@ Scheduled tasks for executing database queries and generating charts
 
 import asyncio
 import logging
+import os
 from datetime import UTC, datetime
 from typing import Any
 
@@ -59,6 +60,64 @@ def execute_scheduled_task(
         db.commit()
 
         try:
+            # --- Execution Backend Routing ---
+            # Skip routing when this process IS the external backend (Lambda /
+            # Cloud Run / DO Functions set SYNKORA_DIRECT_EXECUTION=true in their
+            # env). Without this check the handler would dispatch to itself again,
+            # causing an infinite loop.
+            _direct_execution = os.environ.get("SYNKORA_DIRECT_EXECUTION", "false").lower() == "true"
+
+            if not _direct_execution and task.task_type in ("agent_task", "autonomous_agent"):
+                _agent_id = task.config.get("agent_id") if task.config else None
+                if _agent_id:
+                    from src.models.agent import Agent as _Agent
+
+                    _agent_obj = db.query(_Agent).filter(
+                        _Agent.id == _agent_id, _Agent.tenant_id == task.tenant_id
+                    ).first()
+
+                    if _agent_obj:
+                        _backend_name = (getattr(_agent_obj, "execution_backend", None) or "celery").lower()
+                        if _backend_name != "celery":
+                            from src.services.agents.execution_backends import get_execution_backend
+
+                            # Credentials come from platform env vars (AWSConfig / GCPConfig).
+                            # Tenants only choose the backend — no per-agent credentials stored.
+                            _backend = get_execution_backend(_backend_name)
+                            if not _backend.is_supported_task_type(task.task_type):
+                                raise ValueError(
+                                    f"Backend '{_backend_name}' does not support task type "
+                                    f"'{task.task_type}'. Use 'cloud_run' or 'celery' for "
+                                    "autonomous_agent tasks."
+                                )
+
+                            # Run the async dispatch in a new event loop
+                            import asyncio as _asyncio
+
+                            _loop = _asyncio.new_event_loop()
+                            try:
+                                _ext_id = _loop.run_until_complete(
+                                    _backend.dispatch(
+                                        str(task.id),
+                                        task.task_type,
+                                        str(_agent_id),
+                                        str(task.tenant_id),
+                                    )
+                                )
+                            finally:
+                                _loop.close()
+
+                            execution.status = TaskStatus.SUCCESS
+                            execution.result = {"external_id": _ext_id, "backend": _backend_name}
+                            execution.completed_at = datetime.now(UTC)
+                            task.last_run_at = datetime.now(UTC)
+                            db.commit()
+                            logger.info(
+                                f"Task {task_id} dispatched externally via {_backend_name} "
+                                f"(external_id={_ext_id})"
+                            )
+                            return {"status": "dispatched_externally", "backend": _backend_name}
+
             # Handle followup reminder tasks
             if task.task_type == "followup_reminder":
                 # Get agent_id from task config
@@ -522,7 +581,11 @@ async def _run_autonomous_agent(
     if approval_id:
         from src.models.agent_approval import AgentApprovalRequest
 
-        _approval = db.query(AgentApprovalRequest).filter(AgentApprovalRequest.id == approval_id).first()
+        # SECURITY: scope by tenant_id to prevent cross-tenant approval injection
+        _approval = db.query(AgentApprovalRequest).filter(
+            AgentApprovalRequest.id == approval_id,
+            AgentApprovalRequest.tenant_id == task.tenant_id,
+        ).first()
         if _approval:
             approval_context = {
                 "approved": True,
@@ -556,7 +619,13 @@ async def _run_autonomous_agent(
         if conv_id:
             from sqlalchemy import select as aselect
 
-            result = await async_db.execute(aselect(Conversation).filter(Conversation.id == conv_id))
+            # SECURITY: verify conversation belongs to this agent (tenant-scoped via agent)
+            result = await async_db.execute(
+                aselect(Conversation).filter(
+                    Conversation.id == conv_id,
+                    Conversation.agent_id == agent.id,
+                )
+            )
             if result.scalar_one_or_none() is None:
                 conv_id = None  # will be recreated below
 
@@ -649,6 +718,77 @@ async def _run_autonomous_agent(
             f"Complete your goal. To persist facts for next run, include:\n"
             f'[REMEMBER]{{"key": "value"}}[/REMEMBER]'
         )
+
+        # --- 3b. Context Window Guard ---
+        # Estimate tokens in the initial prompt + conversation history before starting
+        from src.services.agents.context_window_guard import ContextWindowGuard
+
+        _guard = ContextWindowGuard()
+        # Rough estimate: full_prompt + all recent message content
+        _estimated_tokens = len(full_prompt) // 4 + sum(
+            len(str(m.get("content", ""))) // 4 for m in recent
+        )
+        # Get model name from agent's llm_config for accurate limit lookup
+        _model_name = "default"
+        if agent.llm_config and isinstance(agent.llm_config, dict):
+            _model_name = agent.llm_config.get("model", "default")
+
+        _guard_result = _guard.evaluate(_model_name, _estimated_tokens)
+
+        if _guard_result.should_block:
+            logger.warning(
+                f"Autonomous task {task.id}: context window exhausted "
+                f"({_estimated_tokens} estimated tokens), cannot run"
+            )
+            return {
+                "status": "failed",
+                "error": _guard_result.message,
+                "task_id": str(task.id),
+                "agent_name": agent.agent_name,
+                "run_number": run_number,
+                "executed_at": datetime.now(UTC).isoformat(),
+                "has_response": False,
+            }
+
+        if _guard_result.should_summarize:
+            # Compact: keep only the summary + last 3 messages, drop the rest
+            logger.info(
+                f"Autonomous task {task.id}: context window at "
+                f"{_guard_result.remaining_percentage:.0%} remaining — compacting memory "
+                f"({_estimated_tokens} estimated tokens)"
+            )
+            _compact_parts: list[str] = []
+            if memory_ctx.get("summary"):
+                _compact_parts.append(f"[Summary of previous runs]\n{memory_ctx['summary']}")
+            if recent:
+                _lines = []
+                for _m in recent[-3:]:
+                    _role = _m.get("role", "unknown").upper()
+                    _snippet = str(_m.get("content", ""))[:200]
+                    _lines.append(f"{_role}: {_snippet}")
+                _compact_parts.append("[Recent messages (compacted due to context limits)]\n" + "\n".join(_lines))
+            _compact_parts.append(
+                "[NOTE: Conversation history was compacted. Focus on the goal below.]"
+            )
+            memory_block = "\n\n".join(_compact_parts)
+            # Rebuild full_prompt with compacted memory
+            full_prompt = (
+                f"{approval_prefix}"
+                f"[AUTONOMOUS MODE]\n"
+                f"Goal: {goal}\n"
+                f"Run #{run_number} | {datetime.now(UTC).isoformat()}\n"
+                f"Max tool-call budget: {max_steps}\n\n"
+                f"[Memory from previous runs]\n{memory_block}\n\n"
+                f"Complete your goal. To persist facts for next run, include:\n"
+                f'[REMEMBER]{{"key": "value"}}[/REMEMBER]'
+            )
+
+        elif _guard_result.should_warn:
+            logger.warning(
+                f"Autonomous task {task.id}: context window at "
+                f"{_guard_result.remaining_percentage:.0%} remaining "
+                f"({_estimated_tokens} estimated tokens)"
+            )
 
         # --- 4. Execute agent ---
         agent_manager = AgentManager()
@@ -907,6 +1047,34 @@ def cleanup_old_executions(days: int = 30) -> dict[str, Any]:
         db.close()
 
 
+@celery_app.task(name="tasks.cleanup_audit_logs")
+def cleanup_audit_logs() -> dict[str, Any]:
+    """
+    Delete activity logs older than AUDIT_LOG_RETENTION_DAYS (default 365).
+
+    Default of 365 days satisfies SOC 2 and PCI DSS 1-year audit log
+    requirements.  Configurable via the AUDIT_LOG_RETENTION_DAYS environment
+    variable.  Runs daily at 1 AM via Celery beat.
+    """
+    retention_days = int(os.getenv("AUDIT_LOG_RETENTION_DAYS", "365"))
+
+    async def _run() -> int:
+        from src.core.database import get_async_session_factory
+        from src.services.activity.activity_log_service import ActivityLogService
+
+        async with get_async_session_factory()() as db:
+            svc = ActivityLogService(db)
+            return await svc.delete_old_logs(days=retention_days)
+
+    try:
+        deleted_count = asyncio.run(_run())
+        logger.info(f"Audit log cleanup: deleted {deleted_count} entries older than {retention_days} days")
+        return {"status": "success", "deleted_count": deleted_count, "retention_days": retention_days}
+    except Exception as e:
+        logger.error(f"Error cleaning up audit logs: {e}")
+        raise
+
+
 @celery_app.task(name="tasks.cleanup_stale_webhook_events")
 def cleanup_stale_webhook_events(stale_minutes: int = 30) -> dict[str, Any]:
     """
@@ -953,6 +1121,66 @@ def cleanup_stale_webhook_events(stale_minutes: int = 30) -> dict[str, Any]:
 
     except Exception as e:
         logger.error(f"Error cleaning up stale webhook events: {e}")
+        db.rollback()
+        raise
+    finally:
+        db.close()
+
+
+@celery_app.task(name="tasks.disable_dormant_accounts")
+def disable_dormant_accounts() -> dict[str, Any]:
+    """
+    Automatically disable accounts that have been inactive for too long.
+
+    Reads DORMANT_ACCOUNT_DAYS env var (default 90).  Accounts where
+    last_login_at is older than that threshold AND status == 'ACTIVE'
+    are set to 'INACTIVE'.  This limits the blast radius of compromised
+    credentials from accounts that are no longer in use.
+
+    Runs weekly (Sunday 02:00 UTC) via Celery Beat.
+    """
+    from datetime import timedelta
+
+    from src.models.tenant import Account, AccountStatus
+
+    dormant_days = int(os.environ.get("DORMANT_ACCOUNT_DAYS", 90))
+    cutoff = datetime.now(UTC) - timedelta(days=dormant_days)
+
+    db: Session = next(get_db())
+    disabled_count = 0
+
+    try:
+        # Find active accounts that have not logged in since the cutoff date.
+        # Accounts with a NULL last_login_at are treated as never-logged-in and
+        # are excluded — they may be newly registered and awaiting first use.
+        dormant_accounts = (
+            db.query(Account)
+            .filter(
+                Account.status == AccountStatus.ACTIVE,
+                Account.last_login_at.isnot(None),
+                Account.last_login_at < cutoff.isoformat(),
+            )
+            .all()
+        )
+
+        for account in dormant_accounts:
+            logger.warning(
+                f"Disabling dormant account: id={account.id} email={account.email} "
+                f"last_login_at={account.last_login_at} (threshold={dormant_days} days)"
+            )
+            account.status = AccountStatus.INACTIVE
+            disabled_count += 1
+
+        if disabled_count:
+            db.commit()
+            logger.warning(f"Dormant account sweep: disabled {disabled_count} account(s)")
+        else:
+            logger.info(f"Dormant account sweep: no accounts inactive for more than {dormant_days} days")
+
+        return {"status": "success", "disabled_count": disabled_count, "dormant_days": dormant_days}
+
+    except Exception as e:
+        logger.error(f"Error disabling dormant accounts: {e}")
         db.rollback()
         raise
     finally:

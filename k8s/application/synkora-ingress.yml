@@ -17,6 +17,14 @@ metadata:
     nginx.ingress.kubernetes.io/proxy-send-timeout: "3600"
     nginx.ingress.kubernetes.io/proxy-buffering: "off"
     nginx.ingress.kubernetes.io/proxy-http-version: "1.1"
+    # SECURITY: HSTS enforced at ingress level for all TLS responses.
+    # max-age=1 year; includeSubDomains; preload — use preload only after testing.
+    nginx.ingress.kubernetes.io/configuration-snippet: |
+      add_header Strict-Transport-Security "max-age=31536000; includeSubDomains; preload" always;
+    # Rate limiting — caps connections per client IP to reduce DDoS / brute-force impact.
+    # Tune limits based on expected legitimate traffic per IP.
+    nginx.ingress.kubernetes.io/limit-connections: "100"
+    nginx.ingress.kubernetes.io/limit-rps: "20"
 spec:
   ingressClassName: nginx
   tls:

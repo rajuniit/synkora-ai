@@ -12,6 +12,19 @@ from src.core.database import SessionLocal
 
 logger = logging.getLogger(__name__)
 
+# System prompt used for spawned worker sub-agents.
+# Workers receive a task_description and must execute it directly using their tools.
+# They must NOT inherit the orchestrator's "don't do work directly" instructions.
+_WORKER_SYSTEM_PROMPT = """You are a task execution agent. Your job is to complete the specific task given to you using your available tools.
+
+Execute the task directly and thoroughly:
+- Use your tools to gather information, perform actions, and complete the work
+- Be specific and detailed in your findings
+- Report clearly what you did and what you found
+- Do NOT spawn sub-agents or delegate — complete the task yourself
+
+When finished, provide a clear summary of what you accomplished."""
+
 
 # Exceptions that should NOT be retried (permanent failures)
 class PermanentTaskError(Exception):
@@ -354,11 +367,14 @@ def execute_spawn_agent_task(
             f"🚀 Executing spawn_agent task for agent {parent_agent_id} (retry {current_retry}/{self.max_retries})"
         )
 
-        # Load parent agent from DB
-        agent = db.query(Agent).filter(Agent.id == UUID(parent_agent_id)).first()
+        # Load parent agent from DB — tenant-scoped to prevent cross-tenant access
+        agent = db.query(Agent).filter(
+            Agent.id == UUID(parent_agent_id),
+            Agent.tenant_id == UUID(tenant_id),
+        ).first()
 
         if not agent:
-            logger.error(f"Agent {parent_agent_id} not found - permanent failure")
+            logger.error(f"Agent {parent_agent_id} not found for tenant {tenant_id} - permanent failure")
             return {"success": False, "error": f"Agent {parent_agent_id} not found"}
 
         # Build focused prompt - the parent agent's system prompt is already loaded
@@ -399,6 +415,13 @@ Complete this task thoroughly and provide your findings. Be comprehensive but co
                     attachments=None,
                     llm_config_id=None,
                     db=async_db,
+                    # Workers are leaf nodes — always enable parallel tool execution
+                    # regardless of the orchestrator agent's stored parallel_tools setting
+                    override_agentic_config={"parallel_tools": True},
+                    # Workers get a task-focused system prompt so they execute the
+                    # given task directly instead of inheriting the orchestrator's
+                    # "don't do work directly" instructions
+                    override_system_prompt=_WORKER_SYSTEM_PROMPT,
                 ):
                     # Parse SSE events
                     if sse_event.startswith("data: "):
@@ -409,11 +432,26 @@ Complete this task thoroughly and provide your findings. Be comprehensive but co
                         except json.JSONDecodeError:
                             pass
 
-        # Execute async agent call
+        # Execute async agent call, then drain background tasks (e.g. LiteLLM async
+        # logging) with a hard 5-second cap so a hung HTTP call can't stall the worker.
         loop = asyncio.new_event_loop()
         asyncio.set_event_loop(loop)
-        loop.run_until_complete(process_agent())
-        loop.close()
+        try:
+            loop.run_until_complete(process_agent())
+            pending = {t for t in asyncio.all_tasks(loop) if not t.done()}
+            if pending:
+                # Give background tasks up to 5 s; cancel whatever is still running.
+                done, still_pending = loop.run_until_complete(
+                    asyncio.wait(pending, timeout=5.0)
+                )
+                for task in still_pending:
+                    task.cancel()
+                if still_pending:
+                    loop.run_until_complete(
+                        asyncio.gather(*still_pending, return_exceptions=True)
+                    )
+        finally:
+            loop.close()
 
         response_text = "".join(response_chunks)
 

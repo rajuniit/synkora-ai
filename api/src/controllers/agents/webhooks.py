@@ -3,8 +3,6 @@
 import json
 import logging
 import secrets
-import time
-from collections import defaultdict
 from datetime import datetime
 from uuid import UUID
 
@@ -13,6 +11,7 @@ from pydantic import BaseModel, ConfigDict, Field
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from src.config.redis import get_redis_async
 from src.core.database import get_async_db
 from src.middleware.auth_middleware import get_current_account, get_current_tenant_id
 from src.models.agent import Agent
@@ -25,19 +24,23 @@ router = APIRouter()
 public_router = APIRouter()  # Public routes without authentication
 
 
-# SECURITY: Simple in-memory rate limiter for webhooks
-# In production, consider using Redis for distributed rate limiting
+# SECURITY: Redis-backed distributed rate limiter for webhooks.
+# Counters are shared across all pods, so limits are enforced globally.
 class WebhookRateLimiter:
-    """Rate limiter for webhook endpoints to prevent DoS attacks."""
+    """Redis-backed rate limiter for webhook endpoints to prevent DoS attacks."""
 
     def __init__(self, requests_per_minute: int = 60, requests_per_hour: int = 1000):
         self.requests_per_minute = requests_per_minute
         self.requests_per_hour = requests_per_hour
-        self.minute_window: dict[str, list[float]] = defaultdict(list)
-        self.hour_window: dict[str, list[float]] = defaultdict(list)
-        self._last_cleanup = time.time()
 
-    def is_rate_limited(self, key: str) -> tuple[bool, str]:
+    async def _incr_with_ttl(self, redis, key: str, ttl: int) -> int:
+        """Atomic increment; TTL is set only when the key is created for the first time."""
+        count = await redis.incr(key)
+        if count == 1:
+            await redis.expire(key, ttl)
+        return count
+
+    async def is_rate_limited(self, key: str) -> tuple[bool, str]:
         """
         Check if a webhook token is rate limited.
 
@@ -47,46 +50,27 @@ class WebhookRateLimiter:
         Returns:
             Tuple of (is_limited, reason)
         """
-        current_time = time.time()
-        self._cleanup_if_needed(current_time)
+        try:
+            redis = get_redis_async()
+            min_count = int(await redis.get(f"wh_rl_min:{key}") or 0)
+            if min_count >= self.requests_per_minute:
+                return True, f"Rate limit exceeded: {self.requests_per_minute} requests per minute"
+            hr_count = int(await redis.get(f"wh_rl_hr:{key}") or 0)
+            if hr_count >= self.requests_per_hour:
+                return True, f"Rate limit exceeded: {self.requests_per_hour} requests per hour"
+            return False, ""
+        except Exception:
+            logger.warning("Redis unavailable for webhook rate limit check — failing open")
+            return False, ""
 
-        # Count requests in minute window
-        minute_requests = [t for t in self.minute_window[key] if current_time - t < 60]
-        if len(minute_requests) >= self.requests_per_minute:
-            return True, f"Rate limit exceeded: {self.requests_per_minute} requests per minute"
-
-        # Count requests in hour window
-        hour_requests = [t for t in self.hour_window[key] if current_time - t < 3600]
-        if len(hour_requests) >= self.requests_per_hour:
-            return True, f"Rate limit exceeded: {self.requests_per_hour} requests per hour"
-
-        return False, ""
-
-    def record_request(self, key: str) -> None:
+    async def record_request(self, key: str) -> None:
         """Record a request for rate limiting."""
-        current_time = time.time()
-        self.minute_window[key].append(current_time)
-        self.hour_window[key].append(current_time)
-
-    def _cleanup_if_needed(self, current_time: float) -> None:
-        """Clean up old entries periodically."""
-        # Clean up every 5 minutes
-        if current_time - self._last_cleanup < 300:
-            return
-
-        self._last_cleanup = current_time
-
-        # Clean minute window
-        for key in list(self.minute_window.keys()):
-            self.minute_window[key] = [t for t in self.minute_window[key] if current_time - t < 60]
-            if not self.minute_window[key]:
-                del self.minute_window[key]
-
-        # Clean hour window
-        for key in list(self.hour_window.keys()):
-            self.hour_window[key] = [t for t in self.hour_window[key] if current_time - t < 3600]
-            if not self.hour_window[key]:
-                del self.hour_window[key]
+        try:
+            redis = get_redis_async()
+            await self._incr_with_ttl(redis, f"wh_rl_min:{key}", 60)
+            await self._incr_with_ttl(redis, f"wh_rl_hr:{key}", 3600)
+        except Exception:
+            logger.warning("Redis unavailable — webhook rate limit counter not incremented")
 
 
 # Global rate limiter instance
@@ -320,13 +304,13 @@ async def delete_webhook(
 async def receive_webhook(webhook_token: str, request: Request, db: AsyncSession = Depends(get_async_db)):
     """Receive and process webhook event (public endpoint - no auth required)."""
     # SECURITY: Rate limit by webhook token to prevent DoS
-    is_limited, limit_reason = webhook_rate_limiter.is_rate_limited(webhook_token)
+    is_limited, limit_reason = await webhook_rate_limiter.is_rate_limited(webhook_token)
     if is_limited:
         logger.warning(f"Rate limit exceeded for webhook (token length: {len(webhook_token)})")
         raise HTTPException(status_code=status.HTTP_429_TOO_MANY_REQUESTS, detail=limit_reason)
 
     # Record the request for rate limiting
-    webhook_rate_limiter.record_request(webhook_token)
+    await webhook_rate_limiter.record_request(webhook_token)
 
     # Find webhook by URL token
     webhook_url = f"/api/webhooks/{webhook_token}"

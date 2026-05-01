@@ -327,7 +327,7 @@ async def internal_google_drive_upload_file(
         # Decode content if base64
         try:
             file_content = base64.b64decode(content)
-        except:
+        except Exception:
             file_content = content.encode("utf-8")
 
         # Build multipart body
@@ -414,7 +414,7 @@ async def internal_google_drive_update_file(
             if content:
                 try:
                     file_content = base64.b64decode(content)
-                except:
+                except Exception:
                     file_content = content.encode("utf-8")
 
                 async with session.patch(

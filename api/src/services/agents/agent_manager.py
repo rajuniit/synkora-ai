@@ -39,6 +39,7 @@ class AgentManager:
         agent_class: type[BaseAgent],
         api_key: str | None = None,
         observability_config: dict[str, Any] | None = None,
+        tenant_id: str = "",
     ) -> BaseAgent:
         """
         Create and register a new agent.
@@ -48,6 +49,7 @@ class AgentManager:
             agent_class: Agent class to instantiate
             api_key: Optional API key for the agent
             observability_config: Optional observability configuration
+            tenant_id: Tenant identifier for registry scoping
 
         Returns:
             Created agent instance
@@ -55,7 +57,7 @@ class AgentManager:
         Raises:
             ValueError: If agent already exists
         """
-        if config.name in self.registry:
+        if self.registry.contains(config.name, tenant_id):
             raise ValueError(f"Agent '{config.name}' already exists")
 
         # Encrypt API key if provided
@@ -82,19 +84,20 @@ class AgentManager:
         else:
             logger.warning(f"⚠️  No API key provided for agent '{config.name}', LLM client will not be initialized")
 
-        # Register agent
-        self.registry.register(agent)
+        # Register agent (tenant-scoped)
+        self.registry.register(agent, tenant_id=tenant_id)
 
-        logger.info(f"Created and registered agent: {config.name}")
+        logger.info(f"Created and registered agent: {config.name} (tenant={tenant_id})")
         return agent
 
-    async def execute_agent(self, agent_name: str, input_data: dict[str, Any]) -> dict[str, Any]:
+    async def execute_agent(self, agent_name: str, input_data: dict[str, Any], tenant_id: str = "") -> dict[str, Any]:
         """
         Execute a registered agent.
 
         Args:
             agent_name: Name of the agent to execute
             input_data: Input data for the agent
+            tenant_id: Tenant identifier for registry scoping
 
         Returns:
             Execution result
@@ -102,7 +105,7 @@ class AgentManager:
         Raises:
             KeyError: If agent not found
         """
-        agent = self.registry.get(agent_name)
+        agent = self.registry.get(agent_name, tenant_id)
         if not agent:
             raise KeyError(f"Agent '{agent_name}' not found")
 
@@ -267,12 +270,13 @@ class AgentManager:
 
         return results
 
-    def get_agent_stats(self, agent_name: str) -> dict[str, Any]:
+    def get_agent_stats(self, agent_name: str, tenant_id: str = "") -> dict[str, Any]:
         """
         Get statistics for a specific agent.
 
         Args:
             agent_name: Name of the agent
+            tenant_id: Tenant identifier for registry scoping
 
         Returns:
             Agent statistics
@@ -280,7 +284,7 @@ class AgentManager:
         Raises:
             KeyError: If agent not found
         """
-        agent = self.registry.get(agent_name)
+        agent = self.registry.get(agent_name, tenant_id)
         if not agent:
             raise KeyError(f"Agent '{agent_name}' not found")
 
@@ -304,30 +308,32 @@ class AgentManager:
         """
         return self.registry.list_agents()
 
-    async def delete_agent(self, agent_name: str) -> None:
+    async def delete_agent(self, agent_name: str, tenant_id: str = "") -> None:
         """
         Delete an agent from the registry.
 
         Args:
             agent_name: Name of the agent to delete
+            tenant_id: Tenant identifier for registry scoping
 
         Raises:
             KeyError: If agent not found
         """
-        self.registry.unregister(agent_name)
-        logger.info(f"Deleted agent: {agent_name}")
+        self.registry.unregister(agent_name, tenant_id)
+        logger.info(f"Deleted agent: {agent_name} (tenant={tenant_id})")
 
-    async def reset_agent(self, agent_name: str) -> None:
+    async def reset_agent(self, agent_name: str, tenant_id: str = "") -> None:
         """
         Reset an agent's state.
 
         Args:
             agent_name: Name of the agent to reset
+            tenant_id: Tenant identifier for registry scoping
 
         Raises:
             KeyError: If agent not found
         """
-        agent = self.registry.get(agent_name)
+        agent = self.registry.get(agent_name, tenant_id)
         if not agent:
             raise KeyError(f"Agent '{agent_name}' not found")
 

@@ -290,16 +290,26 @@ class TestFunctionCallingHandler:
         with patch.dict("sys.modules", {"litellm": MagicMock()}):
             import litellm
 
-            # Mock the acompletion function
-            mock_response = MagicMock()
-            litellm.acompletion = AsyncMock(return_value=mock_response)
+            # The implementation streams chunks and reassembles via stream_chunk_builder.
+            # Mock acompletion to return an async iterable of one chunk.
+            mock_chunk = MagicMock()
+
+            async def _fake_stream(*args, **kwargs):
+                yield mock_chunk
+
+            litellm.acompletion = AsyncMock(return_value=_fake_stream())
+
+            mock_built = MagicMock()
+            litellm.stream_chunk_builder = MagicMock(return_value=mock_built)
 
             result = await handler._generate_openai_with_tools([], 0.7, 100)
 
-            # Verify litellm.acompletion was called
+            # Verify litellm.acompletion was called with stream=True
             litellm.acompletion.assert_called_once()
-            assert result == mock_response
-            litellm.acompletion.assert_called()
+            call_kwargs = litellm.acompletion.call_args[1]
+            assert call_kwargs.get("stream") is True
+            # Result should be the stream_chunk_builder output
+            assert result == mock_built
 
     @pytest.mark.asyncio
     async def test_tracing(self, handler, mock_llm_client, mock_langfuse):
