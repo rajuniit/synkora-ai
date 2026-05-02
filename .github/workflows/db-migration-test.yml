@@ -28,7 +28,7 @@ jobs:
       CELERY_RESULT_BACKEND: redis://localhost:6379/2
       SECRET_KEY: test-secret-key-for-ci
       JWT_SECRET_KEY: test-jwt-secret-for-ci
-      ENCRYPTION_KEY: h4TKsK-67AUs1F54Rw5TbbEisyDbVfkOuMZk_q2G6Iw=
+      ENCRYPTION_KEY: ${{ secrets.CI_ENCRYPTION_KEY }}
 
     services:
       postgres:
