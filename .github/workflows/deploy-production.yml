@@ -243,6 +243,16 @@ jobs:
       - name: Ensure namespace exists
         run: kubectl apply -f k8s/base/namespace.yaml
 
+      - name: Install KEDA
+        run: |
+          helm repo add kedacore https://kedacore.github.io/charts
+          helm repo update
+          helm upgrade --install keda kedacore/keda \
+            --namespace keda \
+            --create-namespace \
+            --wait \
+            --timeout 3m
+
       - name: Configure AWS credentials (for ECR secret)
         uses: aws-actions/configure-aws-credentials@e3dd6a429d7300a6a4c196c26e071d42e0343502  # v4.0.2
         with:
@@ -351,7 +361,7 @@ jobs:
           # Celery workers
           kubectl apply -f k8s/application/celery-worker-deployment.yml
           kubectl apply -f k8s/application/celery-worker-agents-deployment.yml
-          kubectl apply --validate=false -f k8s/application/celery-worker-agents-keda.yml
+          kubectl apply -f k8s/application/celery-worker-agents-keda.yml
           kubectl apply -f k8s/application/celery-worker-billing-deployment.yml
           kubectl apply -f k8s/application/celery-worker-notifications-deployment.yml
           kubectl apply -f k8s/application/celery-beat-deployment.yml
