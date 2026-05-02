@@ -321,6 +321,7 @@ jobs:
             --from-literal=GCP_SERVICE_ACCOUNT_JSON="${{ secrets.GCP_SERVICE_ACCOUNT_JSON }}" \
             --from-literal=CLOUD_RUN_JOB_NAME="${{ secrets.K8S_CLOUD_RUN_JOB_NAME }}" \
             --from-literal=CLOUD_RUN_INVOCATION_SECRET="${{ secrets.K8S_CLOUD_RUN_INVOCATION_SECRET }}" \
+            --from-literal=AUDIT_CHAIN_SECRET="${{ secrets.K8S_AUDIT_CHAIN_SECRET }}" \
             --dry-run=client -o yaml | kubectl apply -f -
      
       # TODO: re-enable once GCP account is created
