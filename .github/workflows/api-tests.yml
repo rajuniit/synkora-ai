@@ -94,7 +94,7 @@ jobs:
         env:
           TESTING: "true"
         run: |
-          uv run pytest tests/integration/ -v --color=yes --cov=src --cov-append --cov-report=xml --cov-report=term --cov-report=html
+          uv run pytest tests/integration/ -v --color=yes -m "not e2e" --cov=src --cov-append --cov-report=xml --cov-report=term --cov-report=html
 
       - name: Generate coverage report
         run: |

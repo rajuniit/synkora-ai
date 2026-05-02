@@ -25,9 +25,10 @@ jobs:
        with:
          fetch-depth: 0
      - name: Run Gitleaks
-       uses: gitleaks/gitleaks-action@v2
-       env:
-         GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+       run: |
+         curl -sSfL "https://github.com/gitleaks/gitleaks/releases/download/v8.30.1/gitleaks_8.30.1_linux_x64.tar.gz" \
+           | tar -xz -C /usr/local/bin gitleaks
+         gitleaks detect --source . --config .gitleaks.toml --redact -v
   release:
     name: Create GitHub Release
     needs: secret-scan
@@ -111,9 +112,9 @@ jobs:
           cache-to: type=gha,mode=max,scope=api
 
       - name: Scan API image for CVEs (Trivy)
-        uses: aquasecurity/trivy-action@master
+        uses: aquasecurity/trivy-action@915b19bbe73b92a6cf82a1bc12b087c9a19a5fe  # v0.32.0
         with:
-          image-ref: "${{ env.ECR_REGISTRY }}/synkora-api:${{ github.sha }}"
+          image-ref: "${{ env.ECR_REGISTRY }}/synkora-api:${{ github.ref_name }}"
           format: table
           exit-code: "1"
           severity: CRITICAL
@@ -138,9 +139,9 @@ jobs:
       - name: Push API image to Google Artifact Registry
         run: |
          GAR_IMAGE="${{ vars.GCP_REGION || 'us-central1' }}-docker.pkg.dev/${{ secrets.GCP_PROJECT_ID }}/synkora/api"
-         docker tag ${{ env.ECR_REGISTRY }}/synkora-api:${{ github.sha }} ${GAR_IMAGE}:${{ github.sha }}
-         docker tag ${{ env.ECR_REGISTRY }}/synkora-api:${{ github.sha }} ${GAR_IMAGE}:latest
-         docker push ${GAR_IMAGE}:${{ github.sha }}
+         docker tag ${{ env.ECR_REGISTRY }}/synkora-api:${{ github.ref_name }} ${GAR_IMAGE}:${{ github.ref_name }}
+         docker tag ${{ env.ECR_REGISTRY }}/synkora-api:${{ github.ref_name }} ${GAR_IMAGE}:latest
+         docker push ${GAR_IMAGE}:${{ github.ref_name }}
          docker push ${GAR_IMAGE}:latest
 
 
@@ -313,7 +314,7 @@ jobs:
 
       - name: Update Cloud Run Job with new image
         run: |
-         GAR_IMAGE="${{ vars.GCP_REGION || 'us-central1' }}-docker.pkg.dev/${{ secrets.GCP_PROJECT_ID }}/synkora/api:${{ github.sha }}"
+         GAR_IMAGE="${{ vars.GCP_REGION || 'us-central1' }}-docker.pkg.dev/${{ secrets.GCP_PROJECT_ID }}/synkora/api:${{ github.ref_name }}"
          gcloud run jobs update ${{ secrets.K8S_CLOUD_RUN_JOB_NAME }} \
            --image="${GAR_IMAGE}" \
            --region="${{ vars.GCP_REGION || 'us-central1' }}" \

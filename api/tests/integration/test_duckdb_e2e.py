@@ -26,6 +26,8 @@ from unittest.mock import MagicMock
 import httpx
 import pytest
 
+pytestmark = pytest.mark.e2e
+
 BASE_URL = "http://localhost:5001"
 
 # ---------------------------------------------------------------------------

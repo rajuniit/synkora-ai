@@ -16,6 +16,8 @@ import uuid
 import httpx
 import pytest
 
+pytestmark = pytest.mark.e2e
+
 BASE_URL = "http://localhost:5001"
 AGENT_ID = "dfff4404-de17-45f4-8f2a-4a0855b24762"  # Sample DB
 A2A_KEY = os.environ.get("TEST_A2A_KEY", "")
