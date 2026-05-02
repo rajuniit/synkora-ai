@@ -113,8 +113,10 @@ jobs:
 
       - name: Install Trivy
         run: |
-          curl -sfL https://raw.githubusercontent.com/aquasecurity/trivy/main/contrib/install.sh \
-            | sudo sh -s -- -b /usr/local/bin v0.64.1
+          curl -sL "https://github.com/aquasecurity/trivy/releases/download/v0.70.0/trivy_0.70.0_Linux-64bit.tar.gz" \
+            -o /tmp/trivy.tar.gz
+          tar -xzf /tmp/trivy.tar.gz -C /tmp trivy
+          sudo mv /tmp/trivy /usr/local/bin/trivy
 
       - name: Scan API image for CVEs (Trivy)
         run: |
@@ -130,25 +132,23 @@ jobs:
           docker builder prune -f
           df -h
       
-      - name: Authenticate to Google Cloud
-        uses: google-github-actions/auth@v2
-        with:
-          credentials_json: ${{ secrets.GCP_SERVICE_ACCOUNT_JSON }}
-
-
-      - name: Login to Google Artifact Registry
-        run: |
-          gcloud auth configure-docker ${{ vars.GCP_REGION || 'us-central1' }}-docker.pkg.dev --quiet
-
-
-      - name: Push API image to Google Artifact Registry
-        run: |
-         GAR_IMAGE="${{ vars.GCP_REGION || 'us-central1' }}-docker.pkg.dev/${{ secrets.GCP_PROJECT_ID }}/synkora/api"
-         docker tag ${{ env.ECR_REGISTRY }}/synkora-api:${{ github.ref_name }} ${GAR_IMAGE}:${{ github.ref_name }}
-         docker tag ${{ env.ECR_REGISTRY }}/synkora-api:${{ github.ref_name }} ${GAR_IMAGE}:latest
-         docker push ${GAR_IMAGE}:${{ github.ref_name }}
-         docker push ${GAR_IMAGE}:latest
-
+      # TODO: re-enable once GCP account is created
+      # - name: Authenticate to Google Cloud
+      #   uses: google-github-actions/auth@v2
+      #   with:
+      #     credentials_json: ${{ secrets.GCP_SERVICE_ACCOUNT_JSON }}
+      #
+      # - name: Login to Google Artifact Registry
+      #   run: |
+      #     gcloud auth configure-docker ${{ vars.GCP_REGION || 'us-central1' }}-docker.pkg.dev --quiet
+      #
+      # - name: Push API image to Google Artifact Registry
+      #   run: |
+      #     GAR_IMAGE="${{ vars.GCP_REGION || 'us-central1' }}-docker.pkg.dev/${{ secrets.GCP_PROJECT_ID }}/synkora/api"
+      #     docker tag ${{ env.ECR_REGISTRY }}/synkora-api:${{ github.ref_name }} ${GAR_IMAGE}:${{ github.ref_name }}
+      #     docker tag ${{ env.ECR_REGISTRY }}/synkora-api:${{ github.ref_name }} ${GAR_IMAGE}:latest
+      #     docker push ${GAR_IMAGE}:${{ github.ref_name }}
+      #     docker push ${GAR_IMAGE}:latest
 
       - name: Build and push ML service image
         uses: docker/build-push-action@v5
@@ -312,18 +312,19 @@ jobs:
             --from-literal=CLOUD_RUN_INVOCATION_SECRET="${{ secrets.K8S_CLOUD_RUN_INVOCATION_SECRET }}" \
             --dry-run=client -o yaml | kubectl apply -f -
      
-      - name: Authenticate to Google Cloud
-        uses: google-github-actions/auth@v2
-        with:
-         credentials_json: ${{ secrets.GCP_SERVICE_ACCOUNT_JSON }}
-
-      - name: Update Cloud Run Job with new image
-        run: |
-         GAR_IMAGE="${{ vars.GCP_REGION || 'us-central1' }}-docker.pkg.dev/${{ secrets.GCP_PROJECT_ID }}/synkora/api:${{ github.ref_name }}"
-         gcloud run jobs update ${{ secrets.K8S_CLOUD_RUN_JOB_NAME }} \
-           --image="${GAR_IMAGE}" \
-           --region="${{ vars.GCP_REGION || 'us-central1' }}" \
-           --project="${{ secrets.GCP_PROJECT_ID }}"
+      # TODO: re-enable once GCP account is created
+      # - name: Authenticate to Google Cloud
+      #   uses: google-github-actions/auth@v2
+      #   with:
+      #     credentials_json: ${{ secrets.GCP_SERVICE_ACCOUNT_JSON }}
+      #
+      # - name: Update Cloud Run Job with new image
+      #   run: |
+      #     GAR_IMAGE="${{ vars.GCP_REGION || 'us-central1' }}-docker.pkg.dev/${{ secrets.GCP_PROJECT_ID }}/synkora/api:${{ github.ref_name }}"
+      #     gcloud run jobs update ${{ secrets.K8S_CLOUD_RUN_JOB_NAME }} \
+      #       --image="${GAR_IMAGE}" \
+      #       --region="${{ vars.GCP_REGION || 'us-central1' }}" \
+      #       --project="${{ secrets.GCP_PROJECT_ID }}"
 
 
       - name: Apply deployment manifests
