@@ -101,6 +101,7 @@ jobs:
         with:
           context: ./api
           file: ./api/Dockerfile
+          target: production
           push: true
           platforms: linux/amd64
           tags: |
