@@ -11,9 +11,9 @@ data:
   DB_PORT: "25060"
   PGBOUNCER_ENABLED: "false"
 
-  # Redis — AWS ElastiCache (standalone, no Sentinel).
-  # REDIS_URL is set in synkora-secrets (contains auth token).
-  # Format: rediss://:<auth_token>@<elasticache-endpoint>:6379/0
+  # Redis — in-cluster (no TLS, private network).
+  # REDIS_URL is set in synkora-secrets.
+  ALLOW_INSECURE_REDIS: "true"
   SERVER_WORKER_AMOUNT: "2"
   APP_DEBUG: "false"
   API_HOST: "0.0.0.0"
@@ -46,7 +46,7 @@ data:
   PINECONE_ENVIRONMENT: "us-east-1"
   PINECONE_CLOUD: "aws"
 
-  LANGFUSE_ENABLED: "true"
+  LANGFUSE_ENABLED: "false"
   LANGFUSE_SAMPLE_RATE: "1.0"
 
   SMTP_HOST: "smtp.gmail.com"

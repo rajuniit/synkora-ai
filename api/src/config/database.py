@@ -195,7 +195,12 @@ class DatabaseConfig(BaseSettings):
 
             m = re.search(r"sslmode=(\w+)", effective_extras)
             if m and m.group(1) not in ("disable",):
-                connect_args["ssl"] = True
+                import ssl as _ssl
+
+                _ctx = _ssl.create_default_context()
+                _ctx.check_hostname = False
+                _ctx.verify_mode = _ssl.CERT_NONE
+                connect_args["ssl"] = _ctx
 
         if self.pgbouncer_enabled:
             # PgBouncer transaction mode does not support named prepared statements.
