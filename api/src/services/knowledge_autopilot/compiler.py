@@ -210,18 +210,21 @@ class KnowledgeCompiler:
             # Resolve cross-references
             await self._resolve_links(knowledge_base_id)
 
-            # Update staleness scores
-            try:
-                from src.services.knowledge_autopilot.staleness_detector import StalenessDetector
-
-                detector = StalenessDetector(self.db)
-                await detector.update_staleness(knowledge_base_id)
-            except Exception as e:
-                logger.warning(f"Staleness update failed: {e}")
-                try:
-                    await self.db.rollback()
-                except Exception:
-                    pass
+            # Mark ALL articles in this KB as freshly compiled.
+            # The compiler reviewed the latest documents; any article not regenerated
+            # in this run was deliberately kept — it is still current.
+            compiled_now = datetime.now(UTC)
+            all_articles_result = await self.db.execute(
+                select(WikiArticle).filter(
+                    WikiArticle.knowledge_base_id == knowledge_base_id,
+                    WikiArticle.status == "published",
+                )
+            )
+            for art in all_articles_result.scalars().all():
+                art.last_compiled_at = compiled_now
+                art.staleness_score = 0.0
+            await self.db.commit()
+            logger.info(f"Reset staleness to 0 for all published articles in KB {knowledge_base_id}")
 
             job.status = "completed"
             job.completed_at = datetime.now(UTC)

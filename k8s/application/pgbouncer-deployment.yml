@@ -46,6 +46,8 @@ spec:
       - name: ecr-registry-secret
       securityContext:
         runAsNonRoot: false  # edoburu runs as root internally; pgbouncer drops privs itself
+        seccompProfile:
+          type: RuntimeDefault
       containers:
       - name: pgbouncer
         image: edoburu/pgbouncer:latest

@@ -12,7 +12,7 @@ dependencies = [
     "fastapi>=0.115.6,<1.0.0",
     "uvicorn[standard]>=0.34.0,<1.0.0",
     "gunicorn>=23.0.0,<24.0.0",
-    "python-multipart>=0.0.20,<1.0.0",
+    "python-multipart>=0.0.26,<1.0.0",
     # Database & ORM
     "sqlalchemy>=2.0.29,<3.0.0",
     "alembic>=1.13.0,<2.0.0",
@@ -25,25 +25,27 @@ dependencies = [
     "email-validator>=2.2.0,<3.0.0",
     "orjson>=3.10.0,<4.0.0",
     # Authentication & Security
-    "pyjwt>=2.10.0,<3.0.0",
+    "pyjwt>=2.12.0,<3.0.0",
     "bcrypt>=4.2.0,<5.0.0",
-    "cryptography>=44.0.0,<45.0.0",
+    "cryptography>=44.0.0,<46.0.0",  # 46.x needs cffi>=2.0 which conflicts with snowflake-connector-python
+    "pyotp>=2.9.0,<3.0.0",
     # Task Queue
     "celery>=5.5.0,<6.0.0",
     "flower>=2.0.0,<3.0.0",
     "redis[hiredis]>=6.1.0,<7.0.0",
     # HTTP Client
     "httpx>=0.28.0,<1.0.0",
-    "requests>=2.32.0,<3.0.0",
-    "aiohttp>=3.9.0,<4.0.0",
+    "requests>=2.33.0,<3.0.0",
+    "aiohttp>=3.13.4,<4.0.0",
     # Utilities
-    "python-dotenv>=1.0.0,<2.0.0",
+    "python-dotenv>=1.2.2,<2.0.0",
     "click>=8.1.0,<9.0.0",
     "tenacity>=9.0.0,<10.0.0",
     # Google Agent SDK & MCP
     "google-genai>=1.0.0,<2.0.0",
-    "fastmcp==2.13.0.2",
+    "fastmcp>=3.2.0,<4.0.0",
     "asyncpg>=0.30.0",
+    "jsonschema>=4.0.0,<5.0.0",
     # Multi-Provider LLM Support
     "litellm>=1.55.0,<2.0.0",
     "openai>=1.59.0,<2.0.0",
@@ -80,7 +82,7 @@ dependencies = [
     "pymupdf>=1.24.0,<2.0.0",
     "python-docx>=1.1.0,<2.0.0",
     "PyPDF2>=3.0.0,<4.0.0",
-    "pillow>=10.0.0,<12.0.0",
+    "pillow>=12.2.0,<13.0.0",
     "python-magic>=0.4.27,<1.0.0",
     # Database Connectors — all native async
     "aiomysql>=0.2.0,<1.0.0",           # MySQL  — native async pool
@@ -94,8 +96,9 @@ dependencies = [
     # Data Analysis
     "pandas>=2.0.0,<3.0.0",
     "numpy>=1.24.0,<2.0.0",  # Pin to 1.x for pyarrow compatibility
+    "matplotlib>=3.7.0,<4.0.0",  # Server-side chart rendering for Slack
     "openpyxl>=3.1.0,<4.0.0",
-    "pyarrow>=14.0.0,<18.0.0",
+    "pyarrow>=17.0.0,<18.0.0",
     "databricks-sql-connector>=3.0.0,<4.0.0",
     "docker>=6.1.0,<8.0.0",
     "datadog-api-client>=2.0.0,<3.0.0",
@@ -122,6 +125,14 @@ dependencies = [
     "youtube-transcript-api>=0.6.0,<1.0.0",
     # Payment Processing
     "stripe>=11.1.0,<12.0.0",
+    # Transitive dependency version pins — force minimum safe versions for known CVEs
+    "authlib>=1.6.11",          # CVE-2026-27962, CVE-2026-28490, GHSA-jj8c-mmj3-mmgv (via fastmcp)
+    "tornado>=6.5.5",           # CVE-2026-31958, CVE-2026-35536 (via flower)
+    "ecdsa>=0.19.2",            # CVE-2024-23342, CVE-2026-33936 (via sendgrid)
+    "pyasn1>=0.6.3",            # CVE-2026-30922 (via google-auth)
+    "pygments>=2.20.0",         # CVE-2026-4539 (via rich)
+    # pynacl: CVE-2025-69277 needs 1.6.2 which needs cffi>=2.0, conflicts with snowflake-connector-python — ignored in pip-audit
+    # pyopenssl: CVE-2026-27448, CVE-2026-27459 need 26.0.0 but snowflake-connector-python constrains it — ignored in pip-audit
     # WhatsApp Web / Device Link
     "neonize>=0.3.9,<1.0.0",
     "qrcode[pil]>=7.0.0,<9.0.0",
@@ -158,6 +169,17 @@ llm = [
 diagrams = [
     # Optional server-side PNG export for diagram generation
     "cairosvg>=2.7.0,<3.0.0",
+]
+
+lambda = [
+    # AWS Lambda execution backend
+    "boto3>=1.35",
+]
+
+cloud-run = [
+    # Google Cloud Run execution backend
+    "google-cloud-run>=0.10",
+    "google-auth>=2.0",
 ]
 
 vector = [
@@ -250,9 +272,9 @@ line-ending = "auto"
 python_version = "3.11"
 warn_return_any = false
 warn_unused_configs = true
-disallow_untyped_defs = false
+disallow_untyped_defs = true
 disallow_incomplete_defs = false
-check_untyped_defs = false
+check_untyped_defs = true
 disallow_untyped_calls = false
 disallow_untyped_decorators = false
 no_implicit_optional = true
@@ -293,7 +315,7 @@ disable_error_code = [
 
 [[tool.mypy.overrides]]
 module = "src.models.*"
-disable_error_code = ["assignment", "name-defined", "var-annotated", "return-value"]
+disable_error_code = ["assignment", "var-annotated", "return-value"]
 
 [[tool.mypy.overrides]]
 module = "src.services.*"

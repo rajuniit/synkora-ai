@@ -9,8 +9,8 @@ Six correctness gates are enforced before any read or write:
   2. Temperature:  temperature <= 0.1 only (near-deterministic)
   3. No tool ctx:  Skip if any message has role="tool"/"function" or tool_calls
   4. Time-sensit.: Skip if user message contains time-sensitive keywords
-  5. Cache key:    SHA256(provider+model+temp_bucket+messages+system_hash+agent_updated_at)
-                   — any agent edit changes agent_updated_at, auto-busts cache
+  5. Cache key:    SHA256(provider+model+temp_bucket+messages+system_hash+tenant_id+agent_id)
+                   — system_prompt_hash covers content changes; cosmetic edits do not bust cache
   6. Size cap:     Skip storing responses > 50 KB
 """
 
@@ -57,7 +57,8 @@ def _make_cache_key(
     temperature: float,
     messages: list[dict],
     system_prompt_hash: str,
-    agent_updated_at: str,
+    tenant_id: str = "",
+    agent_id: str = "",
 ) -> str:
     temp_bucket = round(temperature * 10) / 10
     payload = json.dumps(
@@ -67,7 +68,8 @@ def _make_cache_key(
             "t": temp_bucket,
             "msgs": messages,
             "sp": system_prompt_hash,
-            "av": agent_updated_at,
+            "tid": tenant_id,
+            "aid": agent_id,
         },
         sort_keys=True,
         default=str,
@@ -105,14 +107,15 @@ async def get_cached_response(
     temperature: float,
     messages: list[dict],
     system_prompt_hash: str,
-    agent_updated_at: str,
+    tenant_id: str = "",
+    agent_id: str = "",
 ) -> str | None:
     """Return cached response string or None (fail-open on any error)."""
     if not _is_cacheable(messages, temperature):
         return None
     try:
         redis = get_redis_async()
-        key = _make_cache_key(provider, model_name, temperature, messages, system_prompt_hash, agent_updated_at)
+        key = _make_cache_key(provider, model_name, temperature, messages, system_prompt_hash, tenant_id, agent_id)
         value = await redis.get(key)
         if value:
             logger.debug(f"LLM response cache HIT: {key[:40]}...")
@@ -130,7 +133,8 @@ async def set_cached_response(
     messages: list[dict],
     response: str,
     system_prompt_hash: str,
-    agent_updated_at: str,
+    tenant_id: str = "",
+    agent_id: str = "",
 ) -> None:
     """Cache a response (fail-open on any error). Uses NX to prevent race overwrites."""
     if not _is_cacheable(messages, temperature):
@@ -140,7 +144,7 @@ async def set_cached_response(
         return
     try:
         redis = get_redis_async()
-        key = _make_cache_key(provider, model_name, temperature, messages, system_prompt_hash, agent_updated_at)
+        key = _make_cache_key(provider, model_name, temperature, messages, system_prompt_hash, tenant_id, agent_id)
         # NX = only set if not exists (atomic, prevents concurrent overwrites)
         await redis.set(key, response, ex=LLM_RESPONSE_CACHE_TTL, nx=True)
         logger.debug(f"LLM response cache SET: {key[:40]}...")

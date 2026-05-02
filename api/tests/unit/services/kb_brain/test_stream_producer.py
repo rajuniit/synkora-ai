@@ -14,6 +14,7 @@ from src.services.company_brain.ingestion.stream_producer import StreamProducer,
 # _stream_key
 # ---------------------------------------------------------------------------
 
+
 def test_stream_key_format():
     assert _stream_key(42, "slack") == "kb_ingest:42:slack"
 
@@ -44,6 +45,7 @@ DOCS = [
 # push — Redis streams path
 # ---------------------------------------------------------------------------
 
+
 @pytest.mark.asyncio
 async def test_push_empty_documents_returns_zeros():
     producer = StreamProducer()
@@ -58,8 +60,10 @@ async def test_push_queues_all_docs_to_correct_stream_key():
     mock_redis.xadd = AsyncMock(return_value=b"1-0")
     producer._redis = mock_redis
 
-    with patch.object(producer, "_use_streams", return_value=True), \
-         patch.object(producer, "_max_len", return_value=500_000):
+    with (
+        patch.object(producer, "_use_streams", return_value=True),
+        patch.object(producer, "_max_len", return_value=500_000),
+    ):
         result = await producer.push(kb_id=5, tenant_id="tenant-xyz", source_type="slack", documents=DOCS)
 
     assert result["queued"] == 2
@@ -85,8 +89,10 @@ async def test_push_stream_message_contains_kb_id():
     mock_redis.xadd = fake_xadd
     producer._redis = mock_redis
 
-    with patch.object(producer, "_use_streams", return_value=True), \
-         patch.object(producer, "_max_len", return_value=500_000):
+    with (
+        patch.object(producer, "_use_streams", return_value=True),
+        patch.object(producer, "_max_len", return_value=500_000),
+    ):
         await producer.push(kb_id=7, tenant_id="t1", source_type="github", documents=DOCS[:1])
 
     assert len(captured_payloads) == 1
@@ -105,8 +111,10 @@ async def test_push_skips_doc_on_redis_error():
     mock_redis.xadd = AsyncMock(side_effect=[Exception("Redis down"), b"1-0"])
     producer._redis = mock_redis
 
-    with patch.object(producer, "_use_streams", return_value=True), \
-         patch.object(producer, "_max_len", return_value=500_000):
+    with (
+        patch.object(producer, "_use_streams", return_value=True),
+        patch.object(producer, "_max_len", return_value=500_000),
+    ):
         result = await producer.push(kb_id=1, tenant_id="t1", source_type="slack", documents=DOCS)
 
     assert result["queued"] == 1
@@ -117,6 +125,7 @@ async def test_push_skips_doc_on_redis_error():
 # push — Celery fallback path
 # ---------------------------------------------------------------------------
 
+
 @pytest.mark.asyncio
 async def test_push_celery_fallback_dispatches_task():
     producer = StreamProducer()
@@ -124,9 +133,14 @@ async def test_push_celery_fallback_dispatches_task():
     mock_task = MagicMock()
     mock_task.delay = MagicMock()
 
-    with patch.object(producer, "_use_streams", return_value=False), \
-         patch("src.services.company_brain.ingestion.stream_producer.StreamProducer._push_via_celery",
-               new_callable=AsyncMock, return_value={"queued": 2, "skipped": 0}) as mock_celery:
+    with (
+        patch.object(producer, "_use_streams", return_value=False),
+        patch(
+            "src.services.company_brain.ingestion.stream_producer.StreamProducer._push_via_celery",
+            new_callable=AsyncMock,
+            return_value={"queued": 2, "skipped": 0},
+        ) as mock_celery,
+    ):
         result = await producer.push(kb_id=3, tenant_id="t2", source_type="jira", documents=DOCS)
 
     mock_celery.assert_called_once_with(3, "t2", "jira", DOCS)
@@ -136,6 +150,7 @@ async def test_push_celery_fallback_dispatches_task():
 # ---------------------------------------------------------------------------
 # stream_length
 # ---------------------------------------------------------------------------
+
 
 @pytest.mark.asyncio
 async def test_stream_length_returns_count():

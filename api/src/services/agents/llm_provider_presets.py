@@ -143,14 +143,22 @@ OPENAI_PRESET = ProviderPreset(
             model_name="gpt-4.1-nano",
             description="Compact GPT-4.1 variant",
             default_max_tokens=8192,
+            default_temperature=1,
         ),
         ModelPreset(
             name="GPT-4.1 mini",
             model_name="gpt-4.1-mini",
             description="Smaller GPT-4.1 model",
             default_max_tokens=16384,
+            default_temperature=1,
         ),
-        ModelPreset(name="GPT-4.1", model_name="gpt-4.1", description="GPT-4.1 base model", default_max_tokens=16384),
+        ModelPreset(
+            name="GPT-4.1",
+            model_name="gpt-4.1",
+            description="GPT-4.1 base model",
+            default_max_tokens=16384,
+            default_temperature=1,
+        ),
         # GPT-4o Series
         ModelPreset(
             name="GPT-4o (Latest)",
@@ -159,6 +167,7 @@ OPENAI_PRESET = ProviderPreset(
             default_max_tokens=16384,
             max_input_tokens=128000,
             max_output_tokens=16384,
+            default_temperature=1,
         ),
         ModelPreset(
             name="GPT-4o Mini",
@@ -167,6 +176,7 @@ OPENAI_PRESET = ProviderPreset(
             default_max_tokens=16384,
             max_input_tokens=128000,
             max_output_tokens=16384,
+            default_temperature=1,
         ),
         # GPT-4 Series
         ModelPreset(
@@ -295,6 +305,19 @@ OPENAI_PRESET = ProviderPreset(
             model_name="gpt-oss-20b",
             description="Open-source GPT 20B parameter model",
             default_max_tokens=8192,
+        ),
+        # ── Image Generation Models ───────────────────────────────────────────
+        ModelPreset(
+            name="GPT Image 2",
+            model_name="gpt-image-2",
+            description="OpenAI's latest image generation model. Supports square (1024x1024), portrait (1024x1536), and landscape (1536x1024).",
+            tags=["image_generation"],
+        ),
+        ModelPreset(
+            name="DALL-E 3",
+            model_name="dall-e-3",
+            description="OpenAI DALL-E 3 image generation. High-quality photorealistic images with prompt rewriting.",
+            tags=["image_generation"],
         ),
     ],
     setup_instructions="Get your API key from https://platform.openai.com/api-keys",
@@ -741,6 +764,19 @@ GEMINI_PRESET = ProviderPreset(
             model_name="gemini-diffusion",
             description="Gemini model specialized for diffusion tasks",
             default_max_tokens=8192,
+        ),
+        # ── Image Generation Models ───────────────────────────────────────────
+        ModelPreset(
+            name="Imagen 3",
+            model_name="imagen-3.0-generate-002",
+            description="Google Imagen 3 — state-of-the-art image generation. Requires a Google AI Studio or Vertex AI API key.",
+            tags=["image_generation"],
+        ),
+        ModelPreset(
+            name="Imagen 3 Fast",
+            model_name="imagen-3.0-fast-generate-001",
+            description="Google Imagen 3 Fast — faster, lower-cost image generation.",
+            tags=["image_generation"],
         ),
     ],
     setup_instructions="Get your API key from https://makersuite.google.com/app/apikey",
@@ -2621,6 +2657,31 @@ LITELLM_PRESET = ProviderPreset(
             model_name="together_ai/mistralai/Mixtral-8x7B-Instruct-v0.1",
             description="Mistral Mixtral 8x7B via LiteLLM",
             default_max_tokens=32768,
+        ),
+        # ── Image Generation Models ───────────────────────────────────────────
+        ModelPreset(
+            name="GPT Image 2",
+            model_name="gpt-image-2",
+            description="OpenAI GPT Image 2 via LiteLLM proxy. Supports square (1024x1024), portrait (1024x1536), landscape (1536x1024).",
+            tags=["image_generation"],
+        ),
+        ModelPreset(
+            name="DALL-E 3",
+            model_name="dall-e-3",
+            description="OpenAI DALL-E 3 via LiteLLM proxy. High-quality photorealistic image generation.",
+            tags=["image_generation"],
+        ),
+        ModelPreset(
+            name="Grok 2 Image",
+            model_name="grok-2-image",
+            description="xAI Grok 2 Image (Aurora) via LiteLLM proxy. Creative and photorealistic image generation.",
+            tags=["image_generation"],
+        ),
+        ModelPreset(
+            name="Imagen 3",
+            model_name="imagen-3.0-generate-002",
+            description="Google Imagen 3 via LiteLLM proxy. State-of-the-art image generation.",
+            tags=["image_generation"],
         ),
     ],
     setup_instructions="Configure LiteLLM proxy and set appropriate model names. LiteLLM supports 100+ providers through a unified API.",

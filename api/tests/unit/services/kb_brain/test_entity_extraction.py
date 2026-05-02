@@ -18,6 +18,7 @@ KB_ID = 1
 # _extract_entities_from_meta — Slack
 # ---------------------------------------------------------------------------
 
+
 def test_extract_slack_user_and_channel():
     meta = {"user": "U123ABC", "channel": "C456DEF"}
     entities = _extract_entities_from_meta("slack", meta)
@@ -59,6 +60,7 @@ def test_extract_slack_user_id_fallback():
 # _extract_entities_from_meta — GitHub / GitLab
 # ---------------------------------------------------------------------------
 
+
 @pytest.mark.parametrize("source_type", ["github", "gitlab"])
 def test_extract_github_author_and_repo(source_type):
     meta = {"author": "alice-dev", "author_email": "alice@corp.com", "repo": "corp/api"}
@@ -97,6 +99,7 @@ def test_extract_github_no_author_no_repo(source_type):
 # _extract_entities_from_meta — Jira
 # ---------------------------------------------------------------------------
 
+
 def test_extract_jira_email_fields():
     meta = {
         "assignee_email": "alice@corp.com",
@@ -132,6 +135,7 @@ def test_extract_jira_empty_meta():
 # _extract_entities_from_meta — Linear
 # ---------------------------------------------------------------------------
 
+
 def test_extract_linear_assignee_and_creator():
     meta = {"assignee_email": "dev@company.io", "creator_email": "pm@company.io", "team_key": "BACKEND"}
     entities = _extract_entities_from_meta("linear", meta)
@@ -158,6 +162,7 @@ def test_extract_linear_none_emails_ignored():
 # _extract_entities_from_meta — Notion
 # ---------------------------------------------------------------------------
 
+
 def test_extract_notion_page():
     meta = {"page_id": "abc-123-def", "title": "Architecture Notes"}
     entities = _extract_entities_from_meta("notion", meta)
@@ -181,6 +186,7 @@ def test_extract_notion_no_page_id():
 # _extract_entities_from_meta — unknown source
 # ---------------------------------------------------------------------------
 
+
 def test_extract_unknown_source_returns_empty():
     assert _extract_entities_from_meta("unknown_source", {"key": "value"}) == []
 
@@ -188,6 +194,7 @@ def test_extract_unknown_source_returns_empty():
 # ---------------------------------------------------------------------------
 # _upsert_entity — create new entity
 # ---------------------------------------------------------------------------
+
 
 def _make_mock_db(existing=None):
     """Return a mock DB session for testing _upsert_entity."""
@@ -203,7 +210,12 @@ def _make_mock_db(existing=None):
 
 def test_upsert_creates_new_entity_when_not_exists():
     db = _make_mock_db(existing=None)
-    data = {"entity_type": "person", "canonical_name": "alice", "email": "alice@corp.com", "identifiers": {"slack_user_id": "U1"}}
+    data = {
+        "entity_type": "person",
+        "canonical_name": "alice",
+        "email": "alice@corp.com",
+        "identifiers": {"slack_user_id": "U1"},
+    }
     _upsert_entity(db, KB_ID, TENANT_ID, data)
     db.add.assert_called_once()
     entity_added = db.add.call_args[0][0]
@@ -215,13 +227,18 @@ def test_upsert_creates_new_entity_when_not_exists():
 
 def test_upsert_merges_existing_entity_identifiers():
     from src.models.kb_brain import KBEntity
+
     existing = MagicMock(spec=KBEntity)
     existing.identifiers = {"slack_user_id": "U1"}
     existing.display_names = ["alice"]
 
     db = _make_mock_db(existing=existing)
-    data = {"entity_type": "person", "canonical_name": "alice-dev", "email": "alice@corp.com",
-            "identifiers": {"github_login": "alice-dev"}}
+    data = {
+        "entity_type": "person",
+        "canonical_name": "alice-dev",
+        "email": "alice@corp.com",
+        "identifiers": {"github_login": "alice-dev"},
+    }
     _upsert_entity(db, KB_ID, TENANT_ID, data)
 
     # db.add should NOT be called (we updated existing)
@@ -233,6 +250,7 @@ def test_upsert_merges_existing_entity_identifiers():
 
 def test_upsert_merges_display_names_deduped():
     from src.models.kb_brain import KBEntity
+
     existing = MagicMock(spec=KBEntity)
     existing.identifiers = {}
     existing.display_names = ["alice"]
@@ -257,8 +275,12 @@ def test_upsert_no_email_uses_type_name_dedup():
 
 def test_upsert_new_entity_has_correct_kb_id():
     db = _make_mock_db(existing=None)
-    data = {"entity_type": "repo", "canonical_name": "corp/api", "email": None,
-            "identifiers": {"github_repo": "corp/api"}}
+    data = {
+        "entity_type": "repo",
+        "canonical_name": "corp/api",
+        "email": None,
+        "identifiers": {"github_repo": "corp/api"},
+    }
     _upsert_entity(db, 99, TENANT_ID, data)
     entity = db.add.call_args[0][0]
     assert entity.knowledge_base_id == 99

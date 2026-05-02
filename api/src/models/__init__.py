@@ -27,6 +27,7 @@ from .agent_subscription import AgentSubscription
 from .agent_template import AgentTemplate
 from .agent_tool import AgentTool
 from .agent_user import AgentUser
+from .agent_version import AgentVersion
 from .agent_webhook import AgentWebhook, AgentWebhookEvent
 from .agent_widget import AgentWidget, WidgetAnalytics
 from .app import App, AppMode, AppStatus
@@ -55,6 +56,7 @@ from .debate_session import DebateSession
 from .diagram import Diagram
 from .document import Document, DocumentStatus
 from .document_segment import DocumentSegment
+from .erasure_request import ErasureRequest
 from .followup import FollowupConfig, FollowupItem, FollowupPriority, FollowupStatus
 from .ghostwriter_draft import GhostwriterDraft
 from .human_contact import HumanContact
@@ -87,7 +89,9 @@ from .proxy_config import ProxyConfig, ProxyProvider
 from .review_analytics import PeriodType, ReviewAnalytics, SentimentTrend
 from .role import Role
 from .role_permission import RolePermission
+from .saml_config import SAMLConfig
 from .scheduled_task import ScheduledTask, TaskExecution, TaskNotification
+from .scim_token import SCIMToken
 from .slack_bot import SlackBot, SlackConversation
 from .social_auth_provider import AccountProvider, SocialAuthProvider
 from .subscription_plan import PlanTier, SubscriptionPlan
@@ -151,6 +155,7 @@ __all__ = [
     "AgentLLMConfig",
     "AgentRating",
     "AgentTool",
+    "AgentVersion",
     "AgentWidget",
     "WidgetAnalytics",
     "WidgetAgentRoute",
@@ -220,6 +225,8 @@ __all__ = [
     "KBRelationship",
     # Diagram models
     "Diagram",
+    # GDPR models
+    "ErasureRequest",
     # Scheduled Task models
     "ScheduledTask",
     "TaskExecution",
@@ -248,6 +255,8 @@ __all__ = [
     "OktaTenant",
     "SocialAuthProvider",
     "AccountProvider",
+    # SAML SSO models
+    "SAMLConfig",
     # Billing and Pricing models
     "SubscriptionPlan",
     "PlanTier",
@@ -323,4 +332,6 @@ __all__ = [
     "TestScenario",
     "MonitoringIntegration",
     "MonitoringProvider",
+    # SCIM models
+    "SCIMToken",
 ]

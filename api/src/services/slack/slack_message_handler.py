@@ -220,8 +220,9 @@ class SlackMessageHandler:
                 agent_loader=AgentLoaderService(self.agent_manager), chat_service=ChatService()
             )
 
-            # Collect the streamed response
+            # Collect the streamed response + chart events
             response_chunks = []
+            chart_events: list[dict] = []
             async for event_data in chat_stream_service.stream_agent_response(
                 agent_name=agent.agent_name,
                 message=context_message,
@@ -250,6 +251,11 @@ class SlackMessageHandler:
 
                     if event_type == "chunk":
                         response_chunks.append(event_json.get("content", ""))
+
+                    elif event_type == "chart":
+                        chart_obj = event_json.get("chart") or event_json
+                        if chart_obj and isinstance(chart_obj, dict):
+                            chart_events.append(chart_obj)
 
                     elif event_type == "status":
                         # e.g. "💭 Thinking...", "📚 Searching knowledge bases..."
@@ -286,6 +292,30 @@ class SlackMessageHandler:
                 thread_ts=thread_ts or message_ts,
                 response=agent_response,
             )
+
+            # Upload charts as images (fire-and-forget, errors are non-fatal)
+            if chart_events:
+                asyncio.ensure_future(
+                    self._upload_charts(
+                        client=client,
+                        channel_id=channel_id,
+                        thread_ts=thread_ts or message_ts,
+                        charts=chart_events,
+                    )
+                )
+
+            # Post metadata footer: row counts, data sources extracted from response
+            metadata_ctx = self._build_metadata_context(agent_response)
+            if metadata_ctx:
+                try:
+                    await client.chat_postMessage(
+                        channel=channel_id,
+                        thread_ts=thread_ts or message_ts,
+                        blocks=[metadata_ctx],
+                        text="Query metadata",
+                    )
+                except Exception as e:
+                    logger.warning(f"Failed to post metadata footer: {e}")
 
             # Save agent response
             assistant_message = Message(
@@ -580,6 +610,74 @@ class SlackMessageHandler:
             logger.info(f"Notified {requester_channel_id}: {replier_name} replied in {dm_channel_id}")
         except Exception as e:
             logger.warning(f"Failed to send report-back notification: {e}")
+
+    async def _upload_charts(
+        self,
+        client: AsyncWebClient,
+        channel_id: str,
+        thread_ts: str | None,
+        charts: list[dict],
+    ) -> None:
+        """Render each chart to PNG and upload to Slack."""
+        try:
+            from .slack_chart_renderer import render_chart_to_png
+        except ImportError:
+            logger.warning("slack_chart_renderer not available — skipping chart upload")
+            return
+
+        for i, chart in enumerate(charts):
+            try:
+                png_bytes = render_chart_to_png(chart)
+                if not png_bytes:
+                    continue
+
+                title = chart.get("title") or f"Chart {i + 1}"
+                await client.files_upload_v2(
+                    channel=channel_id,
+                    thread_ts=thread_ts,
+                    content=png_bytes,
+                    filename=f"chart_{i + 1}.png",
+                    title=title,
+                )
+                logger.info(f"Uploaded chart '{title}' to Slack channel {channel_id}")
+            except Exception as e:
+                logger.warning(f"Failed to upload chart {i}: {e}")
+
+    def _build_metadata_context(self, response_text: str) -> dict | None:
+        """Extract query metadata from response text and build a Slack context block."""
+        parts: list[dict] = []
+
+        # Row count  e.g. "8 rows", "1 record", "Found 42 results"
+        row_match = re.search(
+            r"\b(\d[\d,]*)\s+(?:rows?|records?|results?|accounts?|entries|items?)\b",
+            response_text,
+            re.IGNORECASE,
+        )
+        if row_match:
+            count = row_match.group(1)
+            parts.append({"type": "mrkdwn", "text": f":bar_chart: *{count} rows*"})
+
+        # Data source hints  e.g. "BigQuery", "Supabase", "PostgreSQL", "clientdb.account"
+        source_match = re.search(
+            r"\b(BigQuery|Supabase|PostgreSQL|MySQL|Snowflake|ClickHouse|Elasticsearch|MongoDB|DuckDB)\b",
+            response_text,
+            re.IGNORECASE,
+        )
+        if source_match:
+            parts.append({"type": "mrkdwn", "text": f":database: {source_match.group(1)}"})
+
+        # Table / dataset reference  e.g.  "clientdb.account"  or  "schema.table"
+        table_match = re.search(r"\b([\w-]+\.[\w-]+(?:\.[\w-]+)?)\b", response_text)
+        if table_match:
+            tbl = table_match.group(1)
+            # Skip obvious non-table patterns (domain names, version strings)
+            if "." in tbl and not any(tbl.endswith(s) for s in (".com", ".io", ".ai", ".org")):
+                parts.append({"type": "mrkdwn", "text": f"`{tbl}`"})
+
+        if not parts:
+            return None
+
+        return {"type": "context", "elements": parts[:10]}
 
     def _remove_bot_mention(self, text: str, app_id: str) -> str:
         """Remove bot mention from message text."""

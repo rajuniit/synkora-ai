@@ -4,6 +4,8 @@ Unit tests for File Security Service.
 Tests file validation, malicious content detection, and filename sanitization.
 """
 
+from unittest.mock import MagicMock, patch
+
 import pytest
 
 from src.services.security.file_security import (
@@ -213,11 +215,17 @@ class TestVirusScan:
         return FileSecurityService()
 
     def test_virus_scan_returns_result(self, service):
-        """Test that virus scan returns a result dict."""
-        result = service.scan_for_viruses("/tmp/test_file")
+        """Test that virus scan returns a result dict when pyclamd is available."""
+        mock_clamd = MagicMock()
+        mock_clamd_instance = MagicMock()
+        mock_clamd_instance.scan_file.return_value = None  # no threat found
+        mock_clamd.ClamdUnixSocket.return_value = mock_clamd_instance
+
+        with patch.dict("sys.modules", {"pyclamd": mock_clamd}):
+            result = service.scan_for_viruses("/tmp/test_file")
 
         assert "is_clean" in result
-        assert result["is_clean"] is True  # Placeholder always returns clean
+        assert result["is_clean"] is True
 
 
 class TestPromptInjectionScanner:

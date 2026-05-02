@@ -120,8 +120,12 @@ def create_async_db_engine() -> AsyncEngine:
         # Remove connect_args that might cause issues and handle separately
         connect_args = async_options.pop("connect_args", {})
         engine_kwargs.update(async_options)
-        if connect_args:
-            engine_kwargs["connect_args"] = connect_args
+        # Merge server_settings to set per-statement timeout via asyncpg session params.
+        # statement_timeout value must be a string in milliseconds for PostgreSQL.
+        server_settings = connect_args.get("server_settings", {})
+        server_settings.setdefault("statement_timeout", "30000")
+        connect_args["server_settings"] = server_settings
+        engine_kwargs["connect_args"] = connect_args
 
     return create_async_engine(settings.sqlalchemy_async_database_uri, **engine_kwargs)
 
@@ -194,6 +198,7 @@ def create_celery_async_session() -> async_sessionmaker[AsyncSession]:
         bind=celery_engine,
         class_=AsyncSession,
         expire_on_commit=False,
+        autoflush=False,  # Prevent autoflush during tool-triggered SELECTs
     )
 
 

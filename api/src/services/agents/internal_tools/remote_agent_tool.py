@@ -25,9 +25,18 @@ def _is_url_safe(url: str) -> bool:
 
     Allows only http/https with public IPs. Blocks private ranges,
     localhost, cloud metadata endpoints, etc.
+
+    Exception: the configured APP_BASE_URL is always allowed — it is a
+    known, server-controlled value and agents may call sibling agents on
+    the same instance.
     """
     try:
-        import ipaddress
+        from src.config import settings
+
+        app_base = (settings.app_base_url or "").rstrip("/")
+        if app_base and url.startswith(app_base):
+            return True
+
         import socket
         from urllib.parse import urlparse
 
@@ -96,6 +105,14 @@ async def call_remote_agent(
     headers = {"Content-Type": "application/json"}
     if api_key:
         headers["Authorization"] = f"Bearer {api_key}"
+
+    # Replace APP_BASE_URL with internal service URL so Docker containers can
+    # reach the API server directly without going through a public tunnel.
+    from src.config import settings
+
+    app_base = (settings.app_base_url or "").rstrip("/")
+    if app_base and endpoint_url.startswith(app_base):
+        endpoint_url = endpoint_url.replace(app_base, "http://synkora-api:5001", 1)
 
     try:
         if protocol == "mcp":

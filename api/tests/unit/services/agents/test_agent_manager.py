@@ -12,6 +12,7 @@ class TestAgentManager:
     def mock_registry(self):
         registry = MagicMock()
         registry.__contains__.return_value = False
+        registry.contains.return_value = False
         return registry
 
     @pytest.fixture
@@ -40,12 +41,12 @@ class TestAgentManager:
 
             mock_agent_class.assert_called_once()
             agent.initialize_client.assert_called_with("secret_key")
-            mock_registry.register.assert_called_once_with(agent)
+            mock_registry.register.assert_called_once_with(agent, tenant_id="")
             assert mock_agent_config.llm_config.api_key == "encrypted_key"
 
     @pytest.mark.asyncio
     async def test_create_agent_duplicate(self, manager, mock_agent_config, mock_agent_class, mock_registry):
-        mock_registry.__contains__.return_value = True
+        mock_registry.contains.return_value = True
 
         with pytest.raises(ValueError, match="already exists"):
             await manager.create_agent(mock_agent_config, mock_agent_class)

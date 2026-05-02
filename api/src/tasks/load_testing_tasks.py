@@ -166,7 +166,7 @@ def execute_load_test(self, test_run_id: str) -> dict[str, Any]:
                         load_test.status = LoadTestStatus.READY
 
                 db.commit()
-        except:
+        except Exception:
             pass
 
         # Publish error event
@@ -214,7 +214,7 @@ def cancel_load_test(self, test_run_id: str) -> dict[str, Any]:
         container_name = f"k6-{test_run_id}"
         try:
             subprocess.run(["docker", "stop", container_name], capture_output=True, timeout=30)
-        except:
+        except Exception:
             pass
 
         # Update status

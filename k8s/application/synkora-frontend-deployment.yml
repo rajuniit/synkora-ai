@@ -27,8 +27,20 @@ spec:
     spec:
       imagePullSecrets:
       - name: ecr-registry-secret
+      securityContext:
+        runAsNonRoot: true
+        fsGroup: 1001
+        seccompProfile:
+          type: RuntimeDefault
       containers:
       - name: frontend
+        securityContext:
+          runAsNonRoot: true
+          runAsUser: 1001
+          allowPrivilegeEscalation: false
+          readOnlyRootFilesystem: false  # Next.js needs write access to .next/cache
+          capabilities:
+            drop: ["ALL"]
         image: IMAGE_PLACEHOLDER
         imagePullPolicy: Always
         ports:

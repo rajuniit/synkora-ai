@@ -16,7 +16,9 @@ from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from src.core.database import get_async_db
-from src.middleware.auth_middleware import get_current_tenant_id
+from src.core.errors import safe_error_message
+from src.middleware.auth_middleware import get_current_account, get_current_tenant_id
+from src.models import Account
 from src.models.custom_tool import CustomTool
 from src.services.agents.security import encrypt_value
 from src.services.custom_tools import OpenAPIParser, ToolExecutor
@@ -25,6 +27,32 @@ from src.services.security.url_validator import validate_url_for_openapi_import
 logger = logging.getLogger(__name__)
 
 router = APIRouter(prefix="/custom-tools", tags=["custom-tools"])
+
+
+async def _audit_log(
+    db: AsyncSession,
+    account_id: UUID,
+    tenant_id: UUID,
+    action: str,
+    resource_type: str,
+    resource_id: UUID | None = None,
+    metadata: dict | None = None,
+) -> None:
+    """Fire-and-forget audit log — never raises, never blocks the main response."""
+    try:
+        from src.services.activity.activity_log_service import ActivityLogService
+
+        svc = ActivityLogService(db)
+        await svc.log_activity(
+            tenant_id=tenant_id,
+            account_id=account_id,
+            action=action,
+            resource_type=resource_type,
+            resource_id=resource_id,
+            details=metadata or {},
+        )
+    except Exception:
+        pass  # Audit logging must never break the main flow
 
 
 # Request/Response Models
@@ -129,6 +157,7 @@ class OperationResponse(BaseModel):
 async def create_custom_tool(
     request: CreateCustomToolRequest,
     tenant_id: UUID = Depends(get_current_tenant_id),
+    current_account: Account = Depends(get_current_account),
     db: AsyncSession = Depends(get_async_db),
 ):
     """Create a new custom tool."""
@@ -181,6 +210,15 @@ async def create_custom_tool(
         await db.refresh(tool)
 
         logger.info(f"Created custom tool: {tool.name} (ID: {tool.id})")
+        await _audit_log(
+            db,
+            current_account.id,
+            tenant_id,
+            "create",
+            "custom_tool",
+            resource_id=tool.id,
+            metadata={"name": tool.name},
+        )
 
         return CustomToolResponse(
             id=str(tool.id),
@@ -202,7 +240,7 @@ async def create_custom_tool(
     except Exception as e:
         logger.error(f"Error creating custom tool: {e}", exc_info=True)
         await db.rollback()
-        raise HTTPException(status_code=500, detail=str(e))
+        raise HTTPException(status_code=500, detail=safe_error_message(e, "Failed to create custom tool"))
 
 
 @router.post("/import-url", response_model=CustomToolResponse, status_code=201)
@@ -300,13 +338,13 @@ async def import_from_url(
 
     except httpx.HTTPError as e:
         logger.error(f"Error fetching OpenAPI schema from URL: {e}")
-        raise HTTPException(status_code=400, detail=f"Failed to fetch schema from URL: {str(e)}")
+        raise HTTPException(status_code=400, detail=safe_error_message(e, "Failed to fetch schema from URL"))
     except HTTPException:
         raise
     except Exception as e:
         logger.error(f"Error importing custom tool: {e}", exc_info=True)
         await db.rollback()
-        raise HTTPException(status_code=500, detail=str(e))
+        raise HTTPException(status_code=500, detail=safe_error_message(e, "Failed to import custom tool"))
 
 
 @router.get("", response_model=list[CustomToolResponse])
@@ -347,7 +385,7 @@ async def list_custom_tools(
 
     except Exception as e:
         logger.error(f"Error listing custom tools: {e}")
-        raise HTTPException(status_code=500, detail=str(e))
+        raise HTTPException(status_code=500, detail=safe_error_message(e, "Failed to list custom tools"))
 
 
 @router.get("/{tool_id}", response_model=CustomToolDetailResponse)
@@ -393,7 +431,7 @@ async def get_custom_tool(
         raise
     except Exception as e:
         logger.error(f"Error getting custom tool: {e}")
-        raise HTTPException(status_code=500, detail=str(e))
+        raise HTTPException(status_code=500, detail=safe_error_message(e, "Failed to get custom tool"))
 
 
 @router.patch("/{tool_id}", response_model=CustomToolResponse)
@@ -498,13 +536,14 @@ async def update_custom_tool(
     except Exception as e:
         logger.error(f"Error updating custom tool: {e}", exc_info=True)
         await db.rollback()
-        raise HTTPException(status_code=500, detail=str(e))
+        raise HTTPException(status_code=500, detail=safe_error_message(e, "Failed to update custom tool"))
 
 
 @router.delete("/{tool_id}", status_code=204)
 async def delete_custom_tool(
     tool_id: UUID,
     tenant_id: UUID = Depends(get_current_tenant_id),
+    current_account: Account = Depends(get_current_account),
     db: AsyncSession = Depends(get_async_db),
 ):
     """Delete a custom tool."""
@@ -521,13 +560,22 @@ async def delete_custom_tool(
         await db.commit()
 
         logger.info(f"Deleted custom tool: {tool.name} (ID: {tool.id})")
+        await _audit_log(
+            db,
+            current_account.id,
+            tenant_id,
+            "delete",
+            "custom_tool",
+            resource_id=tool.id,
+            metadata={"name": tool.name},
+        )
 
     except HTTPException:
         raise
     except Exception as e:
         logger.error(f"Error deleting custom tool: {e}")
         await db.rollback()
-        raise HTTPException(status_code=500, detail=str(e))
+        raise HTTPException(status_code=500, detail=safe_error_message(e, "Failed to delete custom tool"))
 
 
 @router.get("/{tool_id}/operations", response_model=list[OperationResponse])
@@ -567,7 +615,7 @@ async def list_tool_operations(
         raise
     except Exception as e:
         logger.error(f"Error listing tool operations: {e}")
-        raise HTTPException(status_code=500, detail=str(e))
+        raise HTTPException(status_code=500, detail=safe_error_message(e, "Failed to list tool operations"))
 
 
 @router.post("/{tool_id}/test")
@@ -612,6 +660,42 @@ async def test_tool(
         return {"success": False, "error": str(e)}
 
 
+_CUSTOM_TOOL_RATE_LIMIT = 100  # max calls per window
+_CUSTOM_TOOL_RATE_WINDOW = 60  # seconds
+
+
+async def _check_custom_tool_rate_limit(tenant_id: UUID) -> None:
+    """Enforce per-tenant rate limit on custom tool execution.
+
+    Uses Redis INCR + EXPIRE pattern.  On the first call in each window a key
+    is created with a TTL; subsequent calls within that window increment the
+    counter.  Raises HTTP 429 when the limit is exceeded.
+    """
+    try:
+        from src.config.redis import get_redis_async
+
+        redis = get_redis_async()
+        if redis is None:
+            # Redis unavailable — fail open with a warning rather than blocking all traffic
+            logger.warning("Redis unavailable for custom tool rate limiting; skipping check")
+            return
+
+        key = f"rate:custom_tool:{tenant_id}"
+        count = await redis.incr(key)
+        if count == 1:
+            # First call in this window — set the TTL
+            await redis.expire(key, _CUSTOM_TOOL_RATE_WINDOW)
+        if count > _CUSTOM_TOOL_RATE_LIMIT:
+            raise HTTPException(
+                status_code=429,
+                detail=f"Rate limit exceeded: maximum {_CUSTOM_TOOL_RATE_LIMIT} tool executions per {_CUSTOM_TOOL_RATE_WINDOW} seconds",
+            )
+    except HTTPException:
+        raise
+    except Exception as exc:
+        logger.warning("Custom tool rate limit check failed: %s", exc)
+
+
 @router.post("/{tool_id}/execute")
 async def execute_tool_operation(
     tool_id: UUID,
@@ -621,6 +705,9 @@ async def execute_tool_operation(
 ):
     """Execute a specific operation of a custom tool."""
     try:
+        # SECURITY: Per-tenant rate limiting (max 100 executions/minute)
+        await _check_custom_tool_rate_limit(tenant_id)
+
         result = await db.execute(
             select(CustomTool).filter(CustomTool.id == tool_id, CustomTool.tenant_id == tenant_id)
         )
@@ -649,4 +736,4 @@ async def execute_tool_operation(
         raise
     except Exception as e:
         logger.error(f"Error executing tool operation: {e}", exc_info=True)
-        raise HTTPException(status_code=500, detail=str(e))
+        raise HTTPException(status_code=500, detail=safe_error_message(e, "Failed to execute tool operation"))

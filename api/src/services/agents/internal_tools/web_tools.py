@@ -8,6 +8,7 @@ and extract text from URLs.
 import asyncio
 import ipaddress
 import logging
+import os
 import socket
 from typing import Any
 from urllib.parse import urlparse
@@ -40,6 +41,33 @@ BLOCKED_HOSTNAME_PATTERNS = [
     "metadata.google.internal",
     "metadata.azure.com",
 ]
+
+
+def _load_platform_blocked_domains() -> list[str]:
+    """Load platform-level blocked domains from environment variable."""
+    raw = os.getenv("AGENT_BLOCKED_DOMAINS", "")
+    return [d.strip().lower() for d in raw.split(",") if d.strip()]
+
+
+def _is_domain_blocked(url: str, blocked_domains: list[str]) -> bool:
+    """
+    Check if the URL's hostname matches any entry in the blocked domains list.
+
+    Supports exact hostname match and subdomain matching (e.g. blocking
+    "example.com" also blocks "sub.example.com").
+    """
+    try:
+        parsed = urlparse(url)
+        hostname = (parsed.hostname or "").lower()
+        if not hostname:
+            return False
+        for blocked in blocked_domains:
+            blocked = blocked.lower()
+            if hostname == blocked or hostname.endswith("." + blocked):
+                return True
+    except Exception:
+        pass
+    return False
 
 
 def _is_ip_blocked(ip_str: str) -> bool:
@@ -94,7 +122,13 @@ async def _is_url_safe(url: str) -> tuple[bool, str | None]:
         # Resolve hostname and check IP — off-loaded to thread pool to avoid blocking event loop
         try:
             loop = asyncio.get_running_loop()
-            resolved_ips = await loop.run_in_executor(None, _resolve_hostname, hostname)
+            try:
+                resolved_ips = await asyncio.wait_for(
+                    loop.run_in_executor(None, _resolve_hostname, hostname),
+                    timeout=5.0,
+                )
+            except TimeoutError:
+                raise ValueError(f"DNS resolution timeout for hostname: {hostname}")
             for _family, _, _, _, sockaddr in resolved_ips:
                 ip_str = sockaddr[0]
                 if _is_ip_blocked(ip_str):
@@ -168,7 +202,7 @@ async def _fetch_via_jina(url: str, max_length: int = MAX_CONTENT_LENGTH) -> dic
     try:
         async with httpx.AsyncClient(
             timeout=REQUEST_TIMEOUT,
-            follow_redirects=True,
+            follow_redirects=False,
             headers={"User-Agent": USER_AGENT, "Accept": "text/plain"},
         ) as client:
             response = await client.get(jina_url)
@@ -241,6 +275,15 @@ async def internal_web_fetch(
         is_safe, error = await _is_url_safe(url)
         if not is_safe:
             return {"error": f"URL blocked for security: {error}"}
+
+        # Domain blocklist check (platform-level + any passed via config)
+        platform_blocked = _load_platform_blocked_domains()
+        agent_blocked: list[str] = (config or {}).get("blocked_domains", []) if config else []
+        all_blocked = platform_blocked + agent_blocked
+        if all_blocked and _is_domain_blocked(url, all_blocked):
+            parsed_host = urlparse(url).hostname or url
+            logger.warning("URL blocked by domain blocklist: %s", parsed_host)
+            return {"error": f"URL blocked by domain policy: {parsed_host}"}
 
         # If explicitly requested, go through Jina Reader (URL already validated above)
         if use_reader:

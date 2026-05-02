@@ -1,6 +1,5 @@
 """Unit tests for integration provider factories."""
 
-
 import pytest
 
 from src.services.integrations.providers.factory import (

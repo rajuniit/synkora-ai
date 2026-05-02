@@ -22,6 +22,7 @@ from src.services.slack.formatters import (
 # format_text_for_slack — edge cases
 # ---------------------------------------------------------------------------
 
+
 @pytest.mark.unit
 class TestFormatTextForSlackMentions:
     def test_slack_user_id_wrapped_in_angle_brackets(self):
@@ -98,6 +99,7 @@ class TestFormatTextForSlackAllSyntax:
 # clean_table_cell — edge cases
 # ---------------------------------------------------------------------------
 
+
 @pytest.mark.unit
 class TestCleanTableCell:
     def test_strips_backticks(self):
@@ -129,6 +131,7 @@ class TestCleanTableCell:
 # ---------------------------------------------------------------------------
 # convert_markdown_table_to_slack_blocks — edge cases
 # ---------------------------------------------------------------------------
+
 
 @pytest.mark.unit
 class TestConvertMarkdownTableToSlackBlocks:
@@ -183,6 +186,7 @@ class TestConvertMarkdownTableToSlackBlocks:
 # chunk_blocks — edge cases
 # ---------------------------------------------------------------------------
 
+
 @pytest.mark.unit
 class TestChunkBlocks:
     def test_empty_list_returns_one_empty_chunk(self):
@@ -222,6 +226,7 @@ class TestChunkBlocks:
 # ---------------------------------------------------------------------------
 # create_slack_blocks — edge cases
 # ---------------------------------------------------------------------------
+
 
 @pytest.mark.unit
 class TestCreateSlackBlocksEdgeCases:

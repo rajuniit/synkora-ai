@@ -1,8 +1,9 @@
 """Unit tests for A2AService."""
 
-import pytest
 from unittest.mock import AsyncMock, MagicMock, patch
 from uuid import uuid4
+
+import pytest
 
 
 @pytest.fixture
@@ -16,9 +17,7 @@ def agent():
         "integrations_config": {
             "a2a_enabled": True,
             "a2a_public": False,
-            "a2a_skills": [
-                {"id": "analyze", "name": "Analyze Data", "description": "Run data analysis"}
-            ],
+            "a2a_skills": [{"id": "analyze", "name": "Analyze Data", "description": "Run data analysis"}],
         }
     }
     return a
@@ -27,6 +26,7 @@ def agent():
 @pytest.fixture
 def service():
     from src.services.agents.a2a_service import A2AService
+
     return A2AService()
 
 
@@ -50,9 +50,7 @@ def test_get_agent_card_default_skills(service, agent):
 @pytest.mark.asyncio
 async def test_send_message_success(service, agent):
     db = AsyncMock()
-    input_msg = {
-        "message": {"role": "user", "parts": [{"type": "text", "text": "Hello!"}]}
-    }
+    input_msg = {"message": {"role": "user", "parts": [{"type": "text", "text": "Hello!"}]}}
 
     with patch(
         "src.services.agents.a2a_service._collect_agent_response",
@@ -92,7 +90,7 @@ async def test_create_task(service, agent):
 
     with patch("src.tasks.a2a_tasks.execute_a2a_task") as mock_task:
         mock_task.delay = MagicMock()
-        task = await service.create_task(agent, input_msg, {"ip": "127.0.0.1"}, db)
+        await service.create_task(agent, input_msg, {"ip": "127.0.0.1"}, db)
 
     db.add.assert_called_once()
     db.commit.assert_called_once()
@@ -113,9 +111,10 @@ def test_extract_message_text():
 
 
 def test_task_to_dict_completed():
+    from datetime import UTC, datetime
+
     from src.models.agent_a2a_task import A2ATaskStatus, AgentA2ATask
     from src.services.agents.a2a_service import _task_to_dict
-    from datetime import datetime, UTC
 
     task = MagicMock(spec=AgentA2ATask)
     task.task_id = "task-123"
@@ -131,9 +130,10 @@ def test_task_to_dict_completed():
 
 
 def test_task_to_dict_failed():
+    from datetime import UTC, datetime
+
     from src.models.agent_a2a_task import A2ATaskStatus, AgentA2ATask
     from src.services.agents.a2a_service import _task_to_dict
-    from datetime import datetime, UTC
 
     task = MagicMock(spec=AgentA2ATask)
     task.task_id = "task-789"

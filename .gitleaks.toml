@@ -1,0 +1,23 @@
+title = "Synkora Gitleaks Configuration"
+
+[allowlist]
+description = "Suppress false positives: test fixtures, docs, example files, and code patterns"
+
+paths = [
+  # Test files intentionally contain fake/mock secrets as fixtures
+  '''api/tests/''',
+  # Documentation examples use placeholder tokens in curl snippets
+  '''docs/''',
+  # Example config — values are intentional placeholders
+  '''api/\.env\.example''',
+  # UI page that renders a curl code snippet with a placeholder API key
+  '''web/app/\(dashboard\)/agents/''',
+  # k8s monitoring defaults (non-production cluster config)
+  '''k8s/monitoring/''',
+]
+
+regexes = [
+  # S3 presigned URL calls: generate_presigned_url(key=s3_key, expiration=86400*7)
+  # gitleaks misreads the expiration integer as a key value
+  '''generate_presigned_url\(key=''',
+]

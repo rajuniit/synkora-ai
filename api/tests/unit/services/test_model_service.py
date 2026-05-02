@@ -183,10 +183,13 @@ class TestGenerateResponse:
         )
         mock_provider.generate = AsyncMock(return_value=mock_response)
 
-        with patch.object(model_service, "_get_provider_from_app", return_value=mock_provider), patch.object(
-            model_service,
-            "_get_model_config_from_app",
-            return_value=ModelConfig(model="gpt-4"),
+        with (
+            patch.object(model_service, "_get_provider_from_app", return_value=mock_provider),
+            patch.object(
+                model_service,
+                "_get_model_config_from_app",
+                return_value=ModelConfig(model="gpt-4"),
+            ),
         ):
             result = await model_service.generate_response(
                 conversation_id=sample_conversation.id,
@@ -226,10 +229,13 @@ class TestGenerateResponse:
 
         mock_provider.generate_stream = Mock(return_value=mock_stream())
 
-        with patch.object(model_service, "_get_provider_from_app", return_value=mock_provider), patch.object(
-            model_service,
-            "_get_model_config_from_app",
-            return_value=ModelConfig(model="gpt-4", stream=True),
+        with (
+            patch.object(model_service, "_get_provider_from_app", return_value=mock_provider),
+            patch.object(
+                model_service,
+                "_get_model_config_from_app",
+                return_value=ModelConfig(model="gpt-4", stream=True),
+            ),
         ):
             result = await model_service.generate_response(
                 conversation_id=sample_conversation.id,

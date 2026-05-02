@@ -466,8 +466,11 @@ async def generate_done_event(
     if sources:
         data["sources"] = sources
 
-    if metadata:
-        data["metadata"] = metadata
+    # Merge caller metadata and inject AI content disclosure fields
+    merged_metadata = dict(metadata) if metadata else {}
+    merged_metadata.setdefault("generated_by_ai", True)
+    merged_metadata.setdefault("model_provider", "ai")  # generic — does not expose actual provider
+    data["metadata"] = merged_metadata
 
     data.update(kwargs)
 

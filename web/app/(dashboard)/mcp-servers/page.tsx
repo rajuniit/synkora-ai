@@ -259,13 +259,30 @@ function MCPServerModal({
     headers: serverHeaders,
     use_sse: serverMetadata.use_sse !== undefined ? serverMetadata.use_sse : true,
   })
+  const AUTH_CONFIG_TEMPLATES: Record<string, string> = {
+    api_key: JSON.stringify({ api_key: 'your_api_key_here', header_name: 'Authorization' }, null, 2),
+    bearer: JSON.stringify({ token: 'your_bearer_token_here' }, null, 2),
+    oauth: JSON.stringify({ client_id: 'your_client_id', client_secret: 'your_client_secret' }, null, 2),
+    none: '{}',
+  }
+
   const [authConfigJson, setAuthConfigJson] = useState(
-    JSON.stringify(serverAuthConfig, null, 2)
+    Object.keys(serverAuthConfig).length > 0
+      ? JSON.stringify(serverAuthConfig, null, 2)
+      : AUTH_CONFIG_TEMPLATES[server?.auth_type || 'none'] ?? '{}'
   )
   const [headersJson, setHeadersJson] = useState(
     JSON.stringify(serverHeaders, null, 2)
   )
   const [saving, setSaving] = useState(false)
+
+  // Reset auth config template when auth type changes (only when creating, not editing)
+  const handleAuthTypeChange = (newAuthType: string) => {
+    setFormData({ ...formData, auth_type: newAuthType })
+    if (!server) {
+      setAuthConfigJson(AUTH_CONFIG_TEMPLATES[newAuthType] ?? '{}')
+    }
+  }
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault()
@@ -381,9 +398,13 @@ function MCPServerModal({
                 value={formData.url}
                 onChange={(e) => setFormData({ ...formData, url: e.target.value })}
                 className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-red-500 focus:border-transparent"
-                placeholder="https://synkora.ai"
+                placeholder="https://api.example.com/mcp"
                 required={formData.transport_type === 'http'}
               />
+              <p className="text-xs text-gray-500 mt-1">
+                Must point to the MCP endpoint path, not just the root domain.
+                Example: <span className="font-mono">https://api.example.com/mcp</span>
+              </p>
             </div>
           ) : (
             <>
@@ -550,7 +571,7 @@ function MCPServerModal({
                 </label>
                 <select
                   value={formData.auth_type}
-                  onChange={(e) => setFormData({ ...formData, auth_type: e.target.value })}
+                  onChange={(e) => handleAuthTypeChange(e.target.value)}
                   className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-red-500 focus:border-transparent"
                 >
                   <option value="none">None</option>
@@ -572,14 +593,32 @@ function MCPServerModal({
                 value={authConfigJson}
                 onChange={(e) => setAuthConfigJson(e.target.value)}
                 className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-red-500 focus:border-transparent font-mono text-sm"
-                rows={6}
-                placeholder={`{\n  "token": "your_token_here"\n}`}
+                rows={5}
               />
-              <p className="text-xs text-gray-500 mt-1">
-                {formData.auth_type === 'bearer' && 'Example: {"token": "ghp_xxxxx"}'}
-                {formData.auth_type === 'api_key' && 'Example: {"api_key": "your_key", "header_name": "X-API-Key"}'}
-                {formData.auth_type === 'oauth' && 'Example: {"client_id": "xxx", "client_secret": "yyy"}'}
-              </p>
+              {formData.auth_type === 'api_key' && (
+                <div className="mt-2 p-3 bg-blue-50 border border-blue-200 rounded-lg text-xs text-blue-900 space-y-1">
+                  <p className="font-semibold">API Key fields:</p>
+                  <p><span className="font-mono font-bold">api_key</span> — your actual API key value</p>
+                  <p><span className="font-mono font-bold">header_name</span> — the HTTP header to send it in</p>
+                  <p className="mt-1.5 font-semibold">Common header names:</p>
+                  <p><span className="font-mono">Authorization</span> — use this when the server expects <span className="font-mono">Authorization: your_key</span></p>
+                  <p><span className="font-mono">X-API-Key</span> — used by many REST APIs</p>
+                </div>
+              )}
+              {formData.auth_type === 'bearer' && (
+                <div className="mt-2 p-3 bg-blue-50 border border-blue-200 rounded-lg text-xs text-blue-900 space-y-1">
+                  <p className="font-semibold">Bearer Token fields:</p>
+                  <p><span className="font-mono font-bold">token</span> — your bearer token (sent as <span className="font-mono">Authorization: Bearer &lt;token&gt;</span>)</p>
+                  <p className="text-blue-700 mt-1">Use this for GitHub, PostHog personal API keys, and most OAuth2 APIs.</p>
+                </div>
+              )}
+              {formData.auth_type === 'oauth' && (
+                <div className="mt-2 p-3 bg-blue-50 border border-blue-200 rounded-lg text-xs text-blue-900 space-y-1">
+                  <p className="font-semibold">OAuth fields:</p>
+                  <p><span className="font-mono font-bold">client_id</span> — OAuth application client ID</p>
+                  <p><span className="font-mono font-bold">client_secret</span> — OAuth application client secret</p>
+                </div>
+              )}
             </div>
           )}
 
@@ -594,10 +633,11 @@ function MCPServerModal({
               onChange={(e) => setHeadersJson(e.target.value)}
               className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-red-500 focus:border-transparent font-mono text-sm"
               rows={4}
-              placeholder={`{\n  "Content-Type": "application/json"\n}`}
+              placeholder={`{\n  "X-Project-ID": "your_project_id"\n}`}
             />
             <p className="text-xs text-gray-500 mt-1">
-              Add custom HTTP headers for requests to this server
+              Extra HTTP headers the server requires — for example a project ID or API version header.
+              Do not put your auth credentials here; use the Auth Config above instead.
             </p>
             </div>
           )}

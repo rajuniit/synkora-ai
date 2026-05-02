@@ -1,8 +1,9 @@
 """Unit tests for MCPServerHostService."""
 
-import pytest
 from unittest.mock import AsyncMock, MagicMock, patch
 from uuid import uuid4
+
+import pytest
 
 
 @pytest.fixture
@@ -17,6 +18,7 @@ def agent():
 @pytest.fixture
 def service():
     from src.services.agents.mcp_server_host_service import MCPServerHostService
+
     return MCPServerHostService()
 
 

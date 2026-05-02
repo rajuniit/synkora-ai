@@ -203,9 +203,7 @@ class TestSummarizeWithContext:
     @pytest.mark.asyncio
     async def test_had_existing_summary_true_when_provided(self):
         svc = ContextSummarizer(llm_client=None)
-        result = await svc.summarize_with_context(
-            _msgs(("user", "hi")), existing_summary="Old summary"
-        )
+        result = await svc.summarize_with_context(_msgs(("user", "hi")), existing_summary="Old summary")
         assert result["had_existing_summary"] is True
 
     @pytest.mark.asyncio
@@ -219,9 +217,7 @@ class TestSummarizeWithContext:
     async def test_important_points_passed_through(self):
         svc = ContextSummarizer(llm_client=None)
         points = ["point A", "point B"]
-        result = await svc.summarize_with_context(
-            _msgs(("user", "hi")), important_points=points
-        )
+        result = await svc.summarize_with_context(_msgs(("user", "hi")), important_points=points)
         assert result["important_points"] == points
 
 

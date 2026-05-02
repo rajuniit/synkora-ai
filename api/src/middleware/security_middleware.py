@@ -8,6 +8,7 @@ NOTE: All middleware classes use pure ASGI pattern instead of BaseHTTPMiddleware
 to avoid TaskGroup cancellation issues with async database sessions.
 """
 
+import json
 import logging
 import re
 import secrets
@@ -75,6 +76,11 @@ class SecurityHeadersMiddleware:
             # NOTE: HSTS intentionally omitted from the API backend. HSTS is a browser
             # directive for HTML pages — browsers ignore it on API (JSON) responses.
             # HSTS belongs on the frontend Next.js server only.
+            # Cross-Origin isolation headers — prevent Spectre/Meltdown side-channel leaks
+            # and restrict cross-origin resource sharing at the browser level.
+            b"cross-origin-opener-policy": b"same-origin",
+            b"cross-origin-embedder-policy": b"require-corp",
+            b"cross-origin-resource-policy": b"same-site",
             # Server header — generic value to avoid leaking tech stack details
             b"server": b"web",
         }
@@ -226,8 +232,17 @@ class InputSanitizationMiddleware:
             try:
                 body_str = scan_data.decode("utf-8", errors="ignore")
 
-                # Check for XSS (but not prompt injection - that's handled by advanced scanner)
-                if self._contains_xss(body_str):
+                # Scan only top-level string values from the parsed JSON body.
+                # Nested structures (e.g. conversation_history, messages arrays)
+                # are skipped — they contain prior AI-generated content that may
+                # legitimately include HTML/code examples and should not be
+                # re-scanned as user input. Falls back to raw body scan if the
+                # body is not a JSON object (e.g. raw string or array).
+                strings_to_scan = self._extract_scannable_strings(body_str)
+
+                # Check for XSS (prompt injection is handled by the advanced scanner)
+                xss_found = any(self._contains_xss(s) for s in strings_to_scan)
+                if xss_found:
                     client = scope.get("client")
                     client_ip = client[0] if client else "unknown"
                     logger.warning(f"XSS attempt detected from {client_ip}")
@@ -257,6 +272,26 @@ class InputSanitizationMiddleware:
             return await receive()
 
         await self.app(scope, receive_replayed, send)
+
+    def _extract_scannable_strings(self, body_str: str) -> list[str]:
+        """Return the string values that should be scanned for XSS.
+
+        For a JSON object body, only top-level string values are returned.
+        Nested arrays and objects (e.g. conversation_history) are skipped
+        because they contain prior AI-generated or pre-validated content, not
+        raw user input.  If the body is not a JSON object, the raw string is
+        returned so the existing behaviour is preserved for non-standard bodies.
+        """
+        try:
+            data = json.loads(body_str)
+            if isinstance(data, dict):
+                return [v for v in data.values() if isinstance(v, str)]
+            if isinstance(data, str):
+                return [data]
+        except (json.JSONDecodeError, ValueError):
+            pass
+        # Non-JSON or root-level array: fall back to scanning the raw body.
+        return [body_str]
 
     def _contains_xss(self, content: str) -> bool:
         """Check content against the compiled XSS pattern."""

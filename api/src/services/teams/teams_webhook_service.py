@@ -127,7 +127,7 @@ class TeamsWebhookService:
                         event_json = json.loads(event_data[6:])
                         if event_json.get("type") == "chunk":
                             response_chunks.append(event_json.get("content", ""))
-                    except:
+                    except Exception:
                         pass
 
             agent_response = "".join(response_chunks)

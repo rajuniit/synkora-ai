@@ -1,6 +1,12 @@
 """Data Analysis API endpoints."""
 
+import base64
+import hashlib
+import hmac
+import json
 import logging
+import os
+import time
 from typing import Any
 from uuid import UUID
 
@@ -16,6 +22,47 @@ from src.services.data_analysis_service import DataAnalysisService
 from src.services.report_export_service import ReportExportService
 
 logger = logging.getLogger(__name__)
+
+_TOKEN_MAX_AGE_SECONDS = 3600  # Tokens expire after 1 hour
+
+
+def _make_download_token(file_path: str) -> str:
+    """Create a signed, time-stamped download token for a file path."""
+    secret = os.getenv("SECRET_KEY", "").encode()
+    ts = str(int(time.time()))
+    sig = hmac.new(secret, f"{ts}:{file_path}".encode(), hashlib.sha256).hexdigest()
+    payload = base64.urlsafe_b64encode(json.dumps({"path": file_path, "ts": ts, "sig": sig}).encode()).decode()
+    return payload
+
+
+def _verify_download_token(token: str) -> str | None:
+    """Verify a signed download token and return the file path if valid.
+
+    Returns the decoded file path on success, or None if the token is invalid,
+    expired, or the HMAC does not match.
+    """
+    try:
+        secret = os.getenv("SECRET_KEY", "").encode()
+        decoded = json.loads(base64.urlsafe_b64decode(token.encode()).decode())
+        file_path = decoded["path"]
+        ts = decoded["ts"]
+        provided_sig = decoded["sig"]
+
+        # Verify signature using constant-time comparison
+        expected_sig = hmac.new(secret, f"{ts}:{file_path}".encode(), hashlib.sha256).hexdigest()
+        if not hmac.compare_digest(provided_sig, expected_sig):
+            logger.warning("Download token HMAC mismatch")
+            return None
+
+        # Check expiry
+        if int(time.time()) - int(ts) > _TOKEN_MAX_AGE_SECONDS:
+            logger.warning("Download token has expired")
+            return None
+
+        return file_path
+    except Exception:
+        return None
+
 
 router = APIRouter(prefix="/api/v1/data-analysis", tags=["data-analysis"])
 
@@ -102,16 +149,37 @@ async def upload_analysis_file(
         Upload result with file info and data preview
     """
     try:
-        # Validate file size (max 100MB)
-        MAX_FILE_SIZE = 100 * 1024 * 1024  # 100MB
-        if file.size and file.size > MAX_FILE_SIZE:
-            raise HTTPException(
-                status_code=status.HTTP_413_REQUEST_ENTITY_TOO_LARGE, detail="File too large. Maximum size is 100MB"
-            )
+        # Streaming size check — file.size is unreliable for chunked uploads
+        MAX_UPLOAD_BYTES = 100 * 1024 * 1024  # 100 MB
+        chunks = []
+        total_size = 0
+        while chunk := await file.read(65536):  # 64 KB chunks
+            total_size += len(chunk)
+            if total_size > MAX_UPLOAD_BYTES:
+                raise HTTPException(
+                    status_code=status.HTTP_413_REQUEST_ENTITY_TOO_LARGE,
+                    detail="File exceeds maximum size of 100 MB",
+                )
+            chunks.append(chunk)
+        file_content = b"".join(chunks)
 
-        # Validate file type
+        # Validate file type by extension
         if not file.filename.endswith((".csv", ".zip")):
             raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Only CSV and ZIP files are supported")
+
+        # Security validation — magic-number check, dangerous extension check, etc.
+        from src.services.security.file_security import FileSecurityService
+
+        file_security = FileSecurityService()
+        validation = file_security.validate_file(file_content, file.filename, "document")
+        if not validation.get("is_valid", True):
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail=f"File rejected: {'; '.join(validation.get('errors', ['security check failed']))}",
+            )
+
+        # Reset the SpooledTemporaryFile so DataAnalysisService can read from it
+        await file.seek(0)
 
         # Process file
         service = DataAnalysisService(db, tenant_id)
@@ -175,7 +243,8 @@ async def query_data_source(
 
     except Exception as e:
         logger.error(f"Error querying data source: {e}", exc_info=True)
-        return DataAnalysisResponse(success=False, message=f"Query failed: {str(e)}", error=str(e))
+        msg = safe_error_message(e, "Query failed", include_type=False)
+        return DataAnalysisResponse(success=False, message=msg, error=msg)
 
 
 @router.post("/query-database", response_model=DataAnalysisResponse)
@@ -208,7 +277,8 @@ async def query_database(
 
     except Exception as e:
         logger.error(f"Error querying database: {e}", exc_info=True)
-        return DataAnalysisResponse(success=False, message=f"Query failed: {str(e)}", error=str(e))
+        msg = safe_error_message(e, "Query failed", include_type=False)
+        return DataAnalysisResponse(success=False, message=msg, error=msg)
 
 
 @router.post("/export-report", response_model=ReportExportResponse)
@@ -246,8 +316,9 @@ async def export_report(
                 message=result.get("message"),
             )
 
-        # Generate download URL (assuming storage service provides this)
-        download_url = f"/api/v1/files/download?path={result.get('file_path')}"
+        # Generate a signed download URL (path is never exposed in plain text)
+        file_path = result.get("file_path", "")
+        download_url = f"/api/v1/analysis/download?token={_make_download_token(file_path)}" if file_path else None
 
         return ReportExportResponse(
             success=True,
@@ -261,7 +332,44 @@ async def export_report(
 
     except Exception as e:
         logger.error(f"Error exporting report: {e}", exc_info=True)
-        return ReportExportResponse(success=False, message=f"Export failed: {str(e)}")
+        return ReportExportResponse(success=False, message=safe_error_message(e, "Export failed", include_type=False))
+
+
+@router.get("/download")
+async def download_analysis_file(
+    token: str = Query(..., description="Signed download token from export endpoint"),
+    current_account: Account = Depends(get_current_account),
+) -> Any:
+    """
+    Download an exported analysis file using a signed token.
+
+    The token is issued by the export endpoint and contains an HMAC-signed
+    file path.  Tokens expire after 1 hour.
+    """
+    import mimetypes
+    import pathlib
+
+    from fastapi.responses import FileResponse
+
+    file_path = _verify_download_token(token)
+    if not file_path:
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Invalid or expired download token")
+
+    # Prevent path traversal — ensure the resolved path stays within /tmp
+    resolved = pathlib.Path(file_path).resolve()
+    if not str(resolved).startswith("/tmp/"):
+        logger.warning("Download token contained path outside /tmp: %s", file_path)
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Invalid download token")
+
+    if not resolved.is_file():
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="File not found or has been removed")
+
+    media_type, _ = mimetypes.guess_type(str(resolved))
+    return FileResponse(
+        path=str(resolved),
+        filename=resolved.name,
+        media_type=media_type or "application/octet-stream",
+    )
 
 
 @router.get("/connectors", response_model=dict[str, Any])

@@ -1,6 +1,5 @@
 """Tests for CronValidator."""
 
-
 from src.services.scheduler.cron_validator import CronValidator
 
 
@@ -88,6 +87,7 @@ class TestCronValidatorValidate:
 
     def test_next_run_is_isoformat(self):
         from datetime import datetime
+
         result = CronValidator.validate("0 12 * * *")
         assert result["is_valid"] is True
         datetime.fromisoformat(result["next_run"])

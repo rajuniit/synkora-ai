@@ -83,6 +83,10 @@ export default function EditAgentPage() {
     parallel_tools: true,
   })
 
+  // Execution backend
+  const [executionBackend, setExecutionBackend] = useState<'celery' | 'lambda' | 'cloud_run' | 'do_functions'>('celery')
+  const [hasServerlessExecution, setHasServerlessExecution] = useState(false)
+
   // PII redaction config
   const [piiRedactionConfig, setPiiRedactionConfig] = useState({
     redact_for_llm: false,
@@ -102,7 +106,18 @@ export default function EditAgentPage() {
   useEffect(() => {
     fetchAgentDetails()
     fetchContacts()
+    fetchPlanFeatures()
   }, [agentName])
+
+  const fetchPlanFeatures = async () => {
+    try {
+      const data = await apiClient.request('GET', '/api/v1/usage-stats')
+      const features = data?.limits?.features || {}
+      setHasServerlessExecution(features.serverless_execution === true)
+    } catch {
+      // Non-fatal: default to false (no serverless access)
+    }
+  }
 
   const fetchContacts = async () => {
     try {
@@ -173,6 +188,10 @@ export default function EditAgentPage() {
         setIntegrationsConfig(agent.agent_metadata.integrations_config)
       }
 
+      // Set execution backend (top-level field)
+      if (agent.execution_backend) {
+        setExecutionBackend(agent.execution_backend as 'celery' | 'lambda' | 'cloud_run' | 'do_functions')
+      }
       // Set agentic config from agent_metadata
       if (agent.agent_metadata?.agentic_config) {
         const ac = agent.agent_metadata.agentic_config
@@ -287,7 +306,8 @@ export default function EditAgentPage() {
         pii_redaction: piiRedactionConfig,
       }
 
-      await apiClient.updateAgent(agentName, {
+      const updateResponse = await apiClient.updateAgent(agentName, {
+        name: formData.name !== agentName ? formData.name : undefined,
         description: formData.description,
         // Avatar is handled separately by uploadAgentAvatar - don't send it here to avoid saving presigned URL
         system_prompt: formData.system_prompt,
@@ -301,11 +321,13 @@ export default function EditAgentPage() {
         allow_transfer: multiAgentConfig.allow_transfer,
         transfer_scope: multiAgentConfig.transfer_scope,
         human_contact_id: formData.human_contact_id || null,
+        execution_backend: executionBackend,
         ...(Object.keys(agentMetadata).length > 0 && { agent_metadata: agentMetadata }),
       })
-      
+
       toast.success('Agent updated successfully!')
-      router.push(`/agents/${agentName}/view`)
+      const newName = updateResponse?.data?.agent_name || formData.name || agentName
+      router.push(`/agents/${newName}/view`)
     } catch (error) {
       console.error('Failed to update agent:', error)
       toast.error('Failed to update agent')
@@ -448,6 +470,9 @@ export default function EditAgentPage() {
                 setConfig={setPerformanceConfig}
                 agenticConfig={agenticConfig}
                 setAgenticConfig={setAgenticConfig}
+                executionBackend={executionBackend}
+                setExecutionBackend={setExecutionBackend}
+                hasServerlessExecution={hasServerlessExecution}
               />
             )}
             {activeTab === 'integrations' && (

@@ -74,17 +74,16 @@ def register_spawn_agent_tools(registry):
 
     registry.register_tool(
         name="spawn_agent",
-        description="""Spawn a sub-agent to handle complex, multi-step, or long-running tasks.
+        description="""Spawn a LOCAL sub-agent (same server, Celery worker) to handle a task in parallel.
 
-The sub-agent inherits your configuration (LLM, tools, system prompt) and runs the given task.
+ASYNC by default when run_in_background=true: returns a task_id immediately — the result is NOT available yet.
+You MUST poll with check_task(task_id) until status='completed' to get the result.
 
-Use this tool when:
-- The task requires deep research or analysis
-- The task involves multiple steps that benefit from focused attention
-- You need to run a task in the background while continuing other work
-- The task would take a long time and shouldn't block the conversation
+Use for fan-out / parallel work on the SAME Synkora instance:
+- Parallelise multiple independent research or analysis sub-tasks
+- Run a long task without blocking other work
 
-For background tasks, use run_in_background=true and retrieve results with check_task.""",
+Do NOT use for calling a remote agent at an external URL — use call_remote_agent instead.""",
         parameters={
             "type": "object",
             "properties": {

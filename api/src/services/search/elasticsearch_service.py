@@ -5,6 +5,7 @@ Provides Elasticsearch connection and search capabilities for agents.
 """
 
 import logging
+import os
 from typing import Any
 
 from elasticsearch import AsyncElasticsearch
@@ -43,6 +44,9 @@ class ElasticsearchService:
         protocol = "https" if self.use_ssl else "http"
         url = f"{protocol}://{self.host}:{self.port}"
 
+        # Fall back to ELASTICSEARCH_PASSWORD env var when no per-connection auth is set
+        es_env_password = os.getenv("ELASTICSEARCH_PASSWORD")
+
         # Initialize client with appropriate authentication
         try:
             if self.api_key:
@@ -50,6 +54,10 @@ class ElasticsearchService:
             elif self.username and self.password:
                 self.client = AsyncElasticsearch(
                     [url], basic_auth=(self.username, self.password), verify_certs=self.verify_certs
+                )
+            elif es_env_password:
+                self.client = AsyncElasticsearch(
+                    [url], basic_auth=("elastic", es_env_password), verify_certs=self.verify_certs
                 )
             else:
                 self.client = AsyncElasticsearch([url], verify_certs=self.verify_certs)

@@ -17,6 +17,7 @@ from src.services.voice.openai_provider import OpenAITTSProvider, OpenAIWhisperP
 # Helpers
 # ---------------------------------------------------------------------------
 
+
 def _make_httpx_client(json_data=None, content=b"", status_code=200, raise_status=None):
     """Return a mock httpx.AsyncClient context manager."""
     mock_response = MagicMock()
@@ -39,6 +40,7 @@ def _make_httpx_client(json_data=None, content=b"", status_code=200, raise_statu
 # ---------------------------------------------------------------------------
 # OpenAIWhisperProvider — init
 # ---------------------------------------------------------------------------
+
 
 @pytest.mark.unit
 class TestOpenAIWhisperProviderInit:
@@ -73,6 +75,7 @@ class TestOpenAIWhisperProviderInit:
 # OpenAIWhisperProvider — transcribe
 # ---------------------------------------------------------------------------
 
+
 @pytest.mark.unit
 class TestOpenAIWhisperProviderTranscribe:
     async def test_no_api_key_raises(self):
@@ -82,12 +85,14 @@ class TestOpenAIWhisperProviderTranscribe:
 
     async def test_returns_formatted_dict(self):
         p = OpenAIWhisperProvider(api_key="k")
-        mock_client, _ = _make_httpx_client(json_data={
-            "text": "Hello world",
-            "language": "en",
-            "duration": 2.5,
-            "segments": [{"start": 0, "end": 2.5}],
-        })
+        mock_client, _ = _make_httpx_client(
+            json_data={
+                "text": "Hello world",
+                "language": "en",
+                "duration": 2.5,
+                "segments": [{"start": 0, "end": 2.5}],
+            }
+        )
         with patch("src.services.voice.openai_provider.httpx.AsyncClient", return_value=mock_client):
             result = await p.transcribe(b"audio")
 
@@ -178,6 +183,7 @@ class TestOpenAIWhisperProviderTranscribe:
 # OpenAITTSProvider — init
 # ---------------------------------------------------------------------------
 
+
 @pytest.mark.unit
 class TestOpenAITTSProviderInit:
     def test_default_model_is_tts_1(self):
@@ -204,7 +210,7 @@ class TestOpenAITTSProviderInit:
         assert len(OpenAITTSProvider.VOICES) == 6
 
     def test_all_voices_have_required_fields(self):
-        for voice_id, info in OpenAITTSProvider.VOICES.items():
+        for _voice_id, info in OpenAITTSProvider.VOICES.items():
             assert "name" in info
             assert "gender" in info
             assert "description" in info
@@ -213,6 +219,7 @@ class TestOpenAITTSProviderInit:
 # ---------------------------------------------------------------------------
 # OpenAITTSProvider — synthesize
 # ---------------------------------------------------------------------------
+
 
 @pytest.mark.unit
 class TestOpenAITTSProviderSynthesize:
@@ -296,6 +303,7 @@ class TestOpenAITTSProviderSynthesize:
 # OpenAITTSProvider — get_voices
 # ---------------------------------------------------------------------------
 
+
 @pytest.mark.unit
 class TestOpenAITTSProviderGetVoices:
     async def test_returns_all_six_voices(self):
@@ -329,6 +337,7 @@ class TestOpenAITTSProviderGetVoices:
 # ElevenLabsProvider — init
 # ---------------------------------------------------------------------------
 
+
 @pytest.mark.unit
 class TestElevenLabsProviderInit:
     def test_default_model_id(self):
@@ -359,6 +368,7 @@ class TestElevenLabsProviderInit:
 # ---------------------------------------------------------------------------
 # ElevenLabsProvider — synthesize
 # ---------------------------------------------------------------------------
+
 
 @pytest.mark.unit
 class TestElevenLabsProviderSynthesize:
@@ -475,6 +485,7 @@ class TestElevenLabsProviderSynthesize:
 # ElevenLabsProvider — get_voices
 # ---------------------------------------------------------------------------
 
+
 @pytest.mark.unit
 class TestElevenLabsProviderGetVoices:
     async def test_no_api_key_raises(self):
@@ -484,18 +495,20 @@ class TestElevenLabsProviderGetVoices:
 
     async def test_returns_voice_list(self):
         p = ElevenLabsProvider(api_key="k")
-        mock_client, _ = _make_httpx_client(json_data={
-            "voices": [
-                {
-                    "voice_id": "v1",
-                    "name": "Rachel",
-                    "labels": {"language": "en", "gender": "female"},
-                    "description": "Calm",
-                    "category": "premade",
-                    "preview_url": "http://ex.com/preview",
-                }
-            ]
-        })
+        mock_client, _ = _make_httpx_client(
+            json_data={
+                "voices": [
+                    {
+                        "voice_id": "v1",
+                        "name": "Rachel",
+                        "labels": {"language": "en", "gender": "female"},
+                        "description": "Calm",
+                        "category": "premade",
+                        "preview_url": "http://ex.com/preview",
+                    }
+                ]
+            }
+        )
         with patch("src.services.voice.elevenlabs_provider.httpx.AsyncClient", return_value=mock_client):
             voices = await p.get_voices()
 
@@ -508,12 +521,26 @@ class TestElevenLabsProviderGetVoices:
 
     async def test_language_filter_includes_matching(self):
         p = ElevenLabsProvider(api_key="k")
-        mock_client, _ = _make_httpx_client(json_data={
-            "voices": [
-                {"voice_id": "v1", "name": "A", "labels": {"language": "en"}, "description": "", "category": "premade"},
-                {"voice_id": "v2", "name": "B", "labels": {"language": "fr"}, "description": "", "category": "premade"},
-            ]
-        })
+        mock_client, _ = _make_httpx_client(
+            json_data={
+                "voices": [
+                    {
+                        "voice_id": "v1",
+                        "name": "A",
+                        "labels": {"language": "en"},
+                        "description": "",
+                        "category": "premade",
+                    },
+                    {
+                        "voice_id": "v2",
+                        "name": "B",
+                        "labels": {"language": "fr"},
+                        "description": "",
+                        "category": "premade",
+                    },
+                ]
+            }
+        )
         with patch("src.services.voice.elevenlabs_provider.httpx.AsyncClient", return_value=mock_client):
             voices = await p.get_voices(language="en")
 
@@ -523,11 +550,19 @@ class TestElevenLabsProviderGetVoices:
 
     async def test_language_filter_includes_multi_voices(self):
         p = ElevenLabsProvider(api_key="k")
-        mock_client, _ = _make_httpx_client(json_data={
-            "voices": [
-                {"voice_id": "vm", "name": "Multi", "labels": {"language": "multi"}, "description": "", "category": "premade"},
-            ]
-        })
+        mock_client, _ = _make_httpx_client(
+            json_data={
+                "voices": [
+                    {
+                        "voice_id": "vm",
+                        "name": "Multi",
+                        "labels": {"language": "multi"},
+                        "description": "",
+                        "category": "premade",
+                    },
+                ]
+            }
+        )
         with patch("src.services.voice.elevenlabs_provider.httpx.AsyncClient", return_value=mock_client):
             voices = await p.get_voices(language="de")
 
@@ -535,12 +570,26 @@ class TestElevenLabsProviderGetVoices:
 
     async def test_no_language_filter_returns_all(self):
         p = ElevenLabsProvider(api_key="k")
-        mock_client, _ = _make_httpx_client(json_data={
-            "voices": [
-                {"voice_id": "v1", "name": "A", "labels": {"language": "en"}, "description": "", "category": "premade"},
-                {"voice_id": "v2", "name": "B", "labels": {"language": "fr"}, "description": "", "category": "premade"},
-            ]
-        })
+        mock_client, _ = _make_httpx_client(
+            json_data={
+                "voices": [
+                    {
+                        "voice_id": "v1",
+                        "name": "A",
+                        "labels": {"language": "en"},
+                        "description": "",
+                        "category": "premade",
+                    },
+                    {
+                        "voice_id": "v2",
+                        "name": "B",
+                        "labels": {"language": "fr"},
+                        "description": "",
+                        "category": "premade",
+                    },
+                ]
+            }
+        )
         with patch("src.services.voice.elevenlabs_provider.httpx.AsyncClient", return_value=mock_client):
             voices = await p.get_voices()
 
@@ -563,6 +612,7 @@ class TestElevenLabsProviderGetVoices:
 # ElevenLabsProvider — get_models
 # ---------------------------------------------------------------------------
 
+
 @pytest.mark.unit
 class TestElevenLabsProviderGetModels:
     async def test_no_api_key_raises(self):
@@ -572,16 +622,18 @@ class TestElevenLabsProviderGetModels:
 
     async def test_returns_formatted_model_list(self):
         p = ElevenLabsProvider(api_key="k")
-        mock_client, _ = _make_httpx_client(json_data=[
-            {
-                "model_id": "eleven_monolingual_v1",
-                "name": "Eleven English v1",
-                "description": "TTS model",
-                "languages": ["en"],
-                "can_do_text_to_speech": True,
-                "can_do_voice_conversion": False,
-            }
-        ])
+        mock_client, _ = _make_httpx_client(
+            json_data=[
+                {
+                    "model_id": "eleven_monolingual_v1",
+                    "name": "Eleven English v1",
+                    "description": "TTS model",
+                    "languages": ["en"],
+                    "can_do_text_to_speech": True,
+                    "can_do_voice_conversion": False,
+                }
+            ]
+        )
         with patch("src.services.voice.elevenlabs_provider.httpx.AsyncClient", return_value=mock_client):
             models = await p.get_models()
 
@@ -596,6 +648,7 @@ class TestElevenLabsProviderGetModels:
 # ElevenLabsProvider — get_user_info
 # ---------------------------------------------------------------------------
 
+
 @pytest.mark.unit
 class TestElevenLabsProviderGetUserInfo:
     async def test_no_api_key_raises(self):
@@ -605,15 +658,17 @@ class TestElevenLabsProviderGetUserInfo:
 
     async def test_returns_subscription_fields(self):
         p = ElevenLabsProvider(api_key="k")
-        mock_client, _ = _make_httpx_client(json_data={
-            "subscription": {
-                "character_count": 1000,
-                "character_limit": 10000,
-                "can_extend_character_limit": True,
-                "tier": "starter",
-                "status": "active",
+        mock_client, _ = _make_httpx_client(
+            json_data={
+                "subscription": {
+                    "character_count": 1000,
+                    "character_limit": 10000,
+                    "can_extend_character_limit": True,
+                    "tier": "starter",
+                    "status": "active",
+                }
             }
-        })
+        )
         with patch("src.services.voice.elevenlabs_provider.httpx.AsyncClient", return_value=mock_client):
             info = await p.get_user_info()
 
@@ -649,6 +704,7 @@ class TestElevenLabsProviderGetUserInfo:
 # ---------------------------------------------------------------------------
 # ElevenLabsProvider — get_supported_languages
 # ---------------------------------------------------------------------------
+
 
 @pytest.mark.unit
 class TestElevenLabsProviderSupportedLanguages:

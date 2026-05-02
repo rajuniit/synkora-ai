@@ -309,6 +309,13 @@ class ADKToolRegistry:
 
         register_infographic_tools(self)
 
+        # AI image generation tools (DALL-E 3 / Google Imagen 3)
+        from src.services.agents.tool_registrations.image_generation_tools_registry import (
+            register_image_generation_tools,
+        )
+
+        register_image_generation_tools(self)
+
         # Recall.ai meeting bot tools - use modular registry
         from src.services.agents.tool_registrations.recall_tools_registry import register_recall_tools
 
@@ -998,12 +1005,42 @@ Supports: Git, GitHub CLI, npm, pip, Docker, file operations (ls, cat, mkdir, et
 
         self.register_tool(
             name="internal_query_database",
-            description="Execute SQL queries on connected PostgreSQL or Elasticsearch databases. Returns query results with row count and column information.",
+            description=(
+                "Execute a SQL (or Elasticsearch DSL / PostgREST JSON) query on a connected "
+                "database. Returns rows, row count, and column names.\n\n"
+                "DATABASE-TYPE RULES:\n"
+                "• PostgreSQL / MySQL / DuckDB / SQLite / BigQuery / Snowflake / ClickHouse / SQLServer:\n"
+                "  Use standard SQL. For large tables prefer aggregation over SELECT *.\n"
+                "  LARGE-TABLE RULES:\n"
+                "  1. NEVER write SELECT * without LIMIT on any table not confirmed small (< 1 000 rows).\n"
+                "  2. For analysis (totals, averages, trends): use GROUP BY + COUNT/SUM/AVG/MIN/MAX.\n"
+                "     • Count by status:  SELECT status, COUNT(*) FROM orders GROUP BY status\n"
+                "     • Daily trend:      SELECT DATE(created_at), COUNT(*) FROM events GROUP BY 1 ORDER BY 1\n"
+                "     • Top N:            SELECT user_id, SUM(amount) FROM payments GROUP BY user_id ORDER BY 2 DESC LIMIT 10\n"
+                "  3. For sampling: SELECT * FROM table LIMIT 100\n"
+                "  4. Broad SELECT * on tables > 50 000 rows is automatically blocked.\n\n"
+                "• Supabase (PostgREST):\n"
+                "  Does NOT support raw SQL aggregates (COUNT/SUM/GROUP BY) or expressions like DATE_TRUNC.\n"
+                "  Use JSON format or simple SQL without aggregates:\n"
+                '  JSON:  {"table": "users", "select": "id,name,status", "eq": {"status": "active"}, "limit": 100}\n'
+                "  SQL:   SELECT id, name FROM users WHERE status = 'active' LIMIT 100\n"
+                "  For aggregations on Supabase, use an RPC call to a pre-created database function:\n"
+                '  RPC:   {"rpc": "my_aggregate_function", "params": {}}\n\n'
+                "• Elasticsearch: Use Elasticsearch DSL JSON.\n"
+                "• MongoDB: Use MongoDB query JSON."
+            ),
             parameters={
                 "type": "object",
                 "properties": {
                     "connection_id": {"type": "string", "description": "UUID of the database connection to use"},
-                    "query": {"type": "string", "description": "SQL query or Elasticsearch DSL query to execute"},
+                    "query": {
+                        "type": "string",
+                        "description": (
+                            "SQL query to execute. Must use aggregation (GROUP BY / COUNT / SUM / AVG) "
+                            "for large tables. Add LIMIT ≤ 1000 when fetching raw rows. "
+                            "Elasticsearch connections accept DSL JSON instead of SQL."
+                        ),
+                    },
                 },
                 "required": ["connection_id", "query"],
             },

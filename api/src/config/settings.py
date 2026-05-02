@@ -14,11 +14,14 @@ from pydantic_settings import BaseSettings, SettingsConfigDict
 from .celery import CeleryConfig
 from .database import DatabaseConfig
 from .feature import (
+    AWSConfig,
     BotWorkerConfig,
     CompanyBrainConfig,
     ComputeConfig,
+    DOConfig,
     DomainConfig,
     FileUploadConfig,
+    GCPConfig,
     HttpConfig,
     LangfuseConfig,
     LLMConfig,
@@ -65,6 +68,12 @@ class AppConfig(BaseSettings):
         description="Public-facing base URL of the API server (used to construct webhook URLs).",
     )
 
+    app_base_url: str | None = Field(
+        default=None,
+        validation_alias="APP_BASE_URL",
+        description="Public-facing base URL for A2A same-instance routing and SSRF bypass.",
+    )
+
     @property
     def is_development(self) -> bool:
         """Check if running in development mode."""
@@ -100,6 +109,10 @@ class Settings(
     WorkspaceConfig,
     ComputeConfig,
     CompanyBrainConfig,
+    # Cloud/serverless execution backends
+    AWSConfig,
+    GCPConfig,
+    DOConfig,
 ):
     """Main application settings combining all config modules."""
 

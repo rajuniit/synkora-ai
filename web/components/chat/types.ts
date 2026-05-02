@@ -49,11 +49,23 @@ export interface InfographicData {
   svg_content?: string
 }
 
+export interface GeneratedImageData {
+  id?: string
+  url?: string | null
+  prompt?: string
+  revised_prompt?: string
+  model?: string
+  provider?: string
+  size?: string
+  created_at?: string
+}
+
 export interface MessageMetadata {
   sources?: Source[]
   charts?: ChartData[]
   diagrams?: DiagramData[]
   infographics?: InfographicData[]
+  generated_images?: GeneratedImageData[]
   tables?: TableData[]
   keyPeople?: Person[]
   news?: NewsItem[]

@@ -8,6 +8,7 @@ as well as chart generation from query results.
 import asyncio
 import json
 import logging
+import re
 import time
 from typing import Any
 from uuid import UUID
@@ -54,6 +55,117 @@ _MAX_RESULT_CHARS = 50_000
 _CHARTJS_TYPES = {"bar", "line", "pie", "doughnut", "scatter"}
 _RECHARTS_TYPES = {"area", "stacked_bar", "radar", "treemap", "funnel"}
 _PLOTLY_TYPES = {"heatmap", "box", "box_plot", "violin", "candlestick", "waterfall"}
+
+
+# ---------------------------------------------------------------------------
+# Write-statement guard — prevent agents from issuing mutating SQL
+# ---------------------------------------------------------------------------
+
+_WRITE_PATTERN = re.compile(
+    r"^\s*(INSERT|UPDATE|DELETE|DROP|TRUNCATE|ALTER|CREATE|REPLACE|GRANT|REVOKE|EXEC|EXECUTE|MERGE)\b",
+    re.IGNORECASE,
+)
+
+# ---------------------------------------------------------------------------
+# Row-count guard — prevent LLM from fetching millions of raw rows
+# ---------------------------------------------------------------------------
+
+# SQL-based DB types where we can run COUNT(*) to estimate table size
+_SQL_COUNT_GUARD_TYPES = frozenset(
+    # Supabase excluded — PostgREST blocks COUNT(*) queries (PGRST123) unless
+    # db-aggregates-enabled=true, which Supabase disables by default.
+    {"POSTGRESQL", "MYSQL", "BIGQUERY", "SNOWFLAKE", "SQLSERVER", "CLICKHOUSE", "DUCKDB", "SQLITE"}
+)
+
+# If estimated row count exceeds this, force the LLM to use aggregation
+_COUNT_GUARD_THRESHOLD = 50_000
+
+
+def _is_broad_select(query: str) -> bool:
+    """
+    Return True if *query* looks like a broad SELECT that could return millions of rows.
+
+    A SELECT is 'broad' when it has none of: LIMIT, GROUP BY, or aggregate functions
+    (COUNT/SUM/AVG/MIN/MAX and friends).  Any of those patterns means the query
+    is already scoped or aggregated and we let it through.
+    """
+    q = query.strip().upper()
+    if not q.startswith("SELECT"):
+        return False
+    if re.search(r"\bLIMIT\b", q):
+        return False
+    if re.search(r"\bGROUP\s+BY\b", q):
+        return False
+    if re.search(r"\b(COUNT|SUM|AVG|MIN|MAX|PERCENTILE|STDDEV|VARIANCE|MEDIAN)\s*\(", q):
+        return False
+    return True
+
+
+def _extract_from_table(query: str) -> str | None:
+    """
+    Extract the table name from the outermost FROM clause of a SELECT query.
+
+    Skips FROM clauses that appear inside parentheses (subqueries, CTEs).
+    Returns None when no suitable table name is found.
+    """
+    # Walk the query character-by-character tracking parenthesis depth.
+    # Only consider FROM tokens at depth 0 (outermost query).
+    depth = 0
+    i = 0
+    length = len(query)
+    while i < length:
+        ch = query[i]
+        if ch == "(":
+            depth += 1
+        elif ch == ")":
+            depth -= 1
+        elif depth == 0 and query[i : i + 4].upper() == "FROM":
+            # Confirm it's a word boundary (not e.g. "INFORM")
+            before = query[i - 1] if i > 0 else " "
+            after = query[i + 4] if i + 4 < length else " "
+            if not before.isalnum() and before != "_" and (not after.isalnum() and after != "_"):
+                # Found FROM at top level — extract the table token
+                rest = query[i + 4 :].lstrip()
+                m = re.match(r'(["\']?[\w.]+["\']?)', rest)
+                if m:
+                    raw = m.group(1).strip("\"'`")
+                    # Skip subquery opening paren or keyword
+                    if not raw or raw.upper() in ("SELECT", "WITH"):
+                        return None
+                    return raw
+                return None
+        i += 1
+    return None
+
+
+async def _estimate_row_count(connector: Any, table_name: str) -> int | None:
+    """
+    Run ``SELECT COUNT(*) FROM table`` via *connector* and return the integer.
+
+    Returns None if the estimate fails (e.g. schema-qualified names, views,
+    virtual tables).  Failures are non-blocking — the guard simply skips.
+    """
+    try:
+        # Quote the table name correctly.  schema.table → "schema"."table"; plain → "table".
+        if "." in table_name:
+            schema, tbl = table_name.split(".", 1)
+            quoted = f'"{schema}"."{tbl}"'
+        else:
+            quoted = f'"{table_name}"'
+        result = await connector.execute_query(f"SELECT COUNT(*) AS _n FROM {quoted}")
+        rows = result.get("rows", [])
+        if rows:
+            row = rows[0]
+            for key in ("_n", "n", "count", "COUNT(*)", "count(*)"):
+                if key in row:
+                    return int(row[key])
+            # Fall back to first value in the row
+            val = next(iter(row.values()), None)
+            if val is not None:
+                return int(val)
+    except Exception as e:
+        logger.debug("Row count estimation skipped for '%s': %s", table_name, e)
+    return None
 
 
 def _truncate_rows_for_llm(rows: list, total_rows: int) -> tuple[list, str | None]:
@@ -215,8 +327,56 @@ async def internal_query_database(
         if connection.status != "active":
             return {"success": False, "error": f"Database connection is not active. Status: {connection.status}"}
 
+        # Write-statement guard: block mutating SQL unless the connection explicitly allows writes.
+        if _WRITE_PATTERN.match(query.strip()):
+            return {
+                "error": "Write statements are not permitted. Only SELECT queries are allowed.",
+                "rows": [],
+                "columns": [],
+                "success": False,
+            }
+
         # Execute query based on database type (use cached connector)
         db_type = str(connection.database_type).upper()
+
+        # Row-count guard: prevent broad SELECT * on large tables.
+        # Run a fast COUNT(*) first; if the table is too large, return a
+        # structured error so the LLM rewrites the query with aggregations.
+        if db_type in _SQL_COUNT_GUARD_TYPES and _is_broad_select(query):
+            table_name = _extract_from_table(query)
+            if table_name:
+                try:
+                    connector = await _get_or_create_connector(connection)
+                    if connector:
+                        row_count = await _estimate_row_count(connector, table_name)
+                        if row_count is not None and row_count > _COUNT_GUARD_THRESHOLD:
+                            logger.info(
+                                "[DB Guard] Blocked broad SELECT on '%s' (%d rows > %d threshold)",
+                                table_name,
+                                row_count,
+                                _COUNT_GUARD_THRESHOLD,
+                            )
+                            return {
+                                "success": False,
+                                "error": (
+                                    f"Table '{table_name}' contains {row_count:,} rows — too large to "
+                                    f"fetch with SELECT *. Rewrite the query using aggregation:\n"
+                                    f"  • GROUP BY + COUNT/SUM/AVG to compute statistics\n"
+                                    f"  • WHERE filters to narrow rows before fetching\n"
+                                    f"  • LIMIT ≤1000 only for sampling a few rows\n"
+                                    f"Example: SELECT status, COUNT(*) AS total "
+                                    f"FROM {table_name} GROUP BY status\n"
+                                    f"Never use SELECT * on tables with more than "
+                                    f"{_COUNT_GUARD_THRESHOLD:,} rows."
+                                ),
+                                "row_count_estimate": row_count,
+                                "connection_name": connection.name,
+                                "database_type": db_type.lower(),
+                            }
+                except Exception as guard_err:
+                    # Guard is non-blocking — log and continue with the original query
+                    logger.debug("[DB Guard] Count check skipped (non-blocking): %s", guard_err)
+
         if db_type == "POSTGRESQL":
             return await _execute_postgresql_query(connection, query)
         elif db_type == "ELASTICSEARCH":

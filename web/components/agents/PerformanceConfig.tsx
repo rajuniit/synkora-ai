@@ -1,5 +1,9 @@
 'use client'
 
+import { Lock } from 'lucide-react'
+
+type ExecutionBackend = 'celery' | 'lambda' | 'cloud_run' | 'do_functions'
+
 interface PerformanceConfig {
   rag: {
     enabled: boolean
@@ -27,6 +31,9 @@ interface PerformanceConfigProps {
   setConfig: (config: PerformanceConfig) => void
   agenticConfig?: AgenticConfig
   setAgenticConfig?: (config: AgenticConfig) => void
+  executionBackend?: ExecutionBackend
+  setExecutionBackend?: (backend: ExecutionBackend) => void
+  hasServerlessExecution?: boolean
 }
 
 const DEFAULT_CONFIG: PerformanceConfig = {
@@ -51,7 +58,15 @@ const DEFAULT_AGENTIC_CONFIG: AgenticConfig = {
   parallel_tools: true,
 }
 
-export default function PerformanceConfig({ config, setConfig, agenticConfig, setAgenticConfig }: PerformanceConfigProps) {
+export default function PerformanceConfig({
+  config,
+  setConfig,
+  agenticConfig,
+  setAgenticConfig,
+  executionBackend = 'celery',
+  setExecutionBackend,
+  hasServerlessExecution = false,
+}: PerformanceConfigProps) {
   const currentConfig = config || DEFAULT_CONFIG
   const currentAgenticConfig = agenticConfig || DEFAULT_AGENTIC_CONFIG
 
@@ -75,6 +90,76 @@ export default function PerformanceConfig({ config, setConfig, agenticConfig, se
           <li><strong>Skills:</strong> Control when skills are included</li>
         </ul>
       </div>
+
+      {/* Execution Backend */}
+      {setExecutionBackend && (
+        <div className="bg-white border border-gray-200 rounded-lg p-5">
+          <div className="mb-4">
+            <h4 className="text-base font-semibold text-gray-900">Execution Backend</h4>
+            <p className="text-sm text-gray-600 mt-1">
+              Choose where scheduled agent tasks run. Credentials are configured by the platform operator via environment variables.
+            </p>
+          </div>
+
+          <div className="mb-4">
+            <label className="block text-sm font-medium text-gray-700 mb-2">Backend</label>
+            <select
+              value={executionBackend}
+              onChange={(e) => {
+                const val = e.target.value as ExecutionBackend
+                if (val !== 'celery' && !hasServerlessExecution) return
+                setExecutionBackend(val)
+              }}
+              className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:ring-2 focus:ring-amber-400 focus:border-transparent"
+            >
+              <option value="celery">Celery Workers (Default)</option>
+              <option value="do_functions" disabled={!hasServerlessExecution}>
+                DigitalOcean Functions (native, &lt;15 min){!hasServerlessExecution ? ' — Professional+ required' : ''}
+              </option>
+              <option value="lambda" disabled={!hasServerlessExecution}>
+                AWS Lambda (&lt;15 min){!hasServerlessExecution ? ' — Professional+ required' : ''}
+              </option>
+              <option value="cloud_run" disabled={!hasServerlessExecution}>
+                Google Cloud Run (all task types, no time limit){!hasServerlessExecution ? ' — Professional+ required' : ''}
+              </option>
+            </select>
+            {!hasServerlessExecution && (
+              <div className="flex items-center gap-2 mt-2 text-sm text-gray-500">
+                <Lock className="w-4 h-4 flex-shrink-0" />
+                <span>Serverless execution (Cloud Run, Lambda) is available on Professional and Enterprise plans. <a href="/settings/billing" className="text-amber-600 hover:underline">Upgrade your plan</a> to enable it.</span>
+              </div>
+            )}
+          </div>
+
+          {executionBackend === 'do_functions' && (
+            <div className="bg-blue-50 border border-blue-200 rounded-lg p-3">
+              <p className="text-sm text-blue-800">
+                DigitalOcean Functions are the native serverless option since your platform runs on DigitalOcean.
+                Maximum execution time is 15 minutes — not suitable for <strong>autonomous_agent</strong> tasks.
+                Configure via <code className="bg-blue-100 px-1 rounded">DO_API_TOKEN</code> and <code className="bg-blue-100 px-1 rounded">DO_FUNCTIONS_ENDPOINT</code> environment variables.
+              </p>
+            </div>
+          )}
+
+          {executionBackend === 'lambda' && (
+            <div className="bg-amber-50 border border-amber-200 rounded-lg p-3">
+              <p className="text-sm text-amber-800">
+                AWS Lambda has a 15-minute hard execution limit. Not supported for <strong>autonomous_agent</strong> tasks — use Google Cloud Run instead.
+                Platform credentials (ARN, region, keys) must be configured via <code className="bg-amber-100 px-1 rounded">AWS_*</code> environment variables.
+              </p>
+            </div>
+          )}
+
+          {executionBackend === 'cloud_run' && (
+            <div className="bg-green-50 border border-green-200 rounded-lg p-3">
+              <p className="text-sm text-green-800">
+                Google Cloud Run Jobs have no execution time limit — recommended for <strong>autonomous_agent</strong> tasks.
+                Platform credentials (project, region, service account) must be configured via <code className="bg-green-100 px-1 rounded">GCP_*</code> environment variables.
+              </p>
+            </div>
+          )}
+        </div>
+      )}
 
       {/* Caching Settings */}
       <div className="bg-white border border-gray-200 rounded-lg p-5">

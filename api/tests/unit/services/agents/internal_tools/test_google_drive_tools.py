@@ -165,7 +165,9 @@ class TestInternalGoogleDriveMoveFile:
     async def test_requires_runtime_context(self):
         from src.services.agents.internal_tools.google_drive_tools import internal_google_drive_move_file
 
-        result = await internal_google_drive_move_file(file_id="file-123", new_parent_folder_id="folder-456", runtime_context=None)
+        result = await internal_google_drive_move_file(
+            file_id="file-123", new_parent_folder_id="folder-456", runtime_context=None
+        )
         assert result["success"] is False
         assert "Runtime context" in result["error"]
 
@@ -177,7 +179,9 @@ class TestInternalGoogleDriveShareFile:
     async def test_requires_runtime_context(self):
         from src.services.agents.internal_tools.google_drive_tools import internal_google_drive_share_file
 
-        result = await internal_google_drive_share_file(file_id="file-123", email="user@example.com", runtime_context=None)
+        result = await internal_google_drive_share_file(
+            file_id="file-123", email="user@example.com", runtime_context=None
+        )
         assert result["success"] is False
         assert "Runtime context" in result["error"]
 
@@ -201,7 +205,9 @@ class TestInternalGoogleDriveRemovePermission:
     async def test_requires_runtime_context(self):
         from src.services.agents.internal_tools.google_drive_tools import internal_google_drive_remove_permission
 
-        result = await internal_google_drive_remove_permission(file_id="file-123", permission_id="perm-456", runtime_context=None)
+        result = await internal_google_drive_remove_permission(
+            file_id="file-123", permission_id="perm-456", runtime_context=None
+        )
         assert result["success"] is False
         assert "Runtime context" in result["error"]
 
@@ -237,7 +243,9 @@ class TestInternalGoogleDocsAppendContent:
     async def test_requires_runtime_context(self):
         from src.services.agents.internal_tools.google_drive_tools import internal_google_docs_append_content
 
-        result = await internal_google_docs_append_content(document_id="doc-123", content="New content", runtime_context=None)
+        result = await internal_google_docs_append_content(
+            document_id="doc-123", content="New content", runtime_context=None
+        )
         assert result["success"] is False
         assert "Runtime context" in result["error"]
 
@@ -273,7 +281,9 @@ class TestInternalGoogleSheetsWriteRange:
     async def test_requires_runtime_context(self):
         from src.services.agents.internal_tools.google_drive_tools import internal_google_sheets_write_range
 
-        result = await internal_google_sheets_write_range(spreadsheet_id="sheet-123", range_name="Sheet1!A1", values=[["Hello"]], runtime_context=None)
+        result = await internal_google_sheets_write_range(
+            spreadsheet_id="sheet-123", range_name="Sheet1!A1", values=[["Hello"]], runtime_context=None
+        )
         assert result["success"] is False
         assert "Runtime context" in result["error"]
 

@@ -4,6 +4,12 @@ User OAuth Token Model.
 Stores per-user OAuth tokens for different OAuth apps.
 This allows each user to connect their own account to an OAuth app,
 rather than sharing a single token at the OAuthApp level.
+
+SECURITY: access_token and refresh_token are stored encrypted at rest via
+Fernet (from src.services.agents.security).  They are exposed via Python
+properties that transparently encrypt on write and decrypt on read.  The
+raw ``_access_token_enc`` / ``_refresh_token_enc`` columns must never be
+read directly — always go through the properties.
 """
 
 from sqlalchemy import Column, DateTime, ForeignKey, Integer, String, Text, UniqueConstraint
@@ -34,10 +40,69 @@ class UserOAuthToken(BaseModel):
         comment="OAuth app configuration this token belongs to",
     )
 
-    # Encrypted tokens
-    access_token = Column(Text, nullable=False, comment="Encrypted access token")
-    refresh_token = Column(Text, nullable=True, comment="Encrypted refresh token (if provided by OAuth provider)")
+    # Encrypted token storage — do NOT access these columns directly.
+    # Use the access_token / refresh_token properties instead.
+    _access_token_enc = Column("access_token", Text, nullable=False, comment="Fernet-encrypted access token")
+    _refresh_token_enc = Column(
+        "refresh_token", Text, nullable=True, comment="Fernet-encrypted refresh token (if provided by provider)"
+    )
     token_expires_at = Column(DateTime(timezone=True), nullable=True, comment="Token expiration timestamp")
+
+    # ------------------------------------------------------------------
+    # Encrypted property accessors
+    # ------------------------------------------------------------------
+
+    @property
+    def access_token(self) -> str | None:
+        """Return the decrypted access token."""
+        if not self._access_token_enc:
+            return None
+        try:
+            from src.services.agents.security import decrypt_value  # noqa: PLC0415
+
+            return decrypt_value(self._access_token_enc)
+        except Exception:
+            # If decryption fails (e.g. key rotation), return None rather than
+            # leaking the ciphertext.
+            return None
+
+    @access_token.setter
+    def access_token(self, value: str | None) -> None:
+        """Encrypt and store the access token."""
+        if value is None:
+            self._access_token_enc = None  # type: ignore[assignment]
+            return
+        try:
+            from src.services.agents.security import encrypt_value  # noqa: PLC0415
+
+            self._access_token_enc = encrypt_value(value)
+        except Exception as exc:
+            raise RuntimeError("Failed to encrypt access_token — check ENCRYPTION_KEY configuration") from exc
+
+    @property
+    def refresh_token(self) -> str | None:
+        """Return the decrypted refresh token."""
+        if not self._refresh_token_enc:
+            return None
+        try:
+            from src.services.agents.security import decrypt_value  # noqa: PLC0415
+
+            return decrypt_value(self._refresh_token_enc)
+        except Exception:
+            return None
+
+    @refresh_token.setter
+    def refresh_token(self, value: str | None) -> None:
+        """Encrypt and store the refresh token."""
+        if value is None:
+            self._refresh_token_enc = None  # type: ignore[assignment]
+            return
+        try:
+            from src.services.agents.security import encrypt_value  # noqa: PLC0415
+
+            self._refresh_token_enc = encrypt_value(value)
+        except Exception as exc:
+            raise RuntimeError("Failed to encrypt refresh_token — check ENCRYPTION_KEY configuration") from exc
 
     # Provider user info (for display purposes)
     provider_user_id = Column(String(255), nullable=True, comment="User ID from the OAuth provider")

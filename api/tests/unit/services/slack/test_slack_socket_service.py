@@ -132,9 +132,7 @@ class TestSlackSocketService:
         mock_client = MagicMock()
         mock_say = AsyncMock()
 
-        with patch(
-            "src.services.slack.slack_socket_service.SlackMessageHandler"
-        ) as MockHandler:
+        with patch("src.services.slack.slack_socket_service.SlackMessageHandler") as MockHandler:
             mock_handler_instance = AsyncMock()
             MockHandler.return_value = mock_handler_instance
 
@@ -164,9 +162,7 @@ class TestSlackSocketService:
     @pytest.mark.asyncio
     async def test_handle_message_error_propagates(self, service, mock_slack_bot, mock_db_session):
         """Errors from SlackMessageHandler should propagate (handler owns error handling)."""
-        with patch(
-            "src.services.slack.slack_socket_service.SlackMessageHandler"
-        ) as MockHandler:
+        with patch("src.services.slack.slack_socket_service.SlackMessageHandler") as MockHandler:
             mock_handler_instance = AsyncMock()
             mock_handler_instance.handle_message.side_effect = Exception("Handler error")
             MockHandler.return_value = mock_handler_instance

@@ -3,7 +3,7 @@
 import os
 from typing import Literal
 
-from pydantic import Field
+from pydantic import Field, field_validator
 from pydantic_settings import BaseSettings
 
 
@@ -36,8 +36,8 @@ class SecurityConfig(BaseSettings):
     )
 
     jwt_access_token_expires: int = Field(
-        default=3600,
-        description="Access token expiration in seconds (default: 1 hour)",
+        default=900,
+        description="Access token expiration in seconds (default: 15 minutes)",
     )
 
     jwt_refresh_token_expires: int = Field(
@@ -45,7 +45,7 @@ class SecurityConfig(BaseSettings):
         description="Refresh token expiration in seconds (default: 30 days)",
     )
 
-    jwt_algorithm: str = Field(
+    jwt_algorithm: Literal["HS256", "HS384", "HS512", "RS256", "RS384", "RS512", "ES256"] = Field(
         default="HS256",
         description="JWT signing algorithm (HS256 recommended for single-service; RS256 for multi-service)",
     )
@@ -66,6 +66,15 @@ class SecurityConfig(BaseSettings):
         ),
     )
 
+    jwt_max_session_age_hours: int = Field(
+        default=12,
+        description=(
+            "Absolute maximum session lifetime in hours. "
+            "Even with valid refresh tokens, a session cannot exceed this age. "
+            "Configurable via JWT_MAX_SESSION_AGE_HOURS env var."
+        ),
+    )
+
     cookie_domain: str | None = Field(
         default=None,
         description=(
@@ -82,6 +91,47 @@ class SecurityConfig(BaseSettings):
             'Generate with: python -c "from cryptography.fernet import Fernet; print(Fernet.generate_key().decode())"'
         ),
     )
+
+    require_2fa_for_admin: bool = Field(
+        default=False,
+        description=(
+            "When True, OWNER and ADMIN accounts must have 2FA enabled to log in. "
+            "Enable in production via REQUIRE_2FA_FOR_ADMIN=true. "
+            "Disabled by default so tests and fresh deployments are not locked out."
+        ),
+    )
+
+    audit_chain_secret: str = Field(
+        default="",
+        description=(
+            "HMAC secret used to chain audit log entries for tamper detection. "
+            "If empty, audit log entries will not be chained and tampering cannot be detected. "
+            "MUST be set in production. "
+            'Generate with: python -c "import secrets; print(secrets.token_hex(32))"'
+        ),
+    )
+
+    @field_validator("secret_key", "jwt_secret_key")
+    @classmethod
+    def validate_key_entropy(cls, v: str) -> str:
+        if len(v) < 32:
+            raise ValueError("Key must be at least 32 characters")
+        if v.lower().startswith("your-") or v in ("change-me", "changeme", "secret"):
+            raise ValueError("Default placeholder key detected — set a real secret key")
+        return v
+
+    @field_validator("encryption_key")
+    @classmethod
+    def validate_encryption_key(cls, v: str) -> str:
+        # Fernet keys are URL-safe base64-encoded 32 bytes → 44 characters
+        if len(v) < 43:
+            raise ValueError(
+                "ENCRYPTION_KEY must be a valid Fernet key (~44 base64 chars). "
+                'Generate with: python -c "from cryptography.fernet import Fernet; print(Fernet.generate_key().decode())"'
+            )
+        if v.lower().startswith("your-") or v in ("change-me", "changeme"):
+            raise ValueError("Default placeholder ENCRYPTION_KEY detected — generate a real Fernet key")
+        return v
 
 
 class RateLimitConfig(BaseSettings):

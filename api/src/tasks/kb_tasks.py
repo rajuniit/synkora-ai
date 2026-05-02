@@ -52,8 +52,8 @@ def crawl_and_process_kb(
         include_subpages: Whether to follow same-domain links
     """
     try:
-        asyncio.run(_crawl_and_process_kb(data_source_id, tenant_id, url, max_pages, include_subpages))
-        return {"status": "completed"}
+        result = asyncio.run(_crawl_and_process_kb(data_source_id, tenant_id, url, max_pages, include_subpages))
+        return {"status": "completed", **(result or {})}
     except Exception as exc:
         logger.error(f"crawl_and_process_kb failed for data_source={data_source_id}: {exc}", exc_info=True)
         raise self.retry(exc=exc)
@@ -133,7 +133,7 @@ async def _process_kb_documents(data_source_id: int, tenant_id: str, documents: 
 
 async def _crawl_and_process_kb(
     data_source_id: int, tenant_id: str, url: str, max_pages: int, include_subpages: bool
-) -> None:
+) -> dict:
     """
     Crawl a website and embed its pages into a knowledge base.
 
@@ -165,17 +165,34 @@ async def _crawl_and_process_kb(
     headers = {"User-Agent": "AI-Agent/1.0 (Web Crawler)"}
 
     async def fetch_page(client: httpx.AsyncClient, page_url: str) -> dict[str, Any] | None:
-        """Fetch and parse a single page. Returns doc dict or None on failure."""
+        """Fetch and parse a single page. Returns doc dict or None on failure.
+
+        Strategy:
+        1. Try a plain HTTP GET with BeautifulSoup (fast, no JS).
+        2. If the page returns empty text (SPA/JS-rendered), fall back to the
+           scraper microservice which uses a headless Playwright browser.
+        """
         is_valid, err = validate_url(
             page_url, allowed_schemes=["http", "https"], block_private_ips=True, resolve_dns=True
         )
         if not is_valid:
             logger.warning(f"SSRF blocked: {page_url} — {err}")
             return None
+
+        title = page_url
+        text = ""
+        new_links: list[str] = []
+
+        # --- Attempt 1: plain HTTP (fast, no JS) ---
         try:
             async with semaphore:
                 response = await client.get(page_url, follow_redirects=True, timeout=20)
             if response.status_code >= 400:
+                logger.warning(f"Crawl skipped {page_url} — HTTP {response.status_code}")
+                return None
+            content_type = response.headers.get("content-type", "")
+            if "text/html" not in content_type and "text/plain" not in content_type:
+                logger.warning(f"Crawl skipped {page_url} — non-HTML content-type: {content_type}")
                 return None
             soup = BeautifulSoup(response.content, "html.parser")
             title = soup.title.string.strip() if soup.title and soup.title.string else page_url
@@ -183,11 +200,7 @@ async def _crawl_and_process_kb(
                 tag.decompose()
             lines = [ln.strip() for ln in soup.get_text(separator="\n").splitlines() if ln.strip()]
             text = "\n".join(lines)
-            if not text:
-                return None
 
-            # Discover subpage links
-            new_links: list[str] = []
             if include_subpages:
                 for a in soup.find_all("a", href=True):
                     href = a["href"]
@@ -197,21 +210,68 @@ async def _crawl_and_process_kb(
                     parsed_full = urlparse(full)
                     if parsed_full.netloc == parsed_base.netloc and full not in visited:
                         new_links.append(full)
-
-            return {
-                "id": page_url,
-                "text": text,
-                "new_links": new_links,
-                "metadata": {
-                    "title": title,
-                    "url": page_url,
-                    "source_type": "web",
-                    "upload_source": "crawl",
-                },
-            }
         except Exception as exc:
             logger.warning(f"Failed to fetch {page_url}: {exc}")
             return None
+
+        # --- Attempt 2: SPA/JS fallback via Jina Reader (already implemented in web_tools) ---
+        if not text:
+            logger.info(f"SPA detected at {page_url} — falling back to Jina Reader")
+            try:
+                from src.services.agents.internal_tools.web_tools import _fetch_via_jina
+
+                jina_result = await _fetch_via_jina(page_url)
+                if jina_result.get("error"):
+                    logger.warning(f"Crawl skipped {page_url} — Jina fallback failed: {jina_result['error']}")
+                    return None
+                text = (jina_result.get("content") or "").strip()
+                if not text:
+                    logger.warning(f"Crawl skipped {page_url} — empty text even after Jina Reader")
+                    return None
+                # Parse links from Jina's markdown output (avoids a separate scraper call
+                # and sidesteps domcontentloaded timing issues with SPAs)
+                if include_subpages and not new_links:
+                    import re as _re
+
+                    _ASSET_EXTS = {
+                        ".svg",
+                        ".png",
+                        ".jpg",
+                        ".jpeg",
+                        ".gif",
+                        ".webp",
+                        ".ico",
+                        ".pdf",
+                        ".zip",
+                        ".css",
+                        ".js",
+                    }
+                    md_links = _re.findall(r"\[(?:[^\]]*)\]\((https?://[^)\s]+)\)", text)
+                    for href in md_links:
+                        full = href.split("#")[0].rstrip("/")
+                        path_lower = urlparse(full).path.lower()
+                        if any(path_lower.endswith(ext) for ext in _ASSET_EXTS):
+                            continue
+                        if urlparse(full).netloc == parsed_base.netloc and full not in visited:
+                            new_links.append(full)
+                    # Deduplicate while preserving order
+                    new_links = list(dict.fromkeys(new_links))
+                    logger.info(f"Discovered {len(new_links)} subpage links from Jina markdown for {page_url}")
+            except Exception as exc:
+                logger.warning(f"Jina fallback failed for {page_url}: {exc}")
+                return None
+
+        return {
+            "id": page_url,
+            "text": text,
+            "new_links": new_links,
+            "metadata": {
+                "title": title,
+                "url": page_url,
+                "source_type": "web",
+                "upload_source": "crawl",
+            },
+        }
 
     # Resolve data source once upfront; cache scalar fields before session closes
     _kb_id: int | None = None
@@ -225,6 +285,10 @@ async def _crawl_and_process_kb(
     if not data_source:
         logger.error(f"DataSource {data_source_id} not found — aborting crawl")
         return
+
+    logger.info(
+        f"Starting crawl: data_source={data_source_id} url={url} max_pages={max_pages} subpages={include_subpages}"
+    )
 
     total_processed = 0
     batch: list[dict[str, Any]] = []
@@ -278,7 +342,7 @@ async def _crawl_and_process_kb(
                 res = await processor.process_documents(data_source=ds, documents=batch)
                 total_processed += res.get("documents_processed", len(batch))
 
-    logger.info(f"Crawl complete for data_source={data_source_id}: {total_processed} pages processed")
+    logger.info(f"Crawl complete for data_source={data_source_id}: {total_processed} pages processed (url={url})")
 
     # Auto-recompile wiki if this KB already has wiki articles
     if total_processed > 0 and _kb_id:
@@ -292,6 +356,8 @@ async def _crawl_and_process_kb(
             if wiki_check.scalar_one_or_none():
                 compile_single_knowledge_wiki.delay(_kb_id, _ds_tenant_id)
                 logger.info(f"Triggered wiki recompile for KB {_kb_id}")
+
+    return {"pages_processed": total_processed, "url": url}
 
 
 async def _analyze_app_store_reviews(

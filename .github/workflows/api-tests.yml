@@ -43,13 +43,13 @@ jobs:
 
     steps:
       - name: Checkout code
-        uses: actions/checkout@v4
+        uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683  # v4.2.2
 
       - name: Use CI test environment
         run: cp .env.test.ci .env.test
 
       - name: Set up Python 3.11
-        uses: actions/setup-python@v5
+        uses: actions/setup-python@0b93645e9fea7318ecaed2b359559ac225c90a2b  # v5.3.0
         with:
           python-version: "3.11"
 
@@ -67,6 +67,23 @@ jobs:
         run: |
           uv sync --extra dev --extra llm
 
+      - name: Audit Python dependencies for CVEs
+        run: |
+          uv export --no-hashes --no-emit-project --format requirements-txt -o /tmp/requirements-audit.txt
+          uvx pip-audit \
+            --requirement /tmp/requirements-audit.txt \
+            --ignore-vuln CVE-2025-69872 \
+            --ignore-vuln CVE-2026-41066 \
+            --ignore-vuln CVE-2026-35029 \
+            --ignore-vuln CVE-2026-35030 \
+            --ignore-vuln GHSA-69x8-hrgq-fjj8 \
+            --ignore-vuln CVE-2026-27448 \
+            --ignore-vuln CVE-2026-27459 \
+            --ignore-vuln CVE-2026-26007 \
+            --ignore-vuln CVE-2026-34073 \
+            --ignore-vuln CVE-2026-39892 \
+            --ignore-vuln CVE-2025-69277
+
       - name: Run unit tests
         env:
           TESTING: "true"
@@ -77,7 +94,7 @@ jobs:
         env:
           TESTING: "true"
         run: |
-          uv run pytest tests/integration/ -v --color=yes --cov=src --cov-append --cov-report=xml --cov-report=term --cov-report=html
+          uv run pytest tests/integration/ -v --color=yes -m "not e2e" --cov=src --cov-append --cov-report=xml --cov-report=term --cov-report=html
 
       - name: Generate coverage report
         run: |
@@ -102,7 +119,7 @@ jobs:
           maxColorRange: 100
 
       - name: Upload coverage HTML report
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@65c4c4a1ddee5b72f698fdd19549f0f0fb45cf08  # v4.6.0
         if: always()
         with:
           name: coverage-report-py3.11

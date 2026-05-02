@@ -47,9 +47,7 @@ async def sync_stripe_plans_async(db: AsyncSession, force: bool = False) -> None
 
     print("🔄 Syncing subscription plans with Stripe...\n")
 
-    result = await db.execute(
-        select(SubscriptionPlan).where(SubscriptionPlan.tier != PlanTier.FREE)
-    )
+    result = await db.execute(select(SubscriptionPlan).where(SubscriptionPlan.tier != PlanTier.FREE))
     plans = result.scalars().all()
 
     if not plans:

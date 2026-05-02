@@ -87,6 +87,15 @@ async def internal_spawn_agent(
                 task_description=task_description,
             )
 
+            # Store tenant ownership of this task in Redis so check_task can verify isolation
+            try:
+                from src.config.redis import get_redis_async
+
+                _redis = get_redis_async()
+                await _redis.setex(f"task_tenant:{result.id}", 86400, str(tenant_id))
+            except Exception as _re:
+                logger.warning("Failed to store task tenant in Redis: %s", _re)
+
             return {
                 "success": True,
                 "task_id": result.id,
@@ -134,6 +143,18 @@ async def internal_check_task(
     try:
         if not task_id:
             return {"success": False, "error": "task_id is required"}
+
+        # Tenant isolation: verify this task belongs to the calling tenant
+        if tenant_id:
+            try:
+                from src.config.redis import get_redis_async
+
+                _redis = get_redis_async()
+                stored_tenant = await _redis.get(f"task_tenant:{task_id}")
+                if stored_tenant and stored_tenant != str(tenant_id):
+                    return {"error": "Task not found", "status": "not_found", "success": False}
+            except Exception as _re:
+                logger.warning("Failed to verify task tenant in Redis: %s", _re)
 
         from celery.result import AsyncResult
 
@@ -223,7 +244,7 @@ async def _execute_sub_agent(
     This uses the existing ChatStreamService infrastructure to run the agent
     with the same configuration as the parent.
     """
-    from src.core.database import async_session_maker
+    from src.core.database import get_async_session_factory
     from src.services.agents.agent_loader_service import AgentLoaderService
     from src.services.agents.agent_manager import AgentManager
     from src.services.agents.chat_service import ChatService
@@ -232,13 +253,17 @@ async def _execute_sub_agent(
     # Use provided db or create a new session
     should_close_db = db is None
     if db is None:
-        db = async_session_maker()
+        db = get_async_session_factory()()
 
     try:
+        # Sanitize task_description: cap length and wrap in delimiters to prevent
+        # prompt injection from user-controlled content reaching the sub-agent.
+        sandboxed_desc = f"--- BEGIN SUB-TASK ---\n{task_description[:4000]}\n--- END SUB-TASK ---"
+
         # Build the focused sub-task prompt
         full_prompt = f"""## Sub-Task
 
-{task_description}
+{sandboxed_desc}
 
 Complete this task thoroughly and provide your findings. Be comprehensive but concise."""
 

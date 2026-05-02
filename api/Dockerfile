@@ -35,6 +35,9 @@ COPY pyproject.toml uv.lock ./
 ENV UV_SYSTEM_PYTHON=1
 RUN uv pip install --system --no-cache --extra diagrams -r pyproject.toml
 
+# Install awslambdaric here so the lambda stage does not need to run as root
+RUN pip install --no-cache-dir awslambdaric==2.0.8
+
 
 # production stage
 FROM base AS production
@@ -111,3 +114,25 @@ USER appuser
 HEALTHCHECK --interval=30s --timeout=5s --retries=3 CMD curl -f http://localhost:5001/health || exit 1
 
 ENTRYPOINT ["/bin/bash", "/entrypoint.sh"]
+
+
+# ── Lambda stage ─────────────────────────────────────────────────────────────
+# Same code as production but uses the AWS Lambda Runtime Interface Client (RIC)
+# as entrypoint so AWS can call our handler function.
+#
+# Build:   docker build --target lambda -t synkora-agent-runner:lambda .
+# Push:    docker tag ... {account}.dkr.ecr.{region}.amazonaws.com/synkora-agent-runner:latest
+#
+# Cloud Run and DO Functions use the production stage above with a different
+# CMD — no separate Dockerfile needed for them.
+FROM production AS lambda
+
+# awslambdaric is pre-installed in the packages stage — no root required here.
+# USER appuser is inherited from the production stage above.
+
+# Prevent the executor from re-dispatching to Lambda (infinite loop guard)
+ENV SYNKORA_DIRECT_EXECUTION=true
+
+# AWS Lambda calls ENTRYPOINT [RIC] with CMD [handler] as argument
+ENTRYPOINT ["/usr/local/bin/python", "-m", "awslambdaric"]
+CMD ["src.handlers.lambda_handler.handler"]

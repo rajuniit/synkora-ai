@@ -7,7 +7,7 @@ Handles user sessions, refresh tokens, and session tracking.
 import logging
 import secrets
 import uuid
-from datetime import datetime
+from datetime import UTC, datetime, timedelta
 
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -65,9 +65,15 @@ class SessionService:
         access_token = AuthService.generate_access_token(account.id, tenant_id, role, token_version=token_version)
         refresh_token = AuthService.generate_refresh_token(account.id, family_id=family_id, token_version=token_version)
 
-        # Store refresh token in family for rotation tracking
+        # Store refresh token in family for rotation tracking.
+        # Also persist session_created_at so refresh_session() can enforce
+        # the absolute maximum session lifetime (JWT_MAX_SESSION_AGE_HOURS).
         refresh_token_hash = blacklist_service._hash_token(refresh_token)
         blacklist_service.store_refresh_token_family(account.id, family_id, refresh_token_hash)
+
+        # Store session creation timestamp in Redis (keyed by family_id)
+        _now_ts = datetime.now(UTC).timestamp()
+        blacklist_service.store_session_created_at(account.id, family_id, _now_ts)
 
         return {
             "access_token": access_token,
@@ -141,6 +147,23 @@ class SessionService:
                     )
                     blacklist_service.invalidate_refresh_token_family(account_id, family_id)
                     raise ValueError("Refresh token reuse detected. Please log in again.")
+
+                # SECURITY: Enforce absolute maximum session lifetime.
+                # Even with a valid refresh token, a session that started more than
+                # JWT_MAX_SESSION_AGE_HOURS ago must require re-login.
+                session_created_at_ts = blacklist_service.get_session_created_at(account_id, family_id)
+                if session_created_at_ts is not None:
+                    max_age_hours = settings.jwt_max_session_age_hours
+                    session_age = datetime.now(UTC) - datetime.fromtimestamp(session_created_at_ts, tz=UTC)
+                    if session_age > timedelta(hours=max_age_hours):
+                        logger.warning(
+                            f"SECURITY: Session age {session_age} exceeds max allowed "
+                            f"{max_age_hours}h for account {account_id}. Forcing re-login."
+                        )
+                        blacklist_service.invalidate_refresh_token_family(account_id, family_id)
+                        raise ValueError(
+                            f"Session has exceeded the maximum lifetime of {max_age_hours} hours. Please log in again."
+                        )
 
             # Use provided tenant_id or try to extract from payload
             if tenant_id is None and "tenant_id" in payload:

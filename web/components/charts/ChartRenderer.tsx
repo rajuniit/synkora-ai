@@ -106,8 +106,8 @@ export function ChartRenderer({ chart, className = '' }: ChartRendererProps) {
     <>
       <div
         ref={fullscreen ? undefined : chartRef}
-        className="relative w-full"
-        style={{ height: fullscreen ? 'calc(100vh - 160px)' : '320px' }}
+        className="relative w-full h-52 sm:h-80"
+        style={fullscreen ? { height: 'calc(100vh - 160px)' } : undefined}
       >
         {renderChart()}
       </div>

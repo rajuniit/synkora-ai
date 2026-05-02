@@ -162,10 +162,14 @@ def create_platform_engineer_agent(tenant_id: UUID, db: Session) -> tuple[bool, 
         Tuple of (success, message, agent_id)
     """
     try:
-        existing = db.query(Agent).filter(
-            Agent.agent_name == "platform_engineer_agent",
-            Agent.tenant_id == tenant_id,
-        ).first()
+        existing = (
+            db.query(Agent)
+            .filter(
+                Agent.agent_name == "platform_engineer_agent",
+                Agent.tenant_id == tenant_id,
+            )
+            .first()
+        )
 
         if existing:
             # Update system prompt and tools config on every run
@@ -263,6 +267,7 @@ def create_platform_engineer_agent(tenant_id: UUID, db: Session) -> tuple[bool, 
     except Exception as e:
         db.rollback()
         import traceback
+
         traceback.print_exc()
         return False, f"Error creating platform engineer agent: {str(e)}", ""
 
@@ -323,6 +328,7 @@ def main():
     except Exception as e:
         print(f"\nERROR: {str(e)}")
         import traceback
+
         traceback.print_exc()
         sys.exit(1)
     finally:

@@ -14,6 +14,25 @@ import re
 # Tool keywords mapping - maps tool names to trigger keywords
 # These keywords indicate when a tool should be considered relevant
 TOOL_KEYWORDS: dict[str, list[str]] = {
+    # Image generation
+    "internal_generate_image": [
+        "create image",
+        "dall-e",
+        "draw",
+        "generate a picture",
+        "generate an image",
+        "generate image",
+        "gpt-image",
+        "image generation",
+        "imagen",
+        "make a picture",
+        "make an image",
+        "paint",
+        "photo",
+        "picture",
+        "render",
+        "visualize",
+    ],
     # Diagram tools
     "internal_generate_diagram": [
         "architecture",

@@ -16,6 +16,7 @@ from src.services.company_brain.ingestion.stream_consumer import StreamConsumer
 # Fixtures
 # ---------------------------------------------------------------------------
 
+
 def _make_doc(doc_id: str, content: str, *, is_bot: bool = False) -> dict:
     return {
         "id": doc_id,
@@ -26,7 +27,7 @@ def _make_doc(doc_id: str, content: str, *, is_bot: bool = False) -> dict:
     }
 
 
-SHORT_CONTENT = "hi"          # < 10 tokens (10 chars // 4 = 2 tokens)
+SHORT_CONTENT = "hi"  # < 10 tokens (10 chars // 4 = 2 tokens)
 NORMAL_CONTENT = "The quick brown fox jumps over the lazy dog. " * 5  # ~50 tokens
 BOT_DOC = _make_doc("bot-1", NORMAL_CONTENT, is_bot=True)
 NORMAL_DOC = _make_doc("real-1", NORMAL_CONTENT)
@@ -35,6 +36,7 @@ NORMAL_DOC = _make_doc("real-1", NORMAL_CONTENT)
 # ---------------------------------------------------------------------------
 # _passes_filter
 # ---------------------------------------------------------------------------
+
 
 def test_passes_filter_normal_doc():
     consumer = StreamConsumer()
@@ -80,6 +82,7 @@ def test_passes_filter_min_tokens_zero_passes_any_nonempty():
 # consume — empty stream
 # ---------------------------------------------------------------------------
 
+
 @pytest.mark.asyncio
 async def test_consume_empty_stream_returns_zeros():
     consumer = StreamConsumer()
@@ -87,9 +90,11 @@ async def test_consume_empty_stream_returns_zeros():
     mock_redis.xgroup_create = AsyncMock(side_effect=Exception("BUSYGROUP"))
     mock_redis.xreadgroup = AsyncMock(return_value=None)
 
-    with patch.object(consumer, "_get_redis", return_value=mock_redis), \
-         patch.object(consumer, "_batch_size", return_value=100), \
-         patch.object(consumer, "_min_tokens", return_value=10):
+    with (
+        patch.object(consumer, "_get_redis", return_value=mock_redis),
+        patch.object(consumer, "_batch_size", return_value=100),
+        patch.object(consumer, "_min_tokens", return_value=10),
+    ):
         result = await consumer.consume(kb_id=1, tenant_id="t-abc", source_type="slack")
 
     assert result == {"read": 0, "indexed": 0, "skipped": 0, "failed": 0}
@@ -108,9 +113,11 @@ async def test_consume_uses_kb_scoped_stream_key():
 
     mock_redis.xreadgroup = fake_xreadgroup
 
-    with patch.object(consumer, "_get_redis", return_value=mock_redis), \
-         patch.object(consumer, "_batch_size", return_value=100), \
-         patch.object(consumer, "_min_tokens", return_value=10):
+    with (
+        patch.object(consumer, "_get_redis", return_value=mock_redis),
+        patch.object(consumer, "_batch_size", return_value=100),
+        patch.object(consumer, "_min_tokens", return_value=10),
+    ):
         await consumer.consume(kb_id=42, tenant_id="t-abc", source_type="github")
 
     assert len(captured_calls) == 1
@@ -130,9 +137,7 @@ async def test_consume_full_pipeline_mocked():
     # Format: [(stream_key, [(msg_id, fields), ...])]
     doc = _make_doc("real-doc-1", "Alice pushed PR #847 to fix authentication bug")
     payload = json.dumps(doc)
-    fake_messages = [
-        (b"kb_ingest:1:slack", [(b"1-0", {b"payload": payload.encode()})])
-    ]
+    fake_messages = [(b"kb_ingest:1:slack", [(b"1-0", {b"payload": payload.encode()})])]
 
     mock_redis = AsyncMock()
     mock_redis.xgroup_create = AsyncMock(side_effect=Exception("BUSYGROUP"))
@@ -150,14 +155,14 @@ async def test_consume_full_pipeline_mocked():
     fake_embedding = [[0.1, 0.2, 0.3]]
 
     # _process_batch uses local imports — patch at the actual source modules
-    with patch.object(consumer, "_get_redis", return_value=mock_redis), \
-         patch.object(consumer, "_batch_size", return_value=100), \
-         patch.object(consumer, "_min_tokens", return_value=10), \
-         patch("src.services.company_brain.ingestion.dedup.get_dedup_backend",
-               return_value=mock_dedup), \
-         patch("src.services.company_brain.search.factory.get_search_backend",
-               return_value=mock_search), \
-         patch.object(consumer, "_embed_batch", AsyncMock(return_value=fake_embedding)):
+    with (
+        patch.object(consumer, "_get_redis", return_value=mock_redis),
+        patch.object(consumer, "_batch_size", return_value=100),
+        patch.object(consumer, "_min_tokens", return_value=10),
+        patch("src.services.company_brain.ingestion.dedup.get_dedup_backend", return_value=mock_dedup),
+        patch("src.services.company_brain.search.factory.get_search_backend", return_value=mock_search),
+        patch.object(consumer, "_embed_batch", AsyncMock(return_value=fake_embedding)),
+    ):
         result = await consumer.consume(kb_id=1, tenant_id="t-abc", source_type="slack")
 
     assert result["read"] == 1
@@ -172,18 +177,18 @@ async def test_consume_skips_bot_doc():
     consumer = StreamConsumer()
     doc = _make_doc("bot-1", NORMAL_CONTENT, is_bot=True)
     payload = json.dumps(doc)
-    fake_messages = [
-        (b"kb_ingest:1:slack", [(b"1-0", {b"payload": payload.encode()})])
-    ]
+    fake_messages = [(b"kb_ingest:1:slack", [(b"1-0", {b"payload": payload.encode()})])]
 
     mock_redis = AsyncMock()
     mock_redis.xgroup_create = AsyncMock(side_effect=Exception("BUSYGROUP"))
     mock_redis.xreadgroup = AsyncMock(return_value=fake_messages)
     mock_redis.xack = AsyncMock()
 
-    with patch.object(consumer, "_get_redis", return_value=mock_redis), \
-         patch.object(consumer, "_batch_size", return_value=100), \
-         patch.object(consumer, "_min_tokens", return_value=10):
+    with (
+        patch.object(consumer, "_get_redis", return_value=mock_redis),
+        patch.object(consumer, "_batch_size", return_value=100),
+        patch.object(consumer, "_min_tokens", return_value=10),
+    ):
         result = await consumer.consume(kb_id=1, tenant_id="t-abc", source_type="slack")
 
     # Bot doc is filtered — indexed=0, skipped=1
@@ -197,9 +202,7 @@ async def test_consume_skips_already_seen_doc():
     consumer = StreamConsumer()
     doc = _make_doc("seen-doc-1", NORMAL_CONTENT)
     payload = json.dumps(doc)
-    fake_messages = [
-        (b"kb_ingest:1:slack", [(b"1-0", {b"payload": payload.encode()})])
-    ]
+    fake_messages = [(b"kb_ingest:1:slack", [(b"1-0", {b"payload": payload.encode()})])]
 
     mock_redis = AsyncMock()
     mock_redis.xgroup_create = AsyncMock(side_effect=Exception("BUSYGROUP"))
@@ -211,13 +214,13 @@ async def test_consume_skips_already_seen_doc():
     mock_dedup.filter_unseen = AsyncMock(return_value=[])
     mock_dedup.mark_seen_batch = AsyncMock()
 
-    with patch.object(consumer, "_get_redis", return_value=mock_redis), \
-         patch.object(consumer, "_batch_size", return_value=100), \
-         patch.object(consumer, "_min_tokens", return_value=10), \
-         patch("src.services.company_brain.ingestion.dedup.get_dedup_backend",
-               return_value=mock_dedup), \
-         patch("src.services.company_brain.search.factory.get_search_backend",
-               return_value=AsyncMock()):
+    with (
+        patch.object(consumer, "_get_redis", return_value=mock_redis),
+        patch.object(consumer, "_batch_size", return_value=100),
+        patch.object(consumer, "_min_tokens", return_value=10),
+        patch("src.services.company_brain.ingestion.dedup.get_dedup_backend", return_value=mock_dedup),
+        patch("src.services.company_brain.search.factory.get_search_backend", return_value=AsyncMock()),
+    ):
         result = await consumer.consume(kb_id=1, tenant_id="t-abc", source_type="slack")
 
     assert result["indexed"] == 0
@@ -228,18 +231,18 @@ async def test_consume_skips_already_seen_doc():
 async def test_consume_handles_malformed_message():
     """Malformed message should be skipped without crashing."""
     consumer = StreamConsumer()
-    fake_messages = [
-        (b"kb_ingest:1:slack", [(b"bad-0", {b"payload": b"NOT JSON!!!"})])
-    ]
+    fake_messages = [(b"kb_ingest:1:slack", [(b"bad-0", {b"payload": b"NOT JSON!!!"})])]
 
     mock_redis = AsyncMock()
     mock_redis.xgroup_create = AsyncMock(side_effect=Exception("BUSYGROUP"))
     mock_redis.xreadgroup = AsyncMock(return_value=fake_messages)
     mock_redis.xack = AsyncMock()
 
-    with patch.object(consumer, "_get_redis", return_value=mock_redis), \
-         patch.object(consumer, "_batch_size", return_value=100), \
-         patch.object(consumer, "_min_tokens", return_value=10):
+    with (
+        patch.object(consumer, "_get_redis", return_value=mock_redis),
+        patch.object(consumer, "_batch_size", return_value=100),
+        patch.object(consumer, "_min_tokens", return_value=10),
+    ):
         result = await consumer.consume(kb_id=1, tenant_id="t-abc", source_type="slack")
 
     # Malformed message skipped, no crash

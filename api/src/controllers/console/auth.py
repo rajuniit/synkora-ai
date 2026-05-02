@@ -16,8 +16,9 @@ from src.config import settings
 from src.core.database import get_async_db
 from src.middleware import get_current_account
 from src.models import Account
+from src.schemas.base import StrictModel
 from src.services import AuthService, SessionService
-from src.services.security.password_validator import PasswordValidator
+from src.services.security.password_validator import PasswordValidator, check_hibp
 from src.utils.config_helper import get_app_base_url
 
 logger = logging.getLogger(__name__)
@@ -39,7 +40,7 @@ class LoginRequest(BaseModel):
     temp_token: str | None = None  # Required when submitting two_factor_token
 
 
-class RegisterRequest(BaseModel):
+class RegisterRequest(StrictModel):
     """Registration request schema with strong password policy."""
 
     email: EmailStr
@@ -70,11 +71,12 @@ class RefreshRequest(BaseModel):
 
 
 @router.post("/login")
-async def login(data: LoginRequest, db: AsyncSession = Depends(get_async_db)):
+async def login(request: Request, data: LoginRequest, db: AsyncSession = Depends(get_async_db)):
     """
     Login endpoint.
 
     Args:
+        request: HTTP request (used for IP extraction and audit logging)
         data: Login credentials
         db: Database session
 
@@ -82,6 +84,16 @@ async def login(data: LoginRequest, db: AsyncSession = Depends(get_async_db)):
         Authentication tokens and user information
         If 2FA is enabled, returns requires_2fa: true and a temporary token
     """
+    from src.services.activity.activity_log_service import ActivityLogService
+    from src.utils.ip_utils import get_client_ip
+
+    client_ip = get_client_ip(
+        request.client.host if request.client else "",
+        request.headers.get("x-forwarded-for"),
+        request.headers.get("x-real-ip"),
+    )
+    user_agent = request.headers.get("user-agent", "")
+
     # Authenticate user
     try:
         account = await AuthService.authenticate(db, data.email, data.password)
@@ -93,10 +105,94 @@ async def login(data: LoginRequest, db: AsyncSession = Depends(get_async_db)):
         )
 
     if not account:
+        # Audit: log failed login attempt (best-effort — don't fail the response)
+        try:
+            from sqlalchemy import select as _select
+
+            from src.models import Account as _Account
+
+            _result = await db.execute(_select(_Account).filter_by(email=data.email))
+            _acct = _result.scalar_one_or_none()
+            if _acct:
+                _log_svc = ActivityLogService(db)
+                await _log_svc.log_activity(
+                    tenant_id=None,
+                    account_id=_acct.id,
+                    action="login_failed",
+                    resource_type="account",
+                    details={"ip": client_ip, "user_agent": user_agent},
+                    ip_address=client_ip,
+                    user_agent=user_agent,
+                )
+        except Exception:
+            pass
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,
             detail="Invalid email or password",
         )
+
+    # SECURITY: Enforce SAML SSO — if any tenant this account belongs to has an
+    # active force_saml config, password-based login must be rejected regardless
+    # of credential validity.  This check runs before 2FA and before token
+    # issuance to prevent bypass.
+    try:
+        from src.models.saml_config import SAMLConfig
+        from src.models.tenant import TenantAccountJoin
+
+        saml_result = await db.execute(
+            select(SAMLConfig)
+            .join(TenantAccountJoin, TenantAccountJoin.tenant_id == SAMLConfig.tenant_id)
+            .filter(
+                TenantAccountJoin.account_id == account.id,
+                SAMLConfig.is_active.is_(True),
+                SAMLConfig.force_saml.is_(True),
+            )
+            .limit(1)
+        )
+        if saml_result.scalar_one_or_none() is not None:
+            raise HTTPException(
+                status_code=status.HTTP_403_FORBIDDEN,
+                detail={
+                    "code": "saml_required",
+                    "message": "This organization requires SAML SSO. Please sign in via your identity provider.",
+                },
+            )
+    except HTTPException:
+        raise
+    except Exception:
+        logger.exception("Error checking SAML config during login for account %s", account.id)
+
+    # SECURITY: Admin-enforced 2FA — if any tenant this account belongs to has
+    # mfa_required=true, reject login if the account has no TOTP configured.
+    try:
+        from src.models.tenant import Tenant as _Tenant
+        from src.models.tenant import TenantAccountJoin as _TAJ
+
+        _mfa_result = await db.execute(
+            select(_Tenant)
+            .join(_TAJ, _TAJ.tenant_id == _Tenant.id)
+            .filter(
+                _TAJ.account_id == account.id,
+                _Tenant.mfa_required == "true",
+            )
+            .limit(1)
+        )
+        _mfa_tenant = _mfa_result.scalar_one_or_none()
+        if _mfa_tenant is not None:
+            _acct_2fa_enabled = getattr(account, "two_factor_enabled", False)
+            _acct_2fa_secret = getattr(account, "two_factor_secret", None)
+            if not (_acct_2fa_enabled and _acct_2fa_secret):
+                raise HTTPException(
+                    status_code=status.HTTP_403_FORBIDDEN,
+                    detail={
+                        "code": "mfa_setup_required",
+                        "message": "Your organization requires two-factor authentication. Please set up 2FA before logging in.",
+                    },
+                )
+    except HTTPException:
+        raise
+    except Exception:
+        logger.exception("Error checking tenant mfa_required during login for account %s", account.id)
 
     # SECURITY: Check if 2FA is enabled AND configured for this account
     # Only require 2FA if both the flag is set AND the secret exists
@@ -164,7 +260,7 @@ async def login(data: LoginRequest, db: AsyncSession = Depends(get_async_db)):
                 )
 
             pending_key = f"2fa_pending:{data.temp_token}"
-            pending_data = await redis_client.get(pending_key)
+            pending_data = await redis_client.getdel(pending_key)
             if not pending_data:
                 raise HTTPException(
                     status_code=status.HTTP_401_UNAUTHORIZED,
@@ -173,8 +269,7 @@ async def login(data: LoginRequest, db: AsyncSession = Depends(get_async_db)):
 
             pending = json.loads(pending_data)
             if pending.get("account_id") != str(account.id):
-                # Token/account mismatch — reject and invalidate token
-                await redis_client.delete(pending_key)
+                # Token/account mismatch — reject (token already consumed by getdel above)
                 raise HTTPException(
                     status_code=status.HTTP_401_UNAUTHORIZED,
                     detail="Invalid two-factor session.",
@@ -186,7 +281,6 @@ async def login(data: LoginRequest, db: AsyncSession = Depends(get_async_db)):
             await redis_client.expire(attempts_key, 300)  # Expire with the session
 
             if attempt_count > 5:
-                await redis_client.delete(pending_key)
                 await redis_client.delete(attempts_key)
                 raise HTTPException(
                     status_code=status.HTTP_429_TOO_MANY_REQUESTS,
@@ -195,20 +289,108 @@ async def login(data: LoginRequest, db: AsyncSession = Depends(get_async_db)):
 
             totp = pyotp.TOTP(two_factor_secret)
             if not totp.verify(data.two_factor_token, valid_window=1):
-                raise HTTPException(
-                    status_code=status.HTTP_401_UNAUTHORIZED, detail="Invalid two-factor authentication code"
-                )
+                # TOTP failed — try backup codes as fallback
+                backup_valid = await AuthService.consume_backup_code(account.id, data.two_factor_token, db)
+                if not backup_valid:
+                    # SECURITY AUDIT: log every MFA failure for alerting / brute-force detection
+                    try:
+                        from src.services.activity.activity_log_service import ActivityLogService
 
-            # TOTP verified — consume the pending token (single-use)
-            await redis_client.delete(pending_key)
+                        _mfa_fail_tenant_id = None
+                        from sqlalchemy import select as _sel_mfa
+
+                        from src.models.tenant import TenantAccountJoin as _TAJ_mfa
+
+                        _mfa_res = await db.execute(_sel_mfa(_TAJ_mfa).filter_by(account_id=account.id))
+                        _mfa_mem = _mfa_res.scalar_one_or_none()
+                        if _mfa_mem:
+                            _mfa_fail_tenant_id = _mfa_mem.tenant_id
+
+                        _mfa_svc = ActivityLogService(db)
+                        await _mfa_svc.log_activity(
+                            tenant_id=_mfa_fail_tenant_id,
+                            account_id=account.id,
+                            action="mfa_failed",
+                            resource_type="account",
+                            resource_id=account.id,
+                        )
+                    except Exception as _mfa_audit_exc:
+                        logger.warning(f"Failed to write mfa_failed audit log: {_mfa_audit_exc}")
+
+                    raise HTTPException(
+                        status_code=status.HTTP_401_UNAUTHORIZED, detail="Invalid two-factor authentication code"
+                    )
+
+            # TOTP or backup code verified — pending token already consumed atomically by getdel above
             await redis_client.delete(attempts_key)
 
     # Get user's tenants
     tenants = await AuthService.get_account_tenants(db, account.id)
 
+    # SECURITY: Enforce 2FA for ADMIN/OWNER roles (opt-in via REQUIRE_2FA_FOR_ADMIN=true).
+    # Disabled by default to avoid locking out fresh deployments and test environments.
+    from src.config import settings as _settings
+    from src.models.tenant import AccountRole as _AccountRole
+
+    if _settings.require_2fa_for_admin and not (two_factor_enabled and two_factor_secret):
+        privileged_roles = {_AccountRole.ADMIN.value, _AccountRole.OWNER.value}
+        if any(t["role"] in privileged_roles for t in tenants):
+            raise HTTPException(
+                status_code=status.HTTP_403_FORBIDDEN,
+                detail={
+                    "code": "2fa_required_for_role",
+                    "message": "Two-factor authentication is required for admin accounts. Please enable 2FA before logging in.",
+                },
+            )
+
     # Create session with first tenant (or None if no tenants)
     tenant_id = tenants[0]["tenant_id"] if tenants else None
     session_data = await SessionService.create_session(db, account, tenant_id)
+
+    # Audit: persist IP and user-agent to account record for audit trail.
+    # Also check whether this is a new-IP login and fire a background notification.
+    try:
+        from datetime import UTC
+        from datetime import datetime as _datetime
+        from datetime import timedelta as _timedelta
+
+        prev_ip = getattr(account, "last_login_ip", None)
+        prev_login_at_str = getattr(account, "last_login_at", None)
+
+        _now = _datetime.now(UTC)
+        account.last_login_ip = client_ip
+        account.last_login_at = _now.isoformat()
+        await db.commit()
+
+        # Fire new-login notification when:
+        #  - IP has changed, AND
+        #  - Last login was more than 1 hour ago (avoids spurious noise for
+        #    round-trip refreshes from the same session)
+        if prev_ip and prev_ip != client_ip:
+            _fire_notification = True
+            if prev_login_at_str:
+                try:
+                    _prev_dt = _datetime.fromisoformat(prev_login_at_str)
+                    if _prev_dt.tzinfo is None:
+                        _prev_dt = _prev_dt.replace(tzinfo=UTC)
+                    if (_now - _prev_dt) < _timedelta(hours=1):
+                        _fire_notification = False
+                except Exception:
+                    pass
+            if _fire_notification:
+                try:
+                    from src.tasks.email_tasks import send_new_login_notification
+
+                    send_new_login_notification.delay(
+                        str(account.id),
+                        client_ip,
+                        user_agent,
+                        _now.isoformat(),
+                    )
+                except Exception:
+                    pass
+    except Exception:
+        pass
 
     # Build response data
     response_data = {
@@ -226,16 +408,37 @@ async def login(data: LoginRequest, db: AsyncSession = Depends(get_async_db)):
         "message": "Login successful",
     }
 
+    # Audit: log successful login (best-effort — don't fail the response)
+    try:
+        _log_svc = ActivityLogService(db)
+        _tenant_id_for_log = tenants[0]["tenant_id"] if tenants else None
+        import uuid as _uuid
+
+        await _log_svc.log_activity(
+            tenant_id=_uuid.UUID(_tenant_id_for_log) if _tenant_id_for_log else None,
+            account_id=account.id,
+            action="login_success",
+            resource_type="account",
+            details={"ip": client_ip, "user_agent": user_agent},
+            ip_address=client_ip,
+            user_agent=user_agent,
+        )
+    except Exception:
+        pass
+
     # Store the refresh token in an HttpOnly cookie so JS cannot read it (XSS-safe).
     # Scoped to the refresh endpoint only — the browser never sends it on normal API calls.
     # The access token is returned in the response body and kept in JS memory by the SPA.
     response = JSONResponse(content=response_data)
+    # SECURITY: Prevent auth tokens from being stored in any cache layer.
+    response.headers["Cache-Control"] = "no-store"
+    response.headers["Pragma"] = "no-cache"
     response.set_cookie(
         key="refresh_token",
         value=session_data["refresh_token"],
         httponly=True,  # JS-unreachable — XSS cannot steal the refresh token
         secure=COOKIE_SECURE,
-        samesite="lax",
+        samesite="strict",
         max_age=30 * 24 * 3600,  # 30 days — matches refresh token lifetime
         path="/console/api/auth/refresh",  # Sent only to the refresh endpoint
         domain=COOKIE_DOMAIN,
@@ -257,6 +460,13 @@ async def register(data: RegisterRequest, db: AsyncSession = Depends(get_async_d
         Authentication tokens and user information
     """
     try:
+        # HIBP breach check — fail open if service is unreachable
+        if await check_hibp(data.password):
+            raise HTTPException(
+                status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+                detail="This password has appeared in a data breach. Please choose a different password.",
+            )
+
         # Register user
         account, tenant = await AuthService.register(
             db,
@@ -344,12 +554,15 @@ async def refresh(request: Request, data: RefreshRequest, db: AsyncSession = Dep
 
         # Rotate the refresh token cookie — old token is now invalid
         response = JSONResponse(content=response_data)
+        # SECURITY: Prevent refreshed tokens from being stored in any cache layer.
+        response.headers["Cache-Control"] = "no-store"
+        response.headers["Pragma"] = "no-cache"
         response.set_cookie(
             key="refresh_token",
             value=session_data["refresh_token"],
             httponly=True,
             secure=COOKIE_SECURE,
-            samesite="lax",
+            samesite="strict",
             max_age=30 * 24 * 3600,
             path="/console/api/auth/refresh",
             domain=COOKIE_DOMAIN,
@@ -368,6 +581,7 @@ async def refresh(request: Request, data: RefreshRequest, db: AsyncSession = Dep
 
 @router.post("/logout")
 async def logout(
+    request: Request,
     current_account: Account = Depends(get_current_account),
     db: AsyncSession = Depends(get_async_db),
 ):
@@ -375,6 +589,7 @@ async def logout(
     Logout endpoint.
 
     Args:
+        request: HTTP request (for IP and user-agent audit logging)
         current_account: Current authenticated account
         db: Database session
 
@@ -383,6 +598,35 @@ async def logout(
     """
     # Revoke session
     await SessionService.revoke_session(db, current_account.id)
+
+    # Audit: log logout (best-effort — never fail the response)
+    try:
+        from src.services.activity.activity_log_service import ActivityLogService
+        from src.utils.ip_utils import get_client_ip
+
+        _log_svc = ActivityLogService(db)
+        await _log_svc.log_activity(
+            tenant_id=None,
+            account_id=current_account.id,
+            action="logout",
+            resource_type="account",
+            details={
+                "ip": get_client_ip(
+                    request.client.host if request.client else "",
+                    request.headers.get("x-forwarded-for"),
+                    request.headers.get("x-real-ip"),
+                ),
+                "user_agent": request.headers.get("user-agent", ""),
+            },
+            ip_address=get_client_ip(
+                request.client.host if request.client else "",
+                request.headers.get("x-forwarded-for"),
+                request.headers.get("x-real-ip"),
+            ),
+            user_agent=request.headers.get("user-agent", ""),
+        )
+    except Exception:
+        pass
 
     # Clear the refresh token cookie
     response = JSONResponse(
@@ -408,9 +652,9 @@ async def signup(data: RegisterRequest, db: AsyncSession = Depends(get_async_db)
 
 
 @router.post("/signin")
-async def signin(data: LoginRequest, db: AsyncSession = Depends(get_async_db)):
+async def signin(request: Request, data: LoginRequest, db: AsyncSession = Depends(get_async_db)):
     """Alias for /login endpoint."""
-    return await login(data, db)
+    return await login(request, data, db)
 
 
 @router.get("/me")
@@ -476,7 +720,7 @@ class ForgotPasswordRequest(BaseModel):
     email: EmailStr
 
 
-class ResetPasswordRequest(BaseModel):
+class ResetPasswordRequest(StrictModel):
     """Request model for reset password with strong password policy."""
 
     token: str
@@ -556,6 +800,13 @@ async def reset_password(data: ResetPasswordRequest, db: AsyncSession = Depends(
     Raises:
         HTTPException: If token is invalid or expired
     """
+    # HIBP breach check on new password — fail open if service is unreachable
+    if await check_hibp(data.new_password):
+        raise HTTPException(
+            status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+            detail="This password has appeared in a data breach. Please choose a different password.",
+        )
+
     account = await AuthService.reset_password(db, data.token, data.new_password)
 
     if not account:
@@ -583,6 +834,9 @@ async def verify_email(data: VerifyEmailRequest, db: AsyncSession = Depends(get_
         HTTPException: If token is invalid
     """
     account = await AuthService.verify_email(db, data.token)
+
+    if isinstance(account, dict) and account.get("error") == "verification_link_expired":
+        raise HTTPException(status_code=status.HTTP_410_GONE, detail=account["message"])
 
     if not account:
         raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Invalid verification token")

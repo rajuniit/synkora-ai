@@ -180,7 +180,10 @@ class TestDatabaseTools:
             connector_instance = MockConnector.return_value
             connector_instance.connect = AsyncMock()
             connector_instance.get_indices = AsyncMock(
-                return_value={"success": True, "indices": [{"name": "users", "health": "green", "status": "open", "docs_count": 0}]}
+                return_value={
+                    "success": True,
+                    "indices": [{"name": "users", "health": "green", "status": "open", "docs_count": 0}],
+                }
             )
             connector_instance.get_index_mapping = AsyncMock(return_value={"success": True, "fields": []})
             connector_instance.disconnect = AsyncMock()

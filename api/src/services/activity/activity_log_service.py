@@ -1,5 +1,7 @@
 """Activity logging service."""
 
+import asyncio
+import os
 from datetime import UTC, datetime, timedelta
 from uuid import UUID
 
@@ -76,8 +78,57 @@ class ActivityLogService:
         )
 
         self.db.add(log_entry)
+        # Flush so the ORM assigns the PK (UUID) before we compute the chain hash
+        await self.db.flush()
+
+        # Compute HMAC chain hash — fetch the previous entry's hash for this tenant
+        try:
+            prev_result = await self.db.execute(
+                select(ActivityLog.entry_hash)
+                .where(ActivityLog.tenant_id == tenant_id)
+                .where(ActivityLog.id != log_entry.id)
+                .order_by(ActivityLog.created_at.desc())
+                .limit(1)
+            )
+            prev_hash = prev_result.scalar() or ("0" * 64)  # Genesis hash for first entry
+
+            # Prefer AUDIT_CHAIN_SECRET; fall back to SECRET_KEY so existing
+            # deployments that have not yet set AUDIT_CHAIN_SECRET still get chain hashes.
+            secret_key = os.getenv("AUDIT_CHAIN_SECRET") or os.getenv("SECRET_KEY", "")
+            log_entry.entry_hash = ActivityLog.compute_hash(
+                entry_id=str(log_entry.id),
+                action=log_entry.action,
+                account_id=str(log_entry.account_id) if log_entry.account_id else None,
+                tenant_id=str(log_entry.tenant_id) if log_entry.tenant_id else None,
+                activity_type=str(log_entry.activity_type),
+                created_at=log_entry.created_at.isoformat() if log_entry.created_at else "",
+                prev_hash=prev_hash,
+                secret_key=secret_key,
+            )
+        except Exception:
+            pass  # Hash computation failure must not block the audit write
+
         await self.db.commit()
         await self.db.refresh(log_entry)
+
+        # Fire-and-forget SIEM forwarding — never blocks the audit write.
+        try:
+            from .siem_service import get_siem_service
+
+            siem_event = {
+                "timestamp": log_entry.created_at.isoformat() if log_entry.created_at else None,
+                "event_type": str(log_entry.activity_type) if log_entry.activity_type else "audit",
+                "tenant_id": str(log_entry.tenant_id) if log_entry.tenant_id else None,
+                "account_id": str(log_entry.account_id) if log_entry.account_id else None,
+                "action": log_entry.action,
+                "resource_type": log_entry.resource_type,
+                "resource_id": str(log_entry.resource_id) if log_entry.resource_id else None,
+                "ip": log_entry.ip_address,
+                "metadata": log_entry.activity_metadata or {},
+            }
+            asyncio.create_task(get_siem_service().stream_event(siem_event))
+        except Exception:
+            pass  # SIEM forwarding failure must never affect the audit write
 
         return log_entry
 

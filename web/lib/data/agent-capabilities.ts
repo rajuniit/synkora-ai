@@ -117,6 +117,13 @@ export const CAPABILITIES: Capability[] = [
     ]
   },
   {
+    id: 'image-generation',
+    name: 'Image Generation',
+    description: 'Generate AI images from text prompts (gpt-image-2, Imagen 3, Grok Aurora)',
+    icon: '🎨',
+    toolPatterns: ['internal_generate_image']
+  },
+  {
     id: 'documents',
     name: 'Documents',
     description: 'Generate PDFs, PowerPoints, Google Docs and Sheets',

@@ -6,7 +6,7 @@
 # Grafana
 # ─────────────────────────────────────────────
 grafana:
-  adminPassword: "8HY-v9GEGb-SwhXKyYg1xw"
+  adminPassword: "${GRAFANA_ADMIN_PASSWORD}"  # set via: kubectl create secret generic grafana-admin --from-literal=adminPassword=<password>
 
   ingress:
     enabled: true

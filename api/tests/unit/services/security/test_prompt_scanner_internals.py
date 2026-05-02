@@ -5,6 +5,8 @@ The existing test_advanced_prompt_scanner.py covers scan_comprehensive()
 end-to-end. This file targets the helper methods directly.
 """
 
+from unittest.mock import patch
+
 import pytest
 
 from src.services.security.advanced_prompt_scanner import AdvancedPromptScanner, ThreatLevel
@@ -12,12 +14,15 @@ from src.services.security.advanced_prompt_scanner import AdvancedPromptScanner,
 
 @pytest.fixture
 def scanner():
-    return AdvancedPromptScanner()
+    """Fresh scanner per test with Redis patched out to avoid cross-test state."""
+    with patch("src.config.redis.get_redis", return_value=None):
+        yield AdvancedPromptScanner()
 
 
 # ---------------------------------------------------------------------------
 # _normalize_text
 # ---------------------------------------------------------------------------
+
 
 @pytest.mark.unit
 class TestNormalizeText:
@@ -46,6 +51,7 @@ class TestNormalizeText:
 # _decode_obfuscations
 # ---------------------------------------------------------------------------
 
+
 @pytest.mark.unit
 class TestDecodeObfuscations:
     def test_html_entity_decoded(self, scanner):
@@ -71,6 +77,7 @@ class TestDecodeObfuscations:
 # ---------------------------------------------------------------------------
 # _extract_context
 # ---------------------------------------------------------------------------
+
 
 @pytest.mark.unit
 class TestExtractContext:
@@ -101,6 +108,7 @@ class TestExtractContext:
 # _get_risk_score
 # ---------------------------------------------------------------------------
 
+
 @pytest.mark.unit
 class TestGetRiskScore:
     def test_safe_severity_returns_zero(self, scanner):
@@ -128,6 +136,7 @@ class TestGetRiskScore:
 # ---------------------------------------------------------------------------
 # _calculate_threat_level
 # ---------------------------------------------------------------------------
+
 
 @pytest.mark.unit
 class TestCalculateThreatLevel:
@@ -166,6 +175,7 @@ class TestCalculateThreatLevel:
 # _analyze_reputation
 # ---------------------------------------------------------------------------
 
+
 @pytest.mark.unit
 class TestAnalyzeReputation:
     def test_unknown_user_scores_zero(self, scanner):
@@ -198,6 +208,7 @@ class TestAnalyzeReputation:
 # _update_reputation
 # ---------------------------------------------------------------------------
 
+
 @pytest.mark.unit
 class TestUpdateReputation:
     def test_high_threat_increments_user_violations(self, scanner):
@@ -226,6 +237,7 @@ class TestUpdateReputation:
 # ---------------------------------------------------------------------------
 # get_detection_stats
 # ---------------------------------------------------------------------------
+
 
 @pytest.mark.unit
 class TestGetDetectionStats:
@@ -261,6 +273,7 @@ class TestGetDetectionStats:
 # ---------------------------------------------------------------------------
 # _get_mitigation_advice
 # ---------------------------------------------------------------------------
+
 
 @pytest.mark.unit
 class TestGetMitigationAdvice:

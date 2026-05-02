@@ -9,6 +9,7 @@ TaskGroup cancellation issues with async database sessions.
 
 import hashlib
 import logging
+import os
 
 from starlette.requests import Request as StarletteRequest
 from starlette.responses import Response
@@ -59,7 +60,14 @@ class DynamicCORSMiddleware:
             max_age: Max age for preflight cache
         """
         self.app = app
-        self.dashboard_origins = dashboard_origins or ["*"]
+        if not dashboard_origins or dashboard_origins == ["*"]:
+            if os.getenv("APP_ENV", "development") == "production":
+                raise RuntimeError(
+                    "CORS_ORIGINS must be explicitly set in production — refusing wildcard + credentials"
+                )
+            self.dashboard_origins = ["*"]  # Only allow wildcard in dev/test
+        else:
+            self.dashboard_origins = dashboard_origins
         self.allow_credentials = allow_credentials
         self.allow_methods = allow_methods or ["*"]
         self.allow_headers = allow_headers or ["*"]

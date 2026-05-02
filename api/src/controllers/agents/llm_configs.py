@@ -45,9 +45,11 @@ def invalidate_agent_llm_cache(agent_name: str):
         cache = get_agent_cache()
         sync_redis = get_redis()
         if sync_redis:
-            key = cache._build_key("config", agent_name)
-            deleted = sync_redis.delete(key)
-            logger.info(f"✅ Deleted Redis cache key '{key}' (deleted: {deleted})")
+            config_key = cache._build_key("config", agent_name)
+            # Also invalidate the routing LLM-configs cache populated by _load_llm_configs_cached
+            llm_configs_key = cache._build_key("llm_configs", agent_name)
+            deleted = sync_redis.delete(config_key, llm_configs_key)
+            logger.info(f"✅ Deleted Redis cache keys '{config_key}', '{llm_configs_key}' (deleted: {deleted})")
         else:
             logger.warning("⚠️  Redis not available, skipping cache invalidation")
     except Exception as e:

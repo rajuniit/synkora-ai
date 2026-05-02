@@ -4,6 +4,8 @@ const { withSentryConfig } = require('@sentry/nextjs')
 const nextConfig = {
   reactStrictMode: true,
   output: 'standalone',
+  // Never expose source maps to the browser in production (regardless of Sentry config)
+  productionBrowserSourceMaps: false,
 
   // Turbopack config (Next.js 16+ uses Turbopack by default)
   turbopack: {},
@@ -72,7 +74,6 @@ const nextConfig = {
         // Sentry error reporting (self-hosted + cloud)
         'https://*.sentry.io',
         'https://ingest.sentry.io',
-        'https://logs.synkora.ai',
         // Cloudflare Analytics beacon
         'https://cloudflareinsights.com',
         process.env.NEXT_PUBLIC_LOGS_URL || '',
@@ -122,6 +123,22 @@ const nextConfig = {
           {
             key: 'Permissions-Policy',
             value: 'camera=(), microphone=(), geolocation=()',
+          },
+          // Cross-Origin isolation — prevent Spectre/Meltdown side-channel leaks.
+          // Using 'credentialless' instead of 'require-corp': still provides isolation
+          // but allows cross-origin resources (MinIO images, CDN assets) without requiring
+          // them to send Cross-Origin-Resource-Policy headers.
+          {
+            key: 'Cross-Origin-Opener-Policy',
+            value: 'same-origin',
+          },
+          {
+            key: 'Cross-Origin-Embedder-Policy',
+            value: 'credentialless',
+          },
+          {
+            key: 'Cross-Origin-Resource-Policy',
+            value: 'same-site',
           },
           // HSTS belongs on the frontend (HTML) server, not the API backend.
           // Only set in production to avoid locking development browsers into HTTPS.

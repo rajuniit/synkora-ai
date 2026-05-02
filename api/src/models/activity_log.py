@@ -119,6 +119,13 @@ class ActivityLog(BaseModel):
         comment="Error message if activity failed",
     )
 
+    entry_hash = Column(
+        String(64),
+        nullable=True,  # nullable for backwards compatibility with old rows
+        index=True,
+        comment="SHA-256 HMAC of this entry chained with the previous entry hash",
+    )
+
     # Relationships
     tenant = relationship("Tenant")
     account = relationship("Account")
@@ -126,6 +133,43 @@ class ActivityLog(BaseModel):
     def __repr__(self) -> str:
         """String representation."""
         return f"<ActivityLog(id={self.id}, action={self.action}, account_id={self.account_id})>"
+
+    @staticmethod
+    def compute_hash(
+        entry_id: str,
+        action: str,
+        account_id: str | None,
+        tenant_id: str | None,
+        activity_type: str,
+        created_at: str,
+        prev_hash: str,
+        secret_key: str,
+    ) -> str:
+        """
+        Compute HMAC-SHA256 for this log entry chained with the previous entry.
+
+        The chain ensures any tampering (modification or deletion of entries)
+        is detectable by re-computing and comparing hashes.
+        """
+        import hashlib
+        import hmac as _hmac
+
+        payload = "|".join(
+            [
+                str(entry_id),
+                str(action),
+                str(account_id or ""),
+                str(tenant_id or ""),
+                str(activity_type),
+                str(created_at),
+                str(prev_hash),
+            ]
+        )
+        return _hmac.new(
+            secret_key.encode(),
+            payload.encode(),
+            hashlib.sha256,
+        ).hexdigest()
 
     @classmethod
     def log_activity(

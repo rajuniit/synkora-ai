@@ -41,13 +41,16 @@ _a2a_service = A2AService()
 # ---------------------------------------------------------------------------
 
 
-async def _get_agent(agent_id: str, db: AsyncSession) -> Agent:
+async def _get_agent(agent_id: str, db: AsyncSession, tenant_id: uuid.UUID | None = None) -> Agent:
     try:
         agent_uuid = uuid.UUID(agent_id)
     except ValueError:
         raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Invalid agent ID")
 
-    result = await db.execute(select(Agent).where(Agent.id == agent_uuid))
+    query = select(Agent).where(Agent.id == agent_uuid)
+    if tenant_id is not None:
+        query = query.where(Agent.tenant_id == tenant_id)
+    result = await db.execute(query)
     agent = result.scalar_one_or_none()
     if not agent:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Agent not found")
@@ -94,6 +97,10 @@ async def get_agent_card(
     If a2a_public=true the card is accessible without auth.
     Otherwise Bearer token with 'a2a' permission is required.
     """
+    # For public agents, load without tenant filter (discovery use-case).
+    # For private agents, authenticate first and then enforce tenant isolation.
+    # We do a preliminary load (no tenant filter) only to check the a2a_public flag;
+    # if the agent is private we re-load after authentication using the caller's tenant.
     agent = await _get_agent(agent_id, db)
     await _check_a2a_enabled(agent)
 
@@ -101,6 +108,11 @@ async def get_agent_card(
     integrations = metadata.get("integrations_config", {})
     if not integrations.get("a2a_public", False):
         await _authenticate_a2a(request, agent)
+        # Re-fetch with tenant isolation to prevent cross-tenant information disclosure.
+        api_key_record = request.state.api_key
+        caller_tenant_id: uuid.UUID = api_key_record.tenant_id
+        agent = await _get_agent(agent_id, db, tenant_id=caller_tenant_id)
+        await _check_a2a_enabled(agent)
 
     base_url = await get_app_base_url(db, agent.tenant_id)
     return _a2a_service.get_agent_card(agent, base_url)
@@ -142,9 +154,16 @@ async def a2a_dispatch(
     """
     Dispatch an A2A JSON-RPC request for the given agent.
     """
-    agent = await _get_agent(agent_id, db)
+    # Authenticate first so we have the caller's tenant_id for the agent lookup.
+    # This prevents cross-tenant agent invocation: even if an attacker knows a
+    # valid agent UUID belonging to a different tenant, the SELECT query will find
+    # no row and return 404.
+    await _authenticate_a2a(request, None)  # type: ignore[arg-type]
+    api_key_record = request.state.api_key
+    caller_tenant_id: uuid.UUID = api_key_record.tenant_id
+
+    agent = await _get_agent(agent_id, db, tenant_id=caller_tenant_id)
     await _check_a2a_enabled(agent)
-    await _authenticate_a2a(request, agent)
 
     try:
         payload = await request.json()

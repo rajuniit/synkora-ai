@@ -7,9 +7,18 @@ Provides encryption and hashing for sensitive data like API keys.
 import hashlib
 import logging
 
-from cryptography.fernet import Fernet
+from cryptography.fernet import Fernet, MultiFernet
 
 logger = logging.getLogger(__name__)
+
+
+def _build_fernet(encryption_key: str) -> MultiFernet:
+    """Support comma-separated keys for rotation: KEY1,KEY2 where KEY1 is primary.
+
+    # To rotate: set ENCRYPTION_KEY=NEW_KEY,OLD_KEY — re-encrypt rows, then set ENCRYPTION_KEY=NEW_KEY
+    """
+    keys = [k.strip() for k in encryption_key.split(",") if k.strip()]
+    return MultiFernet([Fernet(k.encode() if isinstance(k, str) else k) for k in keys])
 
 
 class APIKeyManager:
@@ -20,12 +29,14 @@ class APIKeyManager:
     and SHA-256 hashing for verification.
     """
 
-    def __init__(self, encryption_key: bytes | None = None):
+    def __init__(self, encryption_key: bytes | str | None = None):
         """
         Initialize the API key manager.
 
         Args:
-            encryption_key: Fernet encryption key. If None, generates a new key.
+            encryption_key: Fernet encryption key (bytes or str). Supports comma-separated
+                            keys for rotation (e.g. "NEW_KEY,OLD_KEY"). If None, generates
+                            a new key.
         """
         if encryption_key is None:
             encryption_key = Fernet.generate_key()
@@ -34,7 +45,8 @@ class APIKeyManager:
                 "This key should be stored securely and reused across restarts."
             )
 
-        self.cipher = Fernet(encryption_key)
+        key_str = encryption_key.decode() if isinstance(encryption_key, bytes) else encryption_key
+        self.cipher: MultiFernet = _build_fernet(key_str)
         self.encryption_key = encryption_key
 
     @staticmethod
@@ -158,9 +170,16 @@ def get_api_key_manager(encryption_key: bytes | None = None) -> APIKeyManager:
     Returns:
         APIKeyManager instance
     """
+    import os
+
     global _api_key_manager
 
     if _api_key_manager is None:
+        # Bootstrap from env var when set_encryption_key() hasn't been called yet
+        # (e.g. Celery workers that skip the FastAPI startup lifecycle).
+        if encryption_key is None:
+            env_key = os.getenv("ENCRYPTION_KEY")
+            encryption_key = env_key.encode() if env_key else None
         _api_key_manager = APIKeyManager(encryption_key)
 
     return _api_key_manager
@@ -182,39 +201,45 @@ def set_encryption_key(encryption_key: bytes) -> None:
 # Convenience functions for encryption/decryption
 def encrypt_value(value: str) -> str:
     """
-    Encrypt a value using the encryption key from environment.
+    Encrypt a value using the cached global API key manager.
 
     Args:
         value: Plain text value to encrypt
 
     Returns:
         Encrypted value as base64 string
+
+    Raises:
+        ValueError: If ENCRYPTION_KEY environment variable is not set.
     """
     import os
 
-    encryption_key = os.getenv("ENCRYPTION_KEY")
-    if not encryption_key:
-        raise ValueError("ENCRYPTION_KEY not found in environment variables")
-
-    manager = APIKeyManager(encryption_key.encode())
+    if os.getenv("ENCRYPTION_KEY") is None:
+        raise ValueError(
+            "ENCRYPTION_KEY environment variable is not set. Cannot encrypt values without a persistent key."
+        )
+    manager = get_api_key_manager()
     return manager.encrypt_api_key(value)
 
 
 def decrypt_value(encrypted_value: str) -> str:
     """
-    Decrypt an encrypted value using the encryption key from environment.
+    Decrypt an encrypted value using the cached global API key manager.
 
     Args:
         encrypted_value: Encrypted value as base64 string
 
     Returns:
         Decrypted value as plain text
+
+    Raises:
+        ValueError: If ENCRYPTION_KEY environment variable is not set.
     """
     import os
 
-    encryption_key = os.getenv("ENCRYPTION_KEY")
-    if not encryption_key:
-        raise ValueError("ENCRYPTION_KEY not found in environment variables")
-
-    manager = APIKeyManager(encryption_key.encode())
+    if os.getenv("ENCRYPTION_KEY") is None:
+        raise ValueError(
+            "ENCRYPTION_KEY environment variable is not set. Cannot decrypt values without a persistent key."
+        )
+    manager = get_api_key_manager()
     return manager.decrypt_api_key(encrypted_value)

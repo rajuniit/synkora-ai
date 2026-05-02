@@ -533,66 +533,71 @@ class DataAnalysisService:
                 else:
                     query = f"{query} LIMIT {DEFAULT_LIMIT}"
 
+            # database_type is stored as a plain string in the DB (Mapped[str]).
+            # Normalise once so all comparisons below are safe regardless of whether
+            # the column returned a string or an enum object.
+            db_type = str(connection.database_type).upper().rsplit(".", 1)[-1]
+
             # Execute query based on database type
-            if connection.database_type.value == "POSTGRESQL":
+            if db_type == "POSTGRESQL":
                 connector = PostgreSQLConnector(database_connection=connection)
                 await connector.connect()
                 result = await connector.execute_query(query)
                 await connector.disconnect()
 
-            elif connection.database_type.value == "SQLITE":
+            elif db_type == "SQLITE":
                 connector = SQLiteConnector(database_path=connection.database_path)
                 await connector.connect()
                 result = await connector.execute_query(query)
                 await connector.disconnect()
 
-            elif connection.database_type.value == "ELASTICSEARCH":
+            elif db_type == "ELASTICSEARCH":
                 connector = ElasticsearchConnector(database_connection=connection)
                 result = await connector.search(query)
 
-            elif connection.database_type.value == "MYSQL":
+            elif db_type == "MYSQL":
                 connector = MySQLConnector(database_connection=connection)
                 await connector.connect()
                 result = await connector.execute_query(query)
                 await connector.disconnect()
 
-            elif connection.database_type.value == "MONGODB":
+            elif db_type == "MONGODB":
                 connector = MongoDBConnector(database_connection=connection)
                 await connector.connect()
                 result = await connector.execute_query(query)
                 await connector.disconnect()
 
-            elif connection.database_type.value == "SUPABASE":
+            elif db_type == "SUPABASE":
                 connector = SupabaseConnector(database_connection=connection)
                 await connector.connect()
                 result = await connector.execute_query(query)
                 await connector.disconnect()
 
-            elif connection.database_type.value == "BIGQUERY":
+            elif db_type == "BIGQUERY":
                 connector = BigQueryConnector(database_connection=connection)
                 await connector.connect()
                 result = await connector.execute_query(query)
                 await connector.disconnect()
 
-            elif connection.database_type.value == "SNOWFLAKE":
+            elif db_type == "SNOWFLAKE":
                 connector = SnowflakeConnector(database_connection=connection)
                 await connector.connect()
                 result = await connector.execute_query(query)
                 await connector.disconnect()
 
-            elif connection.database_type.value == "SQLSERVER":
+            elif db_type == "SQLSERVER":
                 connector = SQLServerConnector(database_connection=connection)
                 await connector.connect()
                 result = await connector.execute_query(query)
                 await connector.disconnect()
 
-            elif connection.database_type.value == "CLICKHOUSE":
+            elif db_type == "CLICKHOUSE":
                 connector = ClickHouseConnector(database_connection=connection)
                 await connector.connect()
                 result = await connector.execute_query(query)
                 await connector.disconnect()
 
-            elif connection.database_type.value == "DUCKDB":
+            elif db_type == "DUCKDB":
                 connector = DuckDBConnector(database_connection=connection)
                 await connector.connect()
                 result = await connector.execute_query(query)

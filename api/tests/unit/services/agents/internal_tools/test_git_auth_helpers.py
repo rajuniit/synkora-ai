@@ -21,6 +21,7 @@ from src.services.agents.internal_tools.gitlab_auth_helper import (
 # github inject_token_into_url
 # ---------------------------------------------------------------------------
 
+
 @pytest.mark.unit
 class TestGitHubInjectTokenIntoUrl:
     def test_injects_token_before_host(self):
@@ -76,6 +77,7 @@ class TestGitHubInjectTokenIntoUrl:
 # gitlab inject_token_into_url  (uses oauth2:TOKEN@ format)
 # ---------------------------------------------------------------------------
 
+
 @pytest.mark.unit
 class TestGitLabInjectTokenIntoUrl:
     def test_uses_oauth2_prefix(self):
@@ -116,6 +118,7 @@ class TestGitLabInjectTokenIntoUrl:
 # ---------------------------------------------------------------------------
 # prepare_authenticated_git_url  (GitHub)
 # ---------------------------------------------------------------------------
+
 
 @pytest.mark.unit
 class TestPrepareAuthenticatedGitUrl:
@@ -164,6 +167,7 @@ class TestPrepareAuthenticatedGitUrl:
 # ---------------------------------------------------------------------------
 # prepare_authenticated_gitlab_url
 # ---------------------------------------------------------------------------
+
 
 @pytest.mark.unit
 class TestPrepareAuthenticatedGitLabUrl:

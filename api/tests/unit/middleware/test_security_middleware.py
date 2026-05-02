@@ -125,6 +125,68 @@ class TestInputSanitizationMiddlewareLogic:
         assert ip == "203.0.113.40"
 
 
+class TestExtractScannableStrings:
+    """Tests for InputSanitizationMiddleware._extract_scannable_strings."""
+
+    def setup_method(self):
+        from src.middleware.security_middleware import InputSanitizationMiddleware
+
+        self.middleware = InputSanitizationMiddleware(Mock())
+
+    def test_extracts_top_level_strings(self):
+        """Only top-level string values are returned from a JSON object."""
+        import json
+
+        body = json.dumps({"message": "hello world", "agent_name": "MyAgent"})
+        result = self.middleware._extract_scannable_strings(body)
+        assert set(result) == {"hello world", "MyAgent"}
+
+    def test_skips_nested_lists(self):
+        """conversation_history (a list) is not included in scannable strings."""
+        import json
+
+        body = json.dumps(
+            {
+                "message": "new user message",
+                "conversation_history": [{"role": "assistant", "content": "<script>alert(1)</script>"}],
+            }
+        )
+        result = self.middleware._extract_scannable_strings(body)
+        # Only the top-level "message" string is returned; history is a list and skipped.
+        assert result == ["new user message"]
+        # The XSS in history must NOT be flagged.
+        assert not any(self.middleware._contains_xss(s) for s in result)
+
+    def test_skips_nested_dicts(self):
+        """Nested dict values are not included in scannable strings."""
+        import json
+
+        body = json.dumps({"message": "hi", "metadata": {"key": "<script>x</script>"}})
+        result = self.middleware._extract_scannable_strings(body)
+        assert result == ["hi"]
+
+    def test_skips_non_string_scalars(self):
+        """Integers, booleans, and None at top level are not included."""
+        import json
+
+        body = json.dumps({"message": "hi", "count": 5, "flag": True, "optional": None})
+        result = self.middleware._extract_scannable_strings(body)
+        assert result == ["hi"]
+
+    def test_fallback_for_invalid_json(self):
+        """Non-JSON body falls back to returning the raw string."""
+        result = self.middleware._extract_scannable_strings("not json at all")
+        assert result == ["not json at all"]
+
+    def test_real_xss_in_message_field_still_detected(self):
+        """XSS in the actual message field is still caught after the change."""
+        import json
+
+        body = json.dumps({"message": "<script>alert(1)</script>", "agent_name": "Bot"})
+        strings = self.middleware._extract_scannable_strings(body)
+        assert any(self.middleware._contains_xss(s) for s in strings)
+
+
 class TestMiddlewareConstants:
     """Tests for middleware class constants and configurations."""
 

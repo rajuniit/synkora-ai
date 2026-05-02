@@ -3,6 +3,7 @@
 import json
 import logging
 import re
+from datetime import UTC, datetime, timedelta
 from typing import Any
 
 import httpx
@@ -155,6 +156,19 @@ class SupabaseConnector:
     # Query execution
     # ------------------------------------------------------------------
 
+    # Complex aggregate / expression patterns that PostgREST cannot translate
+    _COMPLEX_EXPR_RE = re.compile(
+        r"EXTRACT\s*\(|DATE_TRUNC\s*\(|CAST\s*\(|::|PERCENTILE|STDDEV|VARIANCE|MEDIAN"
+        r"|\bCASE\b|\bCOALESCE\b|\bNULLIF\b",
+        re.IGNORECASE,
+    )
+
+    # Matches NOW() - INTERVAL 'N unit'
+    _NOW_INTERVAL_RE = re.compile(
+        r"NOW\s*\(\s*\)\s*-\s*INTERVAL\s+'(\d+)\s+(hour|minute|day|week)s?'",
+        re.IGNORECASE,
+    )
+
     async def execute_query(self, query: str) -> dict[str, Any]:
         """
         Execute a PostgREST query.
@@ -175,11 +189,18 @@ class SupabaseConnector:
                     return {
                         "success": False,
                         "error": (
-                            "Supabase accepts a JSON query or a simple SQL SELECT. Examples:\n"
-                            '  JSON:  {"table": "users", "select": "id,name,email", "limit": 100}\n'
-                            '  JSON:  {"table": "orders", "eq": {"status": "active"}, "limit": 50}\n'
-                            '  JSON:  {"rpc": "my_function", "params": {"arg": "value"}}\n'
-                            "  SQL:   SELECT id, name FROM users WHERE status = 'active' LIMIT 100"
+                            "Supabase (PostgREST) cannot execute this query because it contains "
+                            "expressions that cannot be translated to the REST API "
+                            "(e.g. EXTRACT, DATE_TRUNC, CAST, CASE, SUM(CASE WHEN ...), etc.).\n\n"
+                            "Use one of these approaches instead:\n"
+                            "1. Simple COUNT(*) GROUP BY (supported):\n"
+                            "   SELECT status, COUNT(*) FROM my_table GROUP BY status\n"
+                            "2. JSON table query with filters:\n"
+                            '   {"table": "my_table", "select": "id,name,status", "eq": {"status": "active"}, "limit": 100}\n'
+                            "3. RPC call to a pre-created PostgreSQL function:\n"
+                            '   {"rpc": "my_aggregate_function", "params": {}}\n\n'
+                            "For analytics requiring EXTRACT/CAST/CASE, ask the user to create "
+                            "a database function (RPC) for the specific calculation needed."
                         ),
                         "rows": [],
                         "row_count": 0,
@@ -208,16 +229,47 @@ class SupabaseConnector:
     # SQL → PostgREST translation helpers
     # ------------------------------------------------------------------
 
+    def _resolve_now_interval(self, sql: str) -> str:
+        """Replace NOW() - INTERVAL 'N unit' with the computed ISO-8601 timestamp."""
+        _unit_map = {"hour": 3600, "minute": 60, "day": 86400, "week": 604800}
+
+        def _replace(m: re.Match) -> str:
+            n = int(m.group(1))
+            unit = m.group(2).lower()
+            seconds = _unit_map.get(unit, 0) * n
+            if not seconds:
+                return m.group(0)
+            ts = (datetime.now(UTC) - timedelta(seconds=seconds)).isoformat()
+            return f"'{ts}'"
+
+        return self._NOW_INTERVAL_RE.sub(_replace, sql)
+
     def _try_translate_sql(self, sql: str) -> dict[str, Any] | None:
         """
         Translate a simple SQL SELECT to a PostgREST query dict.
 
-        Supports: SELECT cols FROM table [WHERE …] [GROUP BY …] [ORDER BY …] [LIMIT n] [OFFSET n]
+        Supports:
+          - Plain SELECT: SELECT cols FROM table [WHERE …] [ORDER BY …] [LIMIT n]
+          - Aggregate SELECT: SELECT col, COUNT(*) FROM table [WHERE …] GROUP BY col [ORDER BY …] [LIMIT n]
+            → PostgREST: ?select=col,count()   (requires db-aggregates-enabled, default on Supabase)
+
         Returns None when the statement is too complex to translate reliably.
         """
         sql = sql.strip().rstrip(";")
         if not re.match(r"\s*SELECT\b", sql, re.IGNORECASE):
             return None
+
+        # Reject complex expressions that PostgREST cannot handle in any form
+        # (EXTRACT, DATE_TRUNC, CAST ::, CASE, SUM(CASE WHEN …), subqueries, etc.)
+        if self._COMPLEX_EXPR_RE.search(sql):
+            return None
+
+        # Subquery guard: more than one FROM keyword means nested SELECT
+        if len(re.findall(r"\bFROM\b", sql, re.IGNORECASE)) > 1:
+            return None
+
+        # Resolve NOW() - INTERVAL '...' → literal timestamp so we can use it in filters
+        sql = self._resolve_now_interval(sql)
 
         # FROM table
         from_m = re.search(r"\bFROM\s+`?\"?(\w+)`?\"?", sql, re.IGNORECASE)

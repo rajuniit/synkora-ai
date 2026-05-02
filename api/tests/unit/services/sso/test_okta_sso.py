@@ -23,6 +23,7 @@ def _svc(**kwargs):
 # Initialisation
 # ---------------------------------------------------------------------------
 
+
 @pytest.mark.unit
 class TestOktaSSOServiceInit:
     def test_stores_domain(self):
@@ -47,6 +48,7 @@ class TestOktaSSOServiceInit:
 # ---------------------------------------------------------------------------
 # get_oidc_authorization_url
 # ---------------------------------------------------------------------------
+
 
 @pytest.mark.unit
 class TestGetOIDCAuthorizationUrl:
@@ -115,6 +117,7 @@ class TestGetOIDCAuthorizationUrl:
 # get_oidc_access_token
 # ---------------------------------------------------------------------------
 
+
 @pytest.mark.unit
 class TestGetOIDCAccessToken:
     @pytest.mark.asyncio
@@ -179,6 +182,7 @@ class TestGetOIDCAccessToken:
 # get_oidc_user_info
 # ---------------------------------------------------------------------------
 
+
 @pytest.mark.unit
 class TestGetOIDCUserInfo:
     @pytest.mark.asyncio
@@ -221,6 +225,7 @@ class TestGetOIDCUserInfo:
 # ---------------------------------------------------------------------------
 # refresh_oidc_token
 # ---------------------------------------------------------------------------
+
 
 @pytest.mark.unit
 class TestRefreshOIDCToken:
@@ -265,6 +270,7 @@ class TestRefreshOIDCToken:
 # ---------------------------------------------------------------------------
 # revoke_oidc_token
 # ---------------------------------------------------------------------------
+
 
 @pytest.mark.unit
 class TestRevokeOIDCToken:
@@ -340,6 +346,7 @@ class TestRevokeOIDCToken:
 # ---------------------------------------------------------------------------
 # validate_domain / get_oidc_configuration
 # ---------------------------------------------------------------------------
+
 
 @pytest.mark.unit
 class TestValidateDomain:
@@ -428,6 +435,7 @@ class TestGetOIDCConfiguration:
 # ---------------------------------------------------------------------------
 # SAML – no real SAML lib calls, just guard rails
 # ---------------------------------------------------------------------------
+
 
 @pytest.mark.unit
 class TestSAMLGuards:

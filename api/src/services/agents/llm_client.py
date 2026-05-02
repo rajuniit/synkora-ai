@@ -45,6 +45,57 @@ class LLMStreamingTimeoutError(Exception):
         super().__init__(message)
 
 
+class LLMProviderError(Exception):
+    """Raised when the LLM provider fails and a fallback should be attempted.
+
+    Callers that maintain a fallback chain (e.g. ChatStreamService) should
+    catch this exception, log a warning, then retry with the next configured
+    LLM config before surfacing any error to the user.
+    """
+
+    def __init__(self, message: str, provider: str, original_error: Exception):
+        self.provider = provider
+        self.original_error = original_error
+        super().__init__(message)
+
+
+# Error patterns that indicate a provider is unhealthy (rate-limited, down, auth failure).
+# These are the same categories tracked by is_expected_llm_error() in streaming_helpers.py.
+_PROVIDER_ERROR_PATTERNS = (
+    "RateLimitError",
+    "rate limit",
+    "ratelimit",
+    "too many requests",
+    "quota exceeded",
+    "ServiceUnavailableError",
+    "service unavailable",
+    "overloaded",
+    "APIStatusError",
+    "APIConnectionError",
+    "APITimeoutError",
+    "AuthenticationError",
+    "invalid api key",
+    "invalid_api_key",
+    "Unauthorized",
+    "502",
+    "503",
+    "529",
+)
+
+
+def _is_provider_error(exc: Exception) -> bool:
+    """Return True when *exc* is a known recoverable provider failure.
+
+    These are errors where retrying against a different LLM config is
+    reasonable (rate-limits, server errors, auth mismatches).  They are
+    intentionally broad: false positives just mean we try a fallback that
+    might also fail; false negatives mean the user sees the raw error.
+    """
+    exc_str = f"{type(exc).__name__}: {exc}"
+    lower = exc_str.lower()
+    return any(p.lower() in lower for p in _PROVIDER_ERROR_PATTERNS)
+
+
 class MultiProviderLLMClient:
     """
     Multi-provider LLM client that abstracts different LLM providers.
@@ -223,7 +274,7 @@ class MultiProviderLLMClient:
         optimization_flags=None,
         enable_response_cache: bool = False,
         system_prompt_hash: str = "",
-        agent_updated_at: str = "",
+        agent_updated_at=None,
     ) -> None:
         """
         Store per-request metadata for usage tracking.
@@ -447,6 +498,12 @@ class MultiProviderLLMClient:
         temp = temperature if temperature is not None else self.config.temperature
         max_tok = max_tokens if max_tokens is not None else self.config.max_tokens
 
+        # Platform ceiling: cap max_tokens to prevent runaway costs
+        _platform_max = int(os.getenv("PLATFORM_MAX_TOKENS_PER_RESPONSE", "32000"))
+        if max_tok and max_tok > _platform_max:
+            logger.debug("max_tokens %d exceeds platform ceiling %d; capping.", max_tok, _platform_max)
+            max_tok = _platform_max
+
         # Response cache check (opt-in, 6 correctness gates enforced inside)
         _ctx = getattr(self, "_cost_context", {}) or {}
         if _ctx.get("enable_response_cache"):
@@ -459,7 +516,8 @@ class MultiProviderLLMClient:
                     temperature=temp,
                     messages=[{"role": "user", "content": prompt}],
                     system_prompt_hash=_ctx.get("system_prompt_hash", ""),
-                    agent_updated_at=_ctx.get("agent_updated_at", ""),
+                    tenant_id=_ctx.get("tenant_id") or "",
+                    agent_id=str(_ctx.get("agent_id") or ""),
                 )
                 if _cached is not None:
                     self._read_and_fire_usage(response_cache_hit=True)
@@ -467,9 +525,12 @@ class MultiProviderLLMClient:
             except Exception:
                 pass  # fail-open
 
-        # PERFORMANCE: Get circuit breaker for this provider
+        # PERFORMANCE: Get circuit breaker scoped to provider+model (not just provider)
+        # so a failing deployment of model-A doesn't block calls to model-B on the same
+        # provider.  Operators can pin a tighter scope via routing_rules.config_id.
+        _cb_key = f"llm_{self.provider}_{self.config.model_name}".replace("/", "_")
         circuit_breaker = get_circuit_breaker(
-            name=f"llm_{self.provider}",
+            name=_cb_key,
             failure_threshold=5,
             recovery_timeout=60,
         )
@@ -541,7 +602,8 @@ class MultiProviderLLMClient:
                         messages=[{"role": "user", "content": prompt}],
                         response=response,
                         system_prompt_hash=_ctx.get("system_prompt_hash", ""),
-                        agent_updated_at=_ctx.get("agent_updated_at", ""),
+                        tenant_id=_ctx.get("tenant_id") or "",
+                        agent_id=str(_ctx.get("agent_id") or ""),
                     )
                 except Exception:
                     pass  # fail-open
@@ -578,7 +640,11 @@ class MultiProviderLLMClient:
 
         except CircuitBreakerOpen as e:
             logger.warning(f"Circuit breaker open for {self.provider}: {e}")
-            raise
+            raise LLMProviderError(
+                f"Provider '{self.provider}' circuit breaker is open: {e}",
+                provider=self.provider,
+                original_error=e,
+            )
 
         except Exception as e:
             # Log error to Langfuse if tracing is enabled
@@ -592,6 +658,14 @@ class MultiProviderLLMClient:
                         "latency_ms": int((time.time() - start_time) * 1000),
                     },
                 )
+            # Re-raise as LLMProviderError for known recoverable provider failures
+            # so callers with a fallback chain can try the next config.
+            if _is_provider_error(e):
+                raise LLMProviderError(
+                    f"Provider '{self.provider}' failed: {e}",
+                    provider=self.provider,
+                    original_error=e,
+                ) from e
             raise
 
     async def _generate_mock(self, prompt: str, temperature: float, max_tokens: int | None, **kwargs) -> str:
@@ -746,6 +820,7 @@ class MultiProviderLLMClient:
             "max_tokens": max_tokens,
             "api_key": self.config.api_key,
             "num_retries": 3,
+            "drop_params": True,  # Silently drop unsupported params (e.g. temperature for gpt-5)
         }
 
         # Add base URL if provided
@@ -787,6 +862,11 @@ class MultiProviderLLMClient:
         temp = temperature if temperature is not None else self.config.temperature
         max_tok = max_tokens if max_tokens is not None else self.config.max_tokens
 
+        # Platform ceiling
+        _platform_max = int(os.getenv("PLATFORM_MAX_TOKENS_PER_RESPONSE", "32000"))
+        if max_tok and max_tok > _platform_max:
+            max_tok = _platform_max
+
         # Wrap the streaming with timeout protection (both total and chunk timeout)
         async def _stream():
             # Provider is already normalized to lowercase in __init__
@@ -808,12 +888,31 @@ class MultiProviderLLMClient:
             else:
                 raise ValueError(f"Unsupported provider: {self.provider}")
 
-        # Apply full timeout wrapper (checks both total timeout and chunk timeout)
-        async for chunk in self._with_streaming_timeout(
-            self._wrap_with_chunk_timeout(_stream()),
-            total_timeout=timeout or self.streaming_timeout,
-        ):
-            yield chunk
+        # Apply full timeout wrapper (checks both total timeout and chunk timeout).
+        # Translate CircuitBreakerOpen / known provider errors to LLMProviderError
+        # so callers with a fallback chain can retry with the next LLM config.
+        try:
+            async for chunk in self._with_streaming_timeout(
+                self._wrap_with_chunk_timeout(_stream()),
+                total_timeout=timeout or self.streaming_timeout,
+            ):
+                yield chunk
+        except LLMProviderError:
+            raise  # already translated
+        except CircuitBreakerOpen as e:
+            raise LLMProviderError(
+                f"Provider '{self.provider}' circuit breaker is open: {e}",
+                provider=self.provider,
+                original_error=e,
+            ) from e
+        except Exception as e:
+            if _is_provider_error(e):
+                raise LLMProviderError(
+                    f"Provider '{self.provider}' stream failed: {e}",
+                    provider=self.provider,
+                    original_error=e,
+                ) from e
+            raise
 
     async def generate_content_stream_with_messages(
         self,
@@ -841,6 +940,11 @@ class MultiProviderLLMClient:
         """
         temp = temperature if temperature is not None else self.config.temperature
         max_tok = max_tokens if max_tokens is not None else self.config.max_tokens
+
+        # Platform ceiling
+        _platform_max = int(os.getenv("PLATFORM_MAX_TOKENS_PER_RESPONSE", "32000"))
+        if max_tok and max_tok > _platform_max:
+            max_tok = _platform_max
 
         # Note: max_tokens limits vary by model (e.g., Claude supports up to 200k output tokens)
         # We no longer cap this artificially - let the API handle model-specific limits
@@ -870,12 +974,31 @@ class MultiProviderLLMClient:
             else:
                 raise ValueError(f"Unsupported provider: {self.provider}")
 
-        # Apply full timeout wrapper (checks both total timeout and chunk timeout)
-        async for chunk in self._with_streaming_timeout(
-            self._wrap_with_chunk_timeout(_stream()),
-            total_timeout=timeout or self.streaming_timeout,
-        ):
-            yield chunk
+        # Apply full timeout wrapper (checks both total timeout and chunk timeout).
+        # Translate CircuitBreakerOpen / known provider errors to LLMProviderError
+        # so callers with a fallback chain can retry with the next LLM config.
+        try:
+            async for chunk in self._with_streaming_timeout(
+                self._wrap_with_chunk_timeout(_stream()),
+                total_timeout=timeout or self.streaming_timeout,
+            ):
+                yield chunk
+        except LLMProviderError:
+            raise  # already translated
+        except CircuitBreakerOpen as e:
+            raise LLMProviderError(
+                f"Provider '{self.provider}' circuit breaker is open: {e}",
+                provider=self.provider,
+                original_error=e,
+            ) from e
+        except Exception as e:
+            if _is_provider_error(e):
+                raise LLMProviderError(
+                    f"Provider '{self.provider}' stream failed: {e}",
+                    provider=self.provider,
+                    original_error=e,
+                ) from e
+            raise
 
     async def _generate_google_stream(
         self, prompt: str, temperature: float, max_tokens: int | None, **kwargs
@@ -994,6 +1117,7 @@ class MultiProviderLLMClient:
             "api_key": self.config.api_key,
             "stream": True,
             "num_retries": 3,
+            "drop_params": True,  # Silently drop unsupported params (e.g. temperature for gpt-5)
         }
 
         if self.config.api_base:
@@ -1151,6 +1275,7 @@ class MultiProviderLLMClient:
             "api_key": self.config.api_key,
             "stream": True,
             "num_retries": 3,
+            "drop_params": True,  # Silently drop unsupported params (e.g. temperature for gpt-5)
         }
 
         if self.config.api_base:

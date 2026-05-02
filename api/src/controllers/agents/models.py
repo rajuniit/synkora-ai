@@ -8,6 +8,7 @@ from typing import Any
 
 from pydantic import BaseModel, Field
 
+from src.schemas.base import StrictModel
 from src.services.agents.config import AgentConfig, WorkflowConfig
 
 
@@ -19,7 +20,7 @@ class AgentResponse(BaseModel):
     data: dict[str, Any] = Field(default_factory=dict)
 
 
-class CreateAgentRequest(BaseModel):
+class CreateAgentRequest(StrictModel):
     """Request model for creating an agent."""
 
     config: AgentConfig
@@ -32,9 +33,10 @@ class CreateAgentRequest(BaseModel):
     human_contact_id: str | None = Field(None, description="Optional human contact ID for escalation")
 
 
-class UpdateAgentRequest(BaseModel):
+class UpdateAgentRequest(StrictModel):
     """Request model for updating an agent."""
 
+    name: str | None = Field(None, description="New agent name (slug, used in URLs)")
     description: str | None = Field(None, description="Agent description")
     avatar: str | None = Field(None, description="Agent avatar URL")
     system_prompt: str | None = Field(None, description="System prompt")
@@ -69,6 +71,20 @@ class UpdateAgentRequest(BaseModel):
         None,
         description="Routing configuration: quality_floor (0.0-1.0), max_cost_per_1k (USD), etc.",
     )
+    execution_backend: str | None = Field(
+        None,
+        description="Execution backend: celery | lambda | cloud_run",
+    )
+    allow_transfer: bool | None = Field(None, description="Whether this agent can transfer control to other agents")
+    transfer_scope: str | None = Field(
+        None,
+        description="Scope for agent transfer: sub_agents | siblings | parent | any",
+    )
+    change_description: str | None = Field(
+        None,
+        max_length=500,
+        description="Optional commit message recorded in the version history snapshot",
+    )
 
 
 class ExecuteAgentRequest(BaseModel):
@@ -85,11 +101,11 @@ class ExecuteWorkflowRequest(BaseModel):
     input_data: dict[str, Any] = Field(..., description="Initial input data")
 
 
-class ChatRequest(BaseModel):
+class ChatRequest(StrictModel):
     """Request model for chat with streaming."""
 
     agent_name: str = Field(..., description="Name of the agent")
-    message: str = Field(..., description="User message")
+    message: str = Field(..., max_length=32000, description="User message")
     conversation_history: list[dict[str, str]] | None = Field(None, description="Conversation history")
     conversation_id: str | None = Field(None, description="Conversation ID for history")
     attachments: list[dict[str, Any]] | None = Field(None, description="File attachments metadata")

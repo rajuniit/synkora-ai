@@ -438,6 +438,106 @@ class CompanyBrainConfig(BaseSettings):
     )
 
 
+class AWSConfig(BaseSettings):
+    """AWS configuration for Lambda execution backend."""
+
+    aws_access_key_id: str | None = Field(
+        default=None,
+        description="AWS access key ID",
+    )
+
+    aws_secret_access_key: str | None = Field(
+        default=None,
+        description="AWS secret access key",
+    )
+
+    aws_region: str = Field(
+        default="us-east-1",
+        description="AWS region",
+    )
+
+    aws_lambda_function_arn: str | None = Field(
+        default=None,
+        description="ARN of the Lambda function to invoke for agent tasks",
+    )
+
+    aws_lambda_role_arn: str | None = Field(
+        default=None,
+        description="IAM role ARN for Lambda execution (used when creating the function)",
+    )
+
+    lambda_invocation_secret: str | None = Field(
+        default=None,
+        description="HMAC signing key for Lambda invocation payloads",
+    )
+
+    @property
+    def is_configured(self) -> bool:
+        """Check if AWS is properly configured."""
+        return bool(self.aws_access_key_id and self.aws_secret_access_key and self.aws_lambda_function_arn)
+
+
+class GCPConfig(BaseSettings):
+    """GCP configuration for Cloud Run execution backend."""
+
+    gcp_project_id: str | None = Field(
+        default=None,
+        description="GCP project ID",
+    )
+
+    gcp_service_account_json: str | None = Field(
+        default=None,
+        description="Base64-encoded service account JSON",
+    )
+
+    gcp_region: str = Field(
+        default="us-central1",
+        description="GCP region",
+    )
+
+    cloud_run_job_name: str | None = Field(
+        default=None,
+        description="Cloud Run Job name to execute agent tasks",
+    )
+
+    cloud_run_invocation_secret: str | None = Field(
+        default=None,
+        description="HMAC signing key for Cloud Run invocation payloads",
+    )
+
+    @property
+    def is_configured(self) -> bool:
+        """Check if GCP is properly configured."""
+        return bool(self.gcp_project_id and self.gcp_service_account_json and self.cloud_run_job_name)
+
+
+class DOConfig(BaseSettings):
+    """DigitalOcean configuration for Functions execution backend."""
+
+    do_api_token: str | None = Field(
+        default=None,
+        description="DigitalOcean API token (personal access token with write scope)",
+    )
+
+    do_functions_endpoint: str | None = Field(
+        default=None,
+        description=(
+            "Full HTTPS endpoint URL for the deployed DO Function. "
+            "Format: https://faas-{region}.doserverless.co/api/v1/web/{namespace_id}/{package}/{function}"
+        ),
+    )
+
+    do_functions_invocation_secret: str | None = Field(
+        default=None,
+        description="HMAC signing key for DO Functions invocation payloads",
+    )
+
+    @property
+    def is_configured(self) -> bool:
+        """Check if DO Functions is properly configured."""
+        return bool(self.do_api_token and self.do_functions_endpoint)
+
+
 class FeatureConfig(BaseSettings):
     """Feature configuration combining all feature settings."""
 

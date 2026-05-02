@@ -19,11 +19,12 @@ def poll_llm_batches(self):
     import asyncio
 
     try:
-        loop = asyncio.get_event_loop()
-        if loop.is_closed():
-            loop = asyncio.new_event_loop()
-            asyncio.set_event_loop(loop)
-        loop.run_until_complete(_poll_batches_async())
+        loop = asyncio.new_event_loop()
+        asyncio.set_event_loop(loop)
+        try:
+            loop.run_until_complete(_poll_batches_async())
+        finally:
+            loop.close()
     except Exception as exc:
         logger.error(f"poll_llm_batches error: {exc}", exc_info=True)
         raise self.retry(exc=exc, countdown=300) from exc

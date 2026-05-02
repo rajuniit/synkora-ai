@@ -5,12 +5,14 @@ Handles basic agent creation, listing, retrieval, update, delete, and reset oper
 """
 
 import logging
+import os
 import uuid
 
 from fastapi import APIRouter, Depends, HTTPException, status
 from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import selectinload
+from sqlalchemy.orm.attributes import flag_modified
 
 from src.controllers.agents.models import (
     AgentResponse,
@@ -21,7 +23,8 @@ from src.controllers.agents.models import (
     UpdateAgentRequest,
 )
 from src.core.database import get_async_db
-from src.middleware.auth_middleware import get_current_tenant_id
+from src.middleware.auth_middleware import get_current_account, get_current_tenant_id, require_role
+from src.models import AccountRole
 from src.models.agent import Agent
 from src.services.agents.agent_manager import AgentManager
 from src.services.agents.implementations import ClaudeCodeAgent, CodeAgent, LLMAgent, ResearchAgent
@@ -82,7 +85,9 @@ def convert_s3_uri_to_presigned_url(s3_uri: str) -> str:
 async def create_agent(
     request: CreateAgentRequest,
     tenant_id: uuid.UUID = Depends(get_current_tenant_id),
+    current_account=Depends(get_current_account),
     db: AsyncSession = Depends(get_async_db),
+    _: None = Depends(require_role(AccountRole.ADMIN)),
 ):
     """
     Create and register a new agent.
@@ -145,9 +150,11 @@ async def create_agent(
 
         sanitized_suggestion_prompts = sanitize_suggestion_prompts(getattr(request.config, "suggestion_prompts", []))
 
-        # Create agent in memory
+        # Create agent in memory (tenant-scoped)
         if request.api_key:
-            await agent_manager.create_agent(config=request.config, agent_class=agent_class, api_key=request.api_key)
+            await agent_manager.create_agent(
+                config=request.config, agent_class=agent_class, api_key=request.api_key, tenant_id=str(tenant_id)
+            )
 
         # Prepare llm_config with encrypted API key
         from src.services.agents.security import encrypt_value
@@ -319,6 +326,22 @@ async def create_agent(
         cache = get_agent_cache()
         await cache.invalidate_agents_list(str(tenant_id))
 
+        # Audit: log agent creation (best-effort)
+        try:
+            from src.services.activity.activity_log_service import ActivityLogService
+
+            _log_svc = ActivityLogService(db)
+            await _log_svc.log_activity(
+                tenant_id=tenant_id,
+                account_id=current_account.id,
+                action="agent.created",
+                resource_type="agent",
+                resource_id=db_agent.id,
+                details={"agent_name": db_agent.agent_name, "agent_type": db_agent.agent_type},
+            )
+        except Exception:
+            pass
+
         return AgentResponse(
             success=True,
             message=f"Agent '{request.config.name}' created successfully",
@@ -336,8 +359,8 @@ async def create_agent(
 
         await db.rollback()
 
-        # Handle duplicate agent name error
-        if isinstance(e, IntegrityError) and "agents_agent_name_idx" in str(e):
+        # Handle duplicate agent name error (constraint is uq_agent_name_tenant)
+        if isinstance(e, IntegrityError) and ("uq_agent_name_tenant" in str(e) or "agents_agent_name_idx" in str(e)):
             logger.warning(f"Duplicate agent name attempted: {request.config.name}")
             raise HTTPException(
                 status_code=status.HTTP_409_CONFLICT,
@@ -391,7 +414,7 @@ async def execute_agent(
         if not db_agent:
             raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=f"Agent '{request.agent_name}' not found")
 
-        result = await agent_manager.execute_agent(request.agent_name, request.input_data)
+        result = await agent_manager.execute_agent(request.agent_name, request.input_data, str(tenant_id))
 
         return AgentResponse(
             success=result.get("status") == "success",
@@ -742,10 +765,18 @@ async def get_agent(
         if not db_agent:
             raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=f"Agent '{agent_name}' not found")
 
-        # Get runtime stats if agent is in memory
+        # SECURITY: determine ownership before exposing sensitive fields
+        is_own_agent = str(db_agent.tenant_id) == str(tenant_id)
+
+        # Return 404 (not 403) for agents belonging to a different tenant that are not public,
+        # to avoid leaking the existence of private agents across tenants.
+        if not is_own_agent and not db_agent.is_public:
+            raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=f"Agent '{agent_name}' not found")
+
+        # Get runtime stats if agent is in memory (tenant-scoped lookup)
         stats = {}
-        if agent_name in agent_manager.registry:
-            stats = agent_manager.get_agent_stats(agent_name)
+        if is_own_agent and agent_manager.registry.contains(agent_name, str(tenant_id)):
+            stats = agent_manager.get_agent_stats(agent_name, str(tenant_id))
 
         # Convert S3 URI to presigned URL for avatar display
         avatar_url = convert_s3_uri_to_presigned_url(db_agent.avatar) if db_agent.avatar else None
@@ -767,6 +798,26 @@ async def get_agent(
                 "preferred_channel": db_agent.human_contact.preferred_channel,
             }
 
+        # SECURITY: strip sensitive config fields when serving a cross-tenant public agent
+        if is_own_agent:
+            llm_config_out = db_agent.llm_config
+            system_prompt_out = db_agent.system_prompt
+            tools_config_out = db_agent.tools_config
+            observability_config_out = db_agent.observability_config or {}
+        else:
+            raw_llm = db_agent.llm_config or {}
+            # SECURITY: hide model/provider info for cross-tenant public agents when
+            # HIDE_MODEL_INFO_IN_PUBLIC=true is set. Prevents competitors or users from
+            # fingerprinting which LLM is backing a public agent.
+            _hide_model_info = os.getenv("HIDE_MODEL_INFO_IN_PUBLIC", "false").lower() == "true"
+            if _hide_model_info:
+                llm_config_out = {"model": "custom", "provider": "custom"}
+            else:
+                llm_config_out = {"model": raw_llm.get("model"), "provider": raw_llm.get("provider")}
+            system_prompt_out = None  # never expose system prompt cross-tenant
+            tools_config_out = None
+            observability_config_out = {}
+
         return AgentResponse(
             success=True,
             message=f"Agent '{agent_name}' details",
@@ -776,30 +827,35 @@ async def get_agent(
                 "agent_type": db_agent.agent_type,
                 "description": db_agent.description,
                 "avatar": avatar_url,
-                "system_prompt": db_agent.system_prompt,
-                "llm_config": db_agent.llm_config,
-                "tools_config": db_agent.tools_config,
-                "observability_config": db_agent.observability_config or {},
-                "agent_metadata": db_agent.agent_metadata or {},
+                "system_prompt": system_prompt_out,
+                "llm_config": llm_config_out,
+                "tools_config": tools_config_out,
+                "observability_config": observability_config_out,
+                "agent_metadata": db_agent.agent_metadata or {} if is_own_agent else {},
                 "suggestion_prompts": db_agent.suggestion_prompts or [],
                 "status": db_agent.status,
                 "is_public": db_agent.is_public or False,
                 "category": db_agent.category,
                 "tags": db_agent.tags or [],
                 "voice_enabled": db_agent.voice_enabled or False,
-                "voice_config": db_agent.voice_config or {},
+                "voice_config": db_agent.voice_config or {} if is_own_agent else {},
                 "is_adk_workflow_enabled": db_agent.workflow_type is not None,
-                "workflow_type": db_agent.workflow_type,
-                "workflow_config": db_agent.workflow_config,
-                "routing_mode": getattr(db_agent, "routing_mode", "fixed") or "fixed",
-                "routing_config": getattr(db_agent, "routing_config", None),
+                "workflow_type": db_agent.workflow_type if is_own_agent else None,
+                "workflow_config": db_agent.workflow_config if is_own_agent else None,
+                "routing_mode": getattr(db_agent, "routing_mode", "fixed") or "fixed" if is_own_agent else "fixed",
+                "routing_config": getattr(db_agent, "routing_config", None) if is_own_agent else None,
+                "execution_backend": getattr(db_agent, "execution_backend", "celery") or "celery"
+                if is_own_agent
+                else None,
                 "created_at": db_agent.created_at.isoformat(),
                 "updated_at": db_agent.updated_at.isoformat(),
                 "stats": stats,
-                "role_id": str(db_agent.role_id) if db_agent.role_id else None,
-                "human_contact_id": str(db_agent.human_contact_id) if db_agent.human_contact_id else None,
-                "role": role_data,
-                "human_contact": human_contact_data,
+                "role_id": str(db_agent.role_id) if (db_agent.role_id and is_own_agent) else None,
+                "human_contact_id": str(db_agent.human_contact_id)
+                if (db_agent.human_contact_id and is_own_agent)
+                else None,
+                "role": role_data if is_own_agent else None,
+                "human_contact": human_contact_data if is_own_agent else None,
             },
         )
 
@@ -862,6 +918,17 @@ async def get_agent_stats(
             if tenant:
                 creator_name = tenant.name
 
+        # Determine whether the requesting tenant owns this agent
+        is_own_agent = str(db_agent.tenant_id) == str(tenant_id)
+
+        # For cross-tenant public agents, strip sensitive configuration fields
+        if is_own_agent:
+            llm_config_response = db_agent.llm_config
+        else:
+            # Only expose the model name; remove api_key, api_base, and other secrets
+            raw_llm = db_agent.llm_config or {}
+            llm_config_response = {"model": raw_llm.get("model")}
+
         # Combine database info with computed stats
         stats = {
             "agent_id": str(db_agent.id),
@@ -870,7 +937,7 @@ async def get_agent_stats(
             "description": db_agent.description,
             "avatar": avatar_url,
             "status": db_agent.status,
-            "llm_config": db_agent.llm_config,
+            "llm_config": llm_config_response,
             "observability_config": db_agent.observability_config or {},
             "suggestion_prompts": db_agent.suggestion_prompts or [],
             "created_at": db_agent.created_at.isoformat(),
@@ -885,8 +952,10 @@ async def get_agent_stats(
             "dislikes_count": db_agent.dislikes_count,
             "usage_count": db_agent.usage_count,
             "creator_name": creator_name,
-            "tenant_id": str(db_agent.tenant_id),
         }
+        # Only include tenant_id for the agent's own tenant — never leak it cross-tenant
+        if is_own_agent:
+            stats["tenant_id"] = str(db_agent.tenant_id)
 
         return AgentResponse(success=True, message=f"Stats for agent '{agent_name}'", data=stats)
 
@@ -905,7 +974,9 @@ async def update_agent(
     agent_name: str,
     request: UpdateAgentRequest,
     tenant_id: uuid.UUID = Depends(get_current_tenant_id),
+    current_account=Depends(get_current_account),
     db: AsyncSession = Depends(get_async_db),
+    _: None = Depends(require_role(AccountRole.ADMIN)),
 ):
     """
     Update an agent's configuration.
@@ -927,6 +998,19 @@ async def update_agent(
             raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=f"Agent '{agent_name}' not found")
 
         # Update fields if provided
+        old_agent_name = agent_name  # remember original for cache invalidation
+        if request.name is not None and request.name != agent_name:
+            new_name = request.name.strip()
+            if not new_name:
+                raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Agent name cannot be empty")
+            # Check name is not already taken
+            existing = await db.scalar(select(Agent).filter(Agent.agent_name == new_name, Agent.tenant_id == tenant_id))
+            if existing:
+                raise HTTPException(
+                    status_code=status.HTTP_409_CONFLICT,
+                    detail=f"An agent named '{new_name}' already exists",
+                )
+            db_agent.agent_name = new_name
         if request.description is not None:
             db_agent.description = request.description
         if request.avatar is not None:
@@ -986,6 +1070,7 @@ async def update_agent(
             db_agent.voice_config = request.voice_config
         if request.agent_metadata is not None:
             db_agent.agent_metadata = request.agent_metadata
+            flag_modified(db_agent, "agent_metadata")
         # Note: is_adk_workflow_enabled is derived from workflow_type presence, not stored separately
         if request.workflow_type is not None:
             db_agent.workflow_type = request.workflow_type
@@ -1006,25 +1091,71 @@ async def update_agent(
             db_agent.routing_mode = request.routing_mode
         if request.routing_config is not None:
             db_agent.routing_config = request.routing_config
+        if request.execution_backend is not None:
+            valid_backends = {"celery", "lambda", "cloud_run", "do_functions"}
+            if request.execution_backend not in valid_backends:
+                raise HTTPException(
+                    status_code=status.HTTP_400_BAD_REQUEST,
+                    detail=f"Invalid execution_backend '{request.execution_backend}'. Valid values: {sorted(valid_backends)}",
+                )
+            if request.execution_backend != "celery":
+                from src.services.billing import PlanRestrictionError, PlanRestrictionService
+
+                _restriction_service = PlanRestrictionService(db)
+                try:
+                    await _restriction_service.enforce_feature_access(
+                        tenant_id, "serverless_execution", "Serverless execution (Cloud Run / Lambda)"
+                    )
+                except PlanRestrictionError as exc:
+                    raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail=str(exc)) from exc
+            db_agent.execution_backend = request.execution_backend
+        if request.allow_transfer is not None:
+            db_agent.allow_transfer = request.allow_transfer
+        if request.transfer_scope is not None:
+            valid_scopes = {"sub_agents", "siblings", "parent", "any"}
+            if request.transfer_scope not in valid_scopes:
+                raise HTTPException(
+                    status_code=status.HTTP_400_BAD_REQUEST,
+                    detail=f"Invalid transfer_scope '{request.transfer_scope}'. Valid values: {sorted(valid_scopes)}",
+                )
+            db_agent.transfer_scope = request.transfer_scope
 
         await db.commit()
         await db.refresh(db_agent)
 
+        # Phase 3b: Snapshot the saved state as a new version
+        try:
+            from src.services.agents.agent_version_service import create_version
+
+            await create_version(
+                db,
+                db_agent,
+                account_id=current_account.id,
+                change_description=request.change_description,
+            )
+            await db.commit()
+        except Exception as version_err:
+            # Version creation must not fail the update itself
+            logger.warning(f"Failed to create agent version snapshot: {version_err}")
+
         # Phase 4: Invalidate cache after update
         cache = get_agent_cache()
-        await cache.invalidate_agent(agent_name=agent_name, agent_id=str(db_agent.id))
+        await cache.invalidate_agent(agent_name=old_agent_name, agent_id=str(db_agent.id))
+        if db_agent.agent_name != old_agent_name:
+            # Name changed — also invalidate the new name slot in case it was cached
+            await cache.invalidate_agent(agent_name=db_agent.agent_name, agent_id=str(db_agent.id))
         await cache.invalidate_agents_list(str(tenant_id))  # PERFORMANCE: Also invalidate list cache
-        logger.info(f"🗑️  Invalidated cache for agent '{agent_name}'")
+        logger.info(f"🗑️  Invalidated cache for agent '{old_agent_name}'")
 
         # Evict stale agent from memory so the next request reloads it properly
         # via agent_loader_service._resolve_llm_config, which queries AgentLLMConfig
         # and decrypts the API key correctly.  Do NOT recreate here using the
         # inline db_agent.llm_config field — that field may be stale or its api_key
         # still encrypted, which would break the in-memory LLM client.
-        if agent_name in agent_manager.registry:
+        if agent_manager.registry.contains(old_agent_name, str(tenant_id)):
             try:
-                await agent_manager.delete_agent(agent_name)
-                logger.info(f"Evicted agent '{agent_name}' from memory; will reload on next request")
+                await agent_manager.delete_agent(old_agent_name, str(tenant_id))
+                logger.info(f"Evicted agent '{old_agent_name}' from memory; will reload on next request")
             except Exception as e:
                 logger.error(f"Failed to evict agent from memory: {e}")
 
@@ -1046,7 +1177,9 @@ async def update_agent(
 async def delete_agent(
     agent_name: str,
     tenant_id: uuid.UUID = Depends(get_current_tenant_id),
+    current_account=Depends(get_current_account),
     db: AsyncSession = Depends(get_async_db),
+    _: None = Depends(require_role(AccountRole.ADMIN)),
 ):
     """
     Delete an agent.
@@ -1064,7 +1197,7 @@ async def delete_agent(
 
         # Try to delete from memory (may not be loaded)
         try:
-            await agent_manager.delete_agent(agent_name)
+            await agent_manager.delete_agent(agent_name, str(tenant_id))
             deleted_from_memory = True
         except KeyError:
             # Agent not in memory, continue to try deleting from database
@@ -1086,6 +1219,22 @@ async def delete_agent(
         # PERFORMANCE: Invalidate agents list cache for this tenant
         cache = get_agent_cache()
         await cache.invalidate_agents_list(str(tenant_id))
+
+        # Audit: log agent deletion (best-effort)
+        try:
+            from src.services.activity.activity_log_service import ActivityLogService
+
+            _log_svc = ActivityLogService(db)
+            await _log_svc.log_activity(
+                tenant_id=tenant_id,
+                account_id=current_account.id,
+                action="agent.deleted",
+                resource_type="agent",
+                resource_id=db_agent.id if db_agent else None,
+                details={"agent_name": agent_name},
+            )
+        except Exception:
+            pass
 
         return AgentResponse(success=True, message=f"Agent '{agent_name}' deleted successfully")
 
@@ -1124,7 +1273,7 @@ async def reset_agent(
 
         # Try to reset in memory (agent may not be loaded)
         try:
-            await agent_manager.reset_agent(agent_name)
+            await agent_manager.reset_agent(agent_name, str(tenant_id))
         except KeyError:
             # Agent not in memory, but exists in DB - nothing to reset in memory
             pass
@@ -1162,7 +1311,7 @@ async def reset_all_agents(
         reset_count = 0
         for agent_name in tenant_agent_names:
             try:
-                await agent_manager.reset_agent(agent_name)
+                await agent_manager.reset_agent(agent_name, str(tenant_id))
                 reset_count += 1
             except KeyError:
                 # Agent not in memory, skip

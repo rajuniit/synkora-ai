@@ -205,12 +205,58 @@ class TokenBlacklistService:
         try:
             key = f"{REFRESH_TOKEN_FAMILY_PREFIX}{account_id}:{family_id}"
             self.redis.delete(key)
+            # Also delete the session creation timestamp for this family
+            ts_key = f"session:created:{account_id}:{family_id}"
+            self.redis.delete(ts_key)
             logger.info(f"Refresh token family {family_id} invalidated for account {account_id}")
             return True
 
         except Exception as e:
             logger.warning(f"Failed to invalidate refresh token family: {e}")
             return False
+
+    def store_session_created_at(self, account_id: uuid.UUID, family_id: str, created_at_ts: float) -> bool:
+        """
+        Store the original session creation timestamp for a refresh-token family.
+
+        Used by refresh_session() to enforce the absolute maximum session lifetime
+        (JWT_MAX_SESSION_AGE_HOURS) regardless of valid refresh tokens.
+
+        Args:
+            account_id: Account UUID
+            family_id: Refresh token family ID
+            created_at_ts: Unix timestamp of when the session was first created
+
+        Returns:
+            True if successful
+        """
+        try:
+            key = f"session:created:{account_id}:{family_id}"
+            # TTL matches the refresh token lifetime so it auto-expires
+            self.redis.setex(key, settings.jwt_refresh_token_expires, str(created_at_ts))
+            return True
+        except Exception as e:
+            logger.warning(f"Failed to store session created_at: {e}")
+            return False
+
+    def get_session_created_at(self, account_id: uuid.UUID, family_id: str) -> float | None:
+        """
+        Retrieve the original session creation timestamp for a refresh-token family.
+
+        Args:
+            account_id: Account UUID
+            family_id: Refresh token family ID
+
+        Returns:
+            Unix timestamp float, or None if not found
+        """
+        try:
+            key = f"session:created:{account_id}:{family_id}"
+            value = self.redis.get(key)
+            return float(value) if value else None
+        except Exception as e:
+            logger.warning(f"Failed to get session created_at: {e}")
+            return None
 
 
 # Module-level singleton — initialized once at import time, which is inherently

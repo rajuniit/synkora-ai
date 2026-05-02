@@ -42,12 +42,15 @@ class StalenessDetector:
         if not articles:
             return {"updated": 0}
 
-        # Get the latest document update time for this KB
+        # Get the latest SOURCE document update time for this KB.
+        # Exclude wiki-type documents: they are regenerated on every compile, so including them
+        # would cause circular staleness (compile → embed → updated_at=NOW → all articles stale).
         doc_result = await self.db.execute(
             select(Document.updated_at)
             .filter(
                 Document.knowledge_base_id == knowledge_base_id,
                 Document.status == DocumentStatus.COMPLETED,
+                Document.source_type != "wiki",
             )
             .order_by(Document.updated_at.desc())
             .limit(1)
@@ -55,7 +58,7 @@ class StalenessDetector:
         latest_doc_update = doc_result.scalar_one_or_none()
 
         now = datetime.now(UTC)
-        max_age_seconds = 30 * 24 * 3600  # 30 days
+        max_age_seconds = 90 * 24 * 3600  # 90 days — avoids penalising stable content
         updated = 0
 
         for article in articles:

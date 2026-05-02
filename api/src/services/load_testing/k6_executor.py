@@ -138,7 +138,7 @@ class K6Executor:
                     if line.startswith("{"):
                         try:
                             results["summary"] = json.loads(line)
-                        except:
+                        except Exception:
                             pass
 
             # Wait for completion
@@ -157,7 +157,7 @@ class K6Executor:
             # Cleanup
             try:
                 os.unlink(script_path)
-            except:
+            except Exception:
                 pass
 
     async def execute_docker(
@@ -243,7 +243,7 @@ class K6Executor:
                     if line.startswith("{"):
                         try:
                             results["summary"] = json.loads(line)
-                        except:
+                        except Exception:
                             pass
 
             # Wait for completion
@@ -260,7 +260,7 @@ class K6Executor:
         finally:
             try:
                 os.unlink(script_path)
-            except:
+            except Exception:
                 pass
 
     async def cancel(self) -> None:
@@ -281,7 +281,7 @@ class K6Executor:
                     capture_output=True,
                     timeout=10,
                 )
-            except:
+            except Exception:
                 pass
 
         logger.info(f"Test run {self.test_run_id} cancelled")

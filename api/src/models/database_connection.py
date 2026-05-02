@@ -94,8 +94,8 @@ class DatabaseConnection(BaseModel, TimestampMixin):
                         result[k] = _json.loads(decrypted)
                     except (_json.JSONDecodeError, TypeError):
                         result[k] = decrypted
-                except Exception:
-                    result[k] = v  # fallback: return raw if decryption fails
+                except Exception as exc:
+                    raise RuntimeError("Credential decryption failed — check ENCRYPTION_KEY configuration") from exc
             else:
                 result[k] = v
         return result
@@ -115,7 +115,7 @@ class DatabaseConnection(BaseModel, TimestampMixin):
                     raw_str = _json.dumps(v) if isinstance(v, (dict, list)) else str(v)
                     encrypted[k] = f"enc:{encrypt_value(raw_str)}"
                 except Exception:
-                    encrypted[k] = v  # fallback: store plain if encryption fails
+                    raise  # Let encryption failures propagate — never store credentials in plaintext
             else:
                 encrypted[k] = v
         self._connection_params_enc = encrypted

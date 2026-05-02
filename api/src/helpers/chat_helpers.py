@@ -114,6 +114,7 @@ def build_message_metadata(
     charts: list[dict[str, Any]] | None = None,
     diagrams: list[dict[str, Any]] | None = None,
     infographics: list[dict[str, Any]] | None = None,
+    generated_images: list[dict[str, Any]] | None = None,
     fleet_cards: list[dict[str, Any]] | None = None,
     workflow_type: str | None = None,
     execution_log: list[dict[str, Any]] | None = None,
@@ -149,6 +150,9 @@ def build_message_metadata(
 
     if infographics:
         metadata["infographics"] = infographics
+
+    if generated_images:
+        metadata["generated_images"] = generated_images
 
     if fleet_cards:
         metadata["fleet_cards"] = fleet_cards

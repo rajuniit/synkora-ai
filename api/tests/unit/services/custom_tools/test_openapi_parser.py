@@ -22,9 +22,7 @@ def _pet_schema() -> dict:
                     "operationId": "listPets",
                     "summary": "List all pets",
                     "description": "Returns all pets",
-                    "parameters": [
-                        {"name": "limit", "in": "query", "required": False, "schema": {"type": "integer"}}
-                    ],
+                    "parameters": [{"name": "limit", "in": "query", "required": False, "schema": {"type": "integer"}}],
                     "responses": {"200": {"description": "OK"}},
                     "tags": ["pets"],
                 },
@@ -171,9 +169,7 @@ class TestParseParameters:
                     "parameters": [{"name": "id", "in": "path", "required": False, "schema": {"type": "string"}}],
                     "get": {
                         "operationId": "getItem",
-                        "parameters": [
-                            {"name": "id", "in": "path", "required": True, "schema": {"type": "string"}}
-                        ],
+                        "parameters": [{"name": "id", "in": "path", "required": True, "schema": {"type": "string"}}],
                         "responses": {"200": {"description": "OK"}},
                     },
                 }

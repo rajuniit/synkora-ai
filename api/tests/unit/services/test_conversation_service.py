@@ -407,14 +407,17 @@ class TestGetConversationHistoryCached:
         mock_cache.get_conversation_history = AsyncMock(return_value=None)
         mock_cache.set_conversation_history = AsyncMock()
 
-        with patch(
-            "src.services.conversation_service.get_conversation_cache",
-            return_value=mock_cache,
-        ), patch.object(
-            ConversationService,
-            "get_conversation_messages",
-            new_callable=AsyncMock,
-            return_value=mock_messages,
+        with (
+            patch(
+                "src.services.conversation_service.get_conversation_cache",
+                return_value=mock_cache,
+            ),
+            patch.object(
+                ConversationService,
+                "get_conversation_messages",
+                new_callable=AsyncMock,
+                return_value=mock_messages,
+            ),
         ):
             result = await ConversationService.get_conversation_history_cached(mock_db, conversation_id)
 

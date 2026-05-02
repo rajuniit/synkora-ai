@@ -169,11 +169,52 @@ class DuckDBConnector:
                     s3_secret = None
 
             if s3_access_key and s3_secret:
+                # Validate region against an allowlist; escape credentials to
+                # prevent SQL injection via DuckDB's string-based SET commands.
+                _VALID_S3_REGIONS = {
+                    "af-south-1",
+                    "ap-east-1",
+                    "ap-northeast-1",
+                    "ap-northeast-2",
+                    "ap-northeast-3",
+                    "ap-south-1",
+                    "ap-south-2",
+                    "ap-southeast-1",
+                    "ap-southeast-2",
+                    "ap-southeast-3",
+                    "ap-southeast-4",
+                    "ca-central-1",
+                    "ca-west-1",
+                    "eu-central-1",
+                    "eu-central-2",
+                    "eu-north-1",
+                    "eu-south-1",
+                    "eu-south-2",
+                    "eu-west-1",
+                    "eu-west-2",
+                    "eu-west-3",
+                    "il-central-1",
+                    "me-central-1",
+                    "me-south-1",
+                    "sa-east-1",
+                    "us-east-1",
+                    "us-east-2",
+                    "us-gov-east-1",
+                    "us-gov-west-1",
+                    "us-west-1",
+                    "us-west-2",
+                }
+                if s3_region not in _VALID_S3_REGIONS:
+                    raise ValueError(f"Invalid S3 region: {s3_region!r}")
+
+                def _esc(v: str) -> str:
+                    """Escape single quotes for DuckDB SET string literals."""
+                    return v.replace("'", "''")
 
                 def _set_s3(c=conn, region=s3_region, key=s3_access_key, secret=s3_secret):
-                    c.execute(f"SET s3_region='{region}'")
-                    c.execute(f"SET s3_access_key_id='{key}'")
-                    c.execute(f"SET s3_secret_access_key='{secret}'")
+                    c.execute(f"SET s3_region='{_esc(region)}'")
+                    c.execute(f"SET s3_access_key_id='{_esc(key)}'")
+                    c.execute(f"SET s3_secret_access_key='{_esc(secret)}'")
 
                 await self._run_sync(_set_s3)
                 logger.debug("S3 credentials configured for DuckDB (region=%s)", s3_region)

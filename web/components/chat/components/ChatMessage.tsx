@@ -1,10 +1,10 @@
 'use client'
 
-import { useState, useMemo } from 'react'
+import { useState, useMemo, useRef, useEffect } from 'react'
 import Image from 'next/image'
-import { Copy, Check, RefreshCw, Sparkles, FileText, Image as ImageIcon, Download, File } from 'lucide-react'
+import { Copy, Check, RefreshCw, Sparkles, FileText, Image as ImageIcon, Download, File, Trash2 } from 'lucide-react'
 import { cn } from '@/lib/utils'
-import { Message, Attachment } from '../types'
+import { Message, Attachment, GeneratedImageData } from '../types'
 import ReactMarkdown from 'react-markdown'
 import remarkGfm from 'remark-gfm'
 import { Prism as SyntaxHighlighter } from 'react-syntax-highlighter'
@@ -87,12 +87,120 @@ interface ChatMessageProps {
   streamStartTime?: number | null
   onCopy?: (content: string, messageId: string) => void
   onRetry?: (messageId: string) => void
+  onDelete?: (messageId: string) => void
   onActionClick?: (text: string) => void
   className?: string
   chatConfig?: ChatConfig | null
   agentAvatar?: string
   userAvatar?: string
   agentName?: string
+}
+
+/**
+ * TableWithExport — wraps a markdown table with CSV and PDF export buttons.
+ * Uses a DOM ref to extract cell text, so it works with any react-markdown output.
+ */
+function TableWithExport({ children, ...props }: any) {
+  const tableRef = useRef<HTMLTableElement>(null)
+  const [exporting, setExporting] = useState<'csv' | 'pdf' | null>(null)
+
+  function extractTableData(): { headers: string[]; rows: string[][] } {
+    const table = tableRef.current
+    if (!table) return { headers: [], rows: [] }
+    const headers = Array.from(table.querySelectorAll('thead th')).map(th => th.textContent?.trim() ?? '')
+    const rows = Array.from(table.querySelectorAll('tbody tr')).map(tr =>
+      Array.from(tr.querySelectorAll('td')).map(td => td.textContent?.trim() ?? '')
+    )
+    return { headers, rows }
+  }
+
+  function exportCSV() {
+    setExporting('csv')
+    try {
+      const { headers, rows } = extractTableData()
+      const csvRows = [headers, ...rows].map(row =>
+        row.map(cell => `"${cell.replace(/"/g, '""')}"`).join(',')
+      )
+      const csv = '\uFEFF' + csvRows.join('\r\n') // BOM for Excel UTF-8
+      const blob = new Blob([csv], { type: 'text/csv;charset=utf-8;' })
+      const url = URL.createObjectURL(blob)
+      const a = document.createElement('a')
+      a.href = url
+      a.download = 'table-export.csv'
+      a.click()
+      URL.revokeObjectURL(url)
+    } finally {
+      setTimeout(() => setExporting(null), 800)
+    }
+  }
+
+  function exportPDF() {
+    setExporting('pdf')
+    try {
+      const { headers, rows } = extractTableData()
+      const thStyle = 'text-align:left;padding:8px 12px;border:1px solid #d1d5db;background:#f3f4f6;font-size:12px;font-weight:600;color:#374151;'
+      const tdStyle = 'padding:8px 12px;border:1px solid #d1d5db;font-size:12px;color:#374151;'
+      const tableHtml = `
+        <table style="border-collapse:collapse;width:100%;font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;">
+          <thead><tr>${headers.map(h => `<th style="${thStyle}">${h}</th>`).join('')}</tr></thead>
+          <tbody>${rows.map((row, i) =>
+            `<tr style="${i % 2 !== 0 ? 'background:#f9fafb;' : ''}">${row.map(cell => `<td style="${tdStyle}">${cell}</td>`).join('')}</tr>`
+          ).join('')}</tbody>
+        </table>`
+      const win = window.open('', '_blank')
+      if (!win) return
+      win.document.write(`<!DOCTYPE html><html><head><title>Table Export</title>
+        <style>@media print{body{margin:16px}}</style>
+        </head><body>${tableHtml}</body></html>`)
+      win.document.close()
+      win.focus()
+      win.print()
+    } finally {
+      setTimeout(() => setExporting(null), 1200)
+    }
+  }
+
+  return (
+    <div className="my-3 rounded-lg border border-gray-200 overflow-hidden w-full max-w-full">
+      <div className="flex items-center justify-end gap-3 px-3 py-1.5 bg-gray-50 border-b border-gray-200">
+        <button
+          onClick={exportCSV}
+          disabled={exporting !== null}
+          title="Export as CSV"
+          className="flex items-center gap-1 text-xs text-gray-500 hover:text-gray-800 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+        >
+          {exporting === 'csv' ? (
+            <svg className="animate-spin" width={12} height={12} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2.5}>
+              <path d="M12 2v4M12 18v4M4.93 4.93l2.83 2.83M16.24 16.24l2.83 2.83M2 12h4M18 12h4M4.93 19.07l2.83-2.83M16.24 7.76l2.83-2.83" strokeLinecap="round"/>
+            </svg>
+          ) : (
+            <Download size={12} />
+          )}
+          CSV
+        </button>
+        <button
+          onClick={exportPDF}
+          disabled={exporting !== null}
+          title="Export as PDF"
+          className="flex items-center gap-1 text-xs text-gray-500 hover:text-gray-800 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+        >
+          {exporting === 'pdf' ? (
+            <svg className="animate-spin" width={12} height={12} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2.5}>
+              <path d="M12 2v4M12 18v4M4.93 4.93l2.83 2.83M16.24 16.24l2.83 2.83M2 12h4M18 12h4M4.93 19.07l2.83-2.83M16.24 7.76l2.83-2.83" strokeLinecap="round"/>
+            </svg>
+          ) : (
+            <FileText size={12} />
+          )}
+          PDF
+        </button>
+      </div>
+      <div className="overflow-x-auto">
+        <table ref={tableRef} className="min-w-full divide-y divide-gray-200" {...props}>
+          {children}
+        </table>
+      </div>
+    </div>
+  )
 }
 
 /**
@@ -108,6 +216,7 @@ export function ChatMessage({
   streamStartTime,
   onCopy,
   onRetry,
+  onDelete,
   onActionClick,
   className,
   chatConfig,
@@ -116,7 +225,21 @@ export function ChatMessage({
   agentName,
 }: ChatMessageProps) {
   const [copied, setCopied] = useState(false)
+  const [confirmingDelete, setConfirmingDelete] = useState(false)
+  const [isCollapsed, setIsCollapsed] = useState(true)
+  const [isOverflowing, setIsOverflowing] = useState(false)
+  const contentRef = useRef<HTMLDivElement>(null)
   const isUser = message.role === 'user'
+
+  const COLLAPSE_THRESHOLD = 400 // px
+
+  // After streaming ends, check if content exceeds threshold
+  useEffect(() => {
+    if (isStreaming) return
+    const el = contentRef.current
+    if (!el) return
+    setIsOverflowing(el.scrollHeight > COLLAPSE_THRESHOLD)
+  }, [isStreaming, message.content])
 
   // Get colors from config
   const primaryColor = chatConfig?.chat_primary_color || '#0d9488'
@@ -143,7 +266,7 @@ export function ChatMessage({
   if (isUser) {
     return (
       <div className={cn('flex justify-end group', className)}>
-        <div className="max-w-[72%]">
+        <div className="max-w-[85%] sm:max-w-[72%]">
           <div className="bg-gray-900 rounded-2xl px-4 py-3">
             <p className="text-[14px] text-white leading-relaxed whitespace-pre-wrap">{message.content}</p>
             {message.attachments && message.attachments.length > 0 && (
@@ -155,9 +278,38 @@ export function ChatMessage({
             )}
           </div>
           <div className="flex items-center justify-end gap-1.5 mt-1 px-1">
-            <span className="text-[10px] text-gray-400">You</span>
-            <span className="text-[10px] text-gray-300">·</span>
-            <span className="text-[10px] text-gray-400">{formatTimestamp(message.timestamp)}</span>
+            {onDelete && confirmingDelete ? (
+              <>
+                <span className="text-[10px] text-gray-500">Delete this message?</span>
+                <button
+                  onClick={() => { onDelete(message.id); setConfirmingDelete(false) }}
+                  className="text-[10px] font-medium text-red-500 hover:text-red-600 transition-colors"
+                >
+                  Delete
+                </button>
+                <button
+                  onClick={() => setConfirmingDelete(false)}
+                  className="text-[10px] text-gray-400 hover:text-gray-600 transition-colors"
+                >
+                  Cancel
+                </button>
+              </>
+            ) : (
+              <>
+                {onDelete && (
+                  <button
+                    onClick={() => setConfirmingDelete(true)}
+                    className="opacity-0 group-hover:opacity-100 p-1 text-gray-400 hover:text-red-500 transition-all"
+                    title="Delete message"
+                  >
+                    <Trash2 size={11} />
+                  </button>
+                )}
+                <span className="text-[10px] text-gray-400">You</span>
+                <span className="text-[10px] text-gray-300">·</span>
+                <span className="text-[10px] text-gray-400">{formatTimestamp(message.timestamp)}</span>
+              </>
+            )}
           </div>
         </div>
       </div>
@@ -197,7 +349,19 @@ export function ChatMessage({
         )}
       </div>
 
-      <div className="pl-8" style={{ fontFamily }}>
+      <div ref={contentRef} className="pl-6 sm:pl-8 min-w-0 w-full overflow-x-hidden" style={{ fontFamily }}>
+        {/* Collapsible content wrapper */}
+        <div
+          className="relative"
+          style={{
+            maxHeight: isOverflowing && isCollapsed ? `${COLLAPSE_THRESHOLD}px` : undefined,
+            overflow: isOverflowing && isCollapsed ? 'hidden' : undefined,
+          }}
+        >
+          {/* Gradient fade when collapsed */}
+          {isOverflowing && isCollapsed && (
+            <div className="absolute bottom-0 left-0 right-0 h-24 bg-gradient-to-t from-white to-transparent pointer-events-none" />
+          )}
         {/* Document Viewers - Render embedded documents (PDFs, PowerPoint, Google Docs/Sheets) */}
         {/* NOTE: Only render after streaming completes to avoid loading partial/incomplete URLs */}
         {!isStreaming && (() => {
@@ -268,7 +432,7 @@ export function ChatMessage({
         )}
 
         {/* Message Content */}
-        <div className="prose prose-sm max-w-none prose-gray">
+        <div className="prose prose-sm max-w-none prose-gray" style={{ overflowWrap: 'anywhere', wordBreak: 'break-word' }}>
           {!message.isError && thinkingStatus && !message.content && !toolStatus && recentTools.length === 0 ? (
             <div className="flex items-center gap-2 py-1">
               <div className="flex gap-1">
@@ -321,7 +485,7 @@ export function ChatMessage({
                   }
 
                   return (
-                    <div className="relative group/code my-3 -mx-2 max-w-full">
+                    <div className="relative group/code my-3 max-w-full rounded-lg overflow-hidden">
                       <div className="flex items-center justify-between px-3 py-1.5 bg-gray-800 rounded-t-lg border-b border-gray-700">
                         <span className="text-xs text-gray-400 font-mono">{language || 'code'}</span>
                         <button
@@ -351,11 +515,7 @@ export function ChatMessage({
                   <div {...props}>{children}</div>
                 ),
                 table: ({ children, ...props }: any) => (
-                  <div className="overflow-x-auto my-3 -mx-2 rounded-lg border border-gray-200">
-                    <table className="min-w-full divide-y divide-gray-200" {...props}>
-                      {children}
-                    </table>
-                  </div>
+                  <TableWithExport {...props}>{children}</TableWithExport>
                 ),
                 thead: ({ children, ...props }: any) => (
                   <thead className="bg-gray-50" {...props}>
@@ -395,12 +555,12 @@ export function ChatMessage({
                   </a>
                 ),
                 h1: ({ children, ...props }: any) => (
-                  <h1 className="text-xl font-bold text-gray-900 mb-3 mt-4 first:mt-0 flex items-center gap-2" {...props}>
+                  <h1 className="text-xl font-bold text-gray-900 mb-3 mt-4 first:mt-0 flex flex-wrap items-center gap-2 min-w-0" {...props}>
                     {children}
                   </h1>
                 ),
                 h2: ({ children, ...props }: any) => (
-                  <h2 className="text-lg font-bold text-gray-900 mb-2 mt-4 first:mt-0 flex items-center gap-2" {...props}>
+                  <h2 className="text-lg font-bold text-gray-900 mb-2 mt-4 first:mt-0 flex flex-wrap items-center gap-2 min-w-0" {...props}>
                     {children}
                   </h2>
                 ),
@@ -548,6 +708,61 @@ export function ChatMessage({
                     className="w-full h-auto"
                   />
                 ) : null}
+              </div>
+            ))}
+          </div>
+        )}
+
+        {/* Generated Images */}
+        {message.metadata?.generated_images && message.metadata.generated_images.length > 0 && (
+          <div className="mt-3 space-y-4">
+            {message.metadata.generated_images.map((img: GeneratedImageData, index: number) => (
+              <div key={img.id || index} className="group relative rounded-xl overflow-hidden shadow-lg">
+                {img.url ? (
+                  <>
+                    {/* Image */}
+                    <img
+                      src={img.url}
+                      alt={img.revised_prompt || img.prompt || 'Generated image'}
+                      className="w-full h-auto block"
+                      style={{ maxHeight: '640px', objectFit: 'contain', background: '#0a0a0a' }}
+                    />
+
+                    {/* Hover overlay with actions */}
+                    <div className="absolute inset-0 bg-gradient-to-t from-black/70 via-transparent to-transparent opacity-0 group-hover:opacity-100 transition-opacity duration-200 flex flex-col justify-end pointer-events-none group-hover:pointer-events-auto">
+                      <div className="p-4 flex items-end justify-between gap-3">
+                        {/* Prompt caption */}
+                        {(img.revised_prompt || img.prompt) && (
+                          <p className="text-white/90 text-xs leading-relaxed line-clamp-3 flex-1 min-w-0">
+                            {img.revised_prompt || img.prompt}
+                          </p>
+                        )}
+
+                        {/* Action buttons */}
+                        <div className="flex items-center gap-2 shrink-0">
+                          {img.model && (
+                            <span className="text-white/50 text-xs font-mono hidden sm:block">{img.model}</span>
+                          )}
+                          <a
+                            href={img.url}
+                            download={`generated-${img.id || index}.png`}
+                            target="_blank"
+                            rel="noopener noreferrer"
+                            className="flex items-center gap-1.5 px-3 py-1.5 bg-white/15 hover:bg-white/25 backdrop-blur-sm text-white text-xs font-medium rounded-lg transition-colors border border-white/20"
+                            onClick={e => e.stopPropagation()}
+                          >
+                            <Download className="w-3.5 h-3.5" />
+                            Download
+                          </a>
+                        </div>
+                      </div>
+                    </div>
+                  </>
+                ) : (
+                  <div className="px-4 py-6 text-sm text-zinc-400 bg-zinc-900 text-center rounded-xl">
+                    Image unavailable — S3 storage not configured
+                  </div>
+                )}
               </div>
             ))}
           </div>
@@ -950,6 +1165,18 @@ export function ChatMessage({
           </div>
         )}
 
+        </div>{/* end collapsible content wrapper */}
+
+        {/* Show more / Show less toggle */}
+        {isOverflowing && !isStreaming && (
+          <button
+            onClick={() => setIsCollapsed(!isCollapsed)}
+            className="mt-2 text-xs font-medium text-teal-600 hover:text-teal-700 transition-colors"
+          >
+            {isCollapsed ? 'Show more ↓' : 'Show less ↑'}
+          </button>
+        )}
+
         {/* Message Actions */}
         {!isStreaming && (
           <div className="flex items-center gap-2 mt-4 flex-wrap">
@@ -987,6 +1214,34 @@ export function ChatMessage({
               >
                 <RefreshCw size={12} />
               </button>
+            )}
+
+            {onDelete && (
+              confirmingDelete ? (
+                <div className="flex items-center gap-2 ml-1">
+                  <span className="text-[11px] text-gray-500">Delete this message?</span>
+                  <button
+                    onClick={() => { onDelete(message.id); setConfirmingDelete(false) }}
+                    className="text-[11px] font-medium text-red-500 hover:text-red-600 transition-colors"
+                  >
+                    Delete
+                  </button>
+                  <button
+                    onClick={() => setConfirmingDelete(false)}
+                    className="text-[11px] text-gray-400 hover:text-gray-600 transition-colors"
+                  >
+                    Cancel
+                  </button>
+                </div>
+              ) : (
+                <button
+                  onClick={() => setConfirmingDelete(true)}
+                  className="p-1.5 text-gray-400 hover:text-red-500 hover:bg-red-50 rounded transition-colors"
+                  title="Delete message"
+                >
+                  <Trash2 size={12} />
+                </button>
+              )
             )}
 
             <div className="flex items-center gap-2 ml-auto text-[11px] text-gray-400">

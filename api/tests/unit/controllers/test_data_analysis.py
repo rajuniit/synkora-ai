@@ -84,7 +84,10 @@ class TestUploadAnalysisFile:
         # Minimal ZIP file content (not valid but enough for test)
         zip_content = b"PK\x03\x04fake zip content"
 
-        with patch("src.controllers.data_analysis.DataAnalysisService") as MockService:
+        with (
+            patch("src.controllers.data_analysis.DataAnalysisService") as MockService,
+            patch("src.services.security.file_security.FileSecurityService") as MockFileSecurity,
+        ):
             mock_service = MockService.return_value
             mock_service.upload_and_process_file = AsyncMock(
                 return_value={
@@ -95,6 +98,7 @@ class TestUploadAnalysisFile:
                     "file_type": "zip",
                 }
             )
+            MockFileSecurity.return_value.validate_file.return_value = {"is_valid": True}
 
             response = test_client.post(
                 "/api/v1/data-analysis/upload-file",

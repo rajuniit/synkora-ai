@@ -245,15 +245,21 @@ class DatadogConnector:
             rows = []
             for log in result.data or []:
                 attrs = log.attributes
+                # The Datadog v2 SDK raises AttributeError for missing optional fields.
+                # Use getattr with fallbacks; also check the nested attributes dict.
+                extra: dict[str, Any] = {}
+                if hasattr(attrs, "attributes") and isinstance(attrs.attributes, dict):
+                    extra = attrs.attributes
+                message = getattr(attrs, "message", None) or extra.get("message") or extra.get("msg")
                 rows.append(
                     {
-                        "id": log.id,
-                        "timestamp": str(attrs.timestamp) if attrs.timestamp else None,
-                        "message": attrs.message,
-                        "service": attrs.service,
-                        "status": attrs.status,
-                        "host": attrs.host,
-                        "tags": attrs.tags or [],
+                        "id": getattr(log, "id", None),
+                        "timestamp": str(attrs.timestamp) if getattr(attrs, "timestamp", None) else None,
+                        "message": message,
+                        "service": getattr(attrs, "service", None) or extra.get("service"),
+                        "status": getattr(attrs, "status", None) or extra.get("status"),
+                        "host": getattr(attrs, "host", None) or extra.get("host"),
+                        "tags": getattr(attrs, "tags", None) or [],
                     }
                 )
 

@@ -100,6 +100,15 @@ class DatabaseConfig(BaseSettings):
         description="Number of seconds to wait for a connection from the pool before raising a timeout error",
     )
 
+    def _apply_ssl(self, db_extras: str) -> str:
+        """Append sslmode=require for non-development/test environments unless already set."""
+        import os
+
+        app_env = os.getenv("APP_ENV", "development")
+        if app_env not in ("development", "test", "testing") and "sslmode=" not in db_extras:
+            db_extras = (db_extras + "&sslmode=require").lstrip("&") if db_extras else "sslmode=require"
+        return db_extras
+
     @computed_field  # type: ignore[misc]
     @property
     def sqlalchemy_database_uri(self) -> str:
@@ -107,6 +116,7 @@ class DatabaseConfig(BaseSettings):
         db_extras = (
             f"{self.db_extras}&client_encoding={self.db_charset}" if self.db_charset else self.db_extras
         ).strip("&")
+        db_extras = self._apply_ssl(db_extras)
         db_extras = f"?{db_extras}" if db_extras else ""
         return (
             f"{self.sqlalchemy_database_uri_scheme}://"
@@ -178,10 +188,12 @@ class DatabaseConfig(BaseSettings):
 
         # If DB_EXTRAS contains sslmode=require (or any non-disable sslmode), pass ssl=True
         # to asyncpg.  asyncpg does not accept 'sslmode' as a keyword argument.
-        if self.db_extras and "sslmode=" in self.db_extras:
+        # _apply_ssl() will have added sslmode=require for production if not already present.
+        effective_extras = self._apply_ssl(self.db_extras or "")
+        if effective_extras and "sslmode=" in effective_extras:
             import re
 
-            m = re.search(r"sslmode=(\w+)", self.db_extras)
+            m = re.search(r"sslmode=(\w+)", effective_extras)
             if m and m.group(1) not in ("disable",):
                 connect_args["ssl"] = True
 

@@ -31,15 +31,29 @@ spec:
         runAsNonRoot: true
         runAsUser: 1000
         fsGroup: 1000
+        seccompProfile:
+          type: RuntimeDefault
       containers:
       - name: celery-worker-agents
         image: IMAGE_PLACEHOLDER
         imagePullPolicy: Always
+        securityContext:
+          allowPrivilegeEscalation: false
+          readOnlyRootFilesystem: true
+          capabilities:
+            drop:
+            - ALL
         command: ["celery"]
         # Handles: autonomous agent execution, scheduled task runs, webhook event processing.
         # Tasks can run up to 1 hour (task_time_limit=3600 in celery_app.py).
+        # When using Lambda/Cloud Run/DO Functions backends, workers dispatch in ~200ms
+        # (vs blocking for 55 min in Celery-only mode). Higher concurrency is safe.
+        # Celery-only agents still work — they just block their process slot.
+        # Tune concurrency based on your backend mix:
+        #   all-Celery:         2–4   (tasks are CPU/memory intensive)
+        #   mostly-serverless:  8–16  (tasks are just API calls)
         args: ["-A", "src.celery_app", "worker", "--loglevel=info", "-Q", "agents",
-               "--concurrency=2"]
+               "--concurrency=4"]
         envFrom:
         - configMapRef:
             name: synkora-config
