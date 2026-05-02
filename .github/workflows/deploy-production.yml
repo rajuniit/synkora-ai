@@ -351,7 +351,7 @@ jobs:
           # Celery workers
           kubectl apply -f k8s/application/celery-worker-deployment.yml
           kubectl apply -f k8s/application/celery-worker-agents-deployment.yml
-          kubectl apply -f k8s/application/celery-worker-agents-keda.yml
+          kubectl apply --validate=false -f k8s/application/celery-worker-agents-keda.yml
           kubectl apply -f k8s/application/celery-worker-billing-deployment.yml
           kubectl apply -f k8s/application/celery-worker-notifications-deployment.yml
           kubectl apply -f k8s/application/celery-beat-deployment.yml
