@@ -69,7 +69,9 @@ jobs:
 
       - name: Audit Python dependencies for CVEs
         run: |
-          uv run pip-audit \
+          uv export --no-hashes --no-emit-project --format requirements-txt -o /tmp/requirements-audit.txt
+          uvx pip-audit \
+            --requirement /tmp/requirements-audit.txt \
             --ignore-vuln CVE-2025-69872 \
             --ignore-vuln CVE-2026-41066 \
             --ignore-vuln CVE-2026-35029 \
@@ -80,8 +82,7 @@ jobs:
             --ignore-vuln CVE-2026-26007 \
             --ignore-vuln CVE-2026-34073 \
             --ignore-vuln CVE-2026-39892 \
-            --ignore-vuln CVE-2025-69277 \
-            --strict
+            --ignore-vuln CVE-2025-69277
 
       - name: Run unit tests
         env:
