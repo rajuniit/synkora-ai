@@ -112,7 +112,7 @@ jobs:
 
      - name: Export pinned requirements from pyproject.toml
        working-directory: api
-       run: uv export --no-hashes --format requirements-txt -o /tmp/requirements-audit.txt
+       run: uv export --no-hashes --no-emit-project --format requirements-txt -o /tmp/requirements-audit.txt
 
 
      - name: Scan Python dependencies (pip-audit)
