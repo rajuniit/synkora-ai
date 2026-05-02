@@ -22,7 +22,7 @@ vi.stubGlobal("fetch", mockFetch);
 // Minimal ReadableStream / reader mock used by SSE tests
 function makeSseResponse(lines: string[]) {
   const encoder = new TextEncoder();
-  const encoded = encoder.encode(lines.join("\n"));
+  const encoded = encoder.encode(lines.join("\n") + "\n");
   const done = false;
   return {
     ok: true,
