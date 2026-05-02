@@ -111,14 +111,19 @@ jobs:
           cache-from: type=gha,scope=api
           cache-to: type=gha,mode=max,scope=api
 
+      - name: Install Trivy
+        run: |
+          curl -sfL https://raw.githubusercontent.com/aquasecurity/trivy/main/contrib/install.sh \
+            | sudo sh -s -- -b /usr/local/bin v0.64.1
+
       - name: Scan API image for CVEs (Trivy)
-        uses: aquasecurity/trivy-action@dc5a429b52fcf669ce959baa2c2dd26090d2a6c4  # v0.32.0
-        with:
-          image-ref: "${{ env.ECR_REGISTRY }}/synkora-api:${{ github.ref_name }}"
-          format: table
-          exit-code: "1"
-          severity: CRITICAL
-          ignore-unfixed: true
+        run: |
+          trivy image \
+            --exit-code 1 \
+            --severity CRITICAL \
+            --ignore-unfixed \
+            --format table \
+            "${{ env.ECR_REGISTRY }}/synkora-api:${{ github.ref_name }}"
 
       - name: Clean up after API build
         run: |
