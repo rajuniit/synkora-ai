@@ -47,8 +47,8 @@ dependencies = [
     "asyncpg>=0.30.0",
     "jsonschema>=4.0.0,<5.0.0",
     # Multi-Provider LLM Support
-    "litellm>=1.55.0,<2.0.0",
-    "openai>=1.59.0,<2.0.0",
+    "litellm>=1.83.0,<2.0.0",
+    "openai>=2.8.0,<3.0.0",
     "anthropic>=0.42.0,<1.0.0",
     "tiktoken>=0.9.0,<1.0.0",
     # Claude Agent SDK (for Claude Code Agent)
@@ -161,7 +161,7 @@ dev = [
 
 llm = [
     # LLM Providers
-    "openai>=1.59.0,<2.0.0",
+    "openai>=2.8.0,<3.0.0",
     "anthropic>=0.42.0,<1.0.0",
     "tiktoken>=0.9.0,<1.0.0",
 ]
