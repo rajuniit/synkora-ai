@@ -23,7 +23,7 @@ vi.stubGlobal("fetch", mockFetch);
 function makeSseResponse(lines: string[]) {
   const encoder = new TextEncoder();
   const encoded = encoder.encode(lines.join("\n"));
-  let done = false;
+  const done = false;
   return {
     ok: true,
     status: 200,
