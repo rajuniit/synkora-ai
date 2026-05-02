@@ -149,21 +149,7 @@ jobs:
 
      - name: Scan frontend dependencies (pnpm audit)
        working-directory: web
-       run: |
-         # pnpm@9 has no --ignore-advisory flag; ignoreCves in package.json handles CVE-based ones.
-         # GHSA-q4gf-8mx6-v5v3: next@16.x DoS pulled in by @sentry/nextjs — no CVE ID, filter via JSON.
-         pnpm audit --json 2>/dev/null > /tmp/pnpm-audit.json; true
-         node -e "
-           const d = JSON.parse(require('fs').readFileSync('/tmp/pnpm-audit.json', 'utf8'));
-           const skip = new Set(['GHSA-q4gf-8mx6-v5v3']);
-           const highs = Object.values(d.advisories || {})
-             .filter(a => ['high','critical'].includes(a.severity) && !skip.has(a.github_advisory_id));
-           if (highs.length) {
-             highs.forEach(a => console.error('HIGH:', a.github_advisory_id, a.module_name, a.patched_versions));
-             process.exit(1);
-           }
-           console.log('No unacknowledged high/critical vulnerabilities.');
-         "
+       run: pnpm audit --audit-level=high
 
 
      - name: Upload pip-audit report
