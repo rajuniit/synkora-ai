@@ -10,6 +10,7 @@ import uuid
 from typing import Any
 
 from fastapi import APIRouter, Depends, HTTPException, Query
+from pydantic import BaseModel
 from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -20,20 +21,63 @@ from src.models.tenant import Account
 from src.models.wiki_article import WikiArticle, WikiCompilationJob
 from src.tasks.knowledge_compiler_task import compile_single_knowledge_wiki
 
+
+class CompileRequest(BaseModel):
+    llm_config_id: str | None = None
+
+
 logger = logging.getLogger(__name__)
 
 router = APIRouter()
 
 
-@router.post("/knowledge-bases/{kb_id}/autopilot/compile")
-async def trigger_compilation(
+@router.get("/knowledge-bases/{kb_id}/autopilot/llm-configs")
+async def list_llm_configs_for_compilation(
     kb_id: int,
     tenant_id: uuid.UUID = Depends(get_current_tenant_id),
     current_account: Account = Depends(get_current_account),
     db: AsyncSession = Depends(get_async_db),
 ):
+    """List all enabled LLM configs available for wiki compilation (across all tenant agents)."""
+    from sqlalchemy import join
+
+    from src.models.agent import Agent
+    from src.models.agent_llm_config import AgentLLMConfig
+
+    result = await db.execute(
+        select(AgentLLMConfig, Agent.agent_name)
+        .join(Agent, AgentLLMConfig.agent_id == Agent.id)
+        .filter(
+            Agent.tenant_id == tenant_id,
+            AgentLLMConfig.enabled.is_(True),
+        )
+        .order_by(Agent.agent_name, AgentLLMConfig.name)
+    )
+    rows = result.all()
+
+    return {
+        "configs": [
+            {
+                "id": str(row.AgentLLMConfig.id),
+                "name": row.AgentLLMConfig.name,
+                "provider": row.AgentLLMConfig.provider,
+                "model_name": row.AgentLLMConfig.model_name,
+                "agent_name": row.agent_name,
+            }
+            for row in rows
+        ]
+    }
+
+
+@router.post("/knowledge-bases/{kb_id}/autopilot/compile")
+async def trigger_compilation(
+    kb_id: int,
+    body: CompileRequest = CompileRequest(),
+    tenant_id: uuid.UUID = Depends(get_current_tenant_id),
+    current_account: Account = Depends(get_current_account),
+    db: AsyncSession = Depends(get_async_db),
+):
     """Trigger a manual wiki compilation for a knowledge base (runs as background Celery task)."""
-    # Verify KB exists and belongs to tenant before queuing
     result = await db.execute(
         select(KnowledgeBase).filter(
             KnowledgeBase.id == kb_id,
@@ -44,7 +88,7 @@ async def trigger_compilation(
     if not kb:
         raise HTTPException(status_code=404, detail="Knowledge base not found")
 
-    compile_single_knowledge_wiki.delay(kb_id, str(tenant_id))
+    compile_single_knowledge_wiki.delay(kb_id, str(tenant_id), body.llm_config_id)
 
     return {"status": "queued", "message": "Compilation started in the background. Refresh the page in a moment."}
 

@@ -74,7 +74,12 @@ export class APIClient {
           }
         }
 
-        return Promise.reject(error)
+        const responseData = error.response?.data as any
+        const message = responseData?.detail || responseData?.message || error.message
+        const enhancedError = new Error(message)
+        ;(enhancedError as any).status = error.response?.status
+        ;(enhancedError as any).response = error.response
+        return Promise.reject(enhancedError)
       }
     )
   }

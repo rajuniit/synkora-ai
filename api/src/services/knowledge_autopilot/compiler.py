@@ -72,6 +72,7 @@ class KnowledgeCompiler:
         knowledge_base_id: int,
         tenant_id: str,
         llm_config: dict[str, Any] | None = None,
+        llm_config_id: str | None = None,
     ) -> dict[str, Any]:
         """
         Run a full compilation of a knowledge base into wiki articles.
@@ -155,7 +156,7 @@ class KnowledgeCompiler:
             )
 
             # Resolve LLM config — prefer KB's own key, fall back to agent configs
-            resolved_llm = await self._resolve_llm_config(knowledge_base_id, tenant_id, llm_config)
+            resolved_llm = await self._resolve_llm_config(knowledge_base_id, tenant_id, llm_config, llm_config_id)
 
             # Extract entities and generate articles via LLM
             article_proposals = await self._extract_entities(documents, doc_content, resolved_llm)
@@ -270,13 +271,20 @@ class KnowledgeCompiler:
             return {"status": "failed", "error": str(e)}
 
     async def _resolve_llm_config(
-        self, knowledge_base_id: int, tenant_id: str, llm_config: dict[str, Any] | None
+        self,
+        knowledge_base_id: int,
+        tenant_id: str,
+        llm_config: dict[str, Any] | None,
+        llm_config_id: str | None = None,
     ) -> dict[str, Any]:
         """Resolve LLM configuration.
 
-        Finds the best available agent LLM config for this tenant, then
-        overrides the API key with the KB's embedding_config key if available
-        (the user updates that key via the KB edit page).
+        Priority order:
+        1. Explicit llm_config dict (e.g. from API with api_key)
+        2. Specific AgentLLMConfig by llm_config_id (user-selected on wiki page)
+        3. Tenant's most recently updated enabled agent LLM config (fallback)
+
+        API key is then overridden with KB's embedding_config key if available.
         """
         if llm_config and llm_config.get("api_key"):
             return llm_config
@@ -285,17 +293,24 @@ class KnowledgeCompiler:
         from src.models.knowledge_base import KnowledgeBase
         from src.services.agents.security import decrypt_value
 
-        # Get the tenant's best agent LLM config (for provider, model, api_base)
-        result = await self.db.execute(
-            select(AgentLLMConfig)
-            .filter(
-                AgentLLMConfig.tenant_id == tenant_id,
-                AgentLLMConfig.enabled.is_(True),
+        # Use the user-selected config if provided
+        if llm_config_id:
+            result = await self.db.execute(select(AgentLLMConfig).filter(AgentLLMConfig.id == llm_config_id))
+            agent_config = result.scalar_one_or_none()
+            if not agent_config:
+                raise ValueError(f"LLM configuration '{llm_config_id}' not found.")
+        else:
+            # Get the tenant's best agent LLM config (for provider, model, api_base)
+            result = await self.db.execute(
+                select(AgentLLMConfig)
+                .filter(
+                    AgentLLMConfig.tenant_id == tenant_id,
+                    AgentLLMConfig.enabled.is_(True),
+                )
+                .order_by(AgentLLMConfig.updated_at.desc())
+                .limit(1)
             )
-            .order_by(AgentLLMConfig.updated_at.desc())
-            .limit(1)
-        )
-        agent_config = result.scalar_one_or_none()
+            agent_config = result.scalar_one_or_none()
 
         if not agent_config:
             raise ValueError("No LLM configuration found. Please configure an LLM provider on any agent first.")
