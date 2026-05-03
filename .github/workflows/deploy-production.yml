@@ -253,6 +253,10 @@ jobs:
             --create-namespace \
             --atomic \
             --timeout 3m
+          # Wait for KEDA's aggregated API server to be ready before applying manifests,
+          # otherwise kubectl discovery hits EOF on keda.sh API group
+          kubectl rollout status deployment/keda-operator -n keda --timeout=120s
+          kubectl rollout status deployment/keda-operator-metrics-apiserver -n keda --timeout=120s
 
       - name: Configure AWS credentials (for ECR secret)
         uses: aws-actions/configure-aws-credentials@e3dd6a429d7300a6a4c196c26e071d42e0343502  # v4.0.2
@@ -346,45 +350,31 @@ jobs:
           find k8s/application -name "*.yml" -o -name "*.yaml" | xargs sed -i \
             "s|IMAGE_PLACEHOLDER|${{ env.ECR_REGISTRY }}/synkora-api:${IMAGE_TAG}|g"
 
-          # --validate=false skips client-side OpenAPI schema download (causes transient EOF).
-          # Server-side validation still runs — the API server rejects invalid manifests.
-
-          # Infrastructure — config and service accounts first so pods can reference them
-          kubectl apply --validate=false -f k8s/application/synkora-config.yml
-          kubectl apply --validate=false -f k8s/application/synkora-api-serviceaccount.yml
-
-          # Networking — services and ingresses
-          kubectl apply --validate=false -f k8s/application/api-service.yml
-          kubectl apply --validate=false -f k8s/application/synkora-ingress.yml
-          kubectl apply --validate=false -f k8s/application/synkora-frontend-service.yml
-          kubectl apply --validate=false -f k8s/application/synkora-frontend-ingress.yml
-
-          # ML, scraper and sandbox services
-          kubectl apply --validate=false -f k8s/application/ml-service-deployment.yaml
-          kubectl apply --validate=false -f k8s/application/scraper-service-deployment.yaml
-          kubectl apply --validate=false -f k8s/application/sandbox-service-deployment.yaml
-
-          # API and autoscaling
-          kubectl apply --validate=false -f k8s/application/api-deployment.yml
-          kubectl apply --validate=false -f k8s/application/api-hpa.yml
-
-          # Celery workers
-          kubectl apply --validate=false -f k8s/application/celery-worker-deployment.yml
-          kubectl apply --validate=false -f k8s/application/celery-worker-agents-deployment.yml
-          kubectl apply --validate=false -f k8s/application/celery-worker-agents-keda.yml
-          kubectl apply --validate=false -f k8s/application/celery-worker-billing-deployment.yml
-          kubectl apply --validate=false -f k8s/application/celery-worker-notifications-deployment.yml
-          kubectl apply --validate=false -f k8s/application/celery-beat-deployment.yml
-
-          # Bot worker
-          kubectl apply --validate=false -f k8s/application/bot-worker-deployment.yaml
-
-          # Frontend
-          kubectl apply --validate=false -f k8s/application/synkora-frontend-deployment.yml
-
-          # Flower
-          kubectl apply --validate=false -f k8s/application/flower-deployment.yml
-          kubectl apply --validate=false -f k8s/application/flower-ingress.yml
+          # Apply all manifests in one call to avoid hitting the DO API server rate limit.
+          # Multiple rapid kubectl invocations each trigger API discovery + GET, which causes
+          # the control plane to return Retry-After (429) and ultimately EOF failures.
+          kubectl apply --validate=false \
+            -f k8s/application/synkora-config.yml \
+            -f k8s/application/synkora-api-serviceaccount.yml \
+            -f k8s/application/api-service.yml \
+            -f k8s/application/synkora-ingress.yml \
+            -f k8s/application/synkora-frontend-service.yml \
+            -f k8s/application/synkora-frontend-ingress.yml \
+            -f k8s/application/ml-service-deployment.yaml \
+            -f k8s/application/scraper-service-deployment.yaml \
+            -f k8s/application/sandbox-service-deployment.yaml \
+            -f k8s/application/api-deployment.yml \
+            -f k8s/application/api-hpa.yml \
+            -f k8s/application/celery-worker-deployment.yml \
+            -f k8s/application/celery-worker-agents-deployment.yml \
+            -f k8s/application/celery-worker-agents-keda.yml \
+            -f k8s/application/celery-worker-billing-deployment.yml \
+            -f k8s/application/celery-worker-notifications-deployment.yml \
+            -f k8s/application/celery-beat-deployment.yml \
+            -f k8s/application/bot-worker-deployment.yaml \
+            -f k8s/application/synkora-frontend-deployment.yml \
+            -f k8s/application/flower-deployment.yml \
+            -f k8s/application/flower-ingress.yml
 
       - name: Run database migrations
         run: |
