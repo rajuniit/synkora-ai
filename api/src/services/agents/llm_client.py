@@ -792,7 +792,7 @@ class MultiProviderLLMClient:
             **({"extra_headers": extra_headers} if extra_headers else {}),
         }
 
-        response = await self._client.messages.create(**create_kwargs, **kwargs)
+        response = await self._client.messages.create(**create_kwargs, timeout=600.0, **kwargs)
 
         _llm_usage_ctx.set(
             {
