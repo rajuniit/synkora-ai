@@ -350,10 +350,9 @@ jobs:
           find k8s/application -name "*.yml" -o -name "*.yaml" | xargs sed -i \
             "s|IMAGE_PLACEHOLDER|${{ env.ECR_REGISTRY }}/synkora-api:${IMAGE_TAG}|g"
 
-          # Apply all manifests in one call to avoid hitting the DO API server rate limit.
-          # Multiple rapid kubectl invocations each trigger API discovery + GET, which causes
-          # the control plane to return Retry-After (429) and ultimately EOF failures.
-          kubectl apply --validate=false \
+          # Server-side apply: sends a single PATCH per resource (no GET first), halving
+          # API calls and avoiding the DO control-plane rate limit that causes EOF failures.
+          kubectl apply --server-side --force-conflicts \
             -f k8s/application/synkora-config.yml \
             -f k8s/application/synkora-api-serviceaccount.yml \
             -f k8s/application/api-service.yml \
