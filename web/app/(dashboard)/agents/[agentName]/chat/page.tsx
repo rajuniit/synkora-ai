@@ -322,7 +322,7 @@ export default function AdvancedChatPage() {
     }
   }, [currentConversation?.id]) // Only depend on ID to avoid unnecessary reloads
 
-  const loadConversationMessages = async (conversationId: string) => {
+  const loadConversationMessages = async (conversationId: string, preserveEphemeral = false) => {
     // Don't load if we're streaming - it would overwrite streaming messages
     if (isStreaming) return
 
@@ -330,8 +330,8 @@ export default function AdvancedChatPage() {
       const msgs = await apiClient.getConversationMessages(conversationId)
       // Double-check we're not streaming before setting messages
       if (!isStreaming) {
-        setMessages(
-          msgs.map((msg: any) => ({
+        setMessages((prev) => {
+          const loaded = msgs.map((msg: any) => ({
             id: msg.id,
             role: msg.role.toLowerCase(), // Convert "USER" -> "user", "ASSISTANT" -> "assistant"
             content: msg.content,
@@ -339,7 +339,28 @@ export default function AdvancedChatPage() {
             sources: msg.metadata?.sources || [],
             metadata: msg.metadata || {},
           }))
-        )
+
+          if (preserveEphemeral) {
+            // Merge back streaming-only metadata (fleet_cards, charts, diagrams, etc.) that
+            // the backend doesn't persist. Match by index since order is stable.
+            loaded.forEach((newMsg, i) => {
+              const existing = prev[i]
+              if (!existing || newMsg.role !== 'assistant' || existing.role !== 'assistant') return
+              const { fleet_cards, charts, diagrams, infographics, vehicle_maps, generated_images } = existing.metadata || {}
+              newMsg.metadata = {
+                ...newMsg.metadata,
+                ...(fleet_cards?.length && { fleet_cards }),
+                ...(charts?.length && { charts }),
+                ...(diagrams?.length && { diagrams }),
+                ...(infographics?.length && { infographics }),
+                ...(vehicle_maps?.length && { vehicle_maps }),
+                ...(generated_images?.length && { generated_images }),
+              }
+            })
+          }
+
+          return loaded
+        })
       }
     } catch (error) {
       console.error('Failed to load conversation messages:', error)
@@ -679,6 +700,21 @@ export default function AdvancedChatPage() {
             return newMessages
           })
           if (agentId) loadConversations()
+        } else if (event.type === 'error') {
+          const errorMsg = (event as any).error || 'Something went wrong. Please try again.'
+          setThinkingStatus('')
+          setMessages((prev) => {
+            const newMessages = [...prev]
+            const lastIndex = newMessages.length - 1
+            if (lastIndex >= 0 && newMessages[lastIndex].role === 'assistant') {
+              newMessages[lastIndex] = {
+                ...newMessages[lastIndex],
+                content: errorMsg,
+                isError: true,
+              }
+            }
+            return newMessages
+          })
         }
       }
 
@@ -713,7 +749,7 @@ export default function AdvancedChatPage() {
       // anything, so reloading would overwrite the locally-displayed error with stale data.
       const convId = activeConversation?.id || currentConversation?.id
       if (convId && streamStarted) {
-        loadConversationMessages(convId)
+        loadConversationMessages(convId, true)
       }
     }
   }
