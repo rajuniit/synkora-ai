@@ -25,6 +25,7 @@ from src.tasks.knowledge_compiler_task import compile_single_knowledge_wiki
 class CompileRequest(BaseModel):
     llm_config_id: str | None = None
 
+
 logger = logging.getLogger(__name__)
 
 router = APIRouter()

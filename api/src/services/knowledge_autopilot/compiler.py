@@ -295,9 +295,7 @@ class KnowledgeCompiler:
 
         # Use the user-selected config if provided
         if llm_config_id:
-            result = await self.db.execute(
-                select(AgentLLMConfig).filter(AgentLLMConfig.id == llm_config_id)
-            )
+            result = await self.db.execute(select(AgentLLMConfig).filter(AgentLLMConfig.id == llm_config_id))
             agent_config = result.scalar_one_or_none()
             if not agent_config:
                 raise ValueError(f"LLM configuration '{llm_config_id}' not found.")
