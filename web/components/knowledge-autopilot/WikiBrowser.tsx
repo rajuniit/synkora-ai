@@ -4,8 +4,8 @@ import { useState, useEffect } from 'react'
 import { extractErrorMessage } from '@/lib/api/error'
 import { useRouter } from 'next/navigation'
 import { cn } from '@/lib/utils/cn'
-import type { WikiArticle, AutopilotStatus } from '@/lib/api/knowledge-autopilot'
-import { getWikiArticles, searchWiki, getAutopilotStatus, triggerCompilation } from '@/lib/api/knowledge-autopilot'
+import type { WikiArticle, AutopilotStatus, LLMConfigOption } from '@/lib/api/knowledge-autopilot'
+import { getWikiArticles, searchWiki, getAutopilotStatus, triggerCompilation, getLLMConfigsForCompilation } from '@/lib/api/knowledge-autopilot'
 
 const CATEGORY_CONFIG: Record<string, { label: string; icon: string; color: string; bg: string; border: string }> = {
   projects: { label: 'Projects', icon: 'M3 7v10a2 2 0 002 2h14a2 2 0 002-2V9a2 2 0 00-2-2h-6l-2-2H5a2 2 0 00-2 2z', color: 'text-blue-600', bg: 'bg-blue-50', border: 'border-blue-200' },
@@ -34,10 +34,18 @@ export function WikiBrowser({ kbId, kbName }: WikiBrowserProps) {
   const [error, setError] = useState<string | null>(null)
   const [compileError, setCompileError] = useState<string | null>(null)
   const [compileMessage, setCompileMessage] = useState<string | null>(null)
+  const [llmConfigs, setLlmConfigs] = useState<LLMConfigOption[]>([])
+  const [selectedLlmConfigId, setSelectedLlmConfigId] = useState<string>('')
 
   useEffect(() => {
     loadData()
   }, [kbId, selectedCategory])
+
+  useEffect(() => {
+    getLLMConfigsForCompilation(kbId)
+      .then((data) => setLlmConfigs(data.configs || []))
+      .catch(() => {})
+  }, [kbId])
 
   const loadData = async () => {
     try {
@@ -76,7 +84,7 @@ export function WikiBrowser({ kbId, kbName }: WikiBrowserProps) {
     setCompileError(null)
     setCompileMessage(null)
     try {
-      const result = await triggerCompilation(kbId)
+      const result = await triggerCompilation(kbId, selectedLlmConfigId || undefined)
       if (result?.status === 'failed') {
         setCompileError(result.error || 'Compilation failed')
         setCompiling(false)
@@ -216,6 +224,25 @@ export function WikiBrowser({ kbId, kbName }: WikiBrowserProps) {
               )}
             </>
           )}
+
+          <div className="mb-3">
+            <label className="block text-[10px] font-bold text-gray-400 uppercase tracking-[0.12em] mb-1.5">
+              LLM Config
+            </label>
+            <select
+              value={selectedLlmConfigId}
+              onChange={(e) => setSelectedLlmConfigId(e.target.value)}
+              disabled={compiling}
+              className="w-full px-2.5 py-2 text-xs font-medium text-gray-700 bg-gray-50 border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-primary-400 focus:border-transparent disabled:opacity-50"
+            >
+              <option value="">Auto (use agent default)</option>
+              {llmConfigs.map((cfg) => (
+                <option key={cfg.id} value={cfg.id}>
+                  {cfg.name} — {cfg.model_name}
+                </option>
+              ))}
+            </select>
+          </div>
 
           <button
             onClick={handleCompile}

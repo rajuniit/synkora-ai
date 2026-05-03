@@ -37,8 +37,22 @@ export interface WikiGraphData {
   links: { source: string; target: string }[]
 }
 
-export async function triggerCompilation(kbId: string): Promise<any> {
-  return apiClient.request('POST', `/api/v1/knowledge-bases/${kbId}/autopilot/compile`)
+export interface LLMConfigOption {
+  id: string
+  name: string
+  provider: string
+  model_name: string
+  agent_name: string
+}
+
+export async function getLLMConfigsForCompilation(kbId: string): Promise<{ configs: LLMConfigOption[] }> {
+  return apiClient.request('GET', `/api/v1/knowledge-bases/${kbId}/autopilot/llm-configs`)
+}
+
+export async function triggerCompilation(kbId: string, llmConfigId?: string): Promise<any> {
+  return apiClient.request('POST', `/api/v1/knowledge-bases/${kbId}/autopilot/compile`, {
+    llm_config_id: llmConfigId ?? null,
+  })
 }
 
 export async function getWikiArticles(
