@@ -352,9 +352,11 @@ jobs:
       - name: Apply deployment manifests
         run: |
           IMAGE_TAG="${{ github.ref_name }}"
-          # Replace IMAGE_PLACEHOLDER with actual image tags before applying
+          # Replace placeholders with values from GitHub Actions variables
           find k8s/application -name "*.yml" -o -name "*.yaml" | xargs sed -i \
             "s|IMAGE_PLACEHOLDER|${{ env.ECR_REGISTRY }}/synkora-api:${IMAGE_TAG}|g"
+          find k8s/application -name "*.yml" -o -name "*.yaml" | xargs sed -i \
+            "s|DB_PORT_PLACEHOLDER|${{ vars.K8S_DB_PORT }}|g"
 
           # Server-side apply: sends a single PATCH per resource (no GET first), halving
           # API calls and avoiding the DO control-plane rate limit that causes EOF failures.
@@ -387,7 +389,7 @@ jobs:
           POD_NAME="alembic-migrate-$(echo ${IMAGE_TAG} | tr '.' '-')"
           kubectl delete pod "${POD_NAME}" -n ${{ env.NAMESPACE }} --ignore-not-found=true
 
-          # Migrations connect directly to DigitalOcean Managed PostgreSQL.
+          # Migrations connect directly to AWS RDS PostgreSQL.
           # DB_HOST is in synkora-secrets; DB_PORT comes from synkora-config (ConfigMap).
           kubectl run "${POD_NAME}" \
             --image=${{ env.ECR_REGISTRY }}/synkora-api:${IMAGE_TAG} \
