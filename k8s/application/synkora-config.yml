@@ -6,9 +6,9 @@ metadata:
 data:
   APP_ENV: "production"
 
-  # Database — DigitalOcean Managed PostgreSQL (NYC1, same region as cluster).
-  # Direct connection, no PgBouncer. Host/credentials are injected via synkora-secrets.
-  DB_PORT: "25060"
+  # Database — AWS RDS PostgreSQL. Direct connection, no PgBouncer.
+  # Host/credentials are injected via synkora-secrets.
+  DB_PORT: "DB_PORT_PLACEHOLDER"
   PGBOUNCER_ENABLED: "false"
 
   # Redis — in-cluster (no TLS, private network).
