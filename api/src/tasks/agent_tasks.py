@@ -193,6 +193,7 @@ Please process this webhook event using your configured tools."""
             async with async_session_factory() as async_db:
                 async for sse_event in chat_stream_service.stream_agent_response(
                     agent_name=agent_db.agent_name,
+                    tenant_id=str(agent_db.tenant_id),
                     message=message,
                     conversation_history=None,
                     conversation_id=None,
@@ -413,6 +414,7 @@ Complete this task thoroughly and provide your findings. Be comprehensive but co
             async with async_session_factory() as async_db:
                 async for sse_event in chat_stream_service.stream_agent_response(
                     agent_name=agent.agent_name,
+                    tenant_id=str(agent.tenant_id),
                     message=focused_prompt,
                     conversation_history=None,
                     conversation_id=None,

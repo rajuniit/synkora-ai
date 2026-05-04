@@ -380,7 +380,7 @@ const TOOL_GROUPS: ToolGroup[] = [
   },
   {
     id: 'openweather',
-    name: 'OpenWeather',
+    name: 'Weather',
     description: 'Get current weather conditions and hourly forecasts for any location with demand impact scoring',
     icon: Globe,
     tools: [],
@@ -791,7 +791,7 @@ export default function AgentToolsPage() {
         groupId = 'micromobility_intelligence';
       } else if (toolName.includes('micromobility')) {
         groupId = 'micromobility';
-      } else if (toolName.includes('get_weather_forecast') || toolName.includes('get_current_weather')) {
+      } else if (toolName.includes('get_weather_forecast') || toolName.includes('get_current_weather') || toolName.includes('openmeteo')) {
         groupId = 'openweather';
       } else if (toolName.includes('predicthq')) {
         groupId = 'events_predicthq';

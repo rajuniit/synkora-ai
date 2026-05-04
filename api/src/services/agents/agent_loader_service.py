@@ -161,7 +161,7 @@ class AgentLoaderService:
         if not llm_config_id and not query:
             in_memory_agent = self.agent_manager.registry.get(agent_name, tenant_id)
             if in_memory_agent and in_memory_agent.llm_client:
-                cached_data = await self.cache.get_agent_config(agent_name)
+                cached_data = await self.cache.get_agent_config(agent_name, tenant_id=tenant_id)
                 if cached_data:
                     db_agent = self._reconstruct_agent(cached_data)
                     is_workflow = bool(db_agent.workflow_type)
@@ -178,7 +178,7 @@ class AgentLoaderService:
                     )
 
         # Slow path: Redis → DB lookup
-        cached_data = await self.cache.get_agent_config(agent_name)
+        cached_data = await self.cache.get_agent_config(agent_name, tenant_id=tenant_id)
 
         if cached_data:
             db_agent = await self._load_from_cache(cached_data, db)
@@ -316,7 +316,11 @@ class AgentLoaderService:
             "updated_at": db_agent.updated_at.isoformat() if db_agent.updated_at else None,
         }
 
-        await self.cache.set_agent_config(agent_name=db_agent.agent_name, config=agent_dict)
+        await self.cache.set_agent_config(
+            agent_name=db_agent.agent_name,
+            tenant_id=str(db_agent.tenant_id),
+            config=agent_dict,
+        )
 
     async def _load_agent_to_memory(
         self,

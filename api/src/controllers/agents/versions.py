@@ -162,7 +162,7 @@ async def restore_agent_version(
 
         # Invalidate caches so the next request picks up the restored config
         cache = get_agent_cache()
-        await cache.invalidate_agent(agent_name=agent_name, agent_id=str(agent.id))
+        await cache.invalidate_agent(agent_name=agent_name, agent_id=str(agent.id), tenant_id=str(tenant_id))
         await cache.invalidate_agents_list(str(tenant_id))
 
         return {

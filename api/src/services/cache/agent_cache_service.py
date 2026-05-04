@@ -60,12 +60,18 @@ class AgentCacheService:
         """Build cache key with prefix."""
         return f"agent_cache:{prefix}:{identifier}"
 
-    async def get_agent_config(self, agent_name: str) -> dict | None:
+    def _agent_config_key(self, agent_name: str, tenant_id: str = "") -> str:
+        """Build tenant-scoped cache key for agent config."""
+        identifier = f"{tenant_id}:{agent_name}" if tenant_id else agent_name
+        return self._build_key("config", identifier)
+
+    async def get_agent_config(self, agent_name: str, tenant_id: str = "") -> dict | None:
         """
         Get cached agent configuration.
 
         Args:
             agent_name: Name of the agent
+            tenant_id: Tenant ID — must be provided to prevent cross-tenant cache hits
 
         Returns:
             Cached agent config or None
@@ -75,26 +81,27 @@ class AgentCacheService:
             return None
 
         try:
-            key = self._build_key("config", agent_name)
+            key = self._agent_config_key(agent_name, tenant_id)
             cached_data = await redis.get(key)
 
             if cached_data:
-                logger.info(f"Cache HIT: Agent config for '{agent_name}'")
+                logger.info(f"Cache HIT: Agent config for '{agent_name}' (tenant={tenant_id or 'unscoped'})")
                 return json.loads(cached_data)
 
-            logger.info(f"Cache MISS: Agent config for '{agent_name}'")
+            logger.info(f"Cache MISS: Agent config for '{agent_name}' (tenant={tenant_id or 'unscoped'})")
             return None
         except Exception as e:
             logger.error(f"Error getting cached agent config: {e}")
             return None
 
-    async def set_agent_config(self, agent_name: str, config: dict, ttl: int = None) -> bool:
+    async def set_agent_config(self, agent_name: str, config: dict, tenant_id: str = "", ttl: int = None) -> bool:
         """
         Cache agent configuration.
 
         Args:
             agent_name: Name of the agent
             config: Agent configuration dict
+            tenant_id: Tenant ID — must be provided to prevent cross-tenant cache pollution
             ttl: Time to live in seconds (default: 5 minutes)
 
         Returns:
@@ -105,12 +112,12 @@ class AgentCacheService:
             return False
 
         try:
-            key = self._build_key("config", agent_name)
+            key = self._agent_config_key(agent_name, tenant_id)
             ttl = ttl or self.default_ttl
 
             await redis.setex(key, timedelta(seconds=ttl), json.dumps(config))
 
-            logger.info(f"Cached agent config for '{agent_name}' (TTL: {ttl}s)")
+            logger.info(f"Cached agent config for '{agent_name}' (tenant={tenant_id or 'unscoped'}, TTL: {ttl}s)")
             return True
         except Exception as e:
             logger.error(f"Error caching agent config: {e}")
@@ -337,7 +344,13 @@ class AgentCacheService:
             logger.error(f"Error caching context files: {e}")
             return False
 
-    async def invalidate_agent(self, agent_name: str = None, agent_id: str = None, broadcast: bool = True):
+    async def invalidate_agent(
+        self,
+        agent_name: str = None,
+        agent_id: str = None,
+        tenant_id: str = "",
+        broadcast: bool = True,
+    ):
         """
         Invalidate all cached data for an agent.
 
@@ -347,6 +360,7 @@ class AgentCacheService:
         Args:
             agent_name: Agent name (for config cache)
             agent_id: Agent ID (for tools, KBs cache)
+            tenant_id: Tenant ID — required to correctly target the tenant-scoped config key
             broadcast: Whether to broadcast invalidation to other pods (default: True)
         """
         redis = self._get_redis()
@@ -357,7 +371,7 @@ class AgentCacheService:
             keys_to_delete = []
 
             if agent_name:
-                keys_to_delete.append(self._build_key("config", agent_name))
+                keys_to_delete.append(self._agent_config_key(agent_name, tenant_id))
                 # Also invalidate the routing LLM-configs cache (keyed by name)
                 keys_to_delete.append(self._build_key("llm_configs", agent_name))
 

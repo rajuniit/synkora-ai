@@ -111,6 +111,6 @@ async def update_agent_database_connections(
     await db.commit()
 
     cache = get_agent_cache()
-    await cache.invalidate_agent(agent_name=agent_name, agent_id=str(agent.id))
+    await cache.invalidate_agent(agent_name=agent_name, agent_id=str(agent.id), tenant_id=str(tenant_id))
 
     return {"connection_ids": body.connection_ids}

@@ -106,6 +106,7 @@ async def internal_spawn_agent(
             result = await _execute_sub_agent(
                 task_description=task_description,
                 parent_agent_name=parent_agent_name,
+                tenant_id=tenant_id,
                 db=db,
             )
 
@@ -236,6 +237,7 @@ async def internal_list_background_tasks(
 async def _execute_sub_agent(
     task_description: str,
     parent_agent_name: str | None,
+    tenant_id: str | None = None,
     db: AsyncSession | None = None,
 ) -> str:
     """
@@ -281,6 +283,7 @@ Complete this task thoroughly and provide your findings. Be comprehensive but co
 
             async for sse_event in chat_stream_service.stream_agent_response(
                 agent_name=parent_agent_name,
+                tenant_id=tenant_id,
                 message=full_prompt,
                 conversation_history=None,
                 conversation_id=None,

@@ -248,6 +248,12 @@ jobs:
         run: |
           helm repo add kedacore https://kedacore.github.io/charts
           helm repo update
+          # Roll back any stuck pending operation before upgrading
+          KEDA_STATUS=$(helm status keda -n keda --output json 2>/dev/null | python3 -c "import sys,json; print(json.load(sys.stdin)['info']['status'])" 2>/dev/null || echo "not-installed")
+          if [[ "$KEDA_STATUS" == "pending-install" || "$KEDA_STATUS" == "pending-upgrade" || "$KEDA_STATUS" == "pending-rollback" ]]; then
+            echo "Clearing stuck Helm release (status: $KEDA_STATUS)..."
+            helm rollback keda -n keda 2>/dev/null || helm uninstall keda -n keda 2>/dev/null || true
+          fi
           helm upgrade --install keda kedacore/keda \
             --namespace keda \
             --create-namespace \
