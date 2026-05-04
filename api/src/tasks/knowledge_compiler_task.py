@@ -6,11 +6,50 @@ generating and updating wiki articles from source documents.
 """
 
 import asyncio
+import concurrent.futures
 import logging
+from collections.abc import Coroutine
+from typing import Any
 
 from src.celery_app import celery_app
 
 logger = logging.getLogger(__name__)
+
+
+def _run_async(coro: Coroutine[Any, Any, Any]) -> Any:
+    """
+    Run an async coroutine from a Celery (sync) task.
+
+    Runs in a dedicated thread so the coroutine gets a completely fresh event
+    loop and greenlet context. This prevents two classes of errors:
+
+    1. MissingGreenlet — Celery's worker thread can have leftover greenlet /
+       asyncio state that breaks SQLAlchemy's _AsyncIoGreenlet bridge.
+       A new thread starts clean, so await_only() always finds the right
+       greenlet.
+
+    2. RuntimeError('Event loop is closed') — httpx/litellm schedule
+       connection-pool teardown as background Tasks. We drain those before
+       closing the loop so they finish cleanly.
+    """
+
+    def _in_thread() -> Any:
+        loop = asyncio.new_event_loop()
+        try:
+            asyncio.set_event_loop(loop)
+            return loop.run_until_complete(coro)
+        finally:
+            try:
+                pending = asyncio.all_tasks(loop)
+                if pending:
+                    loop.run_until_complete(asyncio.gather(*pending, return_exceptions=True))
+            except Exception:
+                pass
+            loop.close()
+            asyncio.set_event_loop(None)
+
+    with concurrent.futures.ThreadPoolExecutor(max_workers=1) as pool:
+        return pool.submit(_in_thread).result()
 
 
 @celery_app.task(name="tasks.compile_knowledge_wikis", bind=True, max_retries=1)
@@ -20,7 +59,7 @@ def compile_knowledge_wikis(self):
 
     Runs daily to detect new/updated documents and refresh wiki articles.
     """
-    asyncio.run(_compile_all_wikis())
+    _run_async(_compile_all_wikis())
 
 
 @celery_app.task(name="tasks.compile_single_knowledge_wiki", bind=True, max_retries=1)
@@ -28,7 +67,7 @@ def compile_single_knowledge_wiki(self, kb_id: int, tenant_id: str, llm_config_i
     """
     On-demand task: compile a single knowledge base wiki triggered by the user.
     """
-    asyncio.run(_compile_single_wiki(kb_id, tenant_id, llm_config_id))
+    _run_async(_compile_single_wiki(kb_id, tenant_id, llm_config_id))
 
 
 async def _compile_all_wikis():
@@ -91,7 +130,7 @@ def embed_wiki_documents(self, kb_id: int, tenant_id: str):
     Triggered automatically after each wiki compilation run.
     """
     try:
-        asyncio.run(_embed_wiki_documents(kb_id, tenant_id))
+        _run_async(_embed_wiki_documents(kb_id, tenant_id))
     except Exception as exc:
         logger.error(f"embed_wiki_documents failed for KB {kb_id}: {exc}", exc_info=True)
         raise self.retry(exc=exc)

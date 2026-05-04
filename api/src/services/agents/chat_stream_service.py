@@ -201,6 +201,7 @@ class ChatStreamService:
                 llm_config_id=llm_config_id,
                 query=message,
                 conversation_history=conversation_history,
+                tenant_id=str(tenant_id) if tenant_id else "",
             )
 
             if load_result.error:
@@ -425,6 +426,7 @@ class ChatStreamService:
                         agent_name=agent_name,
                         db=db,
                         llm_config_id=_candidate_config_id,
+                        tenant_id=str(tenant_id) if tenant_id else "",
                     )
                     if fallback_result.error or not fallback_result.agent:
                         logger.warning(f"[fallback] Fallback load failed: {fallback_result.error}")

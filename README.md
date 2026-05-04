@@ -419,19 +419,25 @@ cd api && python -m tests.benchmarks.cost_benchmark --provider openai --api-key 
 Run the interactive installer — it handles everything: prerequisite checks, `.env` generation, database migrations, seeding, and starting all services.
 
 ```bash
-git clone https://github.com/getsynkora/synkora-ai.git
-cd synkora-ai
-./install.sh
+curl -fsSL https://raw.githubusercontent.com/getsynkora/synkora-ai/main/get.sh | bash
+```
+
+Installs into `~/synkora-ai` by default. To choose a different directory:
+
+```bash
+curl -fsSL https://raw.githubusercontent.com/getsynkora/synkora-ai/main/get.sh | \
+  SYNKORA_INSTALL_DIR=~/my-synkora bash
 ```
 
 For CI/CD and server deployments (no prompts):
 
 ```bash
-SYNKORA_ADMIN_EMAIL=admin@example.com \
-SYNKORA_ADMIN_PASSWORD=securepass123 \
-SYNKORA_LLM_PROVIDER=openai \
-SYNKORA_LLM_API_KEY=sk-... \
-./install.sh --non-interactive
+curl -fsSL https://raw.githubusercontent.com/getsynkora/synkora-ai/main/get.sh | \
+  SYNKORA_ADMIN_EMAIL=admin@example.com \
+  SYNKORA_ADMIN_PASSWORD=securepass123 \
+  SYNKORA_LLM_PROVIDER=openai \
+  SYNKORA_LLM_API_KEY=sk-... \
+  bash -s -- --non-interactive
 ```
 
 The installer will:

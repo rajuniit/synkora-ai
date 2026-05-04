@@ -1140,10 +1140,12 @@ async def update_agent(
 
         # Phase 4: Invalidate cache after update
         cache = get_agent_cache()
-        await cache.invalidate_agent(agent_name=old_agent_name, agent_id=str(db_agent.id))
+        await cache.invalidate_agent(agent_name=old_agent_name, agent_id=str(db_agent.id), tenant_id=str(tenant_id))
         if db_agent.agent_name != old_agent_name:
             # Name changed — also invalidate the new name slot in case it was cached
-            await cache.invalidate_agent(agent_name=db_agent.agent_name, agent_id=str(db_agent.id))
+            await cache.invalidate_agent(
+                agent_name=db_agent.agent_name, agent_id=str(db_agent.id), tenant_id=str(tenant_id)
+            )
         await cache.invalidate_agents_list(str(tenant_id))  # PERFORMANCE: Also invalidate list cache
         logger.info(f"🗑️  Invalidated cache for agent '{old_agent_name}'")
 

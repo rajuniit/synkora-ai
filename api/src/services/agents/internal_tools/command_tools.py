@@ -558,7 +558,6 @@ def _validate_file_paths(command_name: str, command: list[str], workspace_path: 
     if command_name in [
         "cat",
         "ls",
-        "find",
         "mkdir",
         "touch",
         "cp",
@@ -573,6 +572,19 @@ def _validate_file_paths(command_name: str, command: list[str], workspace_path: 
             if not arg.startswith("-") and not _validate_path(arg, workspace_path):
                 logger.warning(f"Path validation failed for {command_name}: {arg}")
                 return False
+
+    if command_name == "find":
+        # Only validate the search-path positional arguments (those before the first predicate).
+        # Predicate values like `-name *pattern*` are not filesystem paths and must not be
+        # passed to _validate_path — os.path.abspath() would resolve them relative to cwd,
+        # producing paths like /app/api/*pattern* which are outside the workspace.
+        for arg in command[1:]:
+            if arg.startswith("-"):
+                break  # hit first predicate; everything after is predicate args, not paths
+            if not _validate_path(arg, workspace_path):
+                logger.warning(f"Path validation failed for {command_name}: {arg}")
+                return False
+
     return True
 
 
@@ -647,10 +659,14 @@ def _is_command_safe(command: list[str], workspace_path: str | None = None) -> b
     # Get allowed subcommands for this command
     allowed_subcommands = SAFE_COMMANDS[command_name]
 
-    # Find the subcommand (first non-flag argument)
+    # Find the subcommand (first non-flag argument that is not a path).
+    # Path-like args (starting with /, ./, ../) are flag values, not subcommands
+    # (e.g. `git -C /repo show ...` — `/repo` is the value of -C, not a subcommand).
     subcommand = None
     for part in command[1:]:
         if not part.startswith("-"):
+            if part.startswith("/") or part.startswith("./") or part.startswith("../"):
+                continue
             subcommand = part
             break
 
